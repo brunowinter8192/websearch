@@ -20,7 +20,7 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 ## Modules
 
-### search_web.py (364 LOC)
+### search_web.py (377 LOC)
 
 **Purpose:** Search orchestrator — fans out across the 7 active engines via `asyncio.gather`, then builds pools, caps each to Google's pool size, formats a breakdown table, and caches the result. As of the browser-lifecycle milestone (2026-08-25), also owns deterministic own-browser teardown: `_prewarm_browser` launches the shared Chrome ONCE, outside any per-engine watchdog, before fanout (only when `selected` includes a browser engine); `kill_own_chrome` runs in a `finally` around the fanout regardless of outcome. As of the diagnosis-snapshot milestone, `_engine_with_timing` unpacks `engine.search_with_reason(...)`'s uniform `(results, empty_reason, diagnosis)` 3-tuple and threads `diagnosis` into `engine_stats[name]["diagnosis"]`, next to `"status"` — read by both `engine_run` and `workflow_summary` log records (they share the same `engine_stats` dict).
 **Reads:** query + params; per-engine caps in `ENGINE_MAX_RESULTS`; default set via `_DEFAULT_ENGINES`; `_BROWSER_ENGINES` (which of the 7 need `browser.py`'s Chrome).

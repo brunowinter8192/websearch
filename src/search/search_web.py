@@ -114,19 +114,10 @@ async def search_web_workflow(
     total_ms = round((time.perf_counter() - t_total) * 1000)
     _build_query_log_entry(query, language, selected, total_ms, engine_stats, all_excluded, key)
 
-    result = [TextContent(type="text", text=formatted_text)]
-
-    if not _with_timings:
-        return result
-    timings = {
-        "engine_fanout_ms": engine_fanout_ms,
-        **engine_ms,
-        "engine_details": engine_details,
-        "pool_build_ms": pool_build_ms,
-        "cache_write_ms": cache_write_ms,
-        "total_ms": total_ms,
-    }
-    return result, timings
+    return _build_search_result(
+        formatted_text, _with_timings, engine_fanout_ms, engine_ms, engine_details,
+        pool_build_ms, cache_write_ms, total_ms,
+    )
 
 
 # Synchronous wrapper for dev scripts — runs event loop internally
@@ -172,6 +163,31 @@ def _cap_pools(pools: dict) -> dict:
     K = google_count if google_count > 0 else 10
     logger.info("Pool cap K=%d (google_count=%d)", K, google_count)
     return {eng: pool[:K] for eng, pool in pools.items()}
+
+
+# Build the workflow's return value — plain [TextContent], or with _with_timings, (result, timings_dict)
+def _build_search_result(
+    formatted_text: str,
+    with_timings: bool,
+    engine_fanout_ms: int,
+    engine_ms: dict,
+    engine_details: dict,
+    pool_build_ms: int,
+    cache_write_ms: int,
+    total_ms: int,
+) -> list[TextContent] | tuple[list[TextContent], dict]:
+    result = [TextContent(type="text", text=formatted_text)]
+    if not with_timings:
+        return result
+    timings = {
+        "engine_fanout_ms": engine_fanout_ms,
+        **engine_ms,
+        "engine_details": engine_details,
+        "pool_build_ms": pool_build_ms,
+        "cache_write_ms": cache_write_ms,
+        "total_ms": total_ms,
+    }
+    return result, timings
 
 
 # Filter engine registry; return (selected, excluded) — excluded maps engine.name to reason for engines not included
