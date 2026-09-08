@@ -5,14 +5,11 @@ from xml.etree import ElementTree
 
 import httpx
 
-# From src/crawler/seed_feeders_constants.py: shared HTTP timeout, User-Agent, fetch concurrency
 from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT, SITEMAP_FETCH_CONCURRENCY
 
 
 # FUNCTIONS
 
-# GET a sitemap URL, gunzip if named *.gz; None on any non-200/network/decompress error — a
-# 404'd or malformed sitemap is a normal outcome for this feeder, not an error.
 async def fetch_sitemap(client: httpx.AsyncClient, url: str) -> bytes | None:
     try:
         response = await client.get(url, timeout=HTTP_TIMEOUT_S,
@@ -30,12 +27,10 @@ async def fetch_sitemap(client: httpx.AsyncClient, url: str) -> bytes | None:
     return content
 
 
-# Local (namespace-stripped) tag name, e.g. "{http://www.sitemaps.org/...}urlset" -> "urlset"
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if "}" in tag else tag
 
 
-# Stripped text of the first direct child matching local_name, or None
 def _child_text(parent, local_name: str) -> str | None:
     for child in parent:
         if _local_name(child.tag) == local_name:
@@ -43,8 +38,6 @@ def _child_text(parent, local_name: str) -> str | None:
     return None
 
 
-# Parse sitemap XML (namespace-agnostic): ("index", [sub-sitemap urls]) for a <sitemapindex>,
-# ("urlset", [loc urls]) for a <urlset>, or ("unknown", []) for anything else/unparseable content.
 def parse_sitemap_xml(content: bytes) -> tuple:
     try:
         root = ElementTree.fromstring(content)
@@ -60,11 +53,6 @@ def parse_sitemap_xml(content: bytes) -> tuple:
     return ("unknown", [])
 
 
-# Recursively resolve sitemap index/urlset documents starting from sitemap_urls, following
-# <sitemapindex> nesting to arbitrary depth (bounded concurrency via a shared semaphore,
-# cycle-guarded via a shared visited set). Returns the flat, NOT-yet-deduped list of every
-# <loc> URL found in every reachable <urlset>; a sitemap that fails to fetch/parse contributes
-# nothing and does not stop the rest of the tree from resolving.
 async def resolve_sitemap_urls(client: httpx.AsyncClient, sitemap_urls: list, seen: set | None = None) -> list:
     seen = seen if seen is not None else set()
     semaphore = asyncio.Semaphore(SITEMAP_FETCH_CONCURRENCY)

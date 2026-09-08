@@ -6,7 +6,6 @@ _LINK_LINE_RE = re.compile(r'^\[.+\]\(.+\)$')
 
 # FUNCTIONS
 
-# Detect garbage content (error/cookie/login/nav-dump pages) — used only by crawl_site.py's batch filter
 def is_garbage_content(content: str) -> str | None:
     if not content or len(content.strip()) < 50:
         return "minimal_content"

@@ -4,7 +4,6 @@ import logging
 import os
 from pathlib import Path
 
-# From src/log_janitor.py: lazy 14-day prune on write, same mechanism as scrape_log.jsonl
 from src.log_janitor import maybe_prune_jsonl
 
 logger = logging.getLogger(__name__)
@@ -14,7 +13,6 @@ DEFAULT_LOG_PATH = Path(__file__).parent.parent.parent / "src" / "logs" / "pipe_
 
 # FUNCTIONS
 
-# Append one JSONL record; path from WEBSEARCH_PIPE_SCRAPE_LOG_PATH env var; fail-soft
 def log_pipe_scrape(record: dict) -> None:
     env = os.environ.get("WEBSEARCH_PIPE_SCRAPE_LOG_PATH")
     log_path = Path(env) if env else DEFAULT_LOG_PATH

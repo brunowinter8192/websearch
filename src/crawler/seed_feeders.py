@@ -3,21 +3,15 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-# From src/crawler/seed_feeders_constants.py: shared conventional sitemap fallback paths
 from src.crawler.seed_feeders_constants import CONVENTIONAL_SITEMAP_PATHS
-# From src/crawler/seed_feeders_scope.py: FeederResult + shared scope/normalize/dedup/host validation
 from src.crawler.seed_feeders_scope import FeederResult, scope_and_dedup, require_host
-# From src/crawler/seed_feeders_robots.py: robots.txt fetch + directive parsing
 from src.crawler.seed_feeders_robots import fetch_robots_txt, parse_robots_directives
-# From src/crawler/seed_feeders_sitemap.py: sitemap fetch + recursive index resolution
 from src.crawler.seed_feeders_sitemap import resolve_sitemap_urls
-# From src/crawler/seed_feeders_navtree.py: framework nav-tree detection + version union
 from src.crawler.seed_feeders_navtree import resolve_navigation_tree
 
 
 # ORCHESTRATOR
 
-# Fetch seed_url's robots.txt and return its Allow/Disallow path values as scoped, deduped seeds.
 async def robots_feeder_workflow(seed_url: str) -> FeederResult:
     try:
         seed_host = require_host(seed_url)
@@ -30,9 +24,6 @@ async def robots_feeder_workflow(seed_url: str) -> FeederResult:
         return FeederResult(urls=[], ok=False, error=str(exc))
 
 
-# Resolve seed_url's sitemap(s) to a flat, scoped, deduped seed list. robots.txt-declared
-# Sitemap: locations are preferred; the conventional fallback paths are only tried when
-# robots.txt declares none (including when robots.txt itself is missing).
 async def sitemap_feeder_workflow(seed_url: str) -> FeederResult:
     try:
         seed_host = require_host(seed_url)
@@ -47,16 +38,6 @@ async def sitemap_feeder_workflow(seed_url: str) -> FeederResult:
         return FeederResult(urls=[], ok=False, error=str(exc))
 
 
-# Resolve seed_url's navigation tree (its frontend framework's own embedded page inventory) to a
-# flat, scoped, deduped seed list, unioned across every version the site exposes in the same
-# payload. `source` distinguishes a real recursive tree found by structural shape ("navtree_tree")
-# from a flat href scan with no tree evidence behind it ("navtree_flat") — see FeederResult.
-# `version_keys` carries the site's own version-key list (None for a version-less site) so a
-# caller (discovery.py's traversal) can recognize an explicit-version duplicate of an already-known
-# canonical page without reimplementing this feeder's own detection. A seed_url that cannot be
-# fetched at all (unlike a version root, or robots.txt/a sitemap) is ok=False, not an empty
-# "navtree_flat" result — resolve_navigation_tree raises for that case, caught by the same except
-# below as an invalid seed_url.
 async def navtree_feeder_workflow(seed_url: str) -> FeederResult:
     try:
         seed_host = require_host(seed_url)
@@ -70,7 +51,6 @@ async def navtree_feeder_workflow(seed_url: str) -> FeederResult:
 
 # FUNCTIONS
 
-# scheme://host/ root, used as the base for robots.txt and conventional-sitemap-path resolution
 def _base_url(seed_url: str) -> str:
     parsed = urlparse(seed_url)
     return f"{parsed.scheme}://{parsed.netloc}/"

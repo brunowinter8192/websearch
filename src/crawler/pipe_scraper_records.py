@@ -1,10 +1,8 @@
 # INFRASTRUCTURE
-# From src/crawler/pipe_scrape_logger.py: per-URL JSONL log with run/config stamp
 from src.crawler.pipe_scrape_logger import log_pipe_scrape
 
 # FUNCTIONS
 
-# Assemble and write one JSONL record for a single URL's CHROMIUM-engine fetch, fail-soft via log_pipe_scrape
 def _log_pipe_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, diagnosis: dict,
@@ -25,12 +23,6 @@ def _log_pipe_record(
         "config_hash": run_ctx["config_hash"], "config": run_ctx["config"],
     })
 
-# Assemble and write one JSONL record for a single URL's CAMOUFOX-engine fetch — sibling to
-# _log_pipe_record, not shared. acquisition_error is try_scrape_camoufox's own fact field
-# ("budget_exhausted"/"browser_missing"/"exception", or None) — logged directly, not collapsed
-# into a computed outcome; it is the only fact this engine's fetch can produce that the chromium
-# engine has no equivalent for (a hard chromium exception is instead visible via
-# pipe_fallback_used/pipe_fallback_resolved, both chromium-only fields).
 def _log_pipe_camoufox_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, meta: dict,
