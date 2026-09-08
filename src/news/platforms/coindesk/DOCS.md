@@ -18,7 +18,7 @@ Auto-registers via `register(CoinDeskPlatform())` at module end.
 discovery params (TIMELINE_BASE, COINDESK_BASE, TARGET_URL, CALL_DELAY, REWARM_EVERY,
 CLICKS_WARMUP, CLICKS_REWARM, MAX_CURSOR_FALLBACKS, CHECKPOINT_EVERY, DEFAULT_DELTA_DAYS,
 FULL_MODE_FLOOR, DISCOVER_DIR, SKIP_HEADERS).
-**Called by:** `browser.py`, `discover.py`, `__init__.py`.
+**Called by:** `browser.py`, `discover.py`, `timeline.py`, `__init__.py`.
 
 ### browser.py (169 LOC)
 
@@ -26,14 +26,26 @@ FULL_MODE_FLOOR, DISCOVER_DIR, SKIP_HEADERS).
 `browser_load_feed(n_clicks)` launches Chrome via `open -gna`, navigates to latest-crypto-news,
 clicks "More stories" n times under HAR record, captures the first `/api/v1/articles/timeline`
 request (URL + headers + first response body). Returns `(headers, api_url, body_bytes)`.
-**Called by:** `discover.py:discover`, `discover.py:try_rewarm`.
+**Called by:** `discover.py:discover` (warmup); `timeline.py:try_rewarm` (re-warm fallback).
 **Calls out:** `pydoll` (Chrome CDP), `httpx` (first response replay).
 
-### discover.py (402 LOC)
+### discover.py (300 LOC)
 
-**Purpose:** Timeline-API cursor loop + master discover management — `discover(timeframe)` orchestrates warmup → load discover → `cursor_loop` (backward-paging, crash-safe per-article shard writes) → incremental discover write.
-**Called by:** `__init__.py:CoinDeskPlatform.discover`; `__init__.py:load_scrape_entries` (via the standalone `load_discover_filtered`, the `--scrape-only` interface).
-**Calls out:** `httpx` (cursor loop), `browser.py:browser_load_feed` (warmup + re-warm).
+**Purpose:** Discover orchestration + cursor paging — `discover(timeframe)` orchestrates warmup → load discover → `cursor_loop` (backward-paging, crash-safe per-article shard writes) → incremental discover write. Timeline-API access/re-warm and per-year shard storage were split out into `timeline.py`/`shards.py` (below, pure relocation, same behavior) once this file crossed 400 LOC by mixing three concerns.
+**Called by:** `__init__.py:CoinDeskPlatform.discover` (via `discover`).
+**Calls out:** `httpx` (`_fetch_next_page`'s own cursor GET); `browser.py:browser_load_feed` (warmup, in `discover` itself); `timeline.py` (`parse_articles`, `build_cursor_url`, `fetch_feedpage`, `try_rewarm`); `shards.py` (`_append_to_shard`, `load_discover`).
+
+### timeline.py (85 LOC)
+
+**Purpose:** Timeline-API access + session re-warm — split out of `discover.py` (pure relocation, same behavior): `parse_articles` (response-body → article dicts), `build_cursor_url` (pagination cursor URL), `fetch_feedpage` (plain-httpx feed-page GET, used both standalone and inside re-warm), `try_rewarm` (httpx feedpage re-warm first, browser re-warm fallback via `browser.py:browser_load_feed`).
+**Called by:** `discover.py` — `cursor_loop` (`parse_articles`), `_fetch_next_page` (`build_cursor_url`), `_maybe_proactive_rewarm` (`fetch_feedpage`), `_handle_cursor_exhaustion` (`try_rewarm`) — the only caller module.
+**Calls out:** `httpx`; `browser.py:browser_load_feed` (re-warm fallback).
+
+### shards.py (64 LOC)
+
+**Purpose:** Per-year discover shard storage — split out of `discover.py` (pure relocation, same behavior): `_append_to_shard` (streaming, line-buffered append to `coindesk_{year}.txt`), `load_discover` (read all shards → set of known URLs, used by `discover()`'s dedup seed), `load_discover_filtered` (read shards filtered by year/date-range/limit → `[{url, publication_date}]`, the `--scrape-only` interface).
+**Called by:** `discover.py` (`_append_to_shard` via `_process_batch`, `load_discover` via `discover()`); `__init__.py:load_scrape_entries` (`load_discover_filtered`, imported directly — no re-export through `discover.py`).
+**Calls out:** none (stdlib `pathlib` only).
 
 ### cleanup.py (120 LOC)
 

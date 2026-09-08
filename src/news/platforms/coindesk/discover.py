@@ -9,13 +9,10 @@ from urllib.parse import urlparse
 import httpx
 
 from src.news.platforms.coindesk.config import (
-    TIMELINE_BASE,
     COINDESK_BASE,
-    TARGET_URL,
     CALL_DELAY,
     REWARM_EVERY,
     CLICKS_WARMUP,
-    CLICKS_REWARM,
     MAX_CURSOR_FALLBACKS,
     CHECKPOINT_EVERY,
     DEFAULT_DELTA_DAYS,
@@ -24,6 +21,10 @@ from src.news.platforms.coindesk.config import (
 )
 # From browser.py: browser_load_feed(n_clicks) -> (headers, api_url, body)
 from src.news.platforms.coindesk.browser import browser_load_feed
+# From timeline.py: timeline-API access + session re-warm
+from src.news.platforms.coindesk.timeline import parse_articles, build_cursor_url, fetch_feedpage, try_rewarm
+# From shards.py: per-year discover shard storage
+from src.news.platforms.coindesk.shards import _append_to_shard, load_discover
 
 
 # ORCHESTRATOR
@@ -68,80 +69,6 @@ def _parse_stop_date(timeframe: str) -> str:
     return floor.isoformat()
 
 
-# Parse all articles from response body; extract _id, storyType, pathname, displayDate, title
-def parse_articles(body: bytes) -> list[dict]:
-    try:
-        import json
-        data = json.loads(body)
-    except Exception:
-        return []
-    articles = data if isinstance(data, list) else None
-    if isinstance(data, dict):
-        for v in data.values():
-            if isinstance(v, list) and v and isinstance(v[0], dict):
-                articles = v
-                break
-    if not articles:
-        return []
-    result = []
-    for a in articles:
-        ad = a.get("articleDates") or {}
-        result.append({
-            "_id":        a.get("_id") or a.get("id"),
-            "storyType":  a.get("storyType"),
-            "pathname":   a.get("pathname"),
-            "displayDate": (
-                ad.get("displayDate") or ad.get("publishedAt")
-                or a.get("displayDate") or a.get("publishedAt") or a.get("date")
-            ),
-            "title": a.get("title") or "",
-        })
-    return result
-
-
-# Build pagination cursor URL from lastId + lastDisplayDate
-def build_cursor_url(last_id: str, last_date: str) -> str:
-    return f"{TIMELINE_BASE}?size=16&lastId={last_id}&lastDisplayDate={last_date}&lang=en"
-
-
-# Fetch feed HTML page via plain httpx; return HTTP status code
-def fetch_feedpage(headers: dict) -> int:
-    feed_hdrs = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept-language", "accept"}}
-    try:
-        resp = httpx.get(TARGET_URL, headers=feed_hdrs, follow_redirects=True, timeout=30)
-        return resp.status_code
-    except OSError as e:
-        print(f"[coindesk] fetch_feedpage error: {e}", file=sys.stderr)
-        return -1
-
-
-# Attempt re-warm: httpx feedpage first (cheap), then browser re-warm as fallback
-async def try_rewarm(failing_url: str, headers: dict) -> tuple[dict, bytes | None, str]:
-    print("[coindesk] [rewarm] Attempting httpx feedpage re-warm …", file=sys.stderr)
-    fp_status = fetch_feedpage(headers)
-    print(f"[coindesk] [rewarm] httpx feedpage GET → {fp_status}", file=sys.stderr)
-    time.sleep(1.0)
-
-    resp = httpx.get(failing_url, headers=headers, follow_redirects=True, timeout=30)
-    if resp.status_code == 200:
-        print("[coindesk] [rewarm] httpx feedpage re-warm SUCCESS", file=sys.stderr)
-        return headers, resp.content, "httpx"
-
-    print(f"[coindesk] [rewarm] httpx failed ({resp.status_code}) → browser re-warm …", file=sys.stderr)
-    new_headers, _, _ = await browser_load_feed(CLICKS_REWARM)
-    if not new_headers:
-        print("[coindesk] [rewarm] browser re-warm produced no headers — fatal", file=sys.stderr)
-        return headers, None, "fatal"
-
-    resp2 = httpx.get(failing_url, headers=new_headers, follow_redirects=True, timeout=30)
-    if resp2.status_code == 200:
-        print("[coindesk] [rewarm] browser re-warm SUCCESS (httpx feedpage insufficient)", file=sys.stderr)
-        return new_headers, resp2.content, "browser"
-
-    print(f"[coindesk] [rewarm] browser re-warm also failed ({resp2.status_code}) — fatal", file=sys.stderr)
-    return headers, None, "fatal"
-
-
 # Run-wide cursor_loop accumulators — mirrors the per-ride scratch dataclass pattern in rider.py.
 @dataclass
 class _CursorLoopStats:
@@ -183,50 +110,18 @@ async def cursor_loop(
                 print(f"[coindesk] Reached stop_date floor at {oldest_in_batch}. Stopping.", file=sys.stderr)
                 break
 
-            if stats.httpx_rewarm_confirmed and time.monotonic() - stats.last_rewarm_t >= REWARM_EVERY:
-                fp = fetch_feedpage(headers)
-                print(f"[coindesk] [proactive rewarm] httpx feedpage → {fp}", file=sys.stderr)
-                stats.last_rewarm_t = time.monotonic()
-                stats.rewarm_count += 1
+            _maybe_proactive_rewarm(headers, stats)
 
-            next_body, next_url, last_id, last_date = _fetch_next_page(articles, headers, stats)
-
-            if next_body is None and next_url:
-                headers, next_body, fatal = await _handle_cursor_exhaustion(next_url, headers, stats)
-                if fatal:
-                    break
-
-            if next_body is None:
-                print("[coindesk] Cursor exhausted with no body. Stopping.", file=sys.stderr)
+            headers, body, last_date, should_stop = await _advance_cursor(articles, headers, stats)
+            if should_stop:
                 break
 
-            body = next_body
-
-            if stats.ok_calls % CHECKPOINT_EVERY == 0:
-                wall = int(time.monotonic() - t_start)
-                new_in_run = sum(1 for e in all_entries if e.get("_new"))
-                print(
-                    f"[coindesk] checkpoint call={stats.ok_calls} total={len(all_entries)} "
-                    f"new={new_in_run} oldest={stats.oldest_date} pivot={last_date[:10]} "
-                    f"wall={wall}s rewarms={stats.rewarm_count} fallbacks={stats.fallback_count}",
-                    file=sys.stderr,
-                )
+            _maybe_log_checkpoint(stats, all_entries, last_date, t_start)
 
     finally:
-        for fh in year_files.values():
-            try:
-                fh.close()
-            except OSError as e:
-                print(f"[coindesk] year shard close error (non-fatal): {e}", file=sys.stderr)
+        _close_year_files(year_files)
 
-    wall = int(time.monotonic() - t_start)
-    new_total = sum(1 for e in all_entries if e.get("_new"))
-    print(
-        f"[coindesk] cursor_loop done: calls={stats.ok_calls} total={len(all_entries)} "
-        f"new={new_total} oldest={stats.oldest_date} wall={wall}s "
-        f"rewarms={stats.rewarm_count} fallbacks={stats.fallback_count}",
-        file=sys.stderr,
-    )
+    _log_cursor_loop_summary(stats, all_entries, t_start)
     return all_entries
 
 
@@ -253,6 +148,34 @@ def _process_batch(
         d = entry["publication_date"][:10] if entry["publication_date"] else ""
         if d and (stats.oldest_date is None or d < stats.oldest_date):
             stats.oldest_date = d
+
+
+# Proactive keep-alive re-warm once httpx re-warm is confirmed working, throttled to REWARM_EVERY.
+def _maybe_proactive_rewarm(headers: dict, stats: _CursorLoopStats) -> None:
+    if not (stats.httpx_rewarm_confirmed and time.monotonic() - stats.last_rewarm_t >= REWARM_EVERY):
+        return
+    fp = fetch_feedpage(headers)
+    print(f"[coindesk] [proactive rewarm] httpx feedpage → {fp}", file=sys.stderr)
+    stats.last_rewarm_t = time.monotonic()
+    stats.rewarm_count += 1
+
+
+# Advance to the next page, handling cursor exhaustion/re-warm. Return (headers, body, last_date, should_stop).
+async def _advance_cursor(
+    articles: list[dict], headers: dict, stats: _CursorLoopStats,
+) -> tuple[dict, bytes | None, str, bool]:
+    next_body, next_url, last_id, last_date = _fetch_next_page(articles, headers, stats)
+
+    if next_body is None and next_url:
+        headers, next_body, fatal = await _handle_cursor_exhaustion(next_url, headers, stats)
+        if fatal:
+            return headers, None, last_date, True
+
+    if next_body is None:
+        print("[coindesk] Cursor exhausted with no body. Stopping.", file=sys.stderr)
+        return headers, None, last_date, True
+
+    return headers, next_body, last_date, False
 
 
 # Build next cursor; fall back to N-1, N-2 articles on 403. Return (body, url, last_id, last_date).
@@ -313,6 +236,41 @@ async def _handle_cursor_exhaustion(
     return new_headers, rewarm_body, False
 
 
+# Periodic progress log every CHECKPOINT_EVERY successful calls.
+def _maybe_log_checkpoint(stats: _CursorLoopStats, all_entries: list[dict], last_date: str, t_start: float) -> None:
+    if stats.ok_calls % CHECKPOINT_EVERY != 0:
+        return
+    wall = int(time.monotonic() - t_start)
+    new_in_run = sum(1 for e in all_entries if e.get("_new"))
+    print(
+        f"[coindesk] checkpoint call={stats.ok_calls} total={len(all_entries)} "
+        f"new={new_in_run} oldest={stats.oldest_date} pivot={last_date[:10]} "
+        f"wall={wall}s rewarms={stats.rewarm_count} fallbacks={stats.fallback_count}",
+        file=sys.stderr,
+    )
+
+
+# Close all open year-shard file handles; log (non-fatal) on close error.
+def _close_year_files(year_files: dict) -> None:
+    for fh in year_files.values():
+        try:
+            fh.close()
+        except OSError as e:
+            print(f"[coindesk] year shard close error (non-fatal): {e}", file=sys.stderr)
+
+
+# Final cursor_loop summary log.
+def _log_cursor_loop_summary(stats: _CursorLoopStats, all_entries: list[dict], t_start: float) -> None:
+    wall = int(time.monotonic() - t_start)
+    new_total = sum(1 for e in all_entries if e.get("_new"))
+    print(
+        f"[coindesk] cursor_loop done: calls={stats.ok_calls} total={len(all_entries)} "
+        f"new={new_total} oldest={stats.oldest_date} wall={wall}s "
+        f"rewarms={stats.rewarm_count} fallbacks={stats.fallback_count}",
+        file=sys.stderr,
+    )
+
+
 # Build output entry dict from raw article dict; return None if pathname or date missing
 def _build_entry(a: dict) -> dict | None:
     pathname = a.get("pathname") or ""
@@ -340,63 +298,3 @@ def _extract_section(pathname: str) -> str:
 def _is_live_blog(url: str) -> bool:
     slug = urlparse(url).path.rstrip("/").split("/")[-1]
     return slug.startswith("live-")
-
-
-# Append one entry line to the appropriate per-year discover shard (streaming, line-buffered)
-def _append_to_shard(entry: dict, year_files: dict, discover_dir: Path) -> None:
-    date_str = entry["publication_date"][:10]
-    year = date_str[:4]
-    if year not in year_files:
-        p = discover_dir / f"coindesk_{year}.txt"
-        year_files[year] = open(p, "a", encoding="utf-8", buffering=1)
-    year_files[year].write(f"{date_str}\t{entry['url']}\n")
-
-
-# Read all per-year discover shards; return set of known URLs
-def load_discover(discover_dir: Path) -> set[str]:
-    seen: set[str] = set()
-    if not discover_dir.exists():
-        return seen
-    for shard in discover_dir.glob("coindesk_*.txt"):
-        with open(shard, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if "\t" in line:
-                    seen.add(line.split("\t", 1)[1])
-    return seen
-
-
-# Read discover shards filtered by year or date range; return [{url, publication_date}].
-def load_discover_filtered(
-    discover_dir: Path,
-    year: str | None = None,
-    from_date: str | None = None,
-    to_date: str | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    if not discover_dir.exists():
-        return []
-    if year is not None:
-        shards = [discover_dir / f"coindesk_{year}.txt"]
-        shards = [s for s in shards if s.exists()]
-    else:
-        shards = sorted(discover_dir.glob("coindesk_*.txt"))
-    entries: list[dict] = []
-    for shard in shards:
-        with open(shard, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if "\t" not in line:
-                    continue
-                date_col, url = line.split("\t", 1)
-                if from_date and date_col < from_date:
-                    continue
-                if to_date and date_col > to_date:
-                    continue
-                entries.append({
-                    "url": url,
-                    "publication_date": f"{date_col}T00:00:00+00:00",
-                })
-                if limit is not None and len(entries) >= limit:
-                    return entries
-    return entries
