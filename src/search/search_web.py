@@ -27,6 +27,8 @@ from src.search.result import SearchResult
 from src.search.merge import build_engine_pools
 # From status.py: sub-status string constants
 from src.search import status as S
+from src.search import status_timeout as ST
+from src.search import status_error as SE
 # From query_logger.py: append-only JSONL query log
 from src.search.query_logger import log_query
 
@@ -283,22 +285,22 @@ async def _query_engines_concurrent(
 # Map an engine-search exception to (status, drop_reason) — same match order as the original except chain
 def _classify_engine_exception(exc: Exception, timeout: float | None, search_ms: int) -> tuple[str, str]:
     if isinstance(exc, asyncio.TimeoutError):
-        sub = S.TIMEOUT_WATCHDOG if timeout is not None and search_ms < timeout * 1.2 * 1000 else S.TIMEOUT_NONCOOP
+        sub = ST.TIMEOUT_WATCHDOG if timeout is not None and search_ms < timeout * 1.2 * 1000 else ST.TIMEOUT_NONCOOP
         return sub, f"asyncio.TimeoutError after {timeout}s watchdog"
     if isinstance(exc, httpx.TimeoutException):
         logger.warning("Engine httpx timeout: %s", exc)
-        return S.TIMEOUT_HTTPX, str(exc)
+        return ST.TIMEOUT_HTTPX, str(exc)
     if isinstance(exc, (_pydoll_exc.PydollException, _ws_exc.WebSocketException, ConnectionError)):
         logger.warning("Engine browser error: %s", exc)
-        return S.ERROR_BROWSER, str(exc)
+        return SE.ERROR_BROWSER, str(exc)
     if isinstance(exc, httpx.HTTPError):
         logger.warning("Engine HTTP error: %s", exc)
-        return S.ERROR_HTTP, str(exc)
+        return SE.ERROR_HTTP, str(exc)
     if isinstance(exc, (json.JSONDecodeError, KeyError, ValueError, AttributeError)):
         logger.warning("Engine parse error: %s", exc)
-        return S.ERROR_PARSE, str(exc)
+        return SE.ERROR_PARSE, str(exc)
     logger.warning("Engine error: %s", exc)
-    return S.ERROR_OTHER, str(exc)
+    return SE.ERROR_OTHER, str(exc)
 
 
 # Wrap single engine search; return (results, rate_wait_ms, search_ms, status, drop_reason, diagnosis) —
