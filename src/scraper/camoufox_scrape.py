@@ -209,6 +209,20 @@ async def _acquire_camoufox(url: str, kwargs: dict, empty_meta: dict) -> tuple[s
             status_code = response.status if response else None
         html = await page.content()
 
+    content, content_is_raw_html, raw_markdown, conversion_error = await _convert_camoufox_html(url, html)
+
+    meta.update({
+        "status_code": status_code, "landed_url": landed_url,
+        "raw_markdown_bytes": len(raw_markdown.encode("utf-8")),
+        "markdown_conversion_error": conversion_error,
+        "content_is_raw_html": content_is_raw_html,
+        "document_status_chain": list(document_status_chain),
+    })
+    return content, meta
+
+
+# Convert captured HTML to markdown via _html_to_markdown; fall back to raw HTML on any conversion failure.
+async def _convert_camoufox_html(url: str, html: str) -> tuple[str, bool, str, str | None]:
     try:
         raw_markdown, conversion_error = await _html_to_markdown(html)
     except Exception as e:
@@ -220,14 +234,7 @@ async def _acquire_camoufox(url: str, kwargs: dict, empty_meta: dict) -> tuple[s
     else:
         content, content_is_raw_html = raw_markdown, False
 
-    meta.update({
-        "status_code": status_code, "landed_url": landed_url,
-        "raw_markdown_bytes": len(raw_markdown.encode("utf-8")),
-        "markdown_conversion_error": conversion_error,
-        "content_is_raw_html": content_is_raw_html,
-        "document_status_chain": list(document_status_chain),
-    })
-    return content, meta
+    return content, content_is_raw_html, raw_markdown, conversion_error
 
 
 # Single-call Camoufox (Playwright-Firefox) acquisition; returns (content, meta) unconditionally, no content judgment
