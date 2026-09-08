@@ -30,15 +30,9 @@ _TIMEOUT = 6.0
 
 # ORCHESTRATOR
 
-# Google Scholar search via httpx (no browser); migrated from pydoll 2026-05-09 (bead searxng-f3i)
 class ScholarEngine(BaseEngine):
     name = "google_scholar"
 
-    # Full HTTP search logic; returns (results, reason, diagnosis); exceptions propagate to
-    # _engine_with_timing. reason is always None — the redirect and inline-captcha-form branches
-    # used to surface guessed verdicts here; both facts (the observed HTTP status, the captcha-form
-    # element's presence) are now in diagnosis instead, and the verdicts they fed are gone.
-    # diagnosis is None whenever results are non-empty
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("Scholar search: %s", query)
         url = _build_url(query, language, max_results)
@@ -56,7 +50,6 @@ class ScholarEngine(BaseEngine):
             return results, None, None
         return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
 
-    # Legacy thin wrapper — delegates to search_with_reason; swallows exceptions for dev-script compat
     async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
         try:
             results, _, _ = await self.search_with_reason(query, language, max_results)
@@ -68,12 +61,10 @@ class ScholarEngine(BaseEngine):
 
 # FUNCTIONS
 
-# Build Scholar search URL with encoded query and standard Scholar params
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)
 
 
-# Execute single httpx GET with browser headers; follow_redirects=False to catch /sorry/ redirect
 async def _fetch(url: str) -> httpx.Response:
     async with httpx.AsyncClient(
         headers=_HEADERS,
@@ -84,8 +75,6 @@ async def _fetch(url: str) -> httpx.Response:
         return await client.get(url)
 
 
-# Parse Scholar HTML; return (results, captcha_form) — captcha_form is a FACT (the inline
-# form#gs_captcha_f element's presence), never a verdict; results stays [] either way it's True
 def _parse_response(body: str, max_results: int) -> tuple[list[SearchResult], bool]:
     dom = lhtml.fromstring(body)
     if dom.xpath("//form[@id='gs_captcha_f']"):
@@ -94,7 +83,6 @@ def _parse_response(body: str, max_results: int) -> tuple[list[SearchResult], bo
     return _extract_results(dom, max_results), False
 
 
-# Extract SearchResult list from parsed Scholar DOM — skips [CITATION] blocks (no anchor)
 def _extract_results(dom, max_results: int) -> list[SearchResult]:
     results = []
     for i, block in enumerate(dom.xpath("//div[@data-rp]")):

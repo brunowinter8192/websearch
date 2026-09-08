@@ -74,11 +74,9 @@ _limiters["google"] = RateLimiter(max_requests=4, window_seconds=60)
 
 # ORCHESTRATOR
 
-# Google web search via pydoll stealth browser
 class GoogleEngine(BaseEngine):
     name = "google"
 
-    # Full search logic with empty-reason diagnosis; exceptions propagate to _engine_with_timing
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("Google search: %s", query)
         tab = await new_tab()
@@ -111,7 +109,6 @@ class GoogleEngine(BaseEngine):
         finally:
             await kill_tab(tab)
 
-    # Legacy thin wrapper — delegates to search_with_reason; swallows exceptions for dev-script compat
     async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
         try:
             results, _, _ = await self.search_with_reason(query, language, max_results)
@@ -123,7 +120,6 @@ class GoogleEngine(BaseEngine):
 
 # FUNCTIONS
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -131,12 +127,10 @@ def _extract_value(result):
         return None
 
 
-# Build Google search URL with encoded query
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)
 
 
-# Inject SOCS consent cookie per-tab via CDP before navigation
 async def _inject_socs_cookie(tab) -> None:
     await tab._execute_command(NetworkCommands.set_cookie(
         name=SOCS_NAME,
@@ -148,7 +142,6 @@ async def _inject_socs_cookie(tab) -> None:
     ))
 
 
-# Detect inline Google consent banner (no redirect — body text check)
 async def _has_inline_consent(tab) -> bool:
     js = "var body = document.body ? document.body.innerText : ''; return body.indexOf('Before you continue') !== -1 || body.indexOf('cookies and data') !== -1;"
     raw = await tab.execute_script(js)
@@ -156,13 +149,11 @@ async def _has_inline_consent(tab) -> bool:
     return bool(val)
 
 
-# Click Google consent accept button — handles both redirect and inline variants
 async def _handle_consent(tab) -> None:
     logger.info("Google consent page detected — clicking accept")
     await tab.execute_script(_JS_CONSENT)
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES × WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -173,7 +164,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Unwrap Google redirect URLs (/url?q=... pattern)
 def _clean_url(href: str) -> str:
     if not href:
         return ""
@@ -184,7 +174,6 @@ def _clean_url(href: str) -> str:
     return href
 
 
-# Query DOM for search result containers and return SearchResult list
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -209,8 +198,6 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return results
 
 
-# Snapshot the page facts behind an empty result — an OBSERVATION, never a verdict; marker is
-# always None here (Google's block/consent signal is the URL path, not a text marker)
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)

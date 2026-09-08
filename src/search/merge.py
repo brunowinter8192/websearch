@@ -7,7 +7,6 @@ from src.search.result import SearchResult
 
 # FUNCTIONS
 
-# Group raw engine results into per-engine owned pools with cross-engine URL dedup, owner = lowest position (random tie-break)
 def build_engine_pools(results: list[SearchResult]) -> dict[str, list[SearchResult]]:
     url_buckets: dict[str, list[SearchResult]] = defaultdict(list)
     for r in results:

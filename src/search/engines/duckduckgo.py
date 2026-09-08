@@ -54,11 +54,9 @@ _limiters["duckduckgo"] = RateLimiter(max_requests=4, window_seconds=60)
 
 # ORCHESTRATOR
 
-# DuckDuckGo web search via pydoll stealth browser (html.duckduckgo.com/html/ endpoint)
 class DuckDuckGoEngine(BaseEngine):
     name = "duckduckgo"
 
-    # Full search logic with empty-reason diagnosis; exceptions propagate to _engine_with_timing
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("DuckDuckGo search: %s", query)
         tab = await new_tab()
@@ -85,7 +83,6 @@ class DuckDuckGoEngine(BaseEngine):
         finally:
             await kill_tab(tab)
 
-    # Legacy thin wrapper — delegates to search_with_reason; swallows exceptions for dev-script compat
     async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
         try:
             results, _, _ = await self.search_with_reason(query, language, max_results)
@@ -97,7 +94,6 @@ class DuckDuckGoEngine(BaseEngine):
 
 # FUNCTIONS
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -105,12 +101,10 @@ def _extract_value(result):
         return None
 
 
-# Build DuckDuckGo search URL with encoded query
 def _build_url(query: str) -> str:
     return SEARCH_URL.format(quote_plus(query))
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES × WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -121,7 +115,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Unwrap DDG redirect URLs (duckduckgo.com/l/?uddg=<encoded> pattern)
 def _clean_url(href: str) -> str:
     if not href:
         return ""
@@ -133,7 +126,6 @@ def _clean_url(href: str) -> str:
     return href
 
 
-# Query DOM for search result containers and return SearchResult list
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -159,7 +151,6 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return results
 
 
-# Day-precision ISO date from the bare '.result__extras__url' date span, truncated to YYYY-MM-DD
 def _extract_date(date_raw: str) -> str | None:
     text = (date_raw or "").replace("\xa0", " ").strip()
     date_part = text[:10]
@@ -168,9 +159,6 @@ def _extract_date(date_raw: str) -> str | None:
     return None
 
 
-# Snapshot the page facts behind an empty result — an OBSERVATION, never a verdict; marker
-# stays None (DDG's block signal is a structural element count, not a text marker) — the fact lives
-# in its own named field, challenge_form, matching brave's pow_link / startpage's iframe_challenge
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)

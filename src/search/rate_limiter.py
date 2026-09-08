@@ -11,7 +11,6 @@ WINDOW_SECONDS = 60.0
 _limiters: dict[str, "RateLimiter"] = {}
 
 
-# Token bucket rate limiter
 class RateLimiter:
     def __init__(self, max_requests: int = MAX_REQUESTS, window_seconds: float = WINDOW_SECONDS):
         self._max_requests = max_requests
@@ -19,7 +18,6 @@ class RateLimiter:
         self._tokens: list[float] = []
         self._lock = asyncio.Lock()
 
-    # Wait until a request can be made, respecting rate limits
     async def acquire(self) -> None:
         logger.debug("Rate limit: acquiring token")
         async with self._lock:
@@ -37,7 +35,6 @@ class RateLimiter:
             self._tokens.append(time.monotonic())
 
 
-# Return per-engine singleton rate limiter with optional custom config
 def get_limiter(engine_name: str, max_requests: int = MAX_REQUESTS, window_seconds: float = WINDOW_SECONDS) -> RateLimiter:
     if engine_name not in _limiters:
         _limiters[engine_name] = RateLimiter(max_requests, window_seconds)

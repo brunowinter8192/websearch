@@ -19,17 +19,9 @@ _limiters["openalex"] = RateLimiter(max_requests=4, window_seconds=60)
 
 # ORCHESTRATOR
 
-# Search OpenAlex academic graph and return structured results — HTTP API, no DOM-drift/CAPTCHA patterns
 class OpenAlexEngine(BaseEngine):
     name = "openalex"
 
-    # Full HTTP search logic; returns (results, reason, diagnosis). reason is always None — 429
-    # (daily/per-second budget) and 403 (forbidden resource) both used to surface a guessed verdict
-    # here (429 as EMPTY_BLOCK); that verdict carried no information the observed HTTP status did
-    # not already carry, so it is gone, not renamed. diagnosis carries the one fact this engine
-    # already has in hand — the real HTTP status — on every branch that returns without results;
-    # None whenever results are non-empty (no diagnosis mechanism beyond that one fact: HTTP API,
-    # no browser DOM)
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("OpenAlex search: %s", query)
         status_code, works = await _fetch_results(query, max_results)
@@ -50,7 +42,6 @@ class OpenAlexEngine(BaseEngine):
 
 # FUNCTIONS
 
-# Iteratively unescape HTML entities until idempotent — handles double-encoded entities
 def _deep_unescape(s: str) -> str:
     while True:
         new = html.unescape(s)
@@ -59,7 +50,6 @@ def _deep_unescape(s: str) -> str:
         s = new
 
 
-# Fetch raw work items from OpenAlex search API; returns (status_code, works|None) — 429/403 give None works
 async def _fetch_results(query: str, max_results: int) -> tuple[int, list[dict] | None]:
     params: dict = {"search": query, "per_page": min(max_results, MAX_PER_PAGE)}
     api_key = os.environ.get("OPENALEX_API_KEY", "")
@@ -74,7 +64,6 @@ async def _fetch_results(query: str, max_results: int) -> tuple[int, list[dict] 
     return response.status_code, response.json().get("results", [])
 
 
-# Parse OpenAlex work items into SearchResult list
 def _parse_results(works: list[dict]) -> list[SearchResult]:
     results = []
     for i, work in enumerate(works):
@@ -100,7 +89,6 @@ def _parse_results(works: list[dict]) -> list[SearchResult]:
     return results
 
 
-# best_oa_location is nullable; its pdf_url is nullable too — vendor data passed through as-is, no validation
 def _extract_pdf_url(work: dict) -> str | None:
     location = work.get("best_oa_location")
     if not location:
@@ -108,7 +96,6 @@ def _extract_pdf_url(work: dict) -> str | None:
     return location.get("pdf_url")
 
 
-# publication_date is day-accurate ISO 8601 but nullable; fall back to publication_year (year precision)
 def _extract_date(work: dict) -> str | None:
     pub_date = work.get("publication_date")
     if pub_date:
@@ -119,7 +106,6 @@ def _extract_date(work: dict) -> str | None:
     return None
 
 
-# Reconstruct abstract text from OpenAlex inverted index (word -> [positions])
 def _reconstruct_abstract(aii: dict | None) -> str:
     if not aii:
         return ""
@@ -130,7 +116,6 @@ def _reconstruct_abstract(aii: dict | None) -> str:
     return html.unescape(" ".join(html.unescape(pos_word[p]) for p in sorted(pos_word)))
 
 
-# Select canonical URL: arXiv > DOI > openalex.org
 def _pick_url(work: dict) -> str:
     ids = work.get("ids") or {}
     arxiv = ids.get("arxiv")

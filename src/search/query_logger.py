@@ -4,7 +4,6 @@ import logging
 import os
 from pathlib import Path
 
-# From src/log_janitor.py: lazy 14-day prune on write
 from src.log_janitor import maybe_prune_jsonl
 
 logger = logging.getLogger(__name__)
@@ -14,7 +13,6 @@ DEFAULT_LOG_PATH = Path(__file__).parent.parent.parent / "src" / "logs" / "query
 
 # FUNCTIONS
 
-# Append one JSONL record; path read from WEBSEARCH_QUERY_LOG_PATH env var at call time; fail-soft
 def log_query(record: dict) -> None:
     env = os.environ.get("WEBSEARCH_QUERY_LOG_PATH")
     log_path = Path(env) if env else DEFAULT_LOG_PATH
