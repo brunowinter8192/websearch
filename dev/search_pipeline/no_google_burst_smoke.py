@@ -36,6 +36,8 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
 from src.search import status as S
+from src.search import status_timeout as ST
+from src.search import status_error as SE
 from src.search.browser import close_browser
 from src.search.engines.duckduckgo import DuckDuckGoEngine
 from src.search.engines.openalex import OpenAlexEngine
@@ -167,16 +169,16 @@ async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int
         return reason or S.EMPTY, search_ms, 0, blocked
     except asyncio.TimeoutError:
         search_ms = round((time.perf_counter() - t0) * 1000)
-        return S.TIMEOUT_WATCHDOG, search_ms, 0, False
+        return ST.TIMEOUT_WATCHDOG, search_ms, 0, False
     except httpx.TimeoutException:
         search_ms = round((time.perf_counter() - t0) * 1000)
-        return S.TIMEOUT_HTTPX, search_ms, 0, False
+        return ST.TIMEOUT_HTTPX, search_ms, 0, False
     except (_pydoll_exc.PydollException, _ws_exc.WebSocketException, ConnectionError):
         search_ms = round((time.perf_counter() - t0) * 1000)
-        return S.ERROR_BROWSER, search_ms, 0, False
+        return SE.ERROR_BROWSER, search_ms, 0, False
     except httpx.HTTPError:
         search_ms = round((time.perf_counter() - t0) * 1000)
-        return S.ERROR_HTTP, search_ms, 0, False
+        return SE.ERROR_HTTP, search_ms, 0, False
     except Exception:
         search_ms = round((time.perf_counter() - t0) * 1000)
         return "ERROR", search_ms, 0, False

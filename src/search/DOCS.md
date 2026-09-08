@@ -20,13 +20,13 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 ## Modules
 
-### search_web.py (377 LOC)
+### search_web.py (379 LOC)
 
 **Purpose:** Search orchestrator — fans out across the 7 active engines via `asyncio.gather`, then builds pools, caps each to Google's pool size, formats a breakdown table, and caches the result. As of the browser-lifecycle milestone (2026-08-25), also owns deterministic own-browser teardown: `_prewarm_browser` launches the shared Chrome ONCE, outside any per-engine watchdog, before fanout (only when `selected` includes a browser engine); `kill_own_chrome` runs in a `finally` around the fanout regardless of outcome. As of the diagnosis-snapshot milestone, `_engine_with_timing` unpacks `engine.search_with_reason(...)`'s uniform `(results, empty_reason, diagnosis)` 3-tuple and threads `diagnosis` into `engine_stats[name]["diagnosis"]`, next to `"status"` — read by both `engine_run` and `workflow_summary` log records (they share the same `engine_stats` dict).
 **Reads:** query + params; per-engine caps in `ENGINE_MAX_RESULTS`; default set via `_DEFAULT_ENGINES`; `_BROWSER_ENGINES` (which of the 7 need `browser.py`'s Chrome).
 **Writes:** disk cache `~/.cache/websearch/<key>.json` (via cache_write); query log (via log_query).
 **Called by:** `cli.py` (search_web_workflow); dev scripts (fetch_search_results).
-**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `mcp.types.TextContent`; `engines/` (all 7 engine classes); `browser` (get_tab, kill_own_chrome); `cache` (cache_key, cache_write), `rate_limiter` (get_limiter), `merge` (build_engine_pools), `result` (SearchResult), `status`, `query_logger` (log_query).
+**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `mcp.types.TextContent`; `engines/` (all 7 engine classes); `browser` (get_tab, kill_own_chrome); `cache` (cache_key, cache_write), `rate_limiter` (get_limiter), `merge` (build_engine_pools), `result` (SearchResult), `status`, `status_timeout`, `status_error`, `query_logger` (log_query).
 
 ### merge.py (33 LOC)
 
@@ -88,10 +88,22 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 **Called by:** `search_web.py`, `merge.py`, `cache.py`, `engines/`.
 **Calls out:** none (stdlib `dataclasses`).
 
-### status.py (14 LOC)
+### status.py (5 LOC)
 
-**Purpose:** Engine-status string constants for the query log + audit — 10 total, all facts about our own runtime (`OK`, `EMPTY`, `RATE_SKIP`, 3 `TIMEOUT_*`, 4 `ERROR_*`). As of the guessed-verdict-removal milestone, the 5 EMPTY_* sub-statuses (`EMPTY_BLOCK`/`EMPTY_NO_CONTAINER`/`EMPTY_CONCURRENT_RACE`/`EMPTY_CONSENT`/`EMPTY_NO_RESULTS`) and the 2 unused bare `TIMEOUT`/`ERROR` constants (zero and one usage respectively, neither ever produced by `_classify_engine_exception`) were removed — see `engines/DOCS.md`'s Gotchas for what replaced the EMPTY_* distinctions in the diagnosis snapshot.
-**Called by:** `search_web.py`, `engines/` (imported as `status as S`).
+**Purpose:** The 3 ungrouped engine-status string constants — `OK`, `EMPTY`, `RATE_SKIP` — facts about our own runtime for the query log + audit. The `TIMEOUT_*` and `ERROR_*` prefix clusters were split into their own sibling modules (`status_timeout.py`/`status_error.py`, below) once this file held two or more prefix clusters (this sweep's split rule); same constants, same string values, pure relocation. As of the guessed-verdict-removal milestone, the 5 EMPTY_* sub-statuses (`EMPTY_BLOCK`/`EMPTY_NO_CONTAINER`/`EMPTY_CONCURRENT_RACE`/`EMPTY_CONSENT`/`EMPTY_NO_RESULTS`) and the 2 unused bare `TIMEOUT`/`ERROR` constants (zero and one usage respectively, neither ever produced by `_classify_engine_exception`) were removed — see `engines/DOCS.md`'s Gotchas for what replaced the EMPTY_* distinctions in the diagnosis snapshot.
+**Called by:** `search_web.py` (imported as `status as S`); `dev/search_pipeline/no_google_burst_smoke.py` (same alias).
+**Calls out:** none.
+
+### status_timeout.py (5 LOC)
+
+**Purpose:** The `TIMEOUT_*` prefix cluster split out of `status.py` (pure relocation, same values): `TIMEOUT_WATCHDOG`, `TIMEOUT_NONCOOP`, `TIMEOUT_HTTPX`.
+**Called by:** `search_web.py` (imported as `status_timeout as ST`, used in `_classify_engine_exception`); `dev/search_pipeline/no_google_burst_smoke.py` (same alias).
+**Calls out:** none.
+
+### status_error.py (6 LOC)
+
+**Purpose:** The `ERROR_*` prefix cluster split out of `status.py` (pure relocation, same values): `ERROR_BROWSER`, `ERROR_HTTP`, `ERROR_PARSE`, `ERROR_OTHER`.
+**Called by:** `search_web.py` (imported as `status_error as SE`, used in `_classify_engine_exception`); `dev/search_pipeline/no_google_burst_smoke.py` (same alias).
 **Calls out:** none.
 
 ### document_status.py (49 LOC)
