@@ -76,8 +76,9 @@ Touch this package when changing proxy-riding engine behaviour. Do NOT touch `en
 **Reads:** n/a (data-shape module).
 **Writes:** n/a.
 **Called by:** `rider.py` (imports all of it), `fetch.py` (`DELAY_BEFORE_HTML`, `RAW_SUBDIR`),
-`abort.py` (`RiderState` type hint), `reporter.py` (`RiderState`, `FAIL_THRESHOLD`), `scrape.py`
-(`RiderState`), dev/ tests under `dev/news_pipeline/coindesk_proxy_riding/`.
+`abort.py` (`RiderState` type hint), `reporter.py` (`RiderState` type hint only), `metrics.py`
+(`RiderState`, `FAIL_THRESHOLD`), `scrape.py` (`RiderState`), dev/ tests under
+`dev/news_pipeline/coindesk_proxy_riding/`.
 **Calls out:** `src.news.engine.proxy_riding.cooldown.RidingCooldownManager` (type hint on
 `RiderState.cooldown_mgr`).
 
@@ -101,8 +102,9 @@ minimal fallback stub on any reporter error).
 **Called by:** `rider.py:_watchdog` (`_abort_done`, `_abort_stall`); `rider.py:run_riding_pool`
 (`_abort_interrupted`, registered as the SIGINT/SIGTERM handler).
 **Calls out:** late import of `reporter.write_riding_report` inside `_abort_write_report_and_exit`
-(avoids a circular top-level import — `reporter.py` imports `RiderState`/`FAIL_THRESHOLD` from
-`state.py`, not from `abort.py`, but the cycle would still exist through `rider.py`).
+(avoids a circular top-level import — `reporter.py` imports from `state.py` (directly) and from
+`metrics.py`/`plots.py` (which themselves import from `state.py`), not from `abort.py`, but the
+cycle would still exist through `rider.py`).
 
 ### rider.py (318 LOC)
 
@@ -115,20 +117,31 @@ minimal fallback stub on any reporter error).
 `RideRecord`, `JobRecord`, constants); `fetch.py` (`_fetch_one_url`, `_classify_connect_fail`,
 `_write_raw`, `_url_hash`); `abort.py` (`_abort_done`, `_abort_interrupted`, `_abort_stall`).
 
-### reporter.py (424 LOC)
+### reporter.py (213 LOC)
 
-**Purpose:** Job report writer — `job.md` (counts, throughput, riding stats, regwall counts, connect-fail breakdown, load-time distribution) + `cumulative.png` + `success_load_hist.png` + `connect_fail_hist.png` from a completed `RiderState`.
+**Purpose:** Orchestrator (`write_riding_report`) + the `job.md` markdown-rendering concern (counts, throughput, riding stats, regwall counts, connect-fail breakdown, load-time distribution, plot links) from a completed `RiderState`. Metric derivation and plot-file writing were split out into `metrics.py`/`plots.py` (below, pure relocation, same behavior) once this file crossed 400 LOC by mixing three concerns; this module is left as the orchestrator plus the one remaining concern (markdown rendering) since that alone keeps it well under any split threshold.
 **Reads:** `RiderState` (in-memory), `t_job_start` (datetime).
-**Writes:** `{job_dir}/job.md`; `{job_dir}/cumulative.png`;
-`{job_dir}/success_load_hist.png` (only when ≥2 OK `load_s` values);
-`{job_dir}/connect_fail_hist.png` (only when ≥2 `connect_fail_records`).
-All histograms: 0.25 s bins, x-axis auto-ranges to data max, page_timeout_s red vertical line.
+**Writes:** `{job_dir}/job.md`. Plot files (`cumulative.png`, `success_load_hist.png`, `connect_fail_hist.png`) are written by `plots.py`, called from this module's own orchestrator.
 **Called by:** `pipeline.py:_run_scrape_only_riding` (normal completion, via `write_riding_report`);
 `abort.py:_abort_stall` (late import, stall abort); `abort.py:_abort_done` (late import,
 wedge-after-done); `abort.py:_abort_interrupted` (late import, SIGINT/SIGTERM abort).
-**Calls out:** `matplotlib` (lazy import inside plot functions); `statistics` (stdlib, incl.
-`statistics.quantiles` with `method='inclusive'` — bounds p-values within observed [min, max]);
-`math` (stdlib, bin count); `src.news.engine.proxy_riding.state` (`RiderState`, `FAIL_THRESHOLD`).
+**Calls out:** `src.news.engine.proxy_riding.state` (`RiderState`, type hints only); `src.news.engine.proxy_riding.metrics` (`_compute_stats`); `src.news.engine.proxy_riding.plots` (`_write_cumulative_plot`, `_write_load_hist`, `_write_cf_hist`).
+
+### metrics.py (160 LOC)
+
+**Purpose:** Metric derivation from `RiderState` — split out of `reporter.py` (pure relocation, same behavior): `_compute_stats` (the single entry point `write_riding_report` calls), `_compute_fetch_counts` (per-fetch counts/elapsed-time stats/completion times, extracted from `_compute_stats` itself to keep it under 50 LOC — see Gotchas), `_compute_retry_outcome`, `_compute_pool_windows`, `_compute_load_percentiles`, `_compute_connect_fail_stats`, `_distribution_stats`, and the `_BACKFILL_TOTAL = 61_000` constant.
+**Reads:** `RiderState` (in-memory), `t_job_start` (datetime).
+**Writes:** nothing — returns a plain `dict` (the `stats` shape `reporter.py`/`plots.py` both consume).
+**Called by:** `reporter.py` (`write_riding_report` via `_compute_stats`) — the only caller.
+**Calls out:** `statistics` (stdlib, incl. `statistics.quantiles` with `method='inclusive'` — bounds p-values within observed [min, max]); `src.news.engine.proxy_riding.state` (`RiderState`, `FAIL_THRESHOLD`).
+
+### plots.py (77 LOC)
+
+**Purpose:** Matplotlib plot-file writers — split out of `reporter.py` (pure relocation, same behavior): `_write_cumulative_plot`, `_write_load_hist`, `_write_cf_hist`. All histograms: 0.25 s bins, x-axis auto-ranges to data max, page_timeout_s red vertical line. Pure functions of `job_dir: Path` + the `stats` dict `metrics.py` produces — no `proxy_riding`-internal import at all.
+**Reads:** nothing of its own — takes the `stats` dict as a parameter.
+**Writes:** `{job_dir}/cumulative.png`; `{job_dir}/success_load_hist.png` (only when ≥2 OK `load_s` values, gated by the caller); `{job_dir}/connect_fail_hist.png` (only when ≥2 `connect_fail_records`, gated by the caller).
+**Called by:** `reporter.py` (`write_riding_report`) — the only caller.
+**Calls out:** `matplotlib` (lazy import inside each plot function); `math` (stdlib, bin count).
 
 ### scrape.py (111 LOC)
 
@@ -147,7 +160,8 @@ maps `RiderState.job_records` → pipeline manifest.
 `RiderState` (defined in `state.py`, re-exported through `rider.py`) is the shared mutable state
 across all slot coroutines and the watchdog. Owned and mutated by `rider.py:run_riding_pool`,
 `rider.py:_run_slot`, `rider.py:_apply_fetch_result`, `rider.py:_finalize_ride`. Read by
-`reporter.py:write_riding_report` and `scrape.py:_build_manifest` (read-only, after run completes).
+`reporter.py:write_riding_report`, `metrics.py:_compute_stats` (called from `write_riding_report`),
+and `scrape.py:_build_manifest` (read-only, after run completes).
 `asyncio` single-threaded: `set.add/discard` on `in_flight_urls` and `int` increments on counters
 are safe without explicit locking. `proxy_lock` (asyncio.Lock) guards `proxy_cursor` advancement.
 
@@ -167,8 +181,18 @@ are safe without explicit locking. `proxy_lock` (asyncio.Lock) guards `proxy_cur
   the first write because the dir may not exist at abort time. Exit codes follow Unix signal-kill
   convention: 130 = 128+SIGINT(2), 143 = 128+SIGTERM(15); 0 = wedge-after-done (work complete), 1 = stall.
 - Late import of `reporter.write_riding_report` inside `abort.py`'s shared helper is intentional:
-  `reporter.py` imports from `state.py`; importing `reporter` at `abort.py`'s top level would still
-  create a cycle through `rider.py` (which imports both `state.py` and `abort.py`).
+  `reporter.py` imports from `state.py` (directly, for the `RiderState` type hint) and from
+  `metrics.py`/`plots.py` (which themselves import from `state.py`); importing `reporter` at
+  `abort.py`'s top level would still create a cycle through `rider.py` (which imports both
+  `state.py` and `abort.py`). Splitting `reporter.py` into `reporter.py`/`metrics.py`/`plots.py`
+  did not change this — none of the three import `abort.py` or `rider.py`, so the late import
+  remains necessary and sufficient.
+- `metrics.py:_compute_stats` was 61 LOC before `_compute_fetch_counts` was extracted from it — the
+  per-fetch-record block (`n_total_fetches`/`n_ok`/`n_regwall_fetches`/`n_failed`/`n_connect_fail`,
+  elapsed-time `mean_s`/`median_s`, `wall_s`/`urls_per_min`, `ok_completion_s`), everything derivable
+  from `jobs`/`t_job_start` alone before any ride/proxy/pool/load/connect-fail-specific computation
+  begins. `_compute_stats` now spreads `**_compute_fetch_counts(...)` into its returned dict — same
+  keys/values as before, dict-equal return shape, not a behavior change.
 - Pool load (`load_backfill_pool`) is blocking network I/O, run via `run_in_executor` to avoid
   blocking the event loop during the async entry point.
 - `_run_slot` and `_watchdog` MUST stay defined in `rider.py`: the dev/ tests patch
@@ -182,7 +206,7 @@ are safe without explicit locking. `proxy_lock` (asyncio.Lock) guards `proxy_cur
   `run_riding_pool`/`RiderState` are constructed without an explicit `stall_timeout_s`). Production
   runs override it via `RidingScrapeConfig.stall_timeout_s = 300.0` — don't read the module constant
   as "the" production stall timeout.
-- `reporter.py:_write_load_hist`'s x-axis auto-ranges to data max rather than clamping at
+- `plots.py:_write_load_hist`'s x-axis auto-ranges to data max rather than clamping at
   `page_timeout_s` — `load_s` (elapsed minus the fixed `DELAY_BEFORE_HTML`) can legitimately exceed
   `page_timeout_s` due to post-navigation processing time not covered by the nav timeout; the red
   vertical line marks the nav cap, it is not the axis bound.
