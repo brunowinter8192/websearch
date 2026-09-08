@@ -86,10 +86,10 @@ Touch this package when changing proxy-riding engine behaviour. Do NOT touch `en
 
 **Purpose:** Per-URL fetch + outcome classification — the crawl4ai call, regwall detection, connect-fail subtype classification, and raw-HTML persistence.
 **Reads:** n/a (pure per-call).
-**Writes:** `output_dir/raw/{url_hash}.html` (`_write_raw`, called from `rider.py:_apply_fetch_result`
+**Writes:** `output_dir/raw/{url_hash}.html` (`_write_raw`, called from `rider.py:_apply_ok_result`
 on first-writer OK).
-**Called by:** `rider.py:_run_slot` (`_fetch_one_url`), `rider.py:_apply_fetch_result`
-(`_write_raw`, `_url_hash`, `_classify_connect_fail`).
+**Called by:** `rider.py:_fetch_and_build_job` (`_fetch_one_url`, `_url_hash`), `rider.py:_apply_ok_result`
+(`_write_raw`, `_url_hash`), `rider.py:_apply_connect_fail_result` (`_classify_connect_fail`).
 **Calls out:** `crawl4ai` (`AsyncWebCrawler`, `CrawlerRunConfig`, `CacheMode`, `ProxyConfig`,
 `DefaultMarkdownGenerator`).
 
@@ -106,9 +106,9 @@ minimal fallback stub on any reporter error).
 `metrics.py`/`plots.py` (which themselves import from `state.py`), not from `abort.py`, but the
 cycle would still exist through `rider.py`).
 
-### rider.py (318 LOC)
+### rider.py (371 LOC)
 
-**Purpose:** Entry module — orchestrates B `AsyncWebCrawler` instances, N slot coroutines, per-URL proxy context, burn/fail rotation, 30-min pool refresh, and the watchdog (`run_riding_pool`); installs SIGINT/SIGTERM handlers so manual aborts also produce a report.
+**Purpose:** Entry module — orchestrates B `AsyncWebCrawler` instances, N slot coroutines, per-URL proxy context, burn/fail rotation, 30-min pool refresh, and the watchdog (`run_riding_pool`); installs SIGINT/SIGTERM handlers so manual aborts also produce a report. `_run_slot` and `_apply_fetch_result` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output — see Gotchas): `_run_slot` → `_next_url_for_slot` (dequeue-or-tail-race, returns an explicit `"continue"|"break"|"proceed"` action so the caller's own loop control is preserved) → `_fetch_and_apply` (per-attempt orchestrator) → `_fetch_and_build_job` (fetch + `JobRecord` construction) and `_apply_fetch_result` (now a pure dispatcher) → one helper per status (`_apply_ok_result`, `_apply_regwall_result`, `_apply_connect_fail_result`, `_apply_generic_failure_result`) sharing `_maybe_requeue` for the repeated requeue-if-dequeued check.
 **Reads:** URL queue (asyncio.Queue), proxy pool list, `RidingCooldownManager` (shared state).
 **Writes:** `output_dir/raw/{hash}.html` for each ok URL (via `fetch.py:_write_raw`); triggers
 `state.job_dir/job.md` + `cumulative.png` writes on abort (via `abort.py`).
@@ -159,7 +159,8 @@ maps `RiderState.job_records` → pipeline manifest.
 
 `RiderState` (defined in `state.py`, re-exported through `rider.py`) is the shared mutable state
 across all slot coroutines and the watchdog. Owned and mutated by `rider.py:run_riding_pool`,
-`rider.py:_run_slot`, `rider.py:_apply_fetch_result`, `rider.py:_finalize_ride`. Read by
+`rider.py:_run_slot` and its per-attempt/per-status helpers (`_fetch_and_apply`,
+`_fetch_and_build_job`, `_apply_fetch_result` and its four status handlers), `rider.py:_finalize_ride`. Read by
 `reporter.py:write_riding_report`, `metrics.py:_compute_stats` (called from `write_riding_report`),
 and `scrape.py:_build_manifest` (read-only, after run completes).
 `asyncio` single-threaded: `set.add/discard` on `in_flight_urls` and `int` increments on counters
@@ -198,7 +199,20 @@ are safe without explicit locking. `proxy_lock` (asyncio.Lock) guards `proxy_cur
 - `_run_slot` and `_watchdog` MUST stay defined in `rider.py`: the dev/ tests patch
   `_fetch_one_url`/`_next_proxy`/`POOL_REFRESH_INTERVAL_S`/`os` via
   `unittest.mock.patch.object(rider_mod, ...)`, which only resolves through the DEFINING module's
-  globals — moving these to `fetch.py`/`state.py` silently breaks the test suite.
+  globals — moving these to `fetch.py`/`state.py` silently breaks the test suite. The helpers
+  extracted from `_run_slot`/`_apply_fetch_result` (`_next_url_for_slot`, `_fetch_and_apply`,
+  `_fetch_and_build_job`, `_apply_fetch_result` and its four status handlers, `_maybe_requeue`) all
+  stay in `rider.py` too — none of `dev/news_pipeline/coindesk_proxy_riding/test_tail_race.py`'s
+  patches target these, so no patch target changed, but keeping them here preserves the same
+  DEFINING-module-globals guarantee for any future patch.
+- `_next_url_for_slot`'s three-way `("continue"|"break"|"proceed", ...)` return exists specifically
+  because a bare `continue`/`break` inside an extracted helper does not affect the caller's own
+  loop — the original inline block had one `continue` (stale dequeued dup) and two `break`s
+  (all_resolved; no open URL left to race), and collapsing all three into a single sentinel (e.g.
+  `None`) would have silently turned the `continue` case into a `break`. Verified live, not just by
+  inspection: `dev/news_pipeline/coindesk_proxy_riding/test_tail_race.py`'s
+  `test_3_no_spurious_requeue` sub-case A depends on exactly this distinction (a stale dequeued dup
+  must retry the inner loop, not exit the ride) and passed unchanged (7/7) after the split.
 - Regwall detection (`fetch.py:_is_regwall`) checks `result.markdown.raw_markdown` (browser-rendered
   visible text), NOT `result.html` — `REGWALL_SIGNALS` are embedded as hidden React components in the
   raw HTML of every CoinDesk page, so an html-based check would silently never fire.
