@@ -121,43 +121,13 @@ async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -
                     state.termination = "stall"
                     break
 
-                dequeued = True
-                try:
-                    url = state.url_queue.get_nowait()
-                    if url in state.done_urls:
-                        continue
-                except asyncio.QueueEmpty:
-                    if state.all_resolved:
-                        break
-                    open_list = sorted(state.target_urls - state.done_urls)
-                    if not open_list:
-                        break
-                    url = open_list[slot_id % len(open_list)]
-                    dequeued = False
+                action, url, dequeued = _next_url_for_slot(slot_id, state)
+                if action == "continue":
+                    continue
+                if action == "break":
+                    break
 
-                state.in_flight += 1
-                state.in_flight_urls.add(url)
-                ride_pos  = len(progress.positions) + 1
-                t_url_abs = datetime.now(timezone.utc)
-
-                status, char_count, markdown_len, elapsed, html, err = await _fetch_one_url(
-                    crawler, url, pstr, state.page_timeout_ms,
-                )
-                state.in_flight -= 1
-                state.in_flight_urls.discard(url)
-
-                progress.positions.append((url, status, round(elapsed, 2)))
-                job = JobRecord(
-                    url=url, url_hash=_url_hash(url),
-                    status=status, char_count=char_count, markdown_len=markdown_len,
-                    elapsed_s=round(elapsed, 2), error=err, file=None,
-                    t_start=t_url_abs, ride_position=ride_pos, proxy_str=pstr,
-                    load_s=round(max(0.0, elapsed - DELAY_BEFORE_HTML), 3) if status == "ok" else None,
-                )
-
-                action = _apply_fetch_result(
-                    slot_id, state, progress, job, url, html, dequeued, ride_pos, elapsed, err,
-                )
+                action, job = await _fetch_and_apply(slot_id, crawler, pstr, state, progress, url, dequeued)
                 if action == "continue":
                     continue
                 if action == "append":
@@ -169,6 +139,60 @@ async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -
             _finalize_ride(slot_id, state, proto, hp, pstr, t_bind, progress)
 
     print(f"[slot {slot_id}] exit", file=sys.stderr)
+
+
+# Take the next URL: dequeue (skip already-done dup), else tail-race an open URL when the queue is
+# empty. Returns ("continue"|"break", None, None) to signal the caller's loop control, or
+# ("proceed", url, dequeued).
+def _next_url_for_slot(slot_id: int, state: RiderState) -> tuple[str, str | None, bool | None]:
+    try:
+        url = state.url_queue.get_nowait()
+        if url in state.done_urls:
+            return "continue", None, None
+    except asyncio.QueueEmpty:
+        if state.all_resolved:
+            return "break", None, None
+        open_list = sorted(state.target_urls - state.done_urls)
+        if not open_list:
+            return "break", None, None
+        return "proceed", open_list[slot_id % len(open_list)], False
+    return "proceed", url, True
+
+
+# Fetch one URL under proxy pstr; update in-flight bookkeeping + progress.positions; build its JobRecord.
+async def _fetch_and_build_job(
+    crawler: AsyncWebCrawler, url: str, pstr: str, state: RiderState, progress: _RideProgress, ride_pos: int,
+) -> tuple[JobRecord, str, str | None, float]:
+    state.in_flight += 1
+    state.in_flight_urls.add(url)
+    t_url_abs = datetime.now(timezone.utc)
+
+    status, char_count, markdown_len, elapsed, html, err = await _fetch_one_url(
+        crawler, url, pstr, state.page_timeout_ms,
+    )
+    state.in_flight -= 1
+    state.in_flight_urls.discard(url)
+
+    progress.positions.append((url, status, round(elapsed, 2)))
+    job = JobRecord(
+        url=url, url_hash=_url_hash(url),
+        status=status, char_count=char_count, markdown_len=markdown_len,
+        elapsed_s=round(elapsed, 2), error=err, file=None,
+        t_start=t_url_abs, ride_position=ride_pos, proxy_str=pstr,
+        load_s=round(max(0.0, elapsed - DELAY_BEFORE_HTML), 3) if status == "ok" else None,
+    )
+    return job, html, err, elapsed
+
+
+# Fetch this URL, build its JobRecord, and dispatch the outcome; return ("continue"|"append"|"break", job).
+async def _fetch_and_apply(
+    slot_id: int, crawler: AsyncWebCrawler, pstr: str, state: RiderState, progress: _RideProgress,
+    url: str, dequeued: bool,
+) -> tuple[str, JobRecord]:
+    ride_pos = len(progress.positions) + 1
+    job, html, err, elapsed = await _fetch_and_build_job(crawler, url, pstr, state, progress, ride_pos)
+    action = _apply_fetch_result(slot_id, state, progress, job, url, html, dequeued, ride_pos, elapsed, err)
+    return action, job
 
 
 # Dispatch one fetch's status (ok/regwall/connect_fail/failed/empty); return "continue"|"append"|"break".
@@ -187,41 +211,70 @@ def _apply_fetch_result(
     status = job.status
 
     if status == "ok":
-        if url not in state.done_urls:
-            state.done_urls.add(url)
-            out      = _write_raw(_url_hash(url), html, state.output_dir)
-            job.file = str(out)
-            state.n_ok += 1
-            progress.ride_ok += 1
-            state.last_progress_mono = time.monotonic()
-            print(f"[slot {slot_id}] ok  r={ride_pos} {url[:70]}", file=sys.stderr)
-            return "append"
-        print(f"[slot {slot_id}] dup-race discarded {url[:70]}", file=sys.stderr)
-        return "continue"
-
+        return _apply_ok_result(slot_id, state, progress, job, url, html, ride_pos)
     if status == "regwall":
-        progress.burn_count += 1
-        state.n_regwall     += 1
-        if dequeued and url not in state.done_urls:
-            state.url_queue.put_nowait(url)
-        print(
-            f"[slot {slot_id}] RW  burn={progress.burn_count}/{state.burn_threshold}"
-            f" r={ride_pos}", file=sys.stderr,
-        )
-        return "append"
-
+        return _apply_regwall_result(slot_id, state, progress, url, dequeued, ride_pos)
     if status == "connect_fail":
-        state.n_connect_fail += 1
-        if dequeued and url not in state.done_urls:
-            state.url_queue.put_nowait(url)
-        progress.cf_broke = True
-        state.connect_fail_records.append((round(elapsed, 3), _classify_connect_fail(err)))
-        print(f"[slot {slot_id}] CF  rotating", file=sys.stderr)
-        return "break"
+        return _apply_connect_fail_result(slot_id, state, progress, url, dequeued, elapsed, err)
+    return _apply_generic_failure_result(slot_id, state, progress, status, url, dequeued, ride_pos)
 
-    progress.fail_count += 1
+
+# Re-queue url for another attempt if this was a dequeue (not a race pick) and it's not already done.
+def _maybe_requeue(state: RiderState, url: str, dequeued: bool) -> None:
     if dequeued and url not in state.done_urls:
         state.url_queue.put_nowait(url)
+
+
+# "ok" status: first-writer-wins raw write + counters, or dup-race discard.
+def _apply_ok_result(
+    slot_id: int, state: RiderState, progress: _RideProgress, job: JobRecord, url: str, html: str, ride_pos: int,
+) -> str:
+    if url not in state.done_urls:
+        state.done_urls.add(url)
+        out      = _write_raw(_url_hash(url), html, state.output_dir)
+        job.file = str(out)
+        state.n_ok += 1
+        progress.ride_ok += 1
+        state.last_progress_mono = time.monotonic()
+        print(f"[slot {slot_id}] ok  r={ride_pos} {url[:70]}", file=sys.stderr)
+        return "append"
+    print(f"[slot {slot_id}] dup-race discarded {url[:70]}", file=sys.stderr)
+    return "continue"
+
+
+# "regwall" status: burn-count/counter bump + requeue + log.
+def _apply_regwall_result(
+    slot_id: int, state: RiderState, progress: _RideProgress, url: str, dequeued: bool, ride_pos: int,
+) -> str:
+    progress.burn_count += 1
+    state.n_regwall     += 1
+    _maybe_requeue(state, url, dequeued)
+    print(
+        f"[slot {slot_id}] RW  burn={progress.burn_count}/{state.burn_threshold}"
+        f" r={ride_pos}", file=sys.stderr,
+    )
+    return "append"
+
+
+# "connect_fail" status: counter bump + requeue + connect-fail record + log; always rotates the proxy.
+def _apply_connect_fail_result(
+    slot_id: int, state: RiderState, progress: _RideProgress, url: str, dequeued: bool,
+    elapsed: float, err: str | None,
+) -> str:
+    state.n_connect_fail += 1
+    _maybe_requeue(state, url, dequeued)
+    progress.cf_broke = True
+    state.connect_fail_records.append((round(elapsed, 3), _classify_connect_fail(err)))
+    print(f"[slot {slot_id}] CF  rotating", file=sys.stderr)
+    return "break"
+
+
+# Fallback "failed"/"empty" status: fail-count bump + requeue + log + FAIL_THRESHOLD check.
+def _apply_generic_failure_result(
+    slot_id: int, state: RiderState, progress: _RideProgress, status: str, url: str, dequeued: bool, ride_pos: int,
+) -> str:
+    progress.fail_count += 1
+    _maybe_requeue(state, url, dequeued)
     print(
         f"[slot {slot_id}] {status} fail={progress.fail_count}/{FAIL_THRESHOLD}"
         f" r={ride_pos} → requeue", file=sys.stderr,
