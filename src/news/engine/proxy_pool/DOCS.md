@@ -39,9 +39,9 @@ the job lifecycle (lock, janitor). Do NOT touch when adding a browser-engine pla
 
 ---
 
-### loop.py (229 LOC)
+### loop.py (307 LOC)
 
-**Purpose:** Sustained concurrent rotation loop — 60-min pool refresh, 2-strikes lifecycle, tail-race, wait-on-exhaustion, stall-terminate.
+**Purpose:** Sustained concurrent rotation loop — 60-min pool refresh, 2-strikes lifecycle, tail-race, wait-on-exhaustion, stall-terminate. `run_loop` and `_execute_batch` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output/`time.monotonic()` call count — see Gotchas): `run_loop` → `_check_stall` (stall-log + boolean signal), `_maybe_refresh_and_refill` (refresh-if-due + refill-if-under-buffer_size, returns rebound `pool`/`buf`/`last_refresh`), `_run_batch_cycle` (consume batch off queue → `_execute_batch` → requeue failures, returns rebound `buf`/`last_progress`); `_execute_batch` → `_apply_future_outcome` (the per-future ok/dead/other branch, returns rebound `buf`/`last_progress` since one is conditionally reassigned and the other conditionally rebound on proxy-burn).
 **Reads:** `pool_provider()` callback (returns `(pool, sources)`) + target URL list (in-memory).
 **Writes:** delegates state to `AcquireLogger` + `PersistentCooldownManager`; calls `content_handler` per ok fetch. Returns `(done, dead, gap)`. After each `pool_provider()` call: `record_pool_refresh(len(pool))` then `record_pool_source(url, ok, count)` per source.
 **Called by:** `scrape.py:scrape_entries_proxy`.
@@ -162,8 +162,15 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 - `janitor.end_job` calls `jsonl_path.unlink()` then wipes `log_dir`. Interrupt between these two orphans the JSONL in `log_dir`. Non-critical: `start_job` wipes `log_dir` at the next run.
 - `box_lock`: SIGTERM kills Python before `finally` runs → sidecar stays; kernel releases flock. Next `acquire()` recovers via `cleanup_stale()` (dead-PID detection).
 - `_sleep` in `loop.py` AND `pool_retry.py` are both module aliases (`_sleep = time.sleep`) — patch the alias in the target module in tests, not `time.sleep` directly. For retry tests patch `pool_retry._sleep`; for exhaustion-sleep tests patch `loop._sleep`.
-- `loop.py:_execute_batch`'s `last_progress` return MUST call `time.monotonic()` once per done/dead
-  URL resolution inside the batch loop (not once per batch) — `dev/tests/test_proxy_pool.py`'s
-  `test_run_loop_refresh_*` tests patch `loop.time` wholesale and drive it with a pre-counted
-  `side_effect` sequence keyed to the exact call count; collapsing to a single post-batch call
-  desyncs that sequence. Don't "simplify" this without re-checking those tests.
+- `loop.py:_apply_future_outcome`'s `last_progress` reassignment (called once per future from
+  `_execute_batch`'s `as_completed` loop) MUST call `time.monotonic()` once per done/dead URL
+  resolution (not once per batch) — `dev/tests/test_proxy_pool.py`'s `test_run_loop_refresh_*`
+  tests patch `loop.time` wholesale and drive it with a pre-counted `side_effect` sequence keyed to
+  the exact call count and ORDER, across every `time.monotonic()` call anywhere in `loop.py`
+  (module-level patch, so `run_loop`'s own startup/per-iteration calls and `_maybe_refresh_and_refill`'s
+  refresh-tick call share the same sequence). Collapsing to a single post-batch call, or moving a
+  call earlier/later relative to any other `time.monotonic()` call in the file, desyncs that
+  sequence. Don't "simplify" this without re-checking those tests — confirmed safe as of the
+  2026-09-07 function-size split (the per-future call moved into `_apply_future_outcome` but fires
+  at the exact same point in execution order; both `test_run_loop_refresh_*` tests still pass
+  unchanged).
