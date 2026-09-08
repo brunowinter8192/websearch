@@ -14,9 +14,9 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 
 ## Modules
 
-### pipeline.py (345 LOC)
+### pipeline.py (381 LOC)
 
-**Purpose:** Entry module — the 3 CLI-facing async orchestrators (`run_pipeline`, `run_scrape_only`, `run_discover_only`) plus their per-engine arm helpers, dispatching on `platform.scrape_engine`.
+**Purpose:** Entry module — the 3 CLI-facing async orchestrators (`run_pipeline`, `run_scrape_only`, `run_discover_only`) plus their per-engine arm helpers, dispatching on `platform.scrape_engine`. `run_scrape_only` and `_run_pipeline_proxy_pool` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output — see Gotchas): `run_scrape_only` → `_scrape_only_preamble` (logging setup, `job_id`/`filter_desc`, internet + `load_scrape_entries`-capability precondition checks, both `sys.exit(1)` on failure); `_run_pipeline_proxy_pool` → one helper per STAGE block (`_stage_discover_proxy_pool`, `_stage_dedup_proxy_pool`, `_stage_scrape_proxy_pool`), with the discover stage returning `None` to signal "abort, already logged+marked" and the dedup stage returning the plain (possibly empty) `new_entries` list so the caller's own `if not new_entries: ...; return False` and the surrounding `try/finally`'s `len(new_entries)` read stay exactly as before.
 **Reads:** `data/news/{name}/raw/`, `discover/` (dead_urls.txt, failed_urls.txt, per-year shards, master_urls.txt).
 **Writes:** `raw/{hash}.{md,html}`, `raw/manifest.jsonl`, `discover/` block-lists, `scrape_jobs/{job_id}/` reports (via reporters); delegates marker/snapshot/master-list writes to `pipeline_support.py`, clean-pass writes to `clean_pass.py`.
 **Called by:** `__main__.py`.
@@ -38,9 +38,9 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py:_persist_proxy_pool_results` (proxy_pool arm, only when `n_ok > 0`).
 **Calls out:** none (stdlib `re` only).
 
-### __main__.py (150 LOC)
+### __main__.py (160 LOC)
 
-**Purpose:** argparse entry point. Flags: `--source`, `--skip-index` (no-op, CLI compat), `--timeframe`, `--discover-only`, `--scrape-only` (+ `--year/--from/--to/--limit/--browsers/--slots/--cooldown-policy/--page-timeout`). Imports the platform modules for side-effect registration, resolves via `registry.get`, dispatches to the matching pipeline entry. When `--timeframe` is not `delta` and not `--discover-only`, auto-forces `skip_index=True` and prints the manual index reminder.
+**Purpose:** argparse entry point. Flags: `--source`, `--skip-index` (no-op, CLI compat), `--timeframe`, `--discover-only`, `--scrape-only` (+ `--year/--from/--to/--limit/--browsers/--slots/--cooldown-policy/--page-timeout`). Imports the platform modules for side-effect registration, resolves via `registry.get`, dispatches to the matching pipeline entry. When `--timeframe` is not `delta` and not `--discover-only`, auto-forces `skip_index=True` and prints the manual index reminder. `_add_core_args` was split into `_add_run_mode_args` (`--source`/`--skip-index`/`--timeframe`/`--discover-only`/`--scrape-only`) and `_add_date_filter_args` (`--year`/`--from`/`--to`/`--limit`), called in that order from `_add_core_args` — `add_argument` call order (and therefore `--help` output) is unchanged; verified byte-identical against the pre-split output.
 **Reads:** CLI args.
 **Writes:** stdout.
 **Called by:** the `python -m src.news` entry point.

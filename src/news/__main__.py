@@ -59,6 +59,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 # --source/--skip-index/--timeframe/--discover-only/--scrape-only/--year/--from/--to/--limit
 def _add_core_args(parser: argparse.ArgumentParser) -> None:
+    _add_run_mode_args(parser)
+    _add_date_filter_args(parser)
+
+
+# --source/--skip-index/--timeframe/--discover-only/--scrape-only — run-mode flags
+def _add_run_mode_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source",
         required=True,
@@ -91,6 +97,10 @@ def _add_core_args(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="Read discover shards, MD-diff, scrape → clean → publish. No discover. (CoinDesk).",
     )
+
+
+# --year/--from/--to/--limit — date-filter flags for --scrape-only
+def _add_date_filter_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--year",
         default=None,

@@ -60,21 +60,7 @@ async def run_scrape_only(
     cooldown_policy: str | None = None,
     page_timeout_ms: int | None = None,
 ) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log = _setup_logging(platform.name)
-    job_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    filter_desc = (
-        f"year={year}" if year
-        else f"from={from_date} to={to_date}" if (from_date or to_date)
-        else "all"
-    )
-    log.info(f"=== {platform.name} scrape-only started job_id={job_id} filter={filter_desc} ===")
-    if not _check_internet(platform, log):
-        log.error("Internet check failed — aborting.")
-        sys.exit(1)
-    if not hasattr(platform, "load_scrape_entries"):
-        log.error(f"--scrape-only not supported for {platform.name} (no load_scrape_entries)")
-        sys.exit(1)
+    log, job_id, filter_desc = _scrape_only_preamble(platform, year, from_date, to_date)
 
     entries = platform.load_scrape_entries(year=year, from_date=from_date, to_date=to_date, limit=limit)
     log.info(f"discover → {len(entries)} candidate URL(s) after filter")
@@ -132,6 +118,29 @@ async def run_pipeline(platform: Platform, skip_index: bool = False) -> None:
 
 
 # FUNCTIONS
+
+# Set up logging/job_id/filter_desc, log the started line, and verify preconditions
+# (internet, load_scrape_entries capability) — exits the process on failure.
+def _scrape_only_preamble(
+    platform: Platform, year: str | None, from_date: str | None, to_date: str | None,
+) -> tuple[logging.Logger, str, str]:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log = _setup_logging(platform.name)
+    job_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filter_desc = (
+        f"year={year}" if year
+        else f"from={from_date} to={to_date}" if (from_date or to_date)
+        else "all"
+    )
+    log.info(f"=== {platform.name} scrape-only started job_id={job_id} filter={filter_desc} ===")
+    if not _check_internet(platform, log):
+        log.error("Internet check failed — aborting.")
+        sys.exit(1)
+    if not hasattr(platform, "load_scrape_entries"):
+        log.error(f"--scrape-only not supported for {platform.name} (no load_scrape_entries)")
+        sys.exit(1)
+    return log, job_id, filter_desc
+
 
 # proxy_riding scrape-only arm: bypass chunking — engine owns concurrency, watchdog, requeue.
 async def _run_scrape_only_riding(
@@ -219,44 +228,17 @@ async def _run_pipeline_proxy_pool(
         j.start_job(job_id)
         logger = AcquireLogger(total_urls=0, log_dir=log_dir)
         try:
-            log.info("STAGE discover …")
-            entries = await platform.discover(logger=logger)
-            if not entries:
-                log.error("discover returned 0 articles — aborting.")
-                _write_marker(platform.name, log)
+            entries = await _stage_discover_proxy_pool(platform, discover_dir, log, logger)
+            if entries is None:
                 return False
-            if getattr(platform, "uses_master_list", False):
-                master_path = DATA_ROOT / platform.name / "discover" / "master_urls.txt"
-                _persist_master_list(entries, master_path, log)
-            else:
-                discover_snapshot = _write_discover_snapshot(entries, discover_dir)
-                log.info(f"discover → {len(entries)} articles → {discover_snapshot.name}")
 
-            log.info("STAGE dedup …")
-            failure_urls: set[str] = set()
-            for _fname in ("dead_urls.txt", "failed_urls.txt"):
-                _p = discover_dir / _fname
-                if _p.exists():
-                    failure_urls |= {u for u in _p.read_text(encoding="utf-8").splitlines() if u}
-            new_entries, n_skip_raw, n_excluded = filter_new_entries(
-                entries, raw_dir, platform.name, mode="raw",
-                exclude_urls=failure_urls if failure_urls else None,
-            )
-            log.info(
-                f"dedup → {len(entries)} total, {n_skip_raw} already in raw, "
-                f"{n_excluded} known-failures excluded, {len(new_entries)} new"
-            )
+            new_entries = _stage_dedup_proxy_pool(platform, entries, discover_dir, raw_dir, log)
             if not new_entries:
                 log.info("Nothing new to scrape — pipeline complete.")
                 _write_marker(platform.name, log)
                 return False
 
-            log.info(f"STAGE scrape ({len(new_entries)} URLs) …")
-            manifest = scrape_entries_proxy(new_entries, raw_dir, platform.proxy_scrape_config, logger)
-            n_ok     = sum(1 for e in manifest if e["status"] == "ok")
-            n_dead   = sum(1 for e in manifest if e["status"] == "dead")
-            n_failed = sum(1 for e in manifest if e["status"] == "failed")
-            log.info(f"scrape → {n_ok} ok, {n_dead} dead, {n_failed} failed")
+            manifest, n_ok = _stage_scrape_proxy_pool(platform, new_entries, raw_dir, logger, log)
 
         finally:
             logger.close()
@@ -264,6 +246,60 @@ async def _run_pipeline_proxy_pool(
 
     _persist_proxy_pool_results(platform, new_entries, manifest, n_ok, raw_dir, discover_dir, log)
     return True
+
+
+# STAGE discover: fetch entries via platform.discover(), persist snapshot/master-list; return
+# entries, or None to abort (log + marker already written).
+async def _stage_discover_proxy_pool(
+    platform: Platform, discover_dir: Path, log: logging.Logger, logger: AcquireLogger,
+) -> list[dict] | None:
+    log.info("STAGE discover …")
+    entries = await platform.discover(logger=logger)
+    if not entries:
+        log.error("discover returned 0 articles — aborting.")
+        _write_marker(platform.name, log)
+        return None
+    if getattr(platform, "uses_master_list", False):
+        master_path = DATA_ROOT / platform.name / "discover" / "master_urls.txt"
+        _persist_master_list(entries, master_path, log)
+    else:
+        discover_snapshot = _write_discover_snapshot(entries, discover_dir)
+        log.info(f"discover → {len(entries)} articles → {discover_snapshot.name}")
+    return entries
+
+
+# STAGE dedup: filter entries already in raw / known-failed; return new_entries (may be empty).
+def _stage_dedup_proxy_pool(
+    platform: Platform, entries: list[dict], discover_dir: Path, raw_dir: Path, log: logging.Logger,
+) -> list[dict]:
+    log.info("STAGE dedup …")
+    failure_urls: set[str] = set()
+    for _fname in ("dead_urls.txt", "failed_urls.txt"):
+        _p = discover_dir / _fname
+        if _p.exists():
+            failure_urls |= {u for u in _p.read_text(encoding="utf-8").splitlines() if u}
+    new_entries, n_skip_raw, n_excluded = filter_new_entries(
+        entries, raw_dir, platform.name, mode="raw",
+        exclude_urls=failure_urls if failure_urls else None,
+    )
+    log.info(
+        f"dedup → {len(entries)} total, {n_skip_raw} already in raw, "
+        f"{n_excluded} known-failures excluded, {len(new_entries)} new"
+    )
+    return new_entries
+
+
+# STAGE scrape: run scrape_entries_proxy, log ok/dead/failed counts; return (manifest, n_ok).
+def _stage_scrape_proxy_pool(
+    platform: Platform, new_entries: list[dict], raw_dir: Path, logger: AcquireLogger, log: logging.Logger,
+) -> tuple[list[dict], int]:
+    log.info(f"STAGE scrape ({len(new_entries)} URLs) …")
+    manifest = scrape_entries_proxy(new_entries, raw_dir, platform.proxy_scrape_config, logger)
+    n_ok     = sum(1 for e in manifest if e["status"] == "ok")
+    n_dead   = sum(1 for e in manifest if e["status"] == "dead")
+    n_failed = sum(1 for e in manifest if e["status"] == "failed")
+    log.info(f"scrape → {n_ok} ok, {n_dead} dead, {n_failed} failed")
+    return manifest, n_ok
 
 
 # Persist raw manifest + blocked-URL lists, then run clean-pass (proxy_pool / TheBlock only).
