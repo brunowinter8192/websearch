@@ -14,7 +14,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ## Modules
 
-### base.py (18 LOC)
+### base.py (16 LOC)
 
 **Purpose:** Abstract `BaseEngine` parent — declares `search()` (abstract) and a default `search_with_reason()` (delegates to `search()`), returning the uniform `(results, empty_reason, diagnosis)` 3-tuple with `diagnosis=None`. `empty_reason` is `None` for every real engine as of the guessed-verdict-removal milestone — no engine has a non-`None` value left to return from inside `search_with_reason`.
 **Reads:** nothing.
@@ -24,7 +24,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### google.py (224 LOC)
+### google.py (211 LOC)
 
 **Purpose:** Google web search via pydoll Chrome tab — navigates to the search URL, sets the `SOCS` consent cookie, waits for `div.MjjYud` result containers, detects the `/sorry/` CAPTCHA path and consent-domain redirects, and extracts results via an injected JS parse script. Every non-success branch (the `/sorry/` short-circuit, the post-wait-failure branch, the zero-parsed-results branch) returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker` always `None` here — Google's signal is the URL path, not a text marker — plus `title`/`url`/`ready_state`/`containers_found`), merged with `document_status.attach_document_status` for the `document_status_chain`/`http_status` facts. The success branch (non-empty results) attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read — see `engines/DOCS.md`'s Gotchas for why. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONSENT/CONCURRENT_RACE/NO_CONTAINER outputs are all fully re-derivable from `url`/`ready_state`, already in the snapshot.
 **Reads:** none (network only).
@@ -34,7 +34,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### duckduckgo.py (189 LOC)
+### duckduckgo.py (177 LOC)
 
 **Purpose:** DuckDuckGo HTML-endpoint search via pydoll Chrome tab (`html.duckduckgo.com/html/`) — waits for `#links > div.web-result` containers, detects the `form#challenge-form` CAPTCHA element, and populates `SearchResult.date` (day precision) from the optional dated `<span>` in `.result__extras__url` when present. Every non-success branch returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`title`/`url`/`ready_state`/`containers_found` plus its own `challenge_form: bool`, since the block signal is structural — an element count, not text — so `marker` stays `None`, never overloaded with a selector string). `document_status.attach_document_status` merges in `document_status_chain`/`http_status`. The success branch (non-empty results) attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONCURRENT_RACE/NO_CONTAINER outputs are fully re-derivable from `challenge_form`/`ready_state`, already in the snapshot.
 **Reads:** none (network only).
@@ -44,7 +44,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### startpage.py (176 LOC)
+### startpage.py (166 LOC)
 
 **Purpose:** Startpage (Google-index frontend) search via pydoll Chrome tab — two-step React-form flow (homepage load, native-setter query fill, real button click) to obtain a per-session `sc` token, then waits for `div.result` containers and detects block/captcha markers. Every non-success branch returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker`/`title`/`url`/`ready_state`/`containers_found` plus the engine-specific `iframe_challenge: bool`), merged with `document_status_chain`/`http_status` via `document_status.attach_document_status` — status capture is armed before `_submit_search`'s own homepage `go_to`, so the chain also covers the homepage load, not just the post-form-submit result page. The success branch attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONCURRENT_RACE/NO_CONTAINER outputs are fully re-derivable from `marker`/`iframe_challenge`/`ready_state`, already in the snapshot.
 **Reads:** none (network only).
@@ -54,7 +54,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### brave.py (160 LOC)
+### brave.py (151 LOC)
 
 **Purpose:** Brave Search (own index) via pydoll Chrome tab, headed — single GET, waits for `div[data-type="web"]` containers, and returns a graceful empty result (never an exception, `reason=None`) on Proof-of-Work CAPTCHA detection. `_diagnose(tab)` runs once, right after navigation (before the wait); every non-success branch attaches a snapshot — the immediate PoW/CAPTCHA branch and the post-wait-failure branch reuse that same (pre-existing, stale-by-design) DOM snapshot, the zero-parsed-results branch takes a fresh one. Snapshot carries `marker`/`title`/`url`/`ready_state`/`containers_found` (`None` on the immediate branch — `_wait_for_results` was never called — `False`/`True` on the other two) plus the engine-specific `pow_link: bool`. `document_status_chain`/`http_status` are read fresh at EACH of the three empty return sites regardless (a cheap list read, no CDP round trip) via `document_status.attach_document_status` — so the network fact stays current even where the DOM fact is intentionally reused, see Gotchas. The success branch attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read — relevant here since Brave is one of the engines that also gets PoW-challenged, so a success record's `document_status_chain` can show whether a challenge resolved before it. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONCURRENT_RACE/NO_CONTAINER outputs are fully re-derivable from `marker`/`pow_link`/`ready_state`, already in the snapshot.
 **Reads:** none (network only).
@@ -64,7 +64,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### bing.py (201 LOC)
+### bing.py (191 LOC)
 
 **Purpose:** Bing web search (direct path to the Bing index) via pydoll Chrome tab, headed — single GET, waits for `li.b_algo` containers, unwraps the `bing.com/ck/a?...&u=<base64>` tracking redirect on every href, and detects blocks via an EN+DE marker scan. Every non-success branch returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker`/`title`/`url`/`ready_state`/`containers_found`), merged with `document_status_chain`/`http_status` via `document_status.attach_document_status`. The success branch attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONCURRENT_RACE/NO_CONTAINER outputs are fully re-derivable from `marker`/`ready_state`, already in the snapshot.
 **Reads:** none (network only).
@@ -74,7 +74,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### yandex.py (170 LOC)
+### yandex.py (160 LOC)
 
 **Purpose:** Yandex Search (independent index) via pydoll Chrome tab, headed — waits for `li.serp-item` containers, extracts direct hrefs from `a.OrganicTitle-Link` (no unwrap needed), with fast CAPTCHA-redirect short-circuit and self-referential-result filtering. Every non-success branch returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker`/`title`/`url`/`ready_state`/`containers_found`, `None` on the redirect short-circuit — `_wait_for_results` was never called), including the CAPTCHA-redirect short-circuit (a fresh snapshot taken once the redirect is confirmed), merged with `document_status_chain`/`http_status` via `document_status.attach_document_status` — live-confirmed the SmartCaptcha redirect page itself serves HTTP 200, not a 3xx. The success branch attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONCURRENT_RACE/NO_CONTAINER outputs are fully re-derivable from `marker`/`url`/`ready_state`, already in the snapshot; `_is_block_url` stays, since it is also the early short-circuit optimization inside `search_with_reason`, independent of the removed verdict.
 **Reads:** none (network only).
@@ -84,7 +84,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### openalex.py (142 LOC)
+### openalex.py (127 LOC)
 
 **Purpose:** OpenAlex academic graph search via `httpx` GET against `api.openalex.org/works` (JSON API, no browser) — iterative HTML-entity unescape on titles, `SearchResult.date` from `publication_date` (day-accurate) falling back to `publication_year` (year precision), `SearchResult.pdf_url` from `best_oa_location.pdf_url` (`_pick_url`'s arxiv > doi > id choice stays the canonical `url`). `per_page` clamped to the vendor's 100-max. `reason` is always `None` — the 429 branch used to surface a guessed `EMPTY_BLOCK` verdict, removed (the guessed-verdict-removal milestone) since it carried no information the observed `http_status` (already in diagnosis) didn't already carry; 403 (forbidden resource) was already `reason=None` beforehand, unchanged. `diagnosis` is `{"http_status": <the observed status_code>}` on every branch that returns WITHOUT results (429, 403, and a 200 that parsed to zero results), `None` only when results are non-empty — no DOM diagnosis mechanism (HTTP API, no browser to inspect), but the one fact this engine already holds (the real HTTP status) is no longer discarded.
 **Reads:** `OPENALEX_API_KEY` env var (optional free API key, sent as `api_key` query param — raises the daily budget from $0.10 to $1; `mailto` is never sent, ignored by the API since 2026-02).
@@ -94,7 +94,7 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### scholar.py (119 LOC)
+### scholar.py (107 LOC)
 
 **Purpose:** Google Scholar search via `httpx` GET (no browser, migrated off pydoll) — detects concurrent-CAPTCHA via 30x redirect to `/sorry/`; not wired into `search_web.py`'s production engine pool. `reason` is always `None` — the redirect and inline-captcha-form branches used to surface guessed `EMPTY_BLOCK`/`EMPTY_NO_RESULTS` verdicts, both removed (the guessed-verdict-removal milestone). The redirect's fact (the observed HTTP status) was already in diagnosis; the inline-captcha-form fact was NOT — `_parse_response` now returns `(results, captcha_form: bool)` instead of `(results, reason)`, and `captcha_form` moved into `diagnosis` alongside `http_status` before the verdict it fed was removed. `diagnosis` is `{"http_status": <the observed status_code>}` (redirect branch) or `{"http_status": ..., "captcha_form": bool}` (post-fetch branches) on every branch that returns WITHOUT results, `None` only when results are non-empty — same "one fact already in hand" treatment as `openalex.py`, extended by one field here since scholar had a second signal (`captcha_form`) that only ever fed a classification, never a snapshot, before this milestone.
 **Reads:** none (network only).

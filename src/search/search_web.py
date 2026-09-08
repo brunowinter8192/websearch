@@ -11,7 +11,6 @@ import pydoll.exceptions as _pydoll_exc
 import websockets.exceptions as _ws_exc
 from mcp.types import TextContent
 
-# From browser.py: deterministic own-browser teardown, called in a finally around the engine sweep
 from src.search.browser import get_tab, kill_own_chrome
 from src.search.cache import cache_key, cache_write
 from src.search.engines.google import GoogleEngine
@@ -23,13 +22,10 @@ from src.search.engines.yandex import YandexEngine
 from src.search.engines.openalex import OpenAlexEngine
 from src.search.rate_limiter import get_limiter
 from src.search.result import SearchResult
-# From merge.py: per-engine pool builder with cross-engine URL dedup
 from src.search.merge import build_engine_pools
-# From status.py: sub-status string constants
 from src.search import status as S
 from src.search import status_timeout as ST
 from src.search import status_error as SE
-# From query_logger.py: append-only JSONL query log
 from src.search.query_logger import log_query
 
 logger = logging.getLogger(__name__)
@@ -39,18 +35,11 @@ _DEFAULT_ENGINES: frozenset[str] = frozenset({
     "openalex", "startpage", "brave", "bing", "yandex",
 })
 
-# Engines that share the pydoll Chrome session (browser.py) — the only ones _prewarm_browser
-# needs to launch for
 _BROWSER_ENGINES: frozenset[str] = frozenset({
     "google", "duckduckgo",
     "startpage", "brave", "bing", "yandex",
 })
 
-# Uniform across all engines (2026-08-25) — a per-engine override (3.6s default, up to 6.0s for
-# open_library/semantic_scholar/crossref/startpage/brave) saved no wall time since engines run
-# concurrently and the sweep already paid the 6.0s class on nearly every run (138 workflow_summary
-# records: bottleneck semantic_scholar 84x/startpage 26x/open_library 19x, google only 3x), while
-# censoring slow-yet-alive engines at the shorter 3.6s (google 19x TIMEOUT_WATCHDOG, duckduckgo 46x).
 ENGINE_WATCHDOG_TIMEOUT: float = 6.0
 RATE_WAIT_TIMEOUT: float = 60.0
 
@@ -76,7 +65,6 @@ ENGINES = {
 
 # ORCHESTRATOR
 
-# Fan out to all enabled engines, build per-engine pools, format breakdown table, cache, log, return TextContent
 async def search_web_workflow(
     query: str,
     language: str = "en",
@@ -122,7 +110,6 @@ async def search_web_workflow(
     )
 
 
-# Synchronous wrapper for dev scripts — runs event loop internally
 def fetch_search_results(
     query: str,
     category: str,
@@ -146,12 +133,6 @@ def fetch_search_results(
 
 # FUNCTIONS
 
-# Launch (or reuse) the shared browser OUTSIDE any per-engine watchdog — a per-engine timeout
-# (3.6-6.0s) is far shorter than a legitimate cross-process lock wait, so doing this lazily inside
-# an engine's own asyncio.wait_for-guarded call let the watchdog cancel get_tab() mid-wait,
-# abandoning its blocking lock-acquire thread and letting the next engine retry from scratch
-# (caught live via a two-parallel-CLI-run test). A real launch failure here is swallowed and
-# re-surfaces identically per-engine when their own new_tab() call retries it.
 async def _prewarm_browser() -> None:
     try:
         await get_tab()
@@ -159,7 +140,6 @@ async def _prewarm_browser() -> None:
         logger.warning("Browser prewarm failed, engines will retry individually: %s", e)
 
 
-# Cap each engine's pool to K = google's pool size (fallback 10) — prevents drilldown floods
 def _cap_pools(pools: dict) -> dict:
     google_count = len(pools.get("google", []))
     K = google_count if google_count > 0 else 10
@@ -167,7 +147,6 @@ def _cap_pools(pools: dict) -> dict:
     return {eng: pool[:K] for eng, pool in pools.items()}
 
 
-# Build the workflow's return value — plain [TextContent], or with _with_timings, (result, timings_dict)
 def _build_search_result(
     formatted_text: str,
     with_timings: bool,
@@ -192,7 +171,6 @@ def _build_search_result(
     return result, timings
 
 
-# Filter engine registry; return (selected, excluded) — excluded maps engine.name to reason for engines not included
 def _select_engines(engines: str | None) -> tuple[dict, dict[str, str]]:
     if not engines:
         selected = {k: v for k, v in ENGINES.items() if k in _DEFAULT_ENGINES}
@@ -201,7 +179,6 @@ def _select_engines(engines: str | None) -> tuple[dict, dict[str, str]]:
     return {k: v for k, v in ENGINES.items() if k in names}, {}
 
 
-# Execute engine fanout (timed or plain); return (raw_results, engine_stats, fanout_ms, engine_ms, engine_details)
 async def _run_engine_fanout(
     selected: dict,
     query: str,
@@ -244,7 +221,6 @@ async def _run_engine_fanout(
     return raw_results, engine_stats, engine_fanout_ms, engine_ms, engine_details
 
 
-# Query selected engines concurrently; write engine_run log entry; return (combined_results, engine_stats_dict)
 async def _query_engines_concurrent(
     query: str,
     language: str,
@@ -282,7 +258,6 @@ async def _query_engines_concurrent(
     return combined, engine_stats
 
 
-# Map an engine-search exception to (status, drop_reason) — same match order as the original except chain
 def _classify_engine_exception(exc: Exception, timeout: float | None, search_ms: int) -> tuple[str, str]:
     if isinstance(exc, asyncio.TimeoutError):
         sub = ST.TIMEOUT_WATCHDOG if timeout is not None and search_ms < timeout * 1.2 * 1000 else ST.TIMEOUT_NONCOOP
@@ -303,9 +278,6 @@ def _classify_engine_exception(exc: Exception, timeout: float | None, search_ms:
     return SE.ERROR_OTHER, str(exc)
 
 
-# Wrap single engine search; return (results, rate_wait_ms, search_ms, status, drop_reason, diagnosis) —
-# diagnosis is the raw-facts snapshot behind a non-None empty_reason (browser engines), or None
-# (success, or engines with no diagnosis mechanism: openalex, scholar)
 async def _engine_with_timing(
     engine,
     query: str,
@@ -342,7 +314,6 @@ async def _engine_with_timing(
         return [], rate_wait_ms, search_ms, status, drop_reason, None
 
 
-# Format per-engine result counts as a breakdown table with drilldown hint
 def _format_breakdown(query: str, pools: dict[str, list[SearchResult]], all_engine_names: list[str]) -> str:
     lines = [f'Engine breakdown for "{query}":']
     for engine in all_engine_names:
@@ -353,7 +324,6 @@ def _format_breakdown(query: str, pools: dict[str, list[SearchResult]], all_engi
     return "\n".join(lines)
 
 
-# Build and write workflow_summary log entry after each search_web_workflow call
 def _build_query_log_entry(
     query: str,
     language: str,

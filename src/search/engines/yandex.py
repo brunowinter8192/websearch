@@ -54,11 +54,9 @@ _limiters["yandex"] = RateLimiter(max_requests=4, window_seconds=60)
 
 # ORCHESTRATOR
 
-# Yandex web search via pydoll stealth browser — independent index; SmartCaptcha blocks degrade gracefully to empty+reason
 class YandexEngine(BaseEngine):
     name = "yandex"
 
-    # Full search logic with empty-reason diagnosis; exceptions propagate to _engine_with_timing
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("Yandex search: %s", query)
         tab = await new_tab()
@@ -85,7 +83,6 @@ class YandexEngine(BaseEngine):
         finally:
             await kill_tab(tab)
 
-    # Legacy thin wrapper — delegates to search_with_reason; swallows exceptions for dev-script compat
     async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
         try:
             results, _, _ = await self.search_with_reason(query, language, max_results)
@@ -97,7 +94,6 @@ class YandexEngine(BaseEngine):
 
 # FUNCTIONS
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -105,19 +101,16 @@ def _extract_value(result):
         return None
 
 
-# Check a URL for Yandex's SmartCaptcha redirect path (pure — no browser access)
 def _is_block_url(url: str) -> bool:
     lowered = (url or "").lower()
     return any(marker in lowered for marker in BLOCK_URL_MARKERS)
 
 
-# Yandex's own domain (self-referential cards) — matches a dot-separated hostname LABEL, not a raw substring
 def _is_self_referential(url: str) -> bool:
     host = urlparse(url).hostname or ""
     return SELF_DOMAIN_LABEL in host.split(".")
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -128,7 +121,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Build SearchResult list from parsed li.serp-item items, dropping yandex.com self-links (pure)
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     results = []
     for item in items:
@@ -144,7 +136,6 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     return results
 
 
-# Query DOM for li.serp-item containers and return SearchResult list (direct hrefs, no unwrap needed)
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -157,7 +148,6 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return _build_results(items, max_results)
 
 
-# Snapshot the page facts behind an empty result — an OBSERVATION, never a verdict; tab is still open
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)

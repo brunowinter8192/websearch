@@ -7,7 +7,6 @@ MAX_SNIPPET_LEN = 500
 
 # FUNCTIONS
 
-# Remove Google doubled title+domain prefix (heuristic: maximize cut across all repeated-chunk matches)
 def _strip_doubled_prefix(text: str) -> str:
     if len(text) < 60:
         return text
@@ -26,7 +25,6 @@ def _strip_doubled_prefix(text: str) -> str:
     return text[best_cut:] if best_cut else text
 
 
-# Decode HTML entities, strip doubled prefix, and remove bloat patterns; return normalized whitespace
 def _strip_bloat(text: str) -> str:
     text = html.unescape(text)
     text = _strip_doubled_prefix(text)
@@ -43,7 +41,6 @@ def _strip_bloat(text: str) -> str:
     return ' '.join(text.split())
 
 
-# Sentence-aware truncation: period boundary, then word boundary, then hard cut
 def _truncate(text: str, max_len: int) -> str:
     if len(text) <= max_len:
         return text

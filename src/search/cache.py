@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 
 from src.search.result import SearchResult
-# From snippet.py: bloat-strip and truncation for drilldown display
 from src.search.snippet import _strip_bloat, _truncate, MAX_SNIPPET_LEN
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,6 @@ DEFAULT_TTL = 3600
 
 # FUNCTIONS
 
-# SHA-256 hex of canonical input string, first 16 chars.
 def cache_key(
     query: str,
     language: str,
@@ -30,12 +28,10 @@ def cache_key(
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-# ~/.cache/websearch/<key>.json
 def cache_path(key: str) -> Path:
     return CACHE_DIR / f"{key}.json"
 
 
-# Atomic write via temp file + rename; pools is {engine_name: [SearchResult, ...]} from build_engine_pools
 def cache_write(
     key: str,
     pools: dict[str, list[SearchResult]],
@@ -82,7 +78,6 @@ def cache_write(
         raise
 
 
-# Read cache if exists and not expired (mtime-based). Returns dict or None on miss/expiry.
 def cache_read(key: str, ttl_seconds: int = DEFAULT_TTL) -> dict | None:
     path = cache_path(key)
     if not path.exists():
@@ -98,7 +93,6 @@ def cache_read(key: str, ttl_seconds: int = DEFAULT_TTL) -> dict | None:
         return None
 
 
-# Format one engine's pool from cache as a numbered plain-text list with stripped snippet.
 def format_engine_pool(pool: list[dict], engine_name: str, query: str) -> str:
     if not pool:
         return f'No results from {engine_name} for "{query}"'

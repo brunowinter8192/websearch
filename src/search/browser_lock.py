@@ -11,7 +11,6 @@ _TS_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 POLL_INTERVAL_S = 0.25
 
 
-# A held cross-process lock; released via release()
 class LockHandle:
     def __init__(self, fd, sidecar_path: Path):
         self._fd = fd
@@ -25,11 +24,6 @@ class LockHandle:
 
 # FUNCTIONS
 
-# Blocking acquire: polls a non-blocking flock; a sidecar older than hard_budget_s is presumed
-# stuck (not just slow) and force-broken — on_stale runs first (e.g. to reap orphaned children of
-# the presumed-stuck holder), then a fresh inode is opened at the same path (flock is inode-bound,
-# so this bypasses the old holder's still-technically-held lock on the now-unlinked file) and
-# acquire is retried. Returns once this process holds the lock.
 def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None = None) -> LockHandle:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     sidecar_path = lock_path.with_suffix(".json")
@@ -50,7 +44,6 @@ def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] 
         time.sleep(POLL_INTERVAL_S)
 
 
-# Write {"pid", "started_at"} sidecar for the just-acquired lock
 def _write_sidecar(sidecar_path: Path) -> None:
     sidecar_path.write_text(json.dumps({
         "pid": os.getpid(),
@@ -58,7 +51,6 @@ def _write_sidecar(sidecar_path: Path) -> None:
     }))
 
 
-# Age in seconds of the current holder's sidecar; None if missing/unreadable (treated as not-stale)
 def _sidecar_age_s(sidecar_path: Path) -> float | None:
     try:
         data = json.loads(sidecar_path.read_text())
@@ -68,7 +60,6 @@ def _sidecar_age_s(sidecar_path: Path) -> float | None:
     return (datetime.now(timezone.utc) - started).total_seconds()
 
 
-# Force-break a stale lock — see acquire()'s docstring for why unlink+recreate works
 def _break_lock(lock_path: Path, sidecar_path: Path) -> None:
     lock_path.unlink(missing_ok=True)
     sidecar_path.unlink(missing_ok=True)
