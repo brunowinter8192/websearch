@@ -10,7 +10,7 @@ Full-site discovery + capture-pipeline scrape step for offline documentation ind
 
 - `scrape_urls_workflow(urls, output_dir, download_delay, concurrency_per_domain=None, engine="chromium", block_images=False)` (pipe_scraper.py) — batch raw-markdown scrape of a URL list. `engine` is a per-RUN choice ("chromium" default/unchanged behavior, or "camoufox" — a deliberate second lane, never auto-selected); `concurrency_per_domain=None` resolves to the ENGINE'S OWN default.
 - `crawl_site_workflow(...)` (crawl_site.py) — discover (BFS) then crawl a seed domain. Superseded by `discovery.py` for the discovery step; do not extend.
-- `discover_urls_playwright(...)`, `crawl_urls(...)`, `normalize_url(...)` (crawl_site.py).
+- `discover_urls_playwright(...)`, `crawl_urls(...)`, `normalize_url(...)`, `is_garbage_content(content) -> str | None` (crawl_site.py) — the last one moved here from `src/scraper/chromium_scrape.py` (pure relocation): used only by this module's own `save_markdown` batch filter, not called by anything in `src/scraper/`.
 - `log_pipe_scrape(record)` (pipe_scrape_logger.py) — called by pipe_scraper.py.
 - `robots_feeder_workflow(seed_url)`, `sitemap_feeder_workflow(seed_url)`, `navtree_feeder_workflow(seed_url)` (seed_feeders.py) — each returns a `FeederResult(urls, ok, error, source)` (seed_feeders_scope.py). `source` is a short tag naming the extraction method ("robots", "sitemap", "navtree_tree", "navtree_flat" — see seed_feeders_scope.py's own Gotcha) so a caller can tell an authoritative navigation-tree inventory from a flat href scrap without either being filtered here.
 - `discover_urls_workflow(seed_url)` (discovery.py) — returns a `DiscoveryResult(urls, ok, wall_s, failed_feeders, error)`; `urls` is `list[DiscoveredURL(url, source)]`, `source` ∈ `{"seed", "robots", "sitemap", "navtree_tree", "navtree_flat"}`. No page is ever fetched by this function itself (see discovery.py's own entry below).
@@ -22,13 +22,13 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 
 ## Modules
 
-### crawl_site.py (359 LOC)
+### crawl_site.py (403 LOC)
 
-**Purpose:** Discovery engine + content crawl — Playwright-per-page BFS from a seed URL (`discover_urls_playwright`) followed by a parallel content crawl (`crawl_urls`) writing one markdown file per URL.
+**Purpose:** Discovery engine + content crawl — Playwright-per-page BFS from a seed URL (`discover_urls_playwright`) followed by a parallel content crawl (`crawl_urls`) writing one markdown file per URL. Also owns `is_garbage_content` (moved here from `src/scraper/chromium_scrape.py`, pure relocation — it was already only ever consumed by this module's own `save_markdown` batch filter) — an automatic garbage-content verdict (7 categories: `minimal_content`, `crawl4ai_error`, `http_error`, `nav_dump`, `cookie_wall`, `login_wall`, `cloudflare`), correct here since this is an unattended batch crawl with no agent reviewing its output.
 **Reads:** seed URL / `--url-file` list.
 **Writes:** per-URL `.md` to `--output-dir` (each with source header).
 **Called by:** `crawl_site_workflow` (CLI entry); capture-and-index workflow.
-**Calls out:** `crawl4ai` (AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, UndetectedAdapter, AsyncPlaywrightCrawlerStrategy, DefaultMarkdownGenerator, SemaphoreDispatcher); `src.scraper.chromium_scrape.is_garbage_content`.
+**Calls out:** `crawl4ai` (AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, UndetectedAdapter, AsyncPlaywrightCrawlerStrategy, DefaultMarkdownGenerator, SemaphoreDispatcher).
 
 ### pipe_scraper.py (121 LOC) — entry point
 

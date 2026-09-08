@@ -13,7 +13,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-from src.scraper.chromium_scrape import is_garbage_content
+from src.crawler.crawl_site import is_garbage_content
 
 REPORTS_DIR = Path(__file__).parent / "md"
 EDGE_CASES = {

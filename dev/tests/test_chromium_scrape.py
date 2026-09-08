@@ -17,7 +17,8 @@ import time
 
 import pytest
 
-from src.scraper import chromium_scrape
+from src.crawler import crawl_site
+from src.scraper import chromium_process, chromium_scrape
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ from src.scraper import chromium_scrape
 
 def _patch_cdp_launch_mechanics(monkeypatch):
     async def _fake_resolve_bundle():
-        return chromium_scrape.Path("/fake/chromium-1228/Google Chrome for Testing.app")
+        return chromium_process.Path("/fake/chromium-1228/Google Chrome for Testing.app")
 
     monkeypatch.setattr(chromium_scrape, "_resolve_chromium_bundle_path", _fake_resolve_bundle)
     monkeypatch.setattr(chromium_scrape, "_self_launch_chrome", lambda *a, **kw: None)
@@ -606,8 +607,8 @@ def test_extract_config_stamp_no_longer_carries_excluded_selector_hash():
 def test_is_garbage_content_still_importable_and_functioning():
     """Guard against accidentally deleting the function itself — only its use as a gate inside
     this module's own try_scrape/scrape_url_chromium_workflow was removed."""
-    assert chromium_scrape.is_garbage_content("short") == "minimal_content"
-    assert chromium_scrape.is_garbage_content("A" * 5000 + " ordinary long real content " * 20) is None
+    assert crawl_site.is_garbage_content("short") == "minimal_content"
+    assert crawl_site.is_garbage_content("A" * 5000 + " ordinary long real content " * 20) is None
 
 
 @pytest.mark.asyncio
@@ -616,7 +617,7 @@ async def test_try_scrape_does_not_call_is_garbage_content(monkeypatch):
     like a historical garbage category (short 403-flavored text) must come back as content."""
     _patch_cdp_launch_mechanics(monkeypatch)
     called = []
-    monkeypatch.setattr(chromium_scrape, "is_garbage_content",
+    monkeypatch.setattr(crawl_site, "is_garbage_content",
                          lambda content: called.append(content) or "http_error")
 
     class _FakeCrawler:
@@ -847,24 +848,24 @@ async def test_cdp_headed_teardown_fires_on_budget_timeout(monkeypatch):
 def test_wait_for_devtools_port_reads_real_port_file(tmp_path):
     port_file = tmp_path / "DevToolsActivePort"
     port_file.write_text("54321\n/devtools/browser/fake-uuid\n")
-    port = chromium_scrape._wait_for_devtools_port(str(tmp_path), timeout_s=2.0)
+    port = chromium_process._wait_for_devtools_port(str(tmp_path), timeout_s=2.0)
     assert port == 54321
 
 
 def test_wait_for_devtools_port_times_out_when_file_never_appears(tmp_path):
     with pytest.raises(TimeoutError, match="DevToolsActivePort did not appear"):
-        chromium_scrape._wait_for_devtools_port(str(tmp_path), timeout_s=0.3)
+        chromium_process._wait_for_devtools_port(str(tmp_path), timeout_s=0.3)
 
 
 def test_find_app_bundle_walks_up_to_app_suffix():
-    bundle = chromium_scrape._find_app_bundle(
+    bundle = chromium_process._find_app_bundle(
         "/Users/x/Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/"
         "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
     assert str(bundle).endswith("Google Chrome for Testing.app")
 
 
 def test_find_app_bundle_returns_none_when_no_app_ancestor():
-    assert chromium_scrape._find_app_bundle("/usr/local/bin/chrome") is None
+    assert chromium_process._find_app_bundle("/usr/local/bin/chrome") is None
 
 
 # ---------------------------------------------------------------------------
@@ -898,7 +899,7 @@ def test_build_self_launch_flags_keeps_gpu_on_under_stealth():
     (its own comment: keep WebGL working under stealth). Deliberate 3-flag deviation from literal
     parity with the old direct-launch path's cmdline, confirmed here so it can't silently regress
     back to disabling GPU."""
-    flags = chromium_scrape._build_self_launch_flags(chromium_scrape.BrowserConfig(enable_stealth=True))
+    flags = chromium_process._build_self_launch_flags(chromium_scrape.BrowserConfig(enable_stealth=True))
     assert "--disable-gpu" not in flags
     assert "--disable-gpu-compositing" not in flags
     assert "--disable-software-rasterizer" not in flags
@@ -907,7 +908,7 @@ def test_build_self_launch_flags_keeps_gpu_on_under_stealth():
 
 def test_build_self_launch_flags_includes_window_size_when_viewport_set():
     config = chromium_scrape.BrowserConfig(enable_stealth=True, viewport_width=1080, viewport_height=600)
-    flags = chromium_scrape._build_self_launch_flags(config)
+    flags = chromium_process._build_self_launch_flags(config)
     assert "--window-size=1080,600" in flags
 
 
@@ -955,31 +956,31 @@ def test_pids_on_profile_parses_pgrep_output(monkeypatch):
     class _FakeCompleted:
         stdout = "111\n222\n"
 
-    monkeypatch.setattr(chromium_scrape.subprocess, "run", lambda *a, **kw: _FakeCompleted())
-    assert chromium_scrape._pids_on_profile("/tmp/some-dir") == [111, 222]
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _FakeCompleted())
+    assert chromium_process._pids_on_profile("/tmp/some-dir") == [111, 222]
 
 
 def test_pids_on_profile_empty_when_no_match(monkeypatch):
     class _FakeCompleted:
         stdout = ""
 
-    monkeypatch.setattr(chromium_scrape.subprocess, "run", lambda *a, **kw: _FakeCompleted())
-    assert chromium_scrape._pids_on_profile("/tmp/some-dir") == []
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _FakeCompleted())
+    assert chromium_process._pids_on_profile("/tmp/some-dir") == []
 
 
 def test_kill_by_profile_delegates_to_death_pipe_terminate_then_kill(monkeypatch):
-    monkeypatch.setattr(chromium_scrape, "_pids_on_profile", lambda d: [42])
+    monkeypatch.setattr(chromium_process, "_pids_on_profile", lambda d: [42])
     calls = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "_terminate_then_kill", lambda pids, timeout_s=5.0: calls.append((pids, timeout_s)))
-    chromium_scrape._kill_by_profile("/tmp/some-dir")
+    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids, timeout_s=5.0: calls.append((pids, timeout_s)))
+    chromium_process._kill_by_profile("/tmp/some-dir")
     assert calls == [([42], 3.0)]
 
 
 def test_kill_by_profile_noop_when_no_pids(monkeypatch):
-    monkeypatch.setattr(chromium_scrape, "_pids_on_profile", lambda d: [])
+    monkeypatch.setattr(chromium_process, "_pids_on_profile", lambda d: [])
     calls = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "_terminate_then_kill", lambda *a, **kw: calls.append(1))
-    chromium_scrape._kill_by_profile("/tmp/some-dir")
+    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda *a, **kw: calls.append(1))
+    chromium_process._kill_by_profile("/tmp/some-dir")
     assert calls == []
 
 
@@ -997,16 +998,16 @@ def test_reap_orphaned_scrapes_kills_only_pids_older_than_budget(monkeypatch, tm
             self.pid = pid
 
         def create_time(self):
-            return now - (10.0 if self.pid == young_pid else chromium_scrape.TOTAL_SCRAPE_BUDGET_S + 5.0)
+            return now - (10.0 if self.pid == young_pid else chromium_process.TOTAL_SCRAPE_BUDGET_S + 5.0)
 
-    monkeypatch.setattr(chromium_scrape, "_pids_matching_scrape_profiles", lambda: [young_pid, old_pid])
-    monkeypatch.setattr(chromium_scrape.psutil, "Process", _FakeProc)
-    monkeypatch.setattr(chromium_scrape, "_live_scrape_profile_dirs", lambda: set())
+    monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [young_pid, old_pid])
+    monkeypatch.setattr(chromium_process.psutil, "Process", _FakeProc)
+    monkeypatch.setattr(chromium_process, "_live_scrape_profile_dirs", lambda: set())
     killed = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
-    monkeypatch.setattr(chromium_scrape, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
+    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
+    monkeypatch.setattr(chromium_process, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
 
-    chromium_scrape._reap_orphaned_scrapes()
+    chromium_process._reap_orphaned_scrapes()
 
     assert killed == [[old_pid]]
 
@@ -1018,14 +1019,14 @@ def test_reap_orphaned_scrapes_never_kills_pid_under_budget_even_if_only_candida
         def create_time(self):
             return now - 5.0  # well under TOTAL_SCRAPE_BUDGET_S — a legitimate in-flight scrape
 
-    monkeypatch.setattr(chromium_scrape, "_pids_matching_scrape_profiles", lambda: [2001])
-    monkeypatch.setattr(chromium_scrape.psutil, "Process", lambda pid: _FakeProc())
-    monkeypatch.setattr(chromium_scrape, "_live_scrape_profile_dirs", lambda: {"/tmp/scrape-url-cdp-live"})
+    monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [2001])
+    monkeypatch.setattr(chromium_process.psutil, "Process", lambda pid: _FakeProc())
+    monkeypatch.setattr(chromium_process, "_live_scrape_profile_dirs", lambda: {"/tmp/scrape-url-cdp-live"})
     killed = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
-    monkeypatch.setattr(chromium_scrape, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
+    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
+    monkeypatch.setattr(chromium_process, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
 
-    chromium_scrape._reap_orphaned_scrapes()
+    chromium_process._reap_orphaned_scrapes()
 
     assert killed == []
 
@@ -1036,11 +1037,11 @@ def test_reap_orphaned_scrapes_sweeps_dirs_with_no_live_process(monkeypatch, tmp
     live_dir.mkdir()
     orphan_dir.mkdir()
 
-    monkeypatch.setattr(chromium_scrape, "_pids_matching_scrape_profiles", lambda: [])
-    monkeypatch.setattr(chromium_scrape, "_live_scrape_profile_dirs", lambda: {str(live_dir)})
-    monkeypatch.setattr(chromium_scrape, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
+    monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [])
+    monkeypatch.setattr(chromium_process, "_live_scrape_profile_dirs", lambda: {str(live_dir)})
+    monkeypatch.setattr(chromium_process, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
 
-    chromium_scrape._reap_orphaned_scrapes()
+    chromium_process._reap_orphaned_scrapes()
 
     assert live_dir.exists()
     assert not orphan_dir.exists()
@@ -1051,20 +1052,20 @@ def test_live_scrape_profile_dirs_reads_user_data_dir_from_cmdline(monkeypatch):
         def cmdline(self):
             return ["/fake/Chrome", "--remote-debugging-port=0", "--user-data-dir=/tmp/scrape-url-cdp-abc123", "--flag"]
 
-    monkeypatch.setattr(chromium_scrape, "_pids_matching_scrape_profiles", lambda: [7777])
-    monkeypatch.setattr(chromium_scrape.psutil, "Process", lambda pid: _FakeProc())
+    monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [7777])
+    monkeypatch.setattr(chromium_process.psutil, "Process", lambda pid: _FakeProc())
 
-    assert chromium_scrape._live_scrape_profile_dirs() == {"/tmp/scrape-url-cdp-abc123"}
+    assert chromium_process._live_scrape_profile_dirs() == {"/tmp/scrape-url-cdp-abc123"}
 
 
 def test_live_scrape_profile_dirs_skips_already_dead_pid(monkeypatch):
     def raise_no_such_process(pid):
-        raise chromium_scrape.psutil.NoSuchProcess(pid)
+        raise chromium_process.psutil.NoSuchProcess(pid)
 
-    monkeypatch.setattr(chromium_scrape, "_pids_matching_scrape_profiles", lambda: [8888])
-    monkeypatch.setattr(chromium_scrape.psutil, "Process", raise_no_such_process)
+    monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [8888])
+    monkeypatch.setattr(chromium_process.psutil, "Process", raise_no_such_process)
 
-    assert chromium_scrape._live_scrape_profile_dirs() == set()
+    assert chromium_process._live_scrape_profile_dirs() == set()
 
 
 # ---------------------------------------------------------------------------
