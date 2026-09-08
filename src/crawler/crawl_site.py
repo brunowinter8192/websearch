@@ -14,7 +14,7 @@ from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from crawl4ai.async_dispatcher import SemaphoreDispatcher
 
-from src.scraper.chromium_scrape import is_garbage_content
+from src.crawler.garbage_filter import is_garbage_content
 
 logger = logging.getLogger(__name__)
 

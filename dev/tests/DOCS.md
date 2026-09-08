@@ -145,16 +145,24 @@ ordinary-page case, the empty-chain fallback, and non-document/non-main-frame re
 is zeroed in these tests, so there is no real "later" window to fire into; firing the whole chain
 inside `goto()` is an equivalent, deterministic stand-in).
 
-### test_chromium_scrape.py (1124 LOC)
+### test_chromium_scrape.py (1295 LOC)
 **Purpose:** `src/scraper/chromium_scrape.py` — `is_browser_launch_error`, `try_scrape` acquisition-
 error classification + HTTP-error-with-real-content preservation, `_format_scrape_output`,
-`extract_config_stamp`, cdp-headed self-launch teardown-on-every-exit-path, self-launch mechanics
-(`_wait_for_devtools_port`/`_find_app_bundle`, real filesystem), live `crawl4ai.browser_manager.
-ManagedBrowser.build_browser_flags` parity guard + `_build_self_launch_flags` GPU/window-size;
-net 2 (`_acquire_cdp_headed` spawns `death_pipe.spawn_watchdog` with this call's real pids +
-throwaway dir once the cdp port resolves) and net 3 (`_reap_orphaned_scrapes` kills only
-`scrape-url-cdp-*` pids older than `TOTAL_SCRAPE_BUDGET_S`, never a young/legitimate parallel
-scrape, and sweeps only dirs with zero live processes) — subprocess/psutil mocked throughout.
+`extract_config_stamp`, cdp-headed self-launch teardown-on-every-exit-path — via `src/scraper/
+chromium_process.py`'s functions, called from and monkeypatched on `chromium_scrape` for these
+orchestration-level tests, since `_acquire_cdp_headed`/`try_scrape` resolve them through
+`chromium_scrape`'s own imported names. Also direct unit coverage of `chromium_process.py` itself
+(monkeypatched on `chromium_process` instead — that module's own functions resolve `subprocess`/
+`psutil`/`tempfile`/internal helper names via ITS OWN globals, not the caller's): self-launch
+mechanics (`_wait_for_devtools_port`/`_find_app_bundle`, real filesystem), live `crawl4ai.browser_
+manager.ManagedBrowser.build_browser_flags` parity guard + `_build_self_launch_flags` GPU/window-
+size; net 2 (`_acquire_cdp_headed` spawns `death_pipe.spawn_watchdog` with this call's real pids +
+throwaway dir once the cdp port resolves) and net 3 (`chromium_process._reap_orphaned_scrapes`
+kills only `scrape-url-cdp-*` pids older than `chromium_process.TOTAL_SCRAPE_BUDGET_S`, never a
+young/legitimate parallel scrape, and sweeps only dirs with zero live processes). Also covers
+`src/crawler/garbage_filter.py`'s `is_garbage_content` (imported here and monkeypatched via
+`garbage_filter`, not `chromium_scrape` — the function moved there and `try_scrape` has no
+reference to it left at all).
 `_make_document_status_listener`'s `before_goto` hook, exercised through the real
 `_acquire_cdp_headed`/`_acquire_scrape` machinery (a fake `AsyncWebCrawler.arun` invokes
 `crawler_strategy.execute_hook("before_goto", ...)` itself, the same call crawl4ai's own
