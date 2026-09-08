@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from src.crawler import crawl_site
+from src.crawler import garbage_filter
 from src.scraper import chromium_process, chromium_scrape
 
 
@@ -607,8 +607,8 @@ def test_extract_config_stamp_no_longer_carries_excluded_selector_hash():
 def test_is_garbage_content_still_importable_and_functioning():
     """Guard against accidentally deleting the function itself — only its use as a gate inside
     this module's own try_scrape/scrape_url_chromium_workflow was removed."""
-    assert crawl_site.is_garbage_content("short") == "minimal_content"
-    assert crawl_site.is_garbage_content("A" * 5000 + " ordinary long real content " * 20) is None
+    assert garbage_filter.is_garbage_content("short") == "minimal_content"
+    assert garbage_filter.is_garbage_content("A" * 5000 + " ordinary long real content " * 20) is None
 
 
 @pytest.mark.asyncio
@@ -617,7 +617,7 @@ async def test_try_scrape_does_not_call_is_garbage_content(monkeypatch):
     like a historical garbage category (short 403-flavored text) must come back as content."""
     _patch_cdp_launch_mechanics(monkeypatch)
     called = []
-    monkeypatch.setattr(crawl_site, "is_garbage_content",
+    monkeypatch.setattr(garbage_filter, "is_garbage_content",
                          lambda content: called.append(content) or "http_error")
 
     class _FakeCrawler:

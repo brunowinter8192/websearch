@@ -160,9 +160,9 @@ size; net 2 (`_acquire_cdp_headed` spawns `death_pipe.spawn_watchdog` with this 
 throwaway dir once the cdp port resolves) and net 3 (`chromium_process._reap_orphaned_scrapes`
 kills only `scrape-url-cdp-*` pids older than `chromium_process.TOTAL_SCRAPE_BUDGET_S`, never a
 young/legitimate parallel scrape, and sweeps only dirs with zero live processes). Also covers
-`src/crawler/crawl_site.py`'s `is_garbage_content` (imported here and monkeypatched via
-`crawl_site`, not `chromium_scrape` — the function moved there and `try_scrape` has no reference
-to it left at all).
+`src/crawler/garbage_filter.py`'s `is_garbage_content` (imported here and monkeypatched via
+`garbage_filter`, not `chromium_scrape` — the function moved there and `try_scrape` has no
+reference to it left at all).
 `_make_document_status_listener`'s `before_goto` hook, exercised through the real
 `_acquire_cdp_headed`/`_acquire_scrape` machinery (a fake `AsyncWebCrawler.arun` invokes
 `crawler_strategy.execute_hook("before_goto", ...)` itself, the same call crawl4ai's own
