@@ -16,10 +16,7 @@ from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from mcp.types import TextContent
-# From scrape_logger.py: per-URL JSONL log + sidecar content file
 from src.scraper.scrape_logger import log_scrape, write_sidecar
-# From death_pipe.py: net-2 crash backstop (per-call watchdog) — net-3 orphan reap reuses its
-# terminate/kill primitive
 from src import death_pipe
 from src.scraper.chromium_process import (
     CDP_PORT_WAIT_TIMEOUT_S, TOTAL_SCRAPE_BUDGET_S, _build_self_launch_flags,
@@ -29,10 +26,6 @@ from src.scraper.chromium_process import (
 
 logger = logging.getLogger(__name__)
 
-# The single-value posture stamp for extract_config_stamp's "launch_mode" field — kept as a
-# constant (not a param) since the escape hatch removal (process-docs/browser_posture/) leaves only
-# one acquisition path; still recorded in the log as a truthful discriminator for browser_config.
-# headless, which is dead on the cdp path (never read inside crawl4ai's cdp_url branch).
 LAUNCH_MODE = "cdp_headed_backgrounded"
 
 _ACQUISITION_ERROR_MESSAGES = {
@@ -43,13 +36,12 @@ _BROWSER_LAUNCH_SIGNATURES = (
     "executable doesn't exist",
     "playwright install",
     "browsertype.launch",
-    "devtoolsactiveport did not appear",  # this module's own self-launch bounded-wait timeout (cdp path)
+    "devtoolsactiveport did not appear",
 )
 
 
 # ORCHESTRATOR
 
-# Scrape one URL end to end: acquire, log, render — returns content as-is plus acquisition facts
 async def scrape_url_chromium_workflow(url: str) -> list[TextContent]:
     t_total = time.perf_counter()
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -89,7 +81,6 @@ async def scrape_url_chromium_workflow(url: str) -> list[TextContent]:
 
 # FUNCTIONS
 
-# Run one browser acquisition + date extraction + content selection, the guarded span inside try_scrape's budget
 async def _acquire_scrape(
     url: str, browser_config: BrowserConfig, crawler_strategy: AsyncPlaywrightCrawlerStrategy,
     run_config: CrawlerRunConfig, empty_meta: dict, document_status_chain: list,
@@ -97,12 +88,6 @@ async def _acquire_scrape(
     async with AsyncWebCrawler(config=browser_config, crawler_strategy=crawler_strategy) as crawler:
         result = await crawler.arun(url=url, config=run_config)
     status_code = result.status_code if hasattr(result, "status_code") else None
-    # The LAST main-frame document response (document_status_chain, collected by the before_goto
-    # hook set below) is the response of the page whose content was actually captured — overrides
-    # crawl4ai's own status_code, which keeps only the EARLIEST goto-redirect-chain hop and is
-    # never updated by a same-document JS navigation happening later (e.g. a Cloudflare challenge
-    # resolving during delay_before_return_html). Empty chain (e.g. raw: input, no navigation at
-    # all) falls back to crawl4ai's value unchanged — never invents a status.
     if document_status_chain:
         status_code = document_status_chain[-1]
     ct = None
@@ -120,7 +105,6 @@ async def _acquire_scrape(
     return content, meta
 
 
-# The run-governing config (unchanged by this milestone)
 def _build_run_config() -> CrawlerRunConfig:
     return CrawlerRunConfig(
         magic=True,
@@ -137,9 +121,6 @@ def _build_run_config() -> CrawlerRunConfig:
     )
 
 
-# Single-call crawl4ai scrape with native anti-bot baseline; returns (content, meta) unconditionally,
-# no content judgment. Acquisition is always the cdp-headed-backgrounded route (self-launched
-# chromium, connected over cdp_url).
 async def try_scrape(url: str) -> tuple[str, dict]:
     await asyncio.to_thread(_reap_orphaned_scrapes)
     run_config = _build_run_config()
@@ -168,12 +149,6 @@ async def try_scrape(url: str) -> tuple[str, dict]:
         return "", {**_empty_meta, "acquisition_error": "exception"}
 
 
-# The default route (probe 05's proven shape): self-launch chromium-1228 headed-but-backgrounded via
-# macOS `open -g -n -a`, wait for its DevToolsActivePort, connect crawl4ai over cdp_url. Teardown
-# (kill by profile-dir substring + remove the throwaway dir) runs in `finally` so it fires on every
-# exit path, including the outer budget's cancellation and any exception raised above (net 1). A
-# death_pipe watchdog is ALSO spawned once the port resolves (net 2) — the crash backstop for when
-# this whole CLI process dies before the `finally` below ever gets a chance to run at all.
 async def _acquire_cdp_headed(
     url: str, run_config: CrawlerRunConfig, empty_meta: dict, budget_s: float,
 ) -> tuple[str, dict]:
@@ -196,9 +171,6 @@ async def _acquire_cdp_headed(
         adapter = UndetectedAdapter()
         crawler_strategy = AsyncPlaywrightCrawlerStrategy(browser_config=browser_config, browser_adapter=adapter)
         crawler_strategy.set_hook("on_page_context_created", _reject_popup_pages)
-        # before_goto is unused by crawl4ai itself and fires before EVERY navigation attempt
-        # (including page.goto's own response) — the one place that arms the response listener
-        # early enough without touching the on_page_context_created slot _reject_popup_pages owns.
         document_status_chain: list = []
         crawler_strategy.set_hook("before_goto", _make_document_status_listener(document_status_chain))
         config_stamp = extract_config_stamp(browser_config, adapter, crawler_strategy, run_config, budget_s)
@@ -216,10 +188,6 @@ async def _acquire_cdp_headed(
         shutil.rmtree(user_data_dir, ignore_errors=True)
 
 
-# crawl4ai's on_page_context_created hook target: closes any page the context creates BEYOND the
-# one main_page crawl4ai itself asked for (ad/consent-flow popups, window.open) — each such extra
-# page is an independent window-creation event that can trigger the same playwright#42343 activation
-# the focus-steal watchdog above guards against; closing it fast shrinks that window further
 def _reject_popup_pages(main_page, context=None, config=None) -> None:
     def _on_new_page(new_page) -> None:
         if new_page is main_page:
@@ -228,14 +196,6 @@ def _reject_popup_pages(main_page, context=None, config=None) -> None:
     context.on("page", _on_new_page)
 
 
-# crawl4ai's before_goto hook target: arms a page.on("response") listener before navigation
-# begins (so it also catches page.goto's own response), collecting the ORDERED chain of main-frame
-# document response statuses — a same-document JS navigation after goto returns (e.g. a Cloudflare
-# challenge resolving during delay_before_return_html) fires its own response event here even
-# though crawl4ai's own status_code never sees it. A FACT, not a verdict — nothing here decides
-# "challenge solved"/"blocked". request.frame can raise for a navigation request issued before its
-# frame exists (iframes/popups) — guarded, not filtered on is_navigation_request() alone (which is
-# also true for iframe navigations; comparing the frame to page.main_frame is the real filter).
 def _make_document_status_listener(status_chain: list) -> Callable:
     def _on_before_goto(page, context=None, url=None, config=None) -> None:
         def _on_response(response) -> None:
@@ -253,8 +213,6 @@ def _make_document_status_listener(status_chain: list) -> Callable:
     return _on_before_goto
 
 
-# Best-effort popup close — the page may already be gone/closing; logged, not raised, since a stray
-# popup failing to close must degrade gracefully, never fail the main scrape it has nothing to do with
 async def _close_popup_page(page) -> None:
     try:
         await page.close()
@@ -262,10 +220,6 @@ async def _close_popup_page(page) -> None:
         logger.debug("Popup page close failed (non-fatal): %s", e)
 
 
-# Read the scrape-governing config back off the actual constructed objects, never re-declared.
-# launch_mode is the truthful posture discriminator (browser_config.headless is DEAD on the cdp
-# path — never read inside crawl4ai's cdp_url branch, confirmed by source — so it is not stamped at
-# all; LAUNCH_MODE is a fixed module constant now that only one acquisition path exists).
 def extract_config_stamp(
     browser_config, adapter, crawler_strategy, run_config, total_budget_s: float,
 ) -> dict:
@@ -289,13 +243,11 @@ def extract_config_stamp(
     }
 
 
-# Stable short hash over the config record — cheap "same config" grouping key
 def hash_config(config: dict) -> str:
     blob = json.dumps(config, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:10]
 
 
-# Read crawl4ai's own anti-bot diagnosis off the result object, verbatim — an OBSERVATION, not a verdict
 def extract_crawl4ai_diagnosis(result) -> dict:
     stats = getattr(result, "crawl_stats", None) or {}
     return {
@@ -307,13 +259,11 @@ def extract_crawl4ai_diagnosis(result) -> dict:
     }
 
 
-# Detect browser-launch/executable-missing failure (environment defect) vs. an ordinary per-URL error
 def is_browser_launch_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     return any(sig in msg for sig in _BROWSER_LAUNCH_SIGNATURES)
 
 
-# Render acquisition facts + full content into one fixed-shape text block
 def _format_scrape_output(url: str, content: str, meta: dict, og_published_time: str | None) -> str:
     lines = [f"# Content from: {url}", ""]
     lines += [
@@ -341,8 +291,6 @@ def _format_scrape_output(url: str, content: str, meta: dict, og_published_time:
     return "\n".join(lines)
 
 
-# The rendered acquisition-error description — budget_exhausted reads the REAL budget that was in
-# effect for this call (config.total_budget_s) rather than a re-declared literal
 def _acquisition_error_message(acquisition_error: str, config: dict) -> str:
     if acquisition_error == "budget_exhausted":
         budget = config.get("total_budget_s", "?")

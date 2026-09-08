@@ -5,7 +5,6 @@ import os
 import re
 from pathlib import Path
 
-# From src/log_janitor.py: lazy 14-day prune on write
 from src.log_janitor import maybe_prune_jsonl, maybe_prune_sidecars
 
 logger = logging.getLogger(__name__)
@@ -15,12 +14,10 @@ DEFAULT_LOG_PATH = Path(__file__).parent.parent.parent / "src" / "logs" / "scrap
 
 # FUNCTIONS
 
-# Sanitize ISO timestamp for filesystem: replace `:` with `-`
 def _sanitize_ts(ts: str) -> str:
     return ts.replace(":", "-")
 
 
-# Derive URL slug: strip protocol, replace non-alphanumeric with `-`, collapse runs, cap 80 chars
 def _url_slug(url: str) -> str:
     slug = re.sub(r'^https?://', '', url)
     slug = re.sub(r'[^a-zA-Z0-9]', '-', slug)
@@ -28,11 +25,6 @@ def _url_slug(url: str) -> str:
     return slug.strip('-')[:80]
 
 
-# Write sidecar .md to <log_dir>/scrape_content/; return relative path or None on empty/error.
-# No "outcome" line in the header — write_sidecar only ever runs when content is truthy (the guard
-# right below), so a computed ok/empty verdict would read "ok" on literally every sidecar ever
-# written, carrying zero information (see src/scraper/DOCS.md's Gotchas). bytes/mode/engine are the
-# real, always-varying facts about what got written.
 def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> str | None:
     if not content:
         return None
@@ -57,7 +49,6 @@ def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> st
         return None
 
 
-# Append one JSONL record; path from WEBSEARCH_SCRAPE_LOG_PATH env var; fail-soft
 def log_scrape(record: dict) -> None:
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
     log_path = Path(env) if env else DEFAULT_LOG_PATH
