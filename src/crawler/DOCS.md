@@ -23,7 +23,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 
 ## Modules
 
-### crawl_site.py (359 LOC)
+### crawl_site.py (371 LOC)
 
 **Purpose:** Discovery engine + content crawl — Playwright-per-page BFS from a seed URL (`discover_urls_playwright`) followed by a parallel content crawl (`crawl_urls`) writing one markdown file per URL. `save_markdown`'s batch filter calls `garbage_filter.is_garbage_content` (see below) — an automatic garbage-content verdict, correct here since this is an unattended batch crawl with no agent reviewing its output.
 **Reads:** seed URL / `--url-file` list.

@@ -197,11 +197,7 @@ async def discover_urls_playwright(seed: str, include_patterns: str | None,
 
     async with AsyncWebCrawler(**crawler_kw) as crawler:
         while frontier and len(found) < max_pages and stop_reason is None:
-            batch: list[tuple[str, int]] = []
-            while frontier and len(batch) < concurrency:
-                url, depth = frontier.popleft()
-                if depth <= max_depth:
-                    batch.append((url, depth))
+            batch = _pop_batch(frontier, concurrency, max_depth)
             if not batch:
                 continue
 
@@ -217,16 +213,32 @@ async def discover_urls_playwright(seed: str, include_patterns: str | None,
             _process_batch_results(batch, results, found, page_latencies, visited, frontier,
                                     seed_netloc, include_pats, exclude_pats, max_depth)
 
+    stats = _build_discovery_stats(frontier, page_latencies, four_two_nine_count, stop_reason)
+    return found, stats
+
+
+# Pop up to `concurrency` frontier entries within max_depth into a batch.
+def _pop_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[str, int]]:
+    batch: list[tuple[str, int]] = []
+    while frontier and len(batch) < concurrency:
+        url, depth = frontier.popleft()
+        if depth <= max_depth:
+            batch.append((url, depth))
+    return batch
+
+
+# Resolve stop_reason if the loop ended without one, and build the final stats dict.
+def _build_discovery_stats(
+    frontier: deque, page_latencies: list[int], four_two_nine_count: int, stop_reason: str | None,
+) -> dict:
     if stop_reason is None:
         stop_reason = "frontier_exhausted" if not frontier else "max_pages_reached"
-
-    stats = {
+    return {
         "pages_fetched": len(page_latencies),
         "four_two_nine_count": four_two_nine_count,
         "stop_reason": stop_reason,
         "avg_latency_ms": int(sum(page_latencies) / len(page_latencies)) if page_latencies else 0,
     }
-    return found, stats
 
 
 # Read URL list from text file (one URL per line)
