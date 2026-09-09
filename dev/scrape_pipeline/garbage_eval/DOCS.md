@@ -18,6 +18,7 @@ Investigation and validation suite for `is_garbage_content()` garbage detection.
 **Reads:** hardcoded edge-case + baseline URL set.
 **Writes:** `md/08_garbage_edge_cases_<timestamp>.md`.
 **Called by:** CLI only.
+**Gotcha:** its `from src.crawler.garbage_filter import is_garbage_content` fails on import since 2026-09-09 — `garbage_filter.py` was retired along with its only caller, `crawl_site.py` (zero callers, user decision in the Phase 4 control-flow review). This script itself was left untouched; it is a one-shot dev script, not maintained.
 
 ### 09_garbage_fix_prototype.py (207 LOC)
 

@@ -17,7 +17,6 @@ import time
 
 import pytest
 
-from src.crawler import garbage_filter
 from src.scraper import chromium_process, chromium_scrape
 
 
@@ -597,48 +596,6 @@ def test_extract_config_stamp_no_longer_carries_excluded_selector_hash():
     stamp = chromium_scrape.extract_config_stamp(*args, chromium_scrape.TOTAL_SCRAPE_BUDGET_S)
     assert "excluded_selector_hash" not in stamp
     assert not hasattr(chromium_scrape, "COOKIE_CONSENT_SELECTOR")
-
-
-# ---------------------------------------------------------------------------
-# is_garbage_content stays importable/functioning — src/crawler/crawl_site.py depends on it for
-# its own (different, unattended) batch-crawl filter; this module just stops CALLING it as a gate
-# ---------------------------------------------------------------------------
-
-def test_is_garbage_content_still_importable_and_functioning():
-    """Guard against accidentally deleting the function itself — only its use as a gate inside
-    this module's own try_scrape/scrape_url_chromium_workflow was removed."""
-    assert garbage_filter.is_garbage_content("short") == "minimal_content"
-    assert garbage_filter.is_garbage_content("A" * 5000 + " ordinary long real content " * 20) is None
-
-
-@pytest.mark.asyncio
-async def test_try_scrape_does_not_call_is_garbage_content(monkeypatch):
-    """The content classifier is never invoked from try_scrape anymore — a page shaped exactly
-    like a historical garbage category (short 403-flavored text) must come back as content."""
-    _patch_cdp_launch_mechanics(monkeypatch)
-    called = []
-    monkeypatch.setattr(garbage_filter, "is_garbage_content",
-                         lambda content: called.append(content) or "http_error")
-
-    class _FakeCrawler:
-        def __init__(self, *a, **kw):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def arun(self, url, config=None):
-            return _FakeResult(raw_markdown="403 forbidden — but this project no longer discards "
-                                             "on that basis, the agent judges now" + "x" * 200,
-                                status_code=403)
-
-    monkeypatch.setattr(chromium_scrape, "AsyncWebCrawler", _FakeCrawler)
-
-    await chromium_scrape.try_scrape("https://example.com")
-    assert called == []
 
 
 # ---------------------------------------------------------------------------
