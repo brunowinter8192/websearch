@@ -100,10 +100,7 @@ def _clean_url(href: str) -> str:
         return href
     payload = u[2:] if len(u) > 2 else u
     padded = payload + "=" * (-len(payload) % 4)
-    try:
-        return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
-    except Exception:
-        return href
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
 async def _wait_for_results(tab) -> bool:

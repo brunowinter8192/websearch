@@ -29,7 +29,7 @@ production log paths.
 
 ## Modules
 
-### test_bing_engine.py (105 LOC)
+### test_bing_engine.py (106 LOC)
 **Purpose:** `src/search/engines/bing.py` — `_clean_url` (ck/a redirect unwrap, real captured
 sample), `_build_results`. `_classify_diagnosis` coverage removed with the function itself (the
 guessed-verdict-removal milestone) — its marker/ready_state inputs are now plain diagnosis fields.
@@ -39,7 +39,10 @@ whose `execute_script` returns a malformed JSON string makes `_parse_results` ra
 `json.JSONDecodeError` instead of silently returning `[]`. The five sibling engines
 (`brave`/`duckduckgo`/`google`/`startpage`/`yandex`) share the identical removed handler shape but
 are not separately tested for it — one engine's coverage stands for all six, since the code path
-is byte-for-byte the same.
+is byte-for-byte the same. Also as of 2026-09-09, `test_clean_url_raises_when_decode_raises`
+(renamed from `..._falls_back_to_raw_href_when_decode_raises`) proves `_clean_url`'s own removed
+decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now asserts
+`pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
 ### test_brave_engine.py (42 LOC)
