@@ -93,7 +93,7 @@ async def cursor_loop(
         while True:
             articles = parse_articles(body)
             if not articles:
-                print("[coindesk] Empty response — reached API bottom or parse failure. Stopping.", file=sys.stderr)
+                print("[coindesk] Empty response — reached API bottom. Stopping.", file=sys.stderr)
                 break
 
             _process_batch(articles, seen_urls, year_files, discover_dir, all_entries, stats)

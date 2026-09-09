@@ -1,4 +1,5 @@
 # INFRASTRUCTURE
+import json
 import sys
 import time
 
@@ -11,11 +12,7 @@ from src.news.platforms.coindesk.browser import browser_load_feed
 # FUNCTIONS
 
 def parse_articles(body: bytes) -> list[dict]:
-    try:
-        import json
-        data = json.loads(body)
-    except Exception:
-        return []
+    data = json.loads(body)
     articles = data if isinstance(data, list) else None
     if isinstance(data, dict):
         for v in data.values():
