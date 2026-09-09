@@ -32,7 +32,6 @@ def _log_pipe_camoufox_record(
         "acquisition_error": meta.get("acquisition_error"),
         "landed_url": meta.get("landed_url"),
         "markdown_conversion_error": meta.get("markdown_conversion_error"),
-        "content_is_raw_html": meta.get("content_is_raw_html", False),
         "document_status_chain": meta.get("document_status_chain"),
         "config_hash": meta.get("config_hash"), "config": meta.get("config"),
     })

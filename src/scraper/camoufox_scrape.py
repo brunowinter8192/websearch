@@ -47,10 +47,9 @@ async def scrape_url_camoufox_workflow(url: str, block_images: bool = False) -> 
     content, meta = await try_scrape_camoufox(url, block_images=block_images)
     total_wall = round((time.perf_counter() - t_total) * 1000)
 
-    mode = "raw_html" if meta.get("content_is_raw_html") else "markdown"
-    content_path = write_sidecar(url, ts, content, mode, "camoufox")
+    content_path = write_sidecar(url, ts, content, "markdown", "camoufox")
     log_scrape({
-        "ts": ts, "url": url, "domain": domain, "mode": mode,
+        "ts": ts, "url": url, "domain": domain, "mode": "markdown",
         "engine": "camoufox",
         "acquisition_error": meta.get("acquisition_error"),
         "timings_ms": {"total_wall": total_wall},
@@ -60,7 +59,6 @@ async def scrape_url_camoufox_workflow(url: str, block_images: bool = False) -> 
         "content_path": content_path,
         "landed_url": meta.get("landed_url"),
         "markdown_conversion_error": meta.get("markdown_conversion_error"),
-        "content_is_raw_html": meta.get("content_is_raw_html", False),
         "document_status_chain": meta.get("document_status_chain"),
         "config_hash": meta.get("config_hash"), "config": meta.get("config"),
     })
@@ -172,38 +170,24 @@ async def _acquire_camoufox(url: str, kwargs: dict, empty_meta: dict) -> tuple[s
             status_code = response.status if response else None
         html = await page.content()
 
-    content, content_is_raw_html, raw_markdown, conversion_error = await _convert_camoufox_html(url, html)
+    content, conversion_error = await _html_to_markdown(html)
+    if conversion_error:
+        logger.warning("Camoufox markdown conversion failed for %s: %s", url, conversion_error)
 
     meta.update({
         "status_code": status_code, "landed_url": landed_url,
-        "raw_markdown_bytes": len(raw_markdown.encode("utf-8")),
+        "raw_markdown_bytes": len(content.encode("utf-8")),
         "markdown_conversion_error": conversion_error,
-        "content_is_raw_html": content_is_raw_html,
         "document_status_chain": list(document_status_chain),
     })
     return content, meta
-
-
-async def _convert_camoufox_html(url: str, html: str) -> tuple[str, bool, str, str | None]:
-    try:
-        raw_markdown, conversion_error = await _html_to_markdown(html)
-    except Exception as e:
-        raw_markdown, conversion_error = "", str(e)
-
-    if conversion_error:
-        logger.warning("Camoufox markdown conversion failed for %s: %s", url, conversion_error)
-        content, content_is_raw_html = html, True
-    else:
-        content, content_is_raw_html = raw_markdown, False
-
-    return content, content_is_raw_html, raw_markdown, conversion_error
 
 
 async def try_scrape_camoufox(url: str, block_images: bool = False) -> tuple[str, dict]:
     kwargs = _build_camoufox_kwargs(block_images)
     _empty_meta: dict = {
         "acquisition_error": None, "status_code": None, "landed_url": None,
-        "raw_markdown_bytes": 0, "markdown_conversion_error": None, "content_is_raw_html": False,
+        "raw_markdown_bytes": 0, "markdown_conversion_error": None,
         "document_status_chain": [],
         "config": {"config_incomplete": True}, "config_hash": None,
     }
@@ -256,13 +240,6 @@ def _format_camoufox_output(url: str, content: str, meta: dict) -> str:
         f"- Bytes (raw markdown from crawl4ai's raw: conversion): {meta.get('raw_markdown_bytes', 0)}",
         f"- Bytes (content below): {len(content.encode('utf-8')) if content else 0}",
     ]
-    if meta.get("content_is_raw_html"):
-        lines.append(
-            "- Content format: RAW HTML, NOT markdown — the markdown-conversion step failed "
-            "(an OBSERVATION off crawl4ai's own raw: pipeline, not a verdict on this page; the "
-            f"page already captured is returned as-is rather than discarded): "
-            f"{meta.get('markdown_conversion_error')}"
-        )
     if meta.get("acquisition_error"):
         reason = _CAMOUFOX_ACQUISITION_ERROR_MESSAGES.get(meta["acquisition_error"], meta["acquisition_error"])
         lines.append(f"- Acquisition error: {reason}")
