@@ -3,11 +3,8 @@ from src.news.platform import ScrapeConfig
 from src.news.registry import register
 from src.news.engine.proxy_riding.scrape import RidingScrapeConfig
 from src.news.platforms.coindesk.config import REGWALL_SIGNALS, SCRAPE_CONFIG, DISCOVER_DIR
-# From coindesk/discover.py: discover(timeframe) -> list[dict]
 from src.news.platforms.coindesk.discover import discover as _discover
-# From coindesk/shards.py: load_discover_filtered(dir, year, from_date, to_date, limit) -> list[dict]
 from src.news.platforms.coindesk.shards import load_discover_filtered as _load_filtered
-# From coindesk/cleanup.py: cleanup(raw_markdown, entry) -> str
 from src.news.platforms.coindesk.cleanup import cleanup as _cleanup
 
 
@@ -27,7 +24,6 @@ class CoinDeskPlatform:
     async def discover(self) -> list[dict]:
         return await _discover(self.timeframe)
 
-    # Return discover entries filtered by year or date range; [{url, publication_date}].
     def load_scrape_entries(
         self,
         year: str | None = None,

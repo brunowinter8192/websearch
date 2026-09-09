@@ -11,20 +11,17 @@ _TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 # ORCHESTRATOR
 
-# Job lifecycle: wipe transient artifacts at start, derive persistent record at end.
 class Janitor:
     def __init__(self, jobs_dir: Path, log_dir: Path, report_dir: Path):
         self._jobs_dir   = jobs_dir
         self._log_dir    = log_dir
         self._report_dir = report_dir
 
-    # Delete all files in log_dir and report_dir before a fresh job.
     def start_job(self, job_id: str) -> None:
         _wipe_dir(self._log_dir)
         _wipe_dir(self._report_dir)
         print(f"[janitor] start_job {job_id!r}: transient logs wiped")
 
-    # Read JSONL → compute stats → write job.md + cumulative_hits.png → delete JSONL.
     def end_job(
         self,
         job_id: str,
@@ -49,7 +46,6 @@ class Janitor:
 
 # FUNCTIONS
 
-# Delete all contents of a directory without removing the directory itself
 def _wipe_dir(path: Path) -> None:
     if not path.exists():
         return
@@ -60,7 +56,6 @@ def _wipe_dir(path: Path) -> None:
             shutil.rmtree(item)
 
 
-# Read all JSONL lines into a list of dicts
 def _read_events(jsonl_path: Path) -> list[dict]:
     events = []
     for line in jsonl_path.read_text(encoding="utf-8").splitlines():
@@ -70,12 +65,10 @@ def _read_events(jsonl_path: Path) -> list[dict]:
     return events
 
 
-# Parse UTC ISO timestamp string to timezone-aware datetime
 def _parse_ts(ts_str: str) -> datetime:
     return datetime.strptime(ts_str, _TS_FMT).replace(tzinfo=timezone.utc)
 
 
-# Derive all MD/plot stats from event list
 def _compute_stats(events: list[dict]) -> dict:
     all_ts = [_parse_ts(e["ts"]) for e in events if "ts" in e]
     if not all_ts:
@@ -111,7 +104,6 @@ def _compute_stats(events: list[dict]) -> dict:
     }
 
 
-# Bucket attempt events into 60-min windows from t0; return per-window proxy metrics.
 def _compute_window_stats(events: list[dict], t0: datetime) -> list[dict]:
     attempt_events = [e for e in events if "proxy_key" in e]
     refresh_events = [e for e in events if e.get("event") == "pool_refresh"]
@@ -130,7 +122,6 @@ def _compute_window_stats(events: list[dict], t0: datetime) -> list[dict]:
     return [_compute_one_window(k, attempt_events, t0, refresh_by_win) for k in range(max_window + 1)]
 
 
-# Window k's proxy metrics: probiert/erfolgreich/urls_handled/fetch_attempts/pool_size.
 def _compute_one_window(
     k: int, attempt_events: list[dict], t0: datetime, refresh_by_win: list[tuple[int, int]],
 ) -> dict:
@@ -157,7 +148,6 @@ def _compute_one_window(
     }
 
 
-# Group pool_source events into one batch per pool_refresh, in JSONL order
 def _group_pool_sources(events: list[dict]) -> list[list[dict]]:
     batches: list[list[dict]] = []
     current: list[dict] | None = None
@@ -174,7 +164,6 @@ def _group_pool_sources(events: list[dict]) -> list[list[dict]]:
     return batches
 
 
-# Plot cumulative ok fetches vs elapsed seconds since t0; save as PNG
 def _write_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -198,7 +187,6 @@ def _write_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Write lean job.md with exactly the spec-required fields
 def _write_md(
     job_dir: Path,
     job_id: str,
@@ -231,7 +219,6 @@ def _write_md(
     (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-# Proxy usage per 60-min window table, or [] when no windows.
 def _md_window_table(stats: dict) -> list[str]:
     if not stats["windows"]:
         return []
@@ -251,7 +238,6 @@ def _md_window_table(stats: dict) -> list[str]:
     return lines
 
 
-# Pool source breakdown, one sub-section per non-empty refresh batch; [] when none.
 def _md_source_breakdown(stats: dict) -> list[str]:
     non_empty = [b for b in stats["source_batches"] if b]
     if not non_empty:

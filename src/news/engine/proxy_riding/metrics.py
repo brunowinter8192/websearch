@@ -3,7 +3,6 @@
 import statistics
 from datetime import datetime, timezone
 
-# From state.py: shared riding state shape + constants
 from src.news.engine.proxy_riding.state import RiderState, FAIL_THRESHOLD
 
 _BACKFILL_TOTAL = 61_000
@@ -11,7 +10,6 @@ _BACKFILL_TOTAL = 61_000
 
 # FUNCTIONS
 
-# Derive all metrics from RiderState and job start time.
 def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     jobs  = state.job_records
     rides = state.ride_records
@@ -54,7 +52,6 @@ def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     }
 
 
-# Fetch-level counts, elapsed-time stats, and completion times derived directly from job_records.
 def _compute_fetch_counts(jobs: list, state: RiderState, t_job_start: datetime) -> dict:
     n_total_fetches   = len(jobs)
     n_ok              = sum(1 for j in jobs if j.status == "ok")
@@ -84,7 +81,6 @@ def _compute_fetch_counts(jobs: list, state: RiderState, t_job_start: datetime) 
     }
 
 
-# Retry outcome: among URLs that saw ≥1 regwall, final status (eventually ok vs stayed failed).
 def _compute_retry_outcome(jobs: list) -> tuple[int, int, int]:
     url_final: dict[str, str] = {}
     url_rw:    set[str]       = set()
@@ -97,7 +93,6 @@ def _compute_retry_outcome(jobs: list) -> tuple[int, int, int]:
     return len(url_rw), retried_ok, retried_failed
 
 
-# Eligible pool over time — bucket pool_samples into 10-min windows.
 def _compute_pool_windows(state: RiderState) -> tuple[int, list[dict]]:
     pool_total   = len(state.proxy_pool)
     pool_windows: list[dict] = []
@@ -119,7 +114,6 @@ def _compute_pool_windows(state: RiderState) -> tuple[int, list[dict]]:
     return pool_total, pool_windows
 
 
-# OK-fetch load-time inclusive percentiles; None when fewer than 2 samples.
 def _compute_load_percentiles(jobs: list) -> tuple[list[float], dict | None]:
     load_times = [j.load_s for j in jobs if j.status == "ok" and j.load_s is not None]
     if len(load_times) < 2:
@@ -131,7 +125,6 @@ def _compute_load_percentiles(jobs: list) -> tuple[list[float], dict | None]:
     }
 
 
-# Connect-fail elapsed-time inclusive percentiles + subtype counts.
 def _compute_connect_fail_stats(state: RiderState) -> tuple[list[float], dict | None, dict[str, int]]:
     cf_times    = [r[0] for r in state.connect_fail_records]
     cf_subtypes = [r[1] for r in state.connect_fail_records]
@@ -148,7 +141,6 @@ def _compute_connect_fail_stats(state: RiderState) -> tuple[list[float], dict | 
     return cf_times, cf_perc, cf_subtype_counts
 
 
-# Compute mean/median/min/max of a list; return None-filled dict if empty.
 def _distribution_stats(values: list) -> dict:
     if not values:
         return {"mean": None, "median": None, "min": None, "max": None}

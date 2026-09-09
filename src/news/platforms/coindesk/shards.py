@@ -4,7 +4,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Append one entry line to the appropriate per-year discover shard (streaming, line-buffered)
 def _append_to_shard(entry: dict, year_files: dict, discover_dir: Path) -> None:
     date_str = entry["publication_date"][:10]
     year = date_str[:4]
@@ -14,7 +13,6 @@ def _append_to_shard(entry: dict, year_files: dict, discover_dir: Path) -> None:
     year_files[year].write(f"{date_str}\t{entry['url']}\n")
 
 
-# Read all per-year discover shards; return set of known URLs
 def load_discover(discover_dir: Path) -> set[str]:
     seen: set[str] = set()
     if not discover_dir.exists():
@@ -28,7 +26,6 @@ def load_discover(discover_dir: Path) -> set[str]:
     return seen
 
 
-# Read discover shards filtered by year or date range; return [{url, publication_date}].
 def load_discover_filtered(
     discover_dir: Path,
     year: str | None = None,

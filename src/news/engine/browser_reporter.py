@@ -8,7 +8,6 @@ _BACKFILL_TOTAL = 61_000
 
 # ORCHESTRATOR
 
-# Write job.md + cumulative.png for a browser scrape job to job_dir.
 def write_scrape_report(
     job_dir: Path,
     job_records: list[dict],
@@ -25,7 +24,6 @@ def write_scrape_report(
 
 # FUNCTIONS
 
-# Derive throughput, char-distribution, and cumulative-plot data from job_records.
 def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
     n_ok      = sum(1 for r in job_records if r.get("status") == "ok")
     n_regwall = sum(1 for r in job_records if r.get("status") == "regwall")
@@ -71,12 +69,10 @@ def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
     }
 
 
-# Format v with spec+unit, or an em-dash when None.
 def _fmt(v, spec="", unit="") -> str:
     return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
-# Step-plot of cumulative ok scrapes vs elapsed seconds; save as cumulative.png.
 def _write_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -98,7 +94,6 @@ def _write_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Write job.md with counts, throughput, char-distribution, failure rows, and plot link.
 def _write_md(
     job_dir: Path,
     t_job_start: datetime,
@@ -124,7 +119,6 @@ def _write_md(
     (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-# Header + Counts + Throughput sections.
 def _md_header(job_id: str, filter_desc: str, n_target: int, stats: dict, rw_cell: str) -> list[str]:
     return [
         f"# Browser scrape job — {job_id}",
@@ -155,7 +149,6 @@ def _md_header(job_id: str, filter_desc: str, n_target: int, stats: dict, rw_cel
     ]
 
 
-# Char-count distribution table (ok bodies only), or a skip note.
 def _md_char_distribution(stats: dict) -> list[str]:
     p = stats["char_pct"]
     if not p:
@@ -175,7 +168,6 @@ def _md_char_distribution(stats: dict) -> list[str]:
     ]
 
 
-# Failure breakdown table (URL + error), capped at 20 rows.
 def _md_failure_list(job_records: list[dict]) -> list[str]:
     failures = [r for r in job_records if r.get("status") == "failed"]
     if not failures:
@@ -191,7 +183,6 @@ def _md_failure_list(job_records: list[dict]) -> list[str]:
     return lines
 
 
-# URL-only table for a given status (Regwall/Empty), capped at limit rows.
 def _md_url_list_section(title: str, job_records: list[dict], status: str, limit: int = 50) -> list[str]:
     entries = [r for r in job_records if r.get("status") == status]
     if not entries:

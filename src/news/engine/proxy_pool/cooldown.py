@@ -9,34 +9,28 @@ COOLDOWN_S = 3600
 
 # ORCHESTRATOR
 
-# In-memory cooldown tracking — per-job fresh state (empty burn dict per instantiation), no file I/O.
 class PersistentCooldownManager:
     def __init__(self, cooldown_s: int = COOLDOWN_S):
         self._cooldown_td = timedelta(seconds=cooldown_s)
         self._burned_utc: dict[str, datetime] = {}
 
-    # Record proxy as burned now.
     def mark_burned(self, proto: str, host_port: str) -> None:
         key = proxy_key(proto, host_port)
         self._burned_utc[key] = datetime.now(timezone.utc)
 
-    # True if proxy has never burned OR its cooldown has expired.
     def is_eligible(self, proto: str, host_port: str) -> bool:
         burned_at = self._burned_utc.get(proxy_key(proto, host_port))
         if burned_at is None:
             return True
         return (datetime.now(timezone.utc) - burned_at) >= self._cooldown_td
 
-    # Pool filtered to eligible proxies, in pool order.
     def eligible_candidates(self, pool: list[tuple[str, str]]) -> list[tuple[str, str]]:
         return [(p, hp) for p, hp in pool if self.is_eligible(p, hp)]
 
-    # Count of proxies currently in active cooldown.
     def cooldown_count(self) -> int:
         now = datetime.now(timezone.utc)
         return sum(1 for dt in self._burned_utc.values() if (now - dt) < self._cooldown_td)
 
-    # UTC datetime when the next cooled proxy becomes eligible; None if none cooling.
     def earliest_eligible_at(self) -> "datetime | None":
         if not self._burned_utc:
             return None

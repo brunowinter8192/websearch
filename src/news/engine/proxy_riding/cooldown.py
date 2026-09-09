@@ -12,7 +12,6 @@ _EXP_CAP_S         = 3600
 
 # ORCHESTRATOR
 
-# Proxy cooldown manager for the riding engine — policy="fixed" (60-min flat) or "exp" (backoff).
 class RidingCooldownManager:
     def __init__(self, policy: str = "fixed"):
         if policy not in ("fixed", "exp"):
@@ -80,6 +79,5 @@ class RidingCooldownManager:
             return min(self._next_eligible.values())
 
 
-# Numerically stable exp backoff: min(cap, base * 2**attempt).
 def _exp_backoff(attempt: int, cap: float = _EXP_CAP_S, base: float = _EXP_BASE_S) -> float:
     return min(cap, base * (2 ** attempt))

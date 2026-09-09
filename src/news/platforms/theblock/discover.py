@@ -19,7 +19,6 @@ XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 
 # ORCHESTRATOR
 
-# Fetch theblock sitemap index → post_type_post subs → select by timeframe → [{url, lastmod}].
 async def discover(timeframe: str = "delta", logger=None) -> list[dict]:
     pool_cache: list = []
 
@@ -49,7 +48,6 @@ async def discover(timeframe: str = "delta", logger=None) -> list[dict]:
 
 # FUNCTIONS
 
-# Resolve timeframe → target sub-sitemap URL list ("full"|"delta"|"sub:N"|"sub:A-B"); raises RuntimeError on invalid spec.
 def _resolve_target_subs(timeframe: str, post_subs: list[str]) -> list[str]:
     if timeframe == "full":
         return post_subs
@@ -80,7 +78,6 @@ def _resolve_target_subs(timeframe: str, post_subs: list[str]) -> list[str]:
     )
 
 
-# Try direct httpx first; on failure, load pool lazily and iterate proxies; return bytes or None.
 def _fetch_xml(url: str, pool_cache: list, logger=None) -> bytes | None:
     content = _fetch_direct(url)
     if content is not None:
@@ -98,7 +95,6 @@ def _fetch_xml(url: str, pool_cache: list, logger=None) -> bytes | None:
     return None
 
 
-# Direct httpx GET; return bytes if valid XML, else None.
 def _fetch_direct(url: str) -> bytes | None:
     try:
         r = httpx.get(url, timeout=DIRECT_TIMEOUT, follow_redirects=True)
@@ -110,7 +106,6 @@ def _fetch_direct(url: str) -> bytes | None:
         return None
 
 
-# Extract post_type_post sub-sitemap <loc> URLs from index bytes.
 def _parse_post_sub_urls(content: bytes) -> list[str]:
     return [
         m.group(1).decode().strip()
@@ -119,7 +114,6 @@ def _parse_post_sub_urls(content: bytes) -> list[str]:
     ]
 
 
-# Return the N highest-numbered sub-sitemap URLs (descending); fewer than N returned if list is shorter.
 def _top_n_subs(urls: list[str], n: int) -> list[str]:
     def _num(u: str) -> int:
         m = _NUM_RE.search(u)
@@ -127,7 +121,6 @@ def _top_n_subs(urls: list[str], n: int) -> list[str]:
     return sorted(urls, key=_num, reverse=True)[:n]
 
 
-# Return the sub-sitemap URL whose trailing index == n; raise RuntimeError if not found.
 def _sub_by_index(urls: list[str], n: int) -> str:
     for u in urls:
         m = _NUM_RE.search(u)
@@ -136,7 +129,6 @@ def _sub_by_index(urls: list[str], n: int) -> str:
     raise RuntimeError(f"sub:{n} not found among {len(urls)} post_type_post sub-sitemaps")
 
 
-# Return all sub-sitemap URLs whose trailing index is in [a, b] inclusive, sorted descending.
 def _subs_in_range(urls: list[str], a: int, b: int) -> list[str]:
     def _num(u: str) -> int:
         m = _NUM_RE.search(u)
@@ -149,7 +141,6 @@ def _subs_in_range(urls: list[str], a: int, b: int) -> list[str]:
     return sorted(matched, key=_num, reverse=True)
 
 
-# Parse <url> blocks from sub-sitemap XML; return (loc_url, lastmod_datetime) pairs.
 def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
     results = []
     for block in _URL_BLOCK_RE.finditer(content):

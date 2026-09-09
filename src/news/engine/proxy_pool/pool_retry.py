@@ -8,7 +8,6 @@ _BACKOFF = (1, 2, 4, 8)
 
 # FUNCTIONS
 
-# Call fn() up to 5 times with exponential backoff; re-raise last exception on final failure
 def fetch_with_retry(fn):
     last_exc = None
     for delay in (None, *_BACKOFF):

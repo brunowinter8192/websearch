@@ -10,7 +10,6 @@ from src.news.engine.scrape import scrape_entries, RegwallGuardError
 
 # ORCHESTRATOR
 
-# Raw-only chunked scrape: scrape each chunk, persist manifest.jsonl + blocked URL lists; RegwallGuardError stops the loop.
 async def scrape_chunks_raw(
     chunks: list[list[dict]],
     raw_dir: Path,
@@ -34,7 +33,6 @@ async def scrape_chunks_raw(
 
 # FUNCTIONS
 
-# Scrape one chunk (RegwallGuardError-recovered), persist manifest+blocked lists; return (job_records, aborted).
 async def _scrape_one_chunk(
     ci:       int,
     n_chunks: int,
@@ -85,7 +83,6 @@ async def _scrape_one_chunk(
     )
     return chunk_job_records, aborted
 
-# Append one JSONL line per ok entry to raw_dir/manifest.jsonl.
 def _append_to_raw_manifest(raw_dir: Path, ok_entries: list[dict]) -> None:
     if not ok_entries:
         return
@@ -95,7 +92,6 @@ def _append_to_raw_manifest(raw_dir: Path, ok_entries: list[dict]) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-# Read each blocked-URL file, union with new URLs from manifest, write back sorted.
 def _update_blocked_urls(raw_dir: Path, manifest: list[dict], status_filenames: dict[str, str]) -> None:
     for status, filename in status_filenames.items():
         new_urls = {e["url"] for e in manifest if e.get("status") == status}

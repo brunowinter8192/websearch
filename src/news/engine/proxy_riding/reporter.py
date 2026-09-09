@@ -3,17 +3,13 @@
 from datetime import datetime
 from pathlib import Path
 
-# From state.py: shared riding state shape
 from src.news.engine.proxy_riding.state import RiderState
-# From metrics.py: derive all metrics from RiderState
 from src.news.engine.proxy_riding.metrics import _compute_stats
-# From plots.py: cumulative.png + success_load_hist.png + connect_fail_hist.png
 from src.news.engine.proxy_riding.plots import _write_cumulative_plot, _write_load_hist, _write_cf_hist
 
 
 # ORCHESTRATOR
 
-# Write job.md + cumulative.png + success_load_hist.png + connect_fail_hist.png for a proxy-riding scrape run to job_dir.
 def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime) -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
     stats = _compute_stats(state, t_job_start)
@@ -27,12 +23,10 @@ def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime)
 
 # FUNCTIONS
 
-# Format v with spec+unit, or an em-dash when None.
 def _fmt(v, spec="", unit="") -> str:
     return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
-# Write job.md with all metrics, tables, failure lists, and plot links.
 def _write_md(
     job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
 ) -> None:
@@ -50,7 +44,6 @@ def _write_md(
     (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-# Header + Counts + Throughput sections.
 def _md_header_counts(state: RiderState, stats: dict, job_id: str) -> list[str]:
     return [
         f"# CoinDesk riding job — {job_id}",
@@ -83,7 +76,6 @@ def _md_header_counts(state: RiderState, stats: dict, job_id: str) -> list[str]:
     ]
 
 
-# Proxy-riding summary + ride-length distribution + eligible-pool header.
 def _md_proxy_riding(stats: dict) -> list[str]:
     rls = stats["ride_len_stats"]
     return [
@@ -109,7 +101,6 @@ def _md_proxy_riding(stats: dict) -> list[str]:
     ]
 
 
-# Eligible-pool-over-time table (or no-samples note).
 def _md_pool_windows(stats: dict) -> list[str]:
     pw = stats["pool_windows"]
     if not pw:
@@ -128,7 +119,6 @@ def _md_pool_windows(stats: dict) -> list[str]:
     return lines
 
 
-# Regwall summary section.
 def _md_regwall(stats: dict, rw_rate: float) -> list[str]:
     return [
         "## Regwall",
@@ -144,7 +134,6 @@ def _md_regwall(stats: dict, rw_rate: float) -> list[str]:
     ]
 
 
-# Connect-fail breakdown: percentile table + subtype table.
 def _md_connect_fail(stats: dict) -> list[str]:
     lines    = ["## Connect-fail breakdown", ""]
     cp       = stats["cf_perc"]
@@ -178,7 +167,6 @@ def _md_connect_fail(stats: dict) -> list[str]:
     return lines
 
 
-# Success load-time distribution: percentile table.
 def _md_load_time(stats: dict) -> list[str]:
     lines = ["## Success load-time distribution", ""]
     lp = stats["load_perc"]
@@ -203,7 +191,6 @@ def _md_load_time(stats: dict) -> list[str]:
     return lines
 
 
-# Plot links, conditional on which histograms were written.
 def _md_plots(stats: dict) -> list[str]:
     lines = ["## Plots", "", "![Cumulative OK](cumulative.png)", ""]
     if stats["cf_perc"] is not None:

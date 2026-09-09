@@ -2,9 +2,7 @@
 from src.news.platform import ScrapeConfig
 from src.news.registry import register
 from src.news.platforms.theblock.config import PROXY_SCRAPE_CONFIG
-# From theblock/discover.py: discover(timeframe) -> list[dict]
 from src.news.platforms.theblock.discover import discover as _discover
-# From theblock/cleanup.py: cleanup(raw_html, entry) -> str
 from src.news.platforms.theblock.cleanup import cleanup as _cleanup
 
 

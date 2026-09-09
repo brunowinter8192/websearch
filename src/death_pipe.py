@@ -20,14 +20,6 @@ _LOG_PATH = Path(
 
 # FUNCTIONS
 
-# Spawn a detached watchdog: it blocks reading a pipe whose write end only this process holds; when
-# this process ends for ANY reason (including SIGKILL — the OS closes all its fds on death), the
-# watchdog sees EOF and kills `pids`/removes `cleanup_dir` if they're still around. A no-op if net 1
-# (the caller's own normal teardown) already did that — psutil.NoSuchProcess is caught silently, and
-# a missing dir is a no-op rmtree. No-op entirely if there is nothing to ever protect. Returns the
-# write-end fd (None if no-op) — production callers ignore it (its OPEN lifetime in this process,
-# not any explicit close, is the signal); tests can os.close() it to simulate this process dying
-# without actually exiting the test process.
 def spawn_watchdog(pids: list[int], cleanup_dir: str | None = None) -> int | None:
     if not pids and not cleanup_dir:
         return None
@@ -43,7 +35,6 @@ def spawn_watchdog(pids: list[int], cleanup_dir: str | None = None) -> int | Non
     return write_fd
 
 
-# SIGTERM then, after a grace period, SIGKILL any still-alive PID; returns the PIDs actually killed
 def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
     procs = []
     for pid in pids:
@@ -64,9 +55,6 @@ def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
     return killed
 
 
-# Best-effort single-line append to cli.log — only called when the watchdog actually had to act;
-# a write failure here must never crash the watchdog itself, so it's logged (not raised) via the
-# standard logging module, same fail-soft posture as query_logger.py's log_query
 def _log_intervention(message: str) -> None:
     try:
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -77,12 +65,11 @@ def _log_intervention(message: str) -> None:
         logger.warning("death_pipe intervention-log write failed: %s", e)
 
 
-# The watchdog process's own entry point: block until the parent dies (pipe EOF), then clean up
 def _watchdog_main() -> None:
     pids = [int(p) for p in sys.argv[1].split(",") if p.strip()] if len(sys.argv) > 1 else []
     cleanup_dir = sys.argv[2] if len(sys.argv) > 2 else None
 
-    os.read(0, 1)  # blocks until the write end closes (EOF, b"") — the parent process has ended
+    os.read(0, 1)
 
     killed = _terminate_then_kill(pids)
     dir_removed = False

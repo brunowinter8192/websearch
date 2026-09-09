@@ -14,7 +14,7 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 
 ## Modules
 
-### scrape.py (188 LOC)
+### scrape.py (179 LOC)
 
 **Purpose:** Browser-engine scraper — fresh `AsyncWebCrawler` per URL, Scrapy gate pacing, regwall guard. Active when `platform.scrape_engine == "browser"`.
 **Reads:** entries list (in-memory), ScrapeConfig, regwall_signals list.
@@ -22,7 +22,7 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 **Called by:** `pipeline.py:_run_pipeline_browser`, `scrape_job.py:_scrape_one_chunk`.
 **Calls out:** `crawl4ai` (AsyncWebCrawler, BrowserConfig, CrawlerRunConfig).
 
-### dedup.py (57 LOC)
+### dedup.py (54 LOC)
 
 **Purpose:** Filter discover entries to those not yet in the raw corpus by checking file existence; optionally exclude known-failure URLs permanently.
 **Reads:** entries list (in-memory), dir (filesystem), source name, mode, optional exclusion set.
@@ -30,7 +30,7 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 **Called by:** `pipeline.py:_run_pipeline_proxy_pool` / `_run_pipeline_browser` (mode=`"raw"`), `pipeline.py:run_scrape_only` (mode=`"raw"`).
 **Calls out:** stdlib only.
 
-### scrape_job.py (108 LOC)
+### scrape_job.py (104 LOC)
 
 **Purpose:** Raw-only chunked scrape orchestration for `run_scrape_only()` and shared raw-persist helpers.
 **Reads:** chunks (list of entry lists), platform config.
@@ -38,7 +38,7 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 **Called by:** `pipeline.py:_run_scrape_only_browser` (`scrape_chunks_raw`); `pipeline.py:_persist_proxy_pool_results` / `_run_pipeline_browser` (`_append_to_raw_manifest`, `_update_blocked_urls`).
 **Calls out:** `scrape.py:scrape_entries`.
 
-### browser_reporter.py (205 LOC)
+### browser_reporter.py (196 LOC)
 
 **Purpose:** Per-job report writer for browser-engine scrape jobs. Produces `job.md` + `cumulative.png` from `job_records`.
 **Reads:** `job_records` (in-memory list from `scrape_chunks_raw`), `t_job_start`.

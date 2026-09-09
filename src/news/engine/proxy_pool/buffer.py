@@ -8,7 +8,6 @@ DEFAULT_CONCURRENCY = 128
 
 # FUNCTIONS
 
-# Build fresh active buffer: up to max_size eligible proxies from pool in pool order
 def build_active_buffer(
     pool: list[tuple[str, str]],
     cm: PersistentCooldownManager,
@@ -18,7 +17,6 @@ def build_active_buffer(
     return eligible[:max_size]
 
 
-# Top up an existing buffer with eligible proxies not already present
 def refill_buffer(
     buf: list[tuple[str, str]],
     pool: list[tuple[str, str]],

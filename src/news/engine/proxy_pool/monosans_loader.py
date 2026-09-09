@@ -10,7 +10,6 @@ FETCH_TIMEOUT = 15.0
 
 # ORCHESTRATOR
 
-# Fetch monosans proxies.json; return [(protocol, host:port)] in source order
 def load_monosans_proxies() -> list[tuple[str, str]]:
     raw = _fetch_json(MONOSANS_URL)
     return [_build_entry(e) for e in raw]
@@ -26,7 +25,6 @@ def _fetch_json(url: str) -> list[dict]:
     return fetch_with_retry(_do)
 
 
-# Build (protocol, host_port) from one proxies.json entry
 def _build_entry(entry: dict) -> tuple[str, str]:
     proto    = entry["protocol"]
     host     = entry["host"]

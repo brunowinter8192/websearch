@@ -6,7 +6,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Step-plot of cumulative OK fetches vs elapsed seconds; save as cumulative.png.
 def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -25,7 +24,6 @@ def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Histogram of OK-fetch load times; x-axis auto-ranges to data, page_timeout_s marked as a vertical line.
 def _write_load_hist(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -51,7 +49,6 @@ def _write_load_hist(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Histogram of connect-fail elapsed times; mirrors _write_load_hist style for direct comparability.
 def _write_cf_hist(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 

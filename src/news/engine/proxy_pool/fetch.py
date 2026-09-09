@@ -9,7 +9,6 @@ FETCH_TIMEOUT = 15
 
 # ORCHESTRATOR
 
-# Fetch url through proto://host_port; validate by content_type ("xml" | "html"); return (status, content).
 def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[str, bytes]:
     purl = f"{proto}://{host_port}"
     try:
@@ -22,7 +21,6 @@ def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[
 
 # FUNCTIONS
 
-# Classify response: "dead" on 404/410, "fail" on other non-200, "ok"/"fail" on 200 by marker check
 def _validate(r, content_type: str) -> tuple[str, bytes]:
     if r.status_code in (404, 410):
         return "dead", b""

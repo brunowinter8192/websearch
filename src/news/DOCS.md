@@ -14,7 +14,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 
 ## Modules
 
-### pipeline.py (381 LOC)
+### pipeline.py (364 LOC)
 
 **Purpose:** Entry module — the 3 CLI-facing async orchestrators (`run_pipeline`, `run_scrape_only`, `run_discover_only`) plus their per-engine arm helpers, dispatching on `platform.scrape_engine`. `run_scrape_only` and `_run_pipeline_proxy_pool` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output — see Gotchas): `run_scrape_only` → `_scrape_only_preamble` (logging setup, `job_id`/`filter_desc`, internet + `load_scrape_entries`-capability precondition checks, both `sys.exit(1)` on failure); `_run_pipeline_proxy_pool` → one helper per STAGE block (`_stage_discover_proxy_pool`, `_stage_dedup_proxy_pool`, `_stage_scrape_proxy_pool`), with the discover stage returning `None` to signal "abort, already logged+marked" and the dedup stage returning the plain (possibly empty) `new_entries` list so the caller's own `if not new_entries: ...; return False` and the surrounding `try/finally`'s `len(new_entries)` read stay exactly as before.
 **Reads:** `data/news/{name}/raw/`, `discover/` (dead_urls.txt, failed_urls.txt, per-year shards, master_urls.txt).
@@ -22,7 +22,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `__main__.py`.
 **Calls out:** `platform` (Platform); `engine.dedup` (filter_new_entries); `engine.scrape` (scrape_entries, RegwallGuardError); `engine.proxy_pool` (box_lock, Janitor, AcquireLogger, scrape_entries_proxy); `engine.scrape_job` (scrape_chunks_raw, _append_to_raw_manifest, _update_blocked_urls); `engine.browser_reporter` (write_scrape_report); `engine.proxy_riding` (scrape_entries_riding, RidingScrapeConfig, write_riding_report); `pipeline_support.py` (run bookkeeping + `PROJECT_ROOT`/`LOG_DIR`); `clean_pass.py` (`_run_clean_pass`).
 
-### pipeline_support.py (88 LOC)
+### pipeline_support.py (83 LOC)
 
 **Purpose:** Generic run bookkeeping shared by all 3 `pipeline.py` orchestrators — logging setup, connectivity precondition, and the 3 state-writer helpers (master URL list, discover JSON snapshot, last-run marker); owns `PROJECT_ROOT`/`LOG_DIR`.
 **Reads:** `platform.precondition_url` (via `urllib`); existing `master_urls.txt` (set-union merge).
@@ -30,7 +30,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py` (all 3 orchestrators + `_run_pipeline_proxy_pool`/`_run_pipeline_browser`).
 **Calls out:** none (stdlib `logging`, `urllib.request`, `json`).
 
-### clean_pass.py (65 LOC)
+### clean_pass.py (63 LOC)
 
 **Purpose:** The proxy_pool/TheBlock clean-pass stage (`_run_clean_pass`) — reads `raw/{hash}.md`, calls `platform.cleanup()`, writes cleaned articles into the RAG collection dir.
 **Reads:** `raw_dir/{hash}.md` for each ok entry; existing `clean/bodyless_urls.txt` (set-union merge).
@@ -38,7 +38,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py:_persist_proxy_pool_results` (proxy_pool arm, only when `n_ok > 0`).
 **Calls out:** none (stdlib `re` only).
 
-### __main__.py (160 LOC)
+### __main__.py (155 LOC)
 
 **Purpose:** argparse entry point. Flags: `--source`, `--skip-index` (no-op, CLI compat), `--timeframe`, `--discover-only`, `--scrape-only` (+ `--year/--from/--to/--limit/--browsers/--slots/--cooldown-policy/--page-timeout`). Imports the platform modules for side-effect registration, resolves via `registry.get`, dispatches to the matching pipeline entry. When `--timeframe` is not `delta` and not `--discover-only`, auto-forces `skip_index=True` and prints the manual index reminder. `_add_core_args` was split into `_add_run_mode_args` (`--source`/`--skip-index`/`--timeframe`/`--discover-only`/`--scrape-only`) and `_add_date_filter_args` (`--year`/`--from`/`--to`/`--limit`), called in that order from `_add_core_args` — `add_argument` call order (and therefore `--help` output) is unchanged; verified byte-identical against the pre-split output.
 **Reads:** CLI args.
@@ -52,7 +52,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py`, `registry.py`, `platforms/*`, `engine/*`.
 **Calls out:** none (stdlib `typing`, `dataclasses`).
 
-### registry.py (19 LOC)
+### registry.py (17 LOC)
 
 **Purpose:** Name → Platform registry. `register(instance)` (called at platform-module import) and `get(name)` (called by `__main__`).
 **Reads / Writes:** in-memory registry dict.

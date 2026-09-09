@@ -9,7 +9,6 @@ from pathlib import Path
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
 from src.news.engine.proxy_riding.rider import run_riding_pool
-# From state.py: shared riding state shape
 from src.news.engine.proxy_riding.state import RiderState
 
 BROWSER_ELIGIBLE_PROTOS: frozenset[str] = frozenset({"http", "socks5"})
@@ -27,7 +26,6 @@ class RidingScrapeConfig:
 
 # ORCHESTRATOR
 
-# Fetch target URLs via browser-per-context proxy riding; return manifest matching pipeline contract.
 async def scrape_entries_riding(
     entries:    list[dict],
     output_dir: Path,
@@ -66,7 +64,6 @@ async def scrape_entries_riding(
 
 # FUNCTIONS
 
-# Load + filter + shuffle the backfill pool; shared by initial load and 60-min watchdog refresh.
 async def _pool_provider() -> list[tuple[str, str]]:
     loop       = asyncio.get_running_loop()
     raw_pool, _ = await loop.run_in_executor(None, load_backfill_pool)
@@ -74,7 +71,6 @@ async def _pool_provider() -> list[tuple[str, str]]:
     random.shuffle(pool)
     return pool
 
-# Map rider job_records to pipeline manifest; entries order preserved.
 def _build_manifest(
     entries:     list[dict],
     url_to_hash: dict[str, str],

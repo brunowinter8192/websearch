@@ -93,7 +93,6 @@ _IP_PORT_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}:\d+")
 
 # ORCHESTRATOR
 
-# Fetch all active sources per-URL with retry + isolation; return (deduped pool, source results)
 def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
     entries: list[tuple[str, str]] = []
     sources: list[dict]            = []
@@ -140,7 +139,6 @@ def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
 
 # FUNCTIONS
 
-# Fetch proxifly all/data.json; return [(protocol, host:port)]. Retried on transient failure.
 def _fetch_proxifly() -> list[tuple[str, str]]:
     def _do():
         resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
@@ -149,7 +147,6 @@ def _fetch_proxifly() -> list[tuple[str, str]]:
     return fetch_with_retry(_do)
 
 
-# Fetch one bare host:port txt file (one entry per line); return [(proto, host:port)]. Retried.
 def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
     def _do():
         resp = httpx.get(url, timeout=FETCH_TIMEOUT)
@@ -158,7 +155,6 @@ def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
     return fetch_with_retry(_do)
 
 
-# Fetch roosterkid decorated txt; regex-extract IP:PORT; skip header/metadata lines. Retried.
 def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
     def _do():
         resp = httpx.get(url, timeout=FETCH_TIMEOUT)
@@ -168,7 +164,6 @@ def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
     return fetch_with_retry(_do)
 
 
-# Fetch one source URL via fn(); append to entries on success; record {url, ok, count} in sources
 def _try_source(url: str, fn, entries: list, sources: list) -> None:
     try:
         result = fn()
@@ -178,7 +173,6 @@ def _try_source(url: str, fn, entries: list, sources: list) -> None:
         sources.append({"url": url, "ok": False, "count": 0})
 
 
-# Deduplicate entries by canonical proxy_key; first occurrence wins.
 def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
     seen:   set[str]              = set()
     result: list[tuple[str, str]] = []

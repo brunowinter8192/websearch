@@ -2,8 +2,8 @@
 import argparse
 import asyncio
 
-import src.news.platforms.coindesk   # side-effect: registers CoinDeskPlatform
-import src.news.platforms.theblock   # side-effect: registers TheBlockPlatform
+import src.news.platforms.coindesk
+import src.news.platforms.theblock
 
 from src.news.registry import get
 from src.news.pipeline import run_pipeline, run_discover_only, run_scrape_only
@@ -46,7 +46,6 @@ def main() -> None:
 
 # FUNCTIONS
 
-# Build the full argparse surface: core flags + scrape-only refinement flags.
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.news",
@@ -57,13 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-# --source/--skip-index/--timeframe/--discover-only/--scrape-only/--year/--from/--to/--limit
 def _add_core_args(parser: argparse.ArgumentParser) -> None:
     _add_run_mode_args(parser)
     _add_date_filter_args(parser)
 
 
-# --source/--skip-index/--timeframe/--discover-only/--scrape-only — run-mode flags
 def _add_run_mode_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--source",
@@ -99,7 +96,6 @@ def _add_run_mode_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-# --year/--from/--to/--limit — date-filter flags for --scrape-only
 def _add_date_filter_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--year",
@@ -126,7 +122,6 @@ def _add_date_filter_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-# --browsers/--slots/--cooldown-policy/--page-timeout — proxy_riding scrape-only refinement flags
 def _add_scrape_only_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--browsers",

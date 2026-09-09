@@ -16,12 +16,10 @@ from src.news.engine.scrape_job import scrape_chunks_raw, _append_to_raw_manifes
 from src.news.engine.browser_reporter import write_scrape_report
 from src.news.engine.proxy_riding.scrape import scrape_entries_riding, RidingScrapeConfig
 from src.news.engine.proxy_riding.reporter import write_riding_report
-# From pipeline_support.py: run bookkeeping (logging setup, internet check, master-list/snapshot/marker writers)
 from src.news.pipeline_support import (
     PROJECT_ROOT, LOG_DIR,
     _setup_logging, _check_internet, _persist_master_list, _write_discover_snapshot, _write_marker,
 )
-# From clean_pass.py: proxy_pool/TheBlock clean-pass stage
 from src.news.clean_pass import _run_clean_pass
 
 DATA_ROOT = PROJECT_ROOT / "data" / "news"
@@ -30,7 +28,6 @@ SCRAPE_CHUNK_SIZE = 200
 
 # ORCHESTRATOR
 
-# Discover + discover-update only — no dedup/scrape/clean/publish. CoinDesk standalone job.
 async def run_discover_only(platform: Platform) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log = _setup_logging(platform.name)
@@ -47,7 +44,6 @@ async def run_discover_only(platform: Platform) -> None:
     log.info(f"=== {platform.name} discover-only complete ===")
 
 
-# Date-filtered scrape job: discover → raw-diff → chunked scrape → raw persist. No cleanup, no publish.
 async def run_scrape_only(
     platform: Platform,
     year: str | None = None,
@@ -91,7 +87,6 @@ async def run_scrape_only(
     log.info(f"=== {platform.name} scrape-only complete job_id={job_id} ===")
 
 
-# Full pipeline: discover → dedup(raw) → scrape(raw) → persist (+ clean-pass for proxy_pool).
 async def run_pipeline(platform: Platform, skip_index: bool = False) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log = _setup_logging(platform.name)
@@ -119,8 +114,6 @@ async def run_pipeline(platform: Platform, skip_index: bool = False) -> None:
 
 # FUNCTIONS
 
-# Set up logging/job_id/filter_desc, log the started line, and verify preconditions
-# (internet, load_scrape_entries capability) — exits the process on failure.
 def _scrape_only_preamble(
     platform: Platform, year: str | None, from_date: str | None, to_date: str | None,
 ) -> tuple[logging.Logger, str, str]:
@@ -142,7 +135,6 @@ def _scrape_only_preamble(
     return log, job_id, filter_desc
 
 
-# proxy_riding scrape-only arm: bypass chunking — engine owns concurrency, watchdog, requeue.
 async def _run_scrape_only_riding(
     platform:        Platform,
     new_entries:     list[dict],
@@ -179,7 +171,6 @@ async def _run_scrape_only_riding(
     log.info(f"Job report written to {job_dir}")
 
 
-# Chunked-browser scrape-only arm: 200-URL batches via scrape_chunks_raw.
 async def _run_scrape_only_browser(
     platform:    Platform,
     new_entries: list[dict],
@@ -206,7 +197,6 @@ async def _run_scrape_only_browser(
     log.info(f"Job report written to {job_dir}")
 
 
-# proxy_pool arm (box_lock + Janitor lifecycle): returns False on early abort, True on completion.
 async def _run_pipeline_proxy_pool(
     platform:     Platform,
     platform_dir: Path,
@@ -248,8 +238,6 @@ async def _run_pipeline_proxy_pool(
     return True
 
 
-# STAGE discover: fetch entries via platform.discover(), persist snapshot/master-list; return
-# entries, or None to abort (log + marker already written).
 async def _stage_discover_proxy_pool(
     platform: Platform, discover_dir: Path, log: logging.Logger, logger: AcquireLogger,
 ) -> list[dict] | None:
@@ -268,7 +256,6 @@ async def _stage_discover_proxy_pool(
     return entries
 
 
-# STAGE dedup: filter entries already in raw / known-failed; return new_entries (may be empty).
 def _stage_dedup_proxy_pool(
     platform: Platform, entries: list[dict], discover_dir: Path, raw_dir: Path, log: logging.Logger,
 ) -> list[dict]:
@@ -289,7 +276,6 @@ def _stage_dedup_proxy_pool(
     return new_entries
 
 
-# STAGE scrape: run scrape_entries_proxy, log ok/dead/failed counts; return (manifest, n_ok).
 def _stage_scrape_proxy_pool(
     platform: Platform, new_entries: list[dict], raw_dir: Path, logger: AcquireLogger, log: logging.Logger,
 ) -> tuple[list[dict], int]:
@@ -302,7 +288,6 @@ def _stage_scrape_proxy_pool(
     return manifest, n_ok
 
 
-# Persist raw manifest + blocked-URL lists, then run clean-pass (proxy_pool / TheBlock only).
 def _persist_proxy_pool_results(
     platform:     Platform,
     new_entries:  list[dict],
@@ -326,7 +311,6 @@ def _persist_proxy_pool_results(
         )
 
 
-# Browser arm (discover → dedup → scrape, RegwallGuardError-recovered): returns False on early abort, True on completion.
 async def _run_pipeline_browser(
     platform:     Platform,
     discover_dir: Path,
@@ -368,7 +352,6 @@ async def _run_pipeline_browser(
     return True
 
 
-# Build ok-status manifest entries {hash, url, publication_date} for _append_to_raw_manifest.
 def _build_ok_manifest_entries(new_entries: list[dict], manifest: list[dict]) -> list[dict]:
     entries_by_url = {e["url"]: e for e in new_entries}
     return [

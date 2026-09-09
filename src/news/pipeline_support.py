@@ -17,7 +17,6 @@ PRECONDITION_TIMEOUT = 10
 
 # FUNCTIONS
 
-# Configure file + stderr logging; return logger
 def _setup_logging(name: str) -> logging.Logger:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     log_file = LOG_DIR / f"news_{name}_{today}.log"
@@ -37,7 +36,6 @@ def _setup_logging(name: str) -> logging.Logger:
     return log
 
 
-# Check internet reachability via platform.precondition_url
 def _check_internet(platform: Platform, log: logging.Logger) -> bool:
     try:
         with urllib.request.urlopen(platform.precondition_url, timeout=PRECONDITION_TIMEOUT):
@@ -48,7 +46,6 @@ def _check_internet(platform: Platform, log: logging.Logger) -> bool:
         return False
 
 
-# Persist single master URL list (YYYY-MM-DD\t<url>), set-union append, sorted+deduped.
 def _persist_master_list(entries: list[dict], master_path: Path, log: logging.Logger) -> None:
     master_path.parent.mkdir(parents=True, exist_ok=True)
     new_lines: set[str] = set()
@@ -72,7 +69,6 @@ def _persist_master_list(entries: list[dict], master_path: Path, log: logging.Lo
     )
 
 
-# Write discover snapshot JSON; return path
 def _write_discover_snapshot(entries: list[dict], discover_dir: Path) -> Path:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = discover_dir / f"discover_{ts}.json"
@@ -80,7 +76,6 @@ def _write_discover_snapshot(entries: list[dict], discover_dir: Path) -> Path:
     return path
 
 
-# Write timestamp to last-run marker file
 def _write_marker(name: str, log: logging.Logger) -> None:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     marker = LOG_DIR / f"news_{name}_last_run.txt"

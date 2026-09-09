@@ -11,23 +11,18 @@ from pathlib import Path
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
-# From cooldown.py: proxy cooldown manager (type hint only)
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
-# From state.py: shared riding dataclasses + constants
 from src.news.engine.proxy_riding.state import (
     RiderState, RideRecord, JobRecord,
     PAGE_TIMEOUT_MS, DELAY_BEFORE_HTML, STALL_TIMEOUT_S, POOL_REFRESH_INTERVAL_S,
     FAIL_THRESHOLD, RAW_SUBDIR,
 )
-# From fetch.py: per-URL fetch + classification helpers
 from src.news.engine.proxy_riding.fetch import (
     _fetch_one_url, _classify_connect_fail, _write_raw, _url_hash,
 )
-# From abort.py: report-then-exit handlers for watchdog/signal aborts
 from src.news.engine.proxy_riding.abort import _abort_done, _abort_interrupted, _abort_stall
 
 
-# Ephemeral per-ride bookkeeping for _run_slot — not persisted, never reaches a report.
 @dataclass
 class _RideProgress:
     burn_count: int  = 0
@@ -39,7 +34,6 @@ class _RideProgress:
 
 # ORCHESTRATOR
 
-# Launch n_slots concurrent rider tasks across n_browsers browser instances; return shared state when done.
 async def run_riding_pool(
     url_queue:       asyncio.Queue,
     proxy_pool:      list,
@@ -90,7 +84,6 @@ async def run_riding_pool(
 
 # FUNCTIONS
 
-# One rider task: pull proxy → ride URL queue → burn/rotate → repeat.
 async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -> None:
     print(f"[slot {slot_id}] started", file=sys.stderr)
 
@@ -141,9 +134,6 @@ async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -
     print(f"[slot {slot_id}] exit", file=sys.stderr)
 
 
-# Take the next URL: dequeue (skip already-done dup), else tail-race an open URL when the queue is
-# empty. Returns ("continue"|"break", None, None) to signal the caller's loop control, or
-# ("proceed", url, dequeued).
 def _next_url_for_slot(slot_id: int, state: RiderState) -> tuple[str, str | None, bool | None]:
     try:
         url = state.url_queue.get_nowait()
@@ -159,7 +149,6 @@ def _next_url_for_slot(slot_id: int, state: RiderState) -> tuple[str, str | None
     return "proceed", url, True
 
 
-# Fetch one URL under proxy pstr; update in-flight bookkeeping + progress.positions; build its JobRecord.
 async def _fetch_and_build_job(
     crawler: AsyncWebCrawler, url: str, pstr: str, state: RiderState, progress: _RideProgress, ride_pos: int,
 ) -> tuple[JobRecord, str, str | None, float]:
@@ -184,7 +173,6 @@ async def _fetch_and_build_job(
     return job, html, err, elapsed
 
 
-# Fetch this URL, build its JobRecord, and dispatch the outcome; return ("continue"|"append"|"break", job).
 async def _fetch_and_apply(
     slot_id: int, crawler: AsyncWebCrawler, pstr: str, state: RiderState, progress: _RideProgress,
     url: str, dequeued: bool,
@@ -195,7 +183,6 @@ async def _fetch_and_apply(
     return action, job
 
 
-# Dispatch one fetch's status (ok/regwall/connect_fail/failed/empty); return "continue"|"append"|"break".
 def _apply_fetch_result(
     slot_id:  int,
     state:    RiderState,
@@ -219,13 +206,11 @@ def _apply_fetch_result(
     return _apply_generic_failure_result(slot_id, state, progress, status, url, dequeued, ride_pos)
 
 
-# Re-queue url for another attempt if this was a dequeue (not a race pick) and it's not already done.
 def _maybe_requeue(state: RiderState, url: str, dequeued: bool) -> None:
     if dequeued and url not in state.done_urls:
         state.url_queue.put_nowait(url)
 
 
-# "ok" status: first-writer-wins raw write + counters, or dup-race discard.
 def _apply_ok_result(
     slot_id: int, state: RiderState, progress: _RideProgress, job: JobRecord, url: str, html: str, ride_pos: int,
 ) -> str:
@@ -242,7 +227,6 @@ def _apply_ok_result(
     return "continue"
 
 
-# "regwall" status: burn-count/counter bump + requeue + log.
 def _apply_regwall_result(
     slot_id: int, state: RiderState, progress: _RideProgress, url: str, dequeued: bool, ride_pos: int,
 ) -> str:
@@ -256,7 +240,6 @@ def _apply_regwall_result(
     return "append"
 
 
-# "connect_fail" status: counter bump + requeue + connect-fail record + log; always rotates the proxy.
 def _apply_connect_fail_result(
     slot_id: int, state: RiderState, progress: _RideProgress, url: str, dequeued: bool,
     elapsed: float, err: str | None,
@@ -269,7 +252,6 @@ def _apply_connect_fail_result(
     return "break"
 
 
-# Fallback "failed"/"empty" status: fail-count bump + requeue + log + FAIL_THRESHOLD check.
 def _apply_generic_failure_result(
     slot_id: int, state: RiderState, progress: _RideProgress, status: str, url: str, dequeued: bool, ride_pos: int,
 ) -> str:
@@ -284,7 +266,6 @@ def _apply_generic_failure_result(
     return "append"
 
 
-# Build + append RideRecord for a finished proxy ride; mark proxy burned; log summary.
 def _finalize_ride(
     slot_id:  int,
     state:    RiderState,
@@ -314,7 +295,6 @@ def _finalize_ride(
     )
 
 
-# Atomically advance pool cursor; return (proto, hp) or None if pool is empty.
 async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
     async with state.proxy_lock:
         eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
@@ -325,7 +305,6 @@ async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
         return eligible[idx]
 
 
-# Independent progress watchdog — separate asyncio task, immune to wedged slots (see package DOCS.md Role).
 async def _watchdog(
     state:         RiderState,
     poll_interval: float | None = None,
@@ -357,7 +336,6 @@ async def _watchdog(
             _abort_stall(state, idle)
 
 
-# Remove signal handlers, cancel watchdog, close crawlers — teardown after slot tasks finish.
 async def _teardown_pool(loop, watchdog: asyncio.Task, crawlers: list) -> None:
     try:
         loop.remove_signal_handler(signal.SIGINT)

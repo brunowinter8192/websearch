@@ -19,7 +19,6 @@ STALL_TIMEOUT_S    = 3600
 
 # ORCHESTRATOR
 
-# Sustained concurrent rotation loop: 60-min pool refresh + wait-on-exhaustion; returns (done, dead, gap).
 def run_loop(
     pool_provider: Callable[[], tuple[list[tuple[str, str]], list[dict]]],
     target_urls: list[str],
@@ -69,7 +68,6 @@ def run_loop(
 
 # FUNCTIONS
 
-# Log + signal stall termination when no progress for STALL_TIMEOUT_S; return True if the caller should stop.
 def _check_stall(now: float, last_progress: float, queue: deque) -> bool:
     if now - last_progress < STALL_TIMEOUT_S:
         return False
@@ -81,7 +79,6 @@ def _check_stall(now: float, last_progress: float, queue: deque) -> bool:
     return True
 
 
-# Refresh the pool if due (rebuilding buf from it), then top up buf below buffer_size; return (pool, buf, last_refresh).
 def _maybe_refresh_and_refill(
     pool_provider:      Callable[[], tuple[list[tuple[str, str]], list[dict]]],
     logger:             AcquireLogger,
@@ -103,7 +100,6 @@ def _maybe_refresh_and_refill(
     return pool, buf, last_refresh
 
 
-# Fetch a fresh proxy list via pool_provider(), log it, rebuild the active buffer.
 def _refresh_pool(
     pool_provider: Callable[[], tuple[list[tuple[str, str]], list[dict]]],
     logger:        AcquireLogger,
@@ -118,7 +114,6 @@ def _refresh_pool(
     return pool, buf
 
 
-# Seconds to sleep on exhaustion: min(next cooldown expiry, next refresh tick)
 def _compute_sleep(
     cm: PersistentCooldownManager,
     last_refresh_mono: float,
@@ -136,7 +131,6 @@ def _compute_sleep(
     return min(secs_to_refresh, secs_to_eligible)
 
 
-# Build one batch: Phase 1 (wset then fresh buf → distinct URLs) + Phase 2 tail-race. Each proxy appears once.
 def _build_batch(
     queue:       deque,
     wset:        set[tuple[str, str]],
@@ -165,7 +159,6 @@ def _build_batch(
     return batch
 
 
-# Assign proxies to the next distinct queue URL up to concurrency, skipping already-assigned/wset proxies.
 def _assign_batch_slots(
     proxies:          list[tuple[str, str]] | set[tuple[str, str]],
     url_iter,
@@ -186,7 +179,6 @@ def _assign_batch_slots(
         assigned_proxies.add((proto, hp))
 
 
-# Consume this batch's URLs off queue, execute it, requeue anything that failed; return (buf, last_progress).
 def _run_batch_cycle(
     queue:           deque,
     batch:           list[tuple[str, str, str]],
@@ -219,7 +211,6 @@ def _run_batch_cycle(
     return buf, last_progress
 
 
-# Run one concurrent batch; mutate done/dead/wset/consec_fail in place; return (buf, batch_done, batch_failed, last_progress).
 def _execute_batch(
     batch:           list[tuple[str, str, str]],
     content_type:    str,
@@ -256,8 +247,6 @@ def _execute_batch(
     return buf, batch_done, batch_failed, last_progress
 
 
-# Apply one future's outcome (ok/dead/other) to done/dead/wset/consec_fail/batch_done/batch_failed in
-# place; return (buf, last_progress) since buf may be rebound (proxy burn) and last_progress reassigned.
 def _apply_future_outcome(
     proto:           str,
     hp:              str,

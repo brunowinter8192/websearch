@@ -8,12 +8,10 @@ DATE_RE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 
 # FUNCTIONS
 
-# Compute URL hash matching the publish filename convention
 def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]
 
 
-# Extract YYYY-MM-DD from publication_date field (ISO-8601 string) or URL path
 def pub_date_str(entry: dict) -> str:
     pub = entry.get("publication_date", "")
     if pub and len(pub) >= 10:
@@ -24,7 +22,6 @@ def pub_date_str(entry: dict) -> str:
     return ""
 
 
-# Filter entries not yet in collection_dir (or in exclude_urls); return (new_entries, n_skip_raw, n_excluded).
 def filter_new_entries(
     entries: list[dict],
     collection_dir: Path,
