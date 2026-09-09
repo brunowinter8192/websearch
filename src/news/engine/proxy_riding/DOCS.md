@@ -56,7 +56,7 @@ Touch this package when changing proxy-riding engine behaviour. Do NOT touch `en
 
 ## Modules
 
-### cooldown.py (85 LOC)
+### cooldown.py (83 LOC)
 
 **Purpose:** Riding-specific proxy cooldown manager (`RidingCooldownManager`, isolated from the theblock-shared `proxy_pool/cooldown.py`) with two per-run policies via `RidingScrapeConfig.cooldown_policy` — `"fixed"` (60-min flat) and `"exp"` (full-jitter backoff, reset on productive ride).
 **Reads:** `_burned_at` / `_next_eligible` / `_failed_attempts` (in-memory dicts keyed by `proxy_key`).
@@ -82,7 +82,7 @@ Touch this package when changing proxy-riding engine behaviour. Do NOT touch `en
 **Calls out:** `src.news.engine.proxy_riding.cooldown.RidingCooldownManager` (type hint on
 `RiderState.cooldown_mgr`).
 
-### fetch.py (108 LOC)
+### fetch.py (101 LOC)
 
 **Purpose:** Per-URL fetch + outcome classification — the crawl4ai call, regwall detection, connect-fail subtype classification, and raw-HTML persistence.
 **Reads:** n/a (pure per-call).
@@ -93,7 +93,7 @@ on first-writer OK).
 **Calls out:** `crawl4ai` (`AsyncWebCrawler`, `CrawlerRunConfig`, `CacheMode`, `ProxyConfig`,
 `DefaultMarkdownGenerator`).
 
-### abort.py (96 LOC)
+### abort.py (90 LOC)
 
 **Purpose:** The three watchdog/signal abort paths (`_abort_done`, `_abort_interrupted`, `_abort_stall`) plus their shared write-report-and-exit helper `_abort_write_report_and_exit`.
 **Reads:** `RiderState` (in-memory, for the report + fallback stub).
@@ -106,7 +106,7 @@ minimal fallback stub on any reporter error).
 `metrics.py`/`plots.py` (which themselves import from `state.py`), not from `abort.py`, but the
 cycle would still exist through `rider.py`).
 
-### rider.py (371 LOC)
+### rider.py (349 LOC)
 
 **Purpose:** Entry module — orchestrates B `AsyncWebCrawler` instances, N slot coroutines, per-URL proxy context, burn/fail rotation, 30-min pool refresh, and the watchdog (`run_riding_pool`); installs SIGINT/SIGTERM handlers so manual aborts also produce a report. `_run_slot` and `_apply_fetch_result` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output — see Gotchas): `_run_slot` → `_next_url_for_slot` (dequeue-or-tail-race, returns an explicit `"continue"|"break"|"proceed"` action so the caller's own loop control is preserved) → `_fetch_and_apply` (per-attempt orchestrator) → `_fetch_and_build_job` (fetch + `JobRecord` construction) and `_apply_fetch_result` (now a pure dispatcher) → one helper per status (`_apply_ok_result`, `_apply_regwall_result`, `_apply_connect_fail_result`, `_apply_generic_failure_result`) sharing `_maybe_requeue` for the repeated requeue-if-dequeued check.
 **Reads:** URL queue (asyncio.Queue), proxy pool list, `RidingCooldownManager` (shared state).
@@ -117,7 +117,7 @@ cycle would still exist through `rider.py`).
 `RideRecord`, `JobRecord`, constants); `fetch.py` (`_fetch_one_url`, `_classify_connect_fail`,
 `_write_raw`, `_url_hash`); `abort.py` (`_abort_done`, `_abort_interrupted`, `_abort_stall`).
 
-### reporter.py (213 LOC)
+### reporter.py (200 LOC)
 
 **Purpose:** Orchestrator (`write_riding_report`) + the `job.md` markdown-rendering concern (counts, throughput, riding stats, regwall counts, connect-fail breakdown, load-time distribution, plot links) from a completed `RiderState`. Metric derivation and plot-file writing were split out into `metrics.py`/`plots.py` (below, pure relocation, same behavior) once this file crossed 400 LOC by mixing three concerns; this module is left as the orchestrator plus the one remaining concern (markdown rendering) since that alone keeps it well under any split threshold.
 **Reads:** `RiderState` (in-memory), `t_job_start` (datetime).
@@ -127,7 +127,7 @@ cycle would still exist through `rider.py`).
 wedge-after-done); `abort.py:_abort_interrupted` (late import, SIGINT/SIGTERM abort).
 **Calls out:** `src.news.engine.proxy_riding.state` (`RiderState`, type hints only); `src.news.engine.proxy_riding.metrics` (`_compute_stats`); `src.news.engine.proxy_riding.plots` (`_write_cumulative_plot`, `_write_load_hist`, `_write_cf_hist`).
 
-### metrics.py (160 LOC)
+### metrics.py (152 LOC)
 
 **Purpose:** Metric derivation from `RiderState` — split out of `reporter.py` (pure relocation, same behavior): `_compute_stats` (the single entry point `write_riding_report` calls), `_compute_fetch_counts` (per-fetch counts/elapsed-time stats/completion times, extracted from `_compute_stats` itself to keep it under 50 LOC — see Gotchas), `_compute_retry_outcome`, `_compute_pool_windows`, `_compute_load_percentiles`, `_compute_connect_fail_stats`, `_distribution_stats`, and the `_BACKFILL_TOTAL = 61_000` constant.
 **Reads:** `RiderState` (in-memory), `t_job_start` (datetime).
@@ -135,7 +135,7 @@ wedge-after-done); `abort.py:_abort_interrupted` (late import, SIGINT/SIGTERM ab
 **Called by:** `reporter.py` (`write_riding_report` via `_compute_stats`) — the only caller.
 **Calls out:** `statistics` (stdlib, incl. `statistics.quantiles` with `method='inclusive'` — bounds p-values within observed [min, max]); `src.news.engine.proxy_riding.state` (`RiderState`, `FAIL_THRESHOLD`).
 
-### plots.py (77 LOC)
+### plots.py (74 LOC)
 
 **Purpose:** Matplotlib plot-file writers — split out of `reporter.py` (pure relocation, same behavior): `_write_cumulative_plot`, `_write_load_hist`, `_write_cf_hist`. All histograms: 0.25 s bins, x-axis auto-ranges to data max, page_timeout_s red vertical line. Pure functions of `job_dir: Path` + the `stats` dict `metrics.py` produces — no `proxy_riding`-internal import at all.
 **Reads:** nothing of its own — takes the `stats` dict as a parameter.
@@ -143,7 +143,7 @@ wedge-after-done); `abort.py:_abort_interrupted` (late import, SIGINT/SIGTERM ab
 **Called by:** `reporter.py` (`write_riding_report`) — the only caller.
 **Calls out:** `matplotlib` (lazy import inside each plot function); `math` (stdlib, bin count).
 
-### scrape.py (111 LOC)
+### scrape.py (107 LOC)
 
 **Purpose:** Pipeline entry point + manifest adapter. Loads pool, shuffles, calls `run_riding_pool`,
 maps `RiderState.job_records` → pipeline manifest.

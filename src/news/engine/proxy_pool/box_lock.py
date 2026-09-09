@@ -12,14 +12,12 @@ LOCK_DIR = Path.home() / ".websearch-locks"
 _TS_FMT  = "%Y-%m-%dT%H:%M:%SZ"
 
 
-# Raised when the lock is held by another process.
 class LockBusyError(RuntimeError):
     pass
 
 
 # FUNCTIONS
 
-# Remove stale sidecar if the owning PID is no longer alive
 def cleanup_stale(sidecar: Path) -> None:
     if not sidecar.exists():
         return
@@ -39,7 +37,6 @@ def cleanup_stale(sidecar: Path) -> None:
         return
 
 
-# Single-job system-wide lock; crash-safe (kernel releases flock on process death)
 @contextmanager
 def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
     LOCK_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +66,6 @@ def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
         fd.close()
 
 
-# Build human-readable busy message from sidecar JSON
 def _busy_message(sidecar: Path) -> str:
     try:
         data       = json.loads(sidecar.read_text(encoding="utf-8"))
@@ -89,7 +85,6 @@ def _busy_message(sidecar: Path) -> str:
         return "proxy_pool already running (lock held, sidecar unreadable)"
 
 
-# Write sidecar JSON atomically via tmp file + os.rename
 def _write_sidecar(sidecar: Path, data: dict) -> None:
     tmp_fd, tmp_path = tempfile.mkstemp(dir=LOCK_DIR, suffix=".tmp")
     try:

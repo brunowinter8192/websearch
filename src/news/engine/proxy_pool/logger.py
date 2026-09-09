@@ -9,7 +9,6 @@ from src.news.engine.proxy_pool.proxy_key import proxy_key
 
 # ORCHESTRATOR
 
-# Streams fetch events to JSONL (line-buffered, kill-safe); all janitor.end_job() stats derive from it.
 class AcquireLogger:
     def __init__(self, total_urls: int, log_dir: Path):
         self._total      = total_urls
@@ -18,7 +17,6 @@ class AcquireLogger:
         self._jsonl_path = log_dir / f"acquire_events_{ts}.jsonl"
         self._jsonl_fh   = self._jsonl_path.open("a", encoding="utf-8", buffering=1)
 
-    # Stream one fetch-attempt event to JSONL.
     def record_attempt(self, proto: str, host_port: str, url: str, ok: bool) -> None:
         event = {
             "proxy_key": proxy_key(proto, host_port),
@@ -28,7 +26,6 @@ class AcquireLogger:
         }
         self._jsonl_fh.write(json.dumps(event) + "\n")
 
-    # Stream one pool-refresh event to JSONL.
     def record_pool_refresh(self, size: int) -> None:
         event = {
             "event": "pool_refresh",
@@ -37,7 +34,6 @@ class AcquireLogger:
         }
         self._jsonl_fh.write(json.dumps(event) + "\n")
 
-    # Stream one per-source pool-load event to JSONL.
     def record_pool_source(self, url: str, ok: bool, count: int) -> None:
         event = {
             "event": "pool_source",
@@ -48,6 +44,5 @@ class AcquireLogger:
         }
         self._jsonl_fh.write(json.dumps(event) + "\n")
 
-    # Close the JSONL stream — call before janitor.end_job() (which reads the file).
     def close(self) -> None:
         self._jsonl_fh.close()

@@ -11,7 +11,6 @@ DATE_RE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 
 # FUNCTIONS
 
-# Extract YYYY-MM-DD from publication_date field or URL path; "unknown" if neither present.
 def pub_date_str(entry: dict) -> str:
     pub = entry.get("publication_date", "")
     if pub and len(pub) >= 10:
@@ -22,7 +21,6 @@ def pub_date_str(entry: dict) -> str:
     return "unknown"
 
 
-# Clean ok entries → collection_dir; body-less → bodyless_urls.txt; returns {n_cleaned, n_bodyless, total}.
 def _run_clean_pass(
     platform:       Platform,
     ok_entries:     list[dict],

@@ -25,7 +25,6 @@ _RE_INLINE_LINK  = re.compile(r'\[([^\]]+)\]\([^)]+\)')
 
 # FUNCTIONS
 
-# Extract H1 start-anchor → end-anchor → strip chrome → return joined cleaned lines (pure body).
 def cleanup(raw_markdown: str, entry: dict) -> str:
     body_lines = raw_markdown.splitlines()
 
@@ -39,7 +38,6 @@ def cleanup(raw_markdown: str, entry: dict) -> str:
     return "\n".join(cleaned_lines)
 
 
-# Return index of first H1 line in body_lines, or None
 def find_start_anchor(body_lines: list[str]) -> int | None:
     for i, line in enumerate(body_lines):
         if line.startswith("# "):
@@ -47,7 +45,6 @@ def find_start_anchor(body_lines: list[str]) -> int | None:
     return None
 
 
-# Return (end_idx, anchor_name) for the earliest end anchor after start_idx; (len(body_lines), "NONE") if none.
 def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     for i in range(start_idx + 1, len(body_lines)):
         line = body_lines[i]
@@ -57,7 +54,6 @@ def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     return len(body_lines), "NONE"
 
 
-# Apply in-body cleanup rules; return (cleaned_lines, ws_strip_count, para_insert_count, tag_strip_count).
 def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
     pass1, ws_strips, tag_strips = _strip_and_substitute_lines(lines)
     result, para_inserts = _normalize_paragraphs(pass1)
@@ -70,7 +66,6 @@ def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
     return result, ws_strips, para_inserts, tag_strips
 
 
-# Pass 1 — strip/substitute each line, count trailing-ws + tag-footer hits.
 def _strip_and_substitute_lines(lines: list[str]) -> tuple[list[str], int, int]:
     pass1: list[str] = []
     ws_strips = 0
@@ -96,7 +91,6 @@ def _strip_and_substitute_lines(lines: list[str]) -> tuple[list[str], int, int]:
     return pass1, ws_strips, tag_strips
 
 
-# Pass 2 — paragraph normalization + blank-run collapse-to-1.
 def _normalize_paragraphs(pass1: list[str]) -> tuple[list[str], int]:
     result: list[str] = []
     para_inserts = 0

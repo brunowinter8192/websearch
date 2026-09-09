@@ -17,7 +17,6 @@ REGWALL_FAIL_THRESHOLD = 0.20
 
 # ORCHESTRATOR
 
-# Scrape all entries concurrently: fresh crawler per URL, prod gate pacing, loud regwall guard.
 async def scrape_entries(
     entries: list[dict],
     output_dir: Path,
@@ -52,12 +51,10 @@ async def scrape_entries(
 
 # FUNCTIONS
 
-# Return True if markdown contains any of the given regwall signals
 def _is_regwall(markdown: str, signals: list[str]) -> bool:
     return any(sig in markdown for sig in signals)
 
 
-# Return or create per-domain state entry (lastseen, lock, sem) — asyncio-safe.
 def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
     if domain not in domain_states:
         domain_states[domain] = {
@@ -68,7 +65,6 @@ def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domai
     return domain_states[domain]
 
 
-# Scrapy gate: under domain lock, wait until delay elapsed since lastseen, then stamp lastseen=now.
 async def _gate_domain(state: dict, download_delay: float) -> None:
     async with state["lock"]:
         jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
@@ -79,7 +75,6 @@ async def _gate_domain(state: dict, download_delay: float) -> None:
         state["lastseen"] = time.time()
 
 
-# Fetch one URL: domain sem → gate → fresh crawler → arun → regwall check → write or skip.
 async def _fetch_one(
     domain_states: dict,
     entry: dict,
@@ -114,7 +109,6 @@ async def _fetch_one(
     return result_entry
 
 
-# Classify a fetch result (regwall/empty/ok), write the body on ok, log the outcome; return update fields.
 def _classify_fetch(
     url: str, url_hash: str, raw_md: str, elapsed: float,
     regwall_signals: list[str], output_dir: Path,
@@ -139,14 +133,12 @@ def _classify_fetch(
     }
 
 
-# Write raw body ONLY (no frontmatter — cleanup receives entry separately); return path.
 def _write_body(url_hash: str, content: str, output_dir: Path) -> Path:
     file_path = output_dir / f"{url_hash}.md"
     file_path.write_text(content, encoding="utf-8")
     return file_path
 
 
-# Map raw asyncio.gather results (dict or escaped exception) to manifest entries.
 def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
     manifest = []
     for i, r in enumerate(raw_results):
@@ -162,7 +154,6 @@ def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
     return manifest
 
 
-# Regwall guard: WARN per-page (caller handles skip); raise RegwallGuardError if fraction >= threshold.
 class RegwallGuardError(Exception):
     def __init__(self, msg: str, manifest: list[dict] | None = None):
         super().__init__(msg)

@@ -11,7 +11,6 @@ from src.news.platform import ProxyScrapeConfig
 
 # ORCHESTRATOR
 
-# Fetch target URLs via rotating proxy pool; return manifest matching browser scrape format
 def scrape_entries_proxy(
     entries: list[dict],
     output_dir: Path,
@@ -52,7 +51,6 @@ def scrape_entries_proxy(
 
 # FUNCTIONS
 
-# Map run_loop (done/dead/gap) to pipeline manifest; entries order preserved
 def _build_manifest(
     entries: list[dict],
     url_to_hash: dict[str, str],

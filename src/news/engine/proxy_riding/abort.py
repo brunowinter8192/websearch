@@ -4,13 +4,11 @@ import os
 import signal
 import sys
 
-# From state.py: shared riding state shape
 from src.news.engine.proxy_riding.state import RiderState
 
 
 # FUNCTIONS
 
-# Wedged slot(s) after all-done: write report, os._exit(0). Never returns.
 def _abort_done(state: RiderState) -> None:
     print(
         f"[watchdog] all-done but in_flight={state.in_flight} — "
@@ -25,7 +23,6 @@ def _abort_done(state: RiderState) -> None:
     )
 
 
-# SIGINT/SIGTERM handler: write report, os._exit(130/143). Never returns.
 def _abort_interrupted(state: RiderState, signum: int) -> None:
     name      = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
     exit_code = 130      if signum == signal.SIGINT else 143
@@ -41,7 +38,6 @@ def _abort_interrupted(state: RiderState, signum: int) -> None:
     )
 
 
-# Genuine stall: write report, os._exit(1). Never returns.
 def _abort_stall(state: RiderState, idle_s: float) -> None:
     print(
         f"[watchdog] STALL {idle_s:.0f}s ≥ {state.stall_timeout_s:.0f}s — "
@@ -56,7 +52,6 @@ def _abort_stall(state: RiderState, idle_s: float) -> None:
     )
 
 
-# Shared write-report-then-exit path for all three abort triggers; fallback stub on reporter error.
 def _abort_write_report_and_exit(
     state:          RiderState,
     log_prefix:     str,
@@ -67,7 +62,6 @@ def _abort_write_report_and_exit(
     state.job_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        # From reporter.py: writes job.md + plots for the run — late import avoids circular top-level import
         from src.news.engine.proxy_riding.reporter import write_riding_report
         write_riding_report(state, state.job_dir, state.t_job_start)
         print(f"{log_prefix} job.md → {state.job_dir / 'job.md'}", file=sys.stderr)

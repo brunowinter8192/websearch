@@ -37,7 +37,7 @@ Extra platform attributes (not in Protocol):
 
 ---
 
-### discover.py (170 LOC)
+### discover.py (161 LOC)
 
 **Purpose:** Sitemap-based article discovery. Fetches theblock sitemap index (direct httpx →
 proxy pool fallback), selects `post_type_post_*` sub-sitemaps by mode (`delta`/`full`/`sub:N`/`sub:A-B`),
@@ -51,7 +51,7 @@ parses `<url>/<loc>/<lastmod>` blocks — no date filtering. Returns `[{url, las
 
 ---
 
-### cleanup.py (117 LOC)
+### cleanup.py (111 LOC)
 
 **Purpose:** Parse JSON-LD `NewsArticle` block from raw HTML fetched by proxy engine →
 extract `articleBody` (HTML) → convert to Markdown via `crawl4ai.html2text.HTML2Text` →
@@ -63,7 +63,7 @@ apply `_post_clean()` regex pass → mutate `entry["publication_date"] = datePub
 
 ---
 
-### __init__.py (32 LOC)
+### __init__.py (30 LOC)
 
 **Purpose:** `TheBlockPlatform` class wrapping config + discover + cleanup; auto-registers on import; `scrape_engine="proxy_pool"`, `uses_master_list=True`.
 **Called by:** `__main__.py` (side-effect import).

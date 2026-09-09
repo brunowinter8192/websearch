@@ -5,13 +5,11 @@ import time
 import httpx
 
 from src.news.platforms.coindesk.config import TIMELINE_BASE, TARGET_URL, CLICKS_REWARM
-# From browser.py: browser_load_feed(n_clicks) -> (headers, api_url, body)
 from src.news.platforms.coindesk.browser import browser_load_feed
 
 
 # FUNCTIONS
 
-# Parse all articles from response body; extract _id, storyType, pathname, displayDate, title
 def parse_articles(body: bytes) -> list[dict]:
     try:
         import json
@@ -42,12 +40,10 @@ def parse_articles(body: bytes) -> list[dict]:
     return result
 
 
-# Build pagination cursor URL from lastId + lastDisplayDate
 def build_cursor_url(last_id: str, last_date: str) -> str:
     return f"{TIMELINE_BASE}?size=16&lastId={last_id}&lastDisplayDate={last_date}&lang=en"
 
 
-# Fetch feed HTML page via plain httpx; return HTTP status code
 def fetch_feedpage(headers: dict) -> int:
     feed_hdrs = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept-language", "accept"}}
     try:
@@ -58,7 +54,6 @@ def fetch_feedpage(headers: dict) -> int:
         return -1
 
 
-# Attempt re-warm: httpx feedpage first (cheap), then browser re-warm as fallback
 async def try_rewarm(failing_url: str, headers: dict) -> tuple[dict, bytes | None, str]:
     print("[coindesk] [rewarm] Attempting httpx feedpage re-warm …", file=sys.stderr)
     fp_status = fetch_feedpage(headers)

@@ -29,7 +29,7 @@ the job lifecycle (lock, janitor). Do NOT touch when adding a browser-engine pla
 
 ## Modules
 
-### scrape.py (83 LOC)
+### scrape.py (81 LOC)
 
 **Purpose:** Proxy-pool scrape entry point — wires `run_loop` with a caller-supplied `AcquireLogger`; returns pipeline manifest. Job lifecycle (box_lock, Janitor, AcquireLogger) is owned by `pipeline.py:_run_pipeline_proxy_pool`.
 **Reads:** `entries` list (in-memory) + `proxy_cfg.pool_provider()`.
@@ -39,7 +39,7 @@ the job lifecycle (lock, janitor). Do NOT touch when adding a browser-engine pla
 
 ---
 
-### loop.py (307 LOC)
+### loop.py (296 LOC)
 
 **Purpose:** Sustained concurrent rotation loop — 60-min pool refresh, 2-strikes lifecycle, tail-race, wait-on-exhaustion, stall-terminate. `run_loop` and `_execute_batch` were each split into single-responsibility helpers to stay under the 50-LOC function threshold (pure extraction, same behavior/log output/`time.monotonic()` call count — see Gotchas): `run_loop` → `_check_stall` (stall-log + boolean signal), `_maybe_refresh_and_refill` (refresh-if-due + refill-if-under-buffer_size, returns rebound `pool`/`buf`/`last_refresh`), `_run_batch_cycle` (consume batch off queue → `_execute_batch` → requeue failures, returns rebound `buf`/`last_progress`); `_execute_batch` → `_apply_future_outcome` (the per-future ok/dead/other branch, returns rebound `buf`/`last_progress` since one is conditionally reassigned and the other conditionally rebound on proxy-burn).
 **Reads:** `pool_provider()` callback (returns `(pool, sources)`) + target URL list (in-memory).
@@ -49,7 +49,7 @@ the job lifecycle (lock, janitor). Do NOT touch when adding a browser-engine pla
 
 ---
 
-### fetch.py (38 LOC)
+### fetch.py (36 LOC)
 
 **Purpose:** curl_cffi chrome-impersonating HTTP fetch primitive + content-type gate (`"html"` | `"xml"`).
 **Reads:** remote URL via curl_cffi Session (routed through proxy).
@@ -61,7 +61,7 @@ connection error, timeout, CF block, or wrong-format content, `content` is `b""`
 
 ---
 
-### cooldown.py (43 LOC)
+### cooldown.py (37 LOC)
 
 **Purpose:** In-memory per-job cooldown tracking — clean slate per instantiation, 60-min burn window.
 **Reads:** nothing (in-memory only).
@@ -71,7 +71,7 @@ connection error, timeout, CF block, or wrong-format content, `content` is `b""`
 
 ---
 
-### buffer.py (34 LOC)
+### buffer.py (32 LOC)
 
 **Purpose:** Active-buffer helpers — `build_active_buffer`, `refill_buffer`; holds `BUFFER_SIZE = 1280`
 (10× `DEFAULT_CONCURRENCY`), `DEFAULT_CONCURRENCY = 128` (concurrent `(proxy, URL)` pairs per batch —
@@ -83,7 +83,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### logger.py (53 LOC)
+### logger.py (48 LOC)
 
 **Purpose:** Streams per-fetch events to JSONL (line-buffered, kill-safe). Stats derived by `janitor.end_job`.
 **Reads:** events pushed via `record_attempt` / `record_pool_refresh` / `record_pool_source`.
@@ -93,7 +93,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### janitor.py (278 LOC)
+### janitor.py (264 LOC)
 
 **Purpose:** Job lifecycle — `Janitor(jobs_dir, log_dir, report_dir)` wipes transient dirs at start and derives `job.md` (60-min window stats + pool source breakdown) + `cumulative_hits.png` from the JSONL at end.
 **Reads:** JSONL at `jsonl_path` passed to `end_job`.
@@ -103,7 +103,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### box_lock.py (102 LOC)
+### box_lock.py (97 LOC)
 
 **Purpose:** System-wide single-job flock — `acquire(job, target, lock_name="proxy_pool")`; crash-safe (kernel releases flock on process death). Raises `LockBusyError` on contention.
 **Reads:** `~/.websearch-locks/{lock_name}.lock` sidecar (in `cleanup_stale` + busy message).
@@ -113,7 +113,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### proxy_key.py (16 LOC)
+### proxy_key.py (14 LOC)
 
 **Purpose:** Canonical proxy key — `proxy_key(proto, host_port) → "proto://host:port"` (auth stripped if present).
 **Reads:** nothing.
@@ -123,7 +123,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### pool_retry.py (21 LOC)
+### pool_retry.py (20 LOC)
 
 **Purpose:** Bounded exponential-backoff retry for httpx fetches — `fetch_with_retry(fn)` calls `fn()` up to 5 times, sleeping 1/2/4/8s between attempts (~15s total backoff; ~90s worst-case combined with `FETCH_TIMEOUT=15` per attempt); re-raises last exception on final failure.
 **Reads:** nothing.
@@ -133,7 +133,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### pool_loaders.py (190 LOC)
+### pool_loaders.py (184 LOC)
 
 **Purpose:** 18 proxy-source loaders + `load_backfill_pool()` — fetches all sources per-URL with retry and per-source failure isolation; returns `(pool, sources)` where `pool` is deduped `[(protocol, host:port)]` (~32k unique) and `sources` is `[{url, ok, count}, …]` one entry per URL.
 **Reads:** 44 GitHub raw proxy-list URLs via httpx (each wrapped in `fetch_with_retry`).
@@ -143,7 +143,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### monosans_loader.py (40 LOC)
+### monosans_loader.py (38 LOC)
 
 **Purpose:** Fetch monosans/proxy-list JSON; return `[(protocol, host:port)]` in source order. `_fetch_json` is wrapped with `fetch_with_retry` — transient network errors ride out automatically.
 **Reads:** monosans GitHub raw JSON URL via httpx.

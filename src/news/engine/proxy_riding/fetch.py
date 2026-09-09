@@ -9,7 +9,6 @@ from pathlib import Path
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, ProxyConfig
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-# From state.py: shared riding constants
 from src.news.engine.proxy_riding.state import DELAY_BEFORE_HTML, RAW_SUBDIR
 
 REGWALL_SIGNALS: list[str] = [
@@ -24,7 +23,6 @@ _PROXY_ERR = ("timeout", "proxy", "err_proxy", "tunnel", "socks",
 
 # FUNCTIONS
 
-# Fetch one URL via per-context proxy; return (status, char_count, markdown_len, elapsed, html, err).
 async def _fetch_one_url(
     crawler:         AsyncWebCrawler,
     url:              str,
@@ -63,7 +61,6 @@ async def _fetch_one_url(
     return status, len(html) if html else None, markdown_len, elapsed, html, err
 
 
-# Classify a completed crawl4ai result into (status, html, markdown_len, err).
 def _classify_crawl_result(result) -> tuple[str, str, int | None, str | None]:
     if not result.success:
         emsg   = (result.error_message or "").lower()
@@ -77,12 +74,10 @@ def _classify_crawl_result(result) -> tuple[str, str, int | None, str | None]:
     return "ok", result.html, len(raw_md), None
 
 
-# Return True if markdown contains any REGWALL_SIGNALS.
 def _is_regwall(markdown: str) -> bool:
     return any(sig in markdown for sig in REGWALL_SIGNALS)
 
 
-# Classify a connect_fail error string into a subtype for reporting.
 def _classify_connect_fail(err: str | None) -> str:
     if not err:
         return "other"
@@ -96,13 +91,11 @@ def _classify_connect_fail(err: str | None) -> str:
     return "other"
 
 
-# Write raw HTML to output_dir/raw/{url_hash}.html; return path.
 def _write_raw(url_hash: str, html: str, output_dir: Path) -> Path:
     path = output_dir / RAW_SUBDIR / f"{url_hash}.html"
     path.write_text(html, encoding="utf-8")
     return path
 
 
-# SHA-256 URL hash (12 hex chars) — matches scrape.py convention.
 def _url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]

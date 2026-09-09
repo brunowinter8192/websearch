@@ -19,17 +19,13 @@ from src.news.platforms.coindesk.config import (
     FULL_MODE_FLOOR,
     DISCOVER_DIR,
 )
-# From browser.py: browser_load_feed(n_clicks) -> (headers, api_url, body)
 from src.news.platforms.coindesk.browser import browser_load_feed
-# From timeline.py: timeline-API access + session re-warm
 from src.news.platforms.coindesk.timeline import parse_articles, build_cursor_url, fetch_feedpage, try_rewarm
-# From shards.py: per-year discover shard storage
 from src.news.platforms.coindesk.shards import _append_to_shard, load_discover
 
 
 # ORCHESTRATOR
 
-# Browser warmup → httpx cursor loop → incremental discover write → entry list.
 async def discover(timeframe: str = "30") -> list[dict]:
     stop_date = _parse_stop_date(timeframe)
     print(f"[coindesk] discover timeframe={timeframe!r} stop_date={stop_date}", file=sys.stderr)
@@ -57,7 +53,6 @@ async def discover(timeframe: str = "30") -> list[dict]:
 
 # FUNCTIONS
 
-# Compute stop-date string from timeframe specifier
 def _parse_stop_date(timeframe: str) -> str:
     if timeframe == "full":
         return FULL_MODE_FLOOR
@@ -69,7 +64,6 @@ def _parse_stop_date(timeframe: str) -> str:
     return floor.isoformat()
 
 
-# Run-wide cursor_loop accumulators — mirrors the per-ride scratch dataclass pattern in rider.py.
 @dataclass
 class _CursorLoopStats:
     ok_calls:               int  = 0
@@ -80,7 +74,6 @@ class _CursorLoopStats:
     last_rewarm_t:          float = field(default_factory=time.monotonic)
 
 
-# Cursor loop: pages backward to stop_date; writes new URLs incrementally to discover shards.
 async def cursor_loop(
     headers: dict,
     start_url: str,
@@ -125,7 +118,6 @@ async def cursor_loop(
     return all_entries
 
 
-# Process and incrementally write this batch: build entries, filter live-blogs, dedup, track oldest_date.
 def _process_batch(
     articles:     list[dict],
     seen_urls:    set,
@@ -150,7 +142,6 @@ def _process_batch(
             stats.oldest_date = d
 
 
-# Proactive keep-alive re-warm once httpx re-warm is confirmed working, throttled to REWARM_EVERY.
 def _maybe_proactive_rewarm(headers: dict, stats: _CursorLoopStats) -> None:
     if not (stats.httpx_rewarm_confirmed and time.monotonic() - stats.last_rewarm_t >= REWARM_EVERY):
         return
@@ -160,7 +151,6 @@ def _maybe_proactive_rewarm(headers: dict, stats: _CursorLoopStats) -> None:
     stats.rewarm_count += 1
 
 
-# Advance to the next page, handling cursor exhaustion/re-warm. Return (headers, body, last_date, should_stop).
 async def _advance_cursor(
     articles: list[dict], headers: dict, stats: _CursorLoopStats,
 ) -> tuple[dict, bytes | None, str, bool]:
@@ -178,7 +168,6 @@ async def _advance_cursor(
     return headers, next_body, last_date, False
 
 
-# Build next cursor; fall back to N-1, N-2 articles on 403. Return (body, url, last_id, last_date).
 def _fetch_next_page(
     articles: list[dict], headers: dict, stats: _CursorLoopStats,
 ) -> tuple[bytes | None, str, str, str]:
@@ -218,7 +207,6 @@ def _fetch_next_page(
     return next_body, next_url, last_id, last_date
 
 
-# All cursor fallbacks exhausted → try re-warm. Return (headers, body, fatal) — fatal=True means stop.
 async def _handle_cursor_exhaustion(
     next_url: str, headers: dict, stats: _CursorLoopStats,
 ) -> tuple[dict, bytes | None, bool]:
@@ -236,7 +224,6 @@ async def _handle_cursor_exhaustion(
     return new_headers, rewarm_body, False
 
 
-# Periodic progress log every CHECKPOINT_EVERY successful calls.
 def _maybe_log_checkpoint(stats: _CursorLoopStats, all_entries: list[dict], last_date: str, t_start: float) -> None:
     if stats.ok_calls % CHECKPOINT_EVERY != 0:
         return
@@ -250,7 +237,6 @@ def _maybe_log_checkpoint(stats: _CursorLoopStats, all_entries: list[dict], last
     )
 
 
-# Close all open year-shard file handles; log (non-fatal) on close error.
 def _close_year_files(year_files: dict) -> None:
     for fh in year_files.values():
         try:
@@ -259,7 +245,6 @@ def _close_year_files(year_files: dict) -> None:
             print(f"[coindesk] year shard close error (non-fatal): {e}", file=sys.stderr)
 
 
-# Final cursor_loop summary log.
 def _log_cursor_loop_summary(stats: _CursorLoopStats, all_entries: list[dict], t_start: float) -> None:
     wall = int(time.monotonic() - t_start)
     new_total = sum(1 for e in all_entries if e.get("_new"))
@@ -271,7 +256,6 @@ def _log_cursor_loop_summary(stats: _CursorLoopStats, all_entries: list[dict], t
     )
 
 
-# Build output entry dict from raw article dict; return None if pathname or date missing
 def _build_entry(a: dict) -> dict | None:
     pathname = a.get("pathname") or ""
     display_date = (a.get("displayDate") or "")[:10]
@@ -288,13 +272,11 @@ def _build_entry(a: dict) -> dict | None:
     }
 
 
-# Extract first path segment as section (e.g. /markets/2024/... → markets)
 def _extract_section(pathname: str) -> str:
     parts = pathname.strip("/").split("/")
     return parts[0] if parts else "unknown"
 
 
-# Return True if URL is a CoinDesk live-blog: slug starts with "live-"
 def _is_live_blog(url: str) -> bool:
     slug = urlparse(url).path.rstrip("/").split("/")[-1]
     return slug.startswith("live-")
