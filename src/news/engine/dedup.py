@@ -19,7 +19,7 @@ def pub_date_str(entry: dict) -> str:
     m = DATE_RE.search(entry.get("url", ""))
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    return ""
+    return "unknown"
 
 
 def filter_new_entries(

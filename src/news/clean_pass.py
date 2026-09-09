@@ -1,25 +1,13 @@
 # INFRASTRUCTURE
 
 import logging
-import re
 from pathlib import Path
 
+from src.news.engine.dedup import pub_date_str
 from src.news.platform import Platform
-
-DATE_RE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 
 
 # FUNCTIONS
-
-def pub_date_str(entry: dict) -> str:
-    pub = entry.get("publication_date", "")
-    if pub and len(pub) >= 10:
-        return pub[:10]
-    m = DATE_RE.search(entry.get("url", ""))
-    if m:
-        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    return "unknown"
-
 
 def _run_clean_pass(
     platform:       Platform,

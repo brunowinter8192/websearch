@@ -24,10 +24,10 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 
 ### dedup.py (54 LOC)
 
-**Purpose:** Filter discover entries to those not yet in the raw corpus by checking file existence; optionally exclude known-failure URLs permanently.
+**Purpose:** Filter discover entries to those not yet in the raw corpus by checking file existence; optionally exclude known-failure URLs permanently. As of 2026-09-09, `pub_date_str` is the ONE surviving definition (see Gotchas) — used internally by `filter_new_entries`'s `mode="pubdate"` branch and imported directly by `clean_pass.py`; returns `"unknown"` when no date is found.
 **Reads:** entries list (in-memory), dir (filesystem), source name, mode, optional exclusion set.
 **Writes:** nothing (pure filter).
-**Called by:** `pipeline.py:_run_pipeline_proxy_pool` / `_run_pipeline_browser` (mode=`"raw"`), `pipeline.py:run_scrape_only` (mode=`"raw"`).
+**Called by:** `pipeline.py:_run_pipeline_proxy_pool` / `_run_pipeline_browser` (mode=`"raw"`), `pipeline.py:run_scrape_only` (mode=`"raw"`); `clean_pass.py` (`pub_date_str` only).
 **Calls out:** stdlib only.
 
 ### scrape_job.py (104 LOC)
@@ -50,3 +50,4 @@ The two sub-engines live in their own subpackages with own-level DOCS.md: `proxy
 
 - `scrape.py` raises `RegwallGuardError` (not sys.exit) at regwall fraction ≥ `REGWALL_FAIL_THRESHOLD` (0.20); the exception's `.manifest` carries the full per-entry manifest including ok entries written before abort — callers persist aborted-run data from it.
 - `dedup.py`'s `mode="raw"` takes `raw_ext` — `".html"` for the proxy_riding path, default `".md"` elsewhere.
+- **2026-09-09: `pub_date_str` consolidated into `dedup.py` with the `unknown` fallback — user decision, Phase 4 control-flow review.** `clean_pass.py` used to define its own byte-identical copy, differing only in the final fallback (`"unknown"` vs `dedup.py`'s own `""`). `clean_pass.py` built its output filename as `theblock__{pubdate}__{h}.md` using its own `"unknown"`; `dedup.py`'s `mode="pubdate"` branch built its lookup filename the same way using its own `""` — for a date-less entry the two names differed (`theblock__unknown__{h}.md` vs `theblock____{h}.md`), so the pubdate-mode dedup lookup could never find what `clean_pass` actually wrote. `mode="pubdate"` is currently unreached in production (every `pipeline.py` call site passes `mode="raw"`), so this never manifested as an observed bug, but the divergence itself was real and would have surfaced the moment anything called `filter_new_entries` without an explicit `mode=`. `clean_pass.py` now imports `pub_date_str` from here; its own copy and `DATE_RE` are gone.

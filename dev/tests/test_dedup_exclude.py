@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from src.news.engine.dedup import filter_new_entries, url_hash
+from src.news.engine.dedup import filter_new_entries, pub_date_str, url_hash
 
 
 # ---------------------------------------------------------------------------
@@ -130,3 +130,26 @@ def test_empty_exclusion_set_no_exclusions(tmp_path):
     )
     assert len(new) == 2
     assert n_excluded == 0
+
+
+# ---------------------------------------------------------------------------
+# pub_date_str / mode="pubdate" — consolidated 2026-09-09 (was also defined, with a diverging
+# "" fallback, in src/news/clean_pass.py; that copy is gone, this is the one surviving definition)
+# ---------------------------------------------------------------------------
+
+def test_pub_date_str_returns_unknown_when_no_date_found():
+    """The "unknown" fallback (not "") — the same fallback clean_pass.py's own filenames already
+    used, so pubdate-mode dedup lookups now match what clean_pass actually writes for date-less
+    entries."""
+    entry = {"url": "https://x.test/no-date-here", "publication_date": ""}
+    assert pub_date_str(entry) == "unknown"
+
+
+def test_filter_new_entries_pubdate_mode_matches_unknown_filename(tmp_path):
+    url = "https://x.test/no-date-here"
+    h = url_hash(url)
+    (tmp_path / f"theblock__unknown__{h}.md").write_text("stub", encoding="utf-8")
+    entries = [{"url": url, "publication_date": ""}]
+    new, n_skip_raw, n_excluded = filter_new_entries(entries, tmp_path, "theblock", mode="pubdate")
+    assert new == []
+    assert n_skip_raw == 1
