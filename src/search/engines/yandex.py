@@ -133,10 +133,7 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     value = _extract_value(raw)
     if not value:
         return []
-    try:
-        items = json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    items = json.loads(value)
     return _build_results(items, max_results)
 
 

@@ -8,7 +8,11 @@ _classify_diagnosis was removed (the guessed-verdict-removal milestone): its out
 the EMPTY_* sub-statuses that no longer exist — the marker/ready_state facts it classified are
 still available directly in the diagnosis snapshot.
 """
-from src.search.engines.bing import _build_results, _clean_url
+import json
+
+import pytest
+
+from src.search.engines.bing import _build_results, _clean_url, _parse_results
 
 
 # ---------------------------------------------------------------------------
@@ -75,3 +79,27 @@ def test_build_results_respects_max_results_cap():
     results = _build_results(items, max_results=5)
     assert len(results) == 5
     assert [r.position for r in results] == [1, 2, 3, 4, 5]
+
+
+# ---------------------------------------------------------------------------
+# _parse_results
+# ---------------------------------------------------------------------------
+
+class _FakeTab:
+    def __init__(self, raw_value):
+        self._raw_value = raw_value
+
+    async def execute_script(self, script):
+        return {"result": {"result": {"value": self._raw_value}}}
+
+
+@pytest.mark.asyncio
+async def test_parse_results_raises_on_invalid_json():
+    """2026-09-09: the except (json.JSONDecodeError, TypeError): return [] handler was removed —
+    no supporting observation (handler dates from the first engine commit, 0 ERROR_PARSE in 4566
+    logged engine records, the value is always our own stringified JSON). A malformed value now
+    raises out of _parse_results, propagating into search_web's own _classify_engine_exception
+    (ERROR_PARSE) instead of masquerading as an empty page."""
+    tab = _FakeTab("not valid json{")
+    with pytest.raises(json.JSONDecodeError):
+        await _parse_results(tab, max_results=10)
