@@ -2,7 +2,8 @@
 
 ## Role
 The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`,
-`src/news/engine/proxy_pool/`, and `src/news/platforms/theblock/` — pure-logic branch coverage,
+`src/news/engine/proxy_pool/`, `src/news/engine/proxy_riding/` (abort.py only, as of 2026-09-09),
+and `src/news/platforms/theblock/` — pure-logic branch coverage,
 library-upgrade guards (live calls into installed `crawl4ai`), and production-failure regression
 repros. Almost entirely no network/browser dependency: I/O boundaries (HTTP clients, browser
 automation, subprocess) are mocked per-test; production logic itself is exercised for real. The one
@@ -127,6 +128,14 @@ URL recording/union-merge, raw-file read-only invariant, stats.
 fetch_with_retry` backoff/re-raise, `pool_loaders.load_backfill_pool` per-source isolation,
 `logger.AcquireLogger`/`_group_pool_sources`, `loop.run_loop` refresh-boundary integration
 (pool swap + wset state-continuity, confirmed production-correct not a test bug).
+
+### test_proxy_riding_abort.py (43 LOC)
+**Purpose:** `src/news/engine/proxy_riding/abort.py` — proves the 2026-09-09 tripwire replacement
+for the removed stub-`job.md` fallback: `_abort_stall` with `write_riding_report` monkeypatched to
+raise writes NO `job.md`, prints the WARN line naming the exception to stderr, and still calls
+`os._exit` with the caller's exit code. First test coverage for `proxy_riding/` under this
+directory — the package's other tests live as offline dev scripts under
+`dev/news_pipeline/coindesk_proxy_riding/`, not here.
 
 ### test_camoufox_scrape.py (813 LOC)
 **Purpose:** `src/scraper/camoufox_scrape.py` — `try_scrape_camoufox` acquisition-error states
