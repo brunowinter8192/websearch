@@ -371,7 +371,7 @@ async def test_landed_url_recorded_on_plain_success_no_redirect(tmp_path, monkey
 def _camoufox_meta(**overrides):
     base = {
         "acquisition_error": None, "status_code": 200, "landed_url": "https://x.test/a",
-        "raw_markdown_bytes": 100, "markdown_conversion_error": None, "content_is_raw_html": False,
+        "raw_markdown_bytes": 100, "markdown_conversion_error": None,
         "document_status_chain": [200],
         "config": {"headless": False, "os": "macos"}, "config_hash": "cafef00d00",
     }
@@ -494,15 +494,15 @@ async def test_scrape_all_camoufox_engine_resolves_own_concurrency_default(tmp_p
 @pytest.mark.asyncio
 async def test_scrape_all_camoufox_record_shape_engine_specific_fields(tmp_path, monkeypatch):
     """The camoufox-engine record carries engine="camoufox", landed_url,
-    markdown_conversion_error, content_is_raw_html, acquisition_error (try_scrape_camoufox's own
-    fact field, logged directly — None here since this meta doesn't set it) — and does NOT carry
-    the chromium-only crawl4ai_* fields at all (absent, not null/false)."""
+    markdown_conversion_error, acquisition_error (try_scrape_camoufox's own fact field, logged
+    directly — None here since this meta doesn't set it) — and does NOT carry the chromium-only
+    crawl4ai_* fields at all (absent, not null/false)."""
     log_file = tmp_path / "pipe_scrape_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
 
     async def _fake_try_scrape_camoufox(url, block_images=False):
         return "<html>raw</html>", _camoufox_meta(
-            content_is_raw_html=True, markdown_conversion_error="Invalid IPv6 URL",
+            markdown_conversion_error="Invalid IPv6 URL",
             landed_url="https://landed.test/a",
         )
     monkeypatch.setattr(pipe_scraper_acquisition, "try_scrape_camoufox", _fake_try_scrape_camoufox)
@@ -517,7 +517,6 @@ async def test_scrape_all_camoufox_record_shape_engine_specific_fields(tmp_path,
     assert r["engine"] == "camoufox"
     assert r["landed_url"] == "https://landed.test/a"
     assert r["markdown_conversion_error"] == "Invalid IPv6 URL"
-    assert r["content_is_raw_html"] is True
     assert r["acquisition_error"] is None
     for chromium_only_key in ("crawl4ai_success", "crawl4ai_error_message", "crawl4ai_attempts",
                               "crawl4ai_resolved_by", "crawl4ai_fallback_fetch_used"):
@@ -527,8 +526,7 @@ async def test_scrape_all_camoufox_record_shape_engine_specific_fields(tmp_path,
 @pytest.mark.asyncio
 async def test_scrape_all_chromium_record_shape_camoufox_fields_absent(tmp_path, monkeypatch):
     """The chromium-engine record does NOT carry the camoufox-only markdown_conversion_error/
-    content_is_raw_html/acquisition_error fields at all (absent, not null/false) — symmetric with
-    the test above."""
+    acquisition_error fields at all (absent, not null/false) — symmetric with the test above."""
     log_file = tmp_path / "pipe_scrape_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
     monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
@@ -541,7 +539,7 @@ async def test_scrape_all_chromium_record_shape_camoufox_fields_absent(tmp_path,
     records = [json.loads(l) for l in log_file.read_text(encoding="utf-8").splitlines()]
     r = records[0]
     assert r["engine"] == "chromium"
-    for camoufox_only_key in ("markdown_conversion_error", "content_is_raw_html", "acquisition_error"):
+    for camoufox_only_key in ("markdown_conversion_error", "acquisition_error"):
         assert camoufox_only_key not in r
 
 

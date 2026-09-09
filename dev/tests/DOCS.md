@@ -146,10 +146,17 @@ raise writes NO `job.md`, prints the WARN line naming the exception to stderr, a
 directory — the package's other tests live as offline dev scripts under
 `dev/news_pipeline/coindesk_proxy_riding/`, not here.
 
-### test_camoufox_scrape.py (813 LOC)
+### test_camoufox_scrape.py (741 LOC)
 **Purpose:** `src/scraper/camoufox_scrape.py` — `try_scrape_camoufox` acquisition-error states
-(budget/browser_missing/exception), the "Invalid IPv6 URL" urlsplit regression, HTML-preserved-
-on-markdown-conversion-failure, calibration surface (`_build_camoufox_kwargs`/
+(budget/browser_missing/exception), the "Invalid IPv6 URL" urlsplit regression. As of 2026-09-09,
+`test_try_scrape_camoufox_conversion_failure_yields_empty_content` replaces the three tests that
+used to cover the removed raw-HTML-as-content fallback (two "preserves HTML on conversion failure"
+tests plus the sidecar `mode="raw_html"` test) and `test_format_camoufox_output_raw_html_shape_
+states_it_plainly` (the `_format_camoufox_output` "Content format: RAW HTML" block it exercised is
+also gone) — the new test proves the tripwire instead: `_html_to_markdown` monkeypatched to return
+`("", "simulated conversion failure")` yields `content == ""`, `markdown_conversion_error` set,
+`acquisition_error is None`, and `content_is_raw_html` absent from `meta` entirely. Calibration
+surface (`_build_camoufox_kwargs`/
 `_extract_camoufox_config_stamp`/config_hash stability), `scrape_url_camoufox_workflow` logging,
 `_format_camoufox_output`, no-focus-steal launch (`_find_app_bundle`/`_ensure_no_focus_steal`, real
 plistlib round-trip; `ignore_default_args` kwarg presence). REMOVED 2026-08-27: the 8 tests covering
@@ -243,7 +250,7 @@ distinguish once no page is fetched by discovery itself).
 beyond `src.crawler.discovery`/`src.crawler.seed_feeders_scope`, no network in the pure-logic
 section.
 
-### test_pipe_scraper.py (824 LOC)
+### test_pipe_scraper.py (822 LOC)
 **Purpose:** `src/crawler/pipe_scraper*.py` — config stamp extraction off real
 BrowserConfig/CrawlerRunConfig, live crawl4ai `AsyncPlaywrightCrawlerStrategy`/`StealthAdapter`
 wiring guard, `pipe_scrape_logger.log_pipe_scrape` fail-soft JSONL, `_scrape_all` (run_id sharing,
