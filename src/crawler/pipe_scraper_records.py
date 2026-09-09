@@ -6,7 +6,6 @@ from src.crawler.pipe_scrape_logger import log_pipe_scrape
 def _log_pipe_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, diagnosis: dict,
-    pipe_fallback_used: bool = False, pipe_fallback_resolved: bool = False,
     landed_url: str | None = None,
 ) -> None:
     log_pipe_scrape({
@@ -18,7 +17,6 @@ def _log_pipe_record(
         "crawl4ai_attempts": diagnosis.get("crawl4ai_attempts"),
         "crawl4ai_resolved_by": diagnosis.get("crawl4ai_resolved_by"),
         "crawl4ai_fallback_fetch_used": diagnosis.get("crawl4ai_fallback_fetch_used"),
-        "pipe_fallback_used": pipe_fallback_used, "pipe_fallback_resolved": pipe_fallback_resolved,
         "landed_url": landed_url,
         "config_hash": run_ctx["config_hash"], "config": run_ctx["config"],
     })

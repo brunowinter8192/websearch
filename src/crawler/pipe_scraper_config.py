@@ -3,7 +3,6 @@ from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.crawler.pipe_scraper_constants import PAGE_TIMEOUT_MS, DELAY_BEFORE_RETURN_HTML
-from src.crawler.pipe_scraper_acquisition import _fallback_fetch
 
 # FUNCTIONS
 
@@ -23,7 +22,6 @@ def _build_configs() -> tuple[BrowserConfig, CrawlerRunConfig]:
         override_navigator=True,
         magic=False,
         remove_consent_popups=True,
-        fallback_fetch_function=_fallback_fetch,
         verbose=False,
     )
     return browser_cfg, run_cfg
@@ -45,7 +43,6 @@ def _extract_pipe_config_stamp(
         "override_navigator": run_cfg.override_navigator,
         "magic": run_cfg.magic,
         "remove_consent_popups": run_cfg.remove_consent_popups,
-        "fallback_armed": run_cfg.fallback_fetch_function is not None,
         "download_delay_s": download_delay,
         "concurrency_per_domain": concurrency_per_domain,
     }
