@@ -137,9 +137,14 @@ capture in `src/search/search_web.py` (`_engine_with_timing`, `search_web_workfl
 wrong (`.parent.parent`) for one relocation cycle when the file lived at `tests/` before the
 milestone-2 move to `dev/tests/` and must be re-checked on any future relocation.
 
-### test_dedup_exclude.py (132 LOC)
+### test_dedup_exclude.py (155 LOC)
 **Purpose:** `src/news/engine/dedup.py:filter_new_entries` — `exclude_urls` param precedence over
-raw-file-exists skip, mixed-entry counts, `None`/empty-set backward compat.
+raw-file-exists skip, mixed-entry counts, `None`/empty-set backward compat. As of 2026-09-09, also
+`pub_date_str` (the single surviving definition, consolidated from a diverging duplicate in
+`clean_pass.py` — see `src/news/engine/DOCS.md`'s Gotchas): returns `"unknown"` for a date-less
+entry, and `filter_new_entries(mode="pubdate")` on such an entry correctly matches a pre-existing
+`{source}__unknown__{hash}.md` as already present — the exact lookup the diverging `""` fallback
+used to miss.
 
 ### test_theblock_clean_pass.py (138 LOC)
 **Purpose:** `src/news/clean_pass.py:_run_clean_pass` — good-article clean-file write, bodyless

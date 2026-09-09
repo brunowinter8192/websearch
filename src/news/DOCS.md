@@ -30,13 +30,13 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py` (all 3 orchestrators + `_run_pipeline_proxy_pool`/`_run_pipeline_browser`).
 **Calls out:** none (stdlib `logging`, `urllib.request`, `json`).
 
-### clean_pass.py (63 LOC)
+### clean_pass.py (51 LOC)
 
-**Purpose:** The proxy_pool/TheBlock clean-pass stage (`_run_clean_pass`) — reads `raw/{hash}.md`, calls `platform.cleanup()`, writes cleaned articles into the RAG collection dir.
+**Purpose:** The proxy_pool/TheBlock clean-pass stage (`_run_clean_pass`) — reads `raw/{hash}.md`, calls `platform.cleanup()`, writes cleaned articles into the RAG collection dir. As of 2026-09-09, `pub_date_str` is no longer defined here — this module imports the single surviving copy from `src.news.engine.dedup` (see that module's own entry and Gotchas).
 **Reads:** `raw_dir/{hash}.md` for each ok entry; existing `clean/bodyless_urls.txt` (set-union merge).
 **Writes:** `collection_dir/theblock__{pubdate}__{hash}.md` per cleaned entry; `raw_dir.parent/clean/bodyless_urls.txt` (body-less URLs, set-union, sorted); progress logged every 200 entries.
 **Called by:** `pipeline.py:_persist_proxy_pool_results` (proxy_pool arm, only when `n_ok > 0`).
-**Calls out:** none (stdlib `re` only).
+**Calls out:** `src.news.engine.dedup` (`pub_date_str`).
 
 ### __main__.py (155 LOC)
 
