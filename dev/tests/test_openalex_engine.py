@@ -196,12 +196,38 @@ async def test_per_page_untouched_when_under_cap(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_search_legacy_wrapper_still_returns_plain_list(monkeypatch):
+async def test_search_base_method_returns_plain_list(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": [_work(pdf_url="https://x.com/p.pdf")]}))
     engine = OpenAlexEngine()
     results = await engine.search("query", max_results=10)
     assert len(results) == 1
     assert results[0].pdf_url == "https://x.com/p.pdf"
+
+
+class _RaisingAsyncClient:
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def get(self, url, params=None, **kwargs):
+        raise RuntimeError("simulated network failure")
+
+
+@pytest.mark.asyncio
+async def test_search_base_method_propagates_exception(monkeypatch):
+    """2026-09-09: search()'s own try/except that swallowed exceptions into [] was removed — a
+    code-standards violation (silently hiding an error affecting business logic). search() now
+    inherits BaseEngine's plain delegation to search_with_reason and lets an exception through
+    unchanged."""
+    monkeypatch.setattr(openalex_mod.httpx, "AsyncClient", lambda *a, **kw: _RaisingAsyncClient())
+    engine = OpenAlexEngine()
+    with pytest.raises(RuntimeError):
+        await engine.search("query", max_results=10)
 
 
 # ---------------------------------------------------------------------------

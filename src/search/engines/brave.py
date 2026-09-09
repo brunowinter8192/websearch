@@ -86,14 +86,6 @@ class BraveEngine(BaseEngine):
         finally:
             await kill_tab(tab)
 
-    async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
-        try:
-            results, _, _ = await self.search_with_reason(query, language, max_results)
-            return results
-        except Exception as e:
-            logger.error("Brave search failed: %s", e)
-            return []
-
 
 # FUNCTIONS
 

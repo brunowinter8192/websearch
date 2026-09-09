@@ -35,10 +35,6 @@ class OpenAlexEngine(BaseEngine):
             return results, None, None
         return results, None, {"http_status": status_code}
 
-    async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
-        results, _, _ = await self.search_with_reason(query, language, max_results)
-        return results
-
 
 # FUNCTIONS
 

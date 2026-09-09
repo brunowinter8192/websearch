@@ -50,14 +50,6 @@ class ScholarEngine(BaseEngine):
             return results, None, None
         return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
 
-    async def search(self, query: str, language: str = "en", max_results: int = 10) -> list[SearchResult]:
-        try:
-            results, _, _ = await self.search_with_reason(query, language, max_results)
-            return results
-        except Exception as e:
-            logger.error("Scholar search failed: %s", e)
-            return []
-
 
 # FUNCTIONS
 
