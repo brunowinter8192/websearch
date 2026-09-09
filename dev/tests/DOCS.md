@@ -3,7 +3,8 @@
 ## Role
 The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`,
 `src/news/engine/proxy_pool/`, `src/news/engine/proxy_riding/` (abort.py only, as of 2026-09-09),
-`src/news/platforms/theblock/`, and `src/log_janitor.py` (as of 2026-09-09) — pure-logic branch coverage,
+`src/news/platforms/theblock/`, `src/news/platforms/coindesk/` (timeline.py only, as of 2026-09-09),
+and `src/log_janitor.py` (as of 2026-09-09) — pure-logic branch coverage,
 library-upgrade guards (live calls into installed `crawl4ai`), and production-failure regression
 repros. Almost entirely no network/browser dependency: I/O boundaries (HTTP clients, browser
 automation, subprocess) are mocked per-test; production logic itself is exercised for real. The one
@@ -147,6 +148,13 @@ URL recording/union-merge, raw-file read-only invariant, stats.
 ### test_theblock_discover.py (169 LOC)
 **Purpose:** `src/news/platforms/theblock/discover.py` — `_subs_in_range`, `_sub_by_index`,
 `discover()`'s `sub:A-B` dispatch error paths (A>B, non-int, no match).
+
+### test_coindesk_timeline.py (20 LOC)
+**Purpose:** `src/news/platforms/coindesk/timeline.py::parse_articles` — first test coverage for
+this module. As of 2026-09-09: a non-JSON body raises `json.JSONDecodeError` (the removed
+parse-failure→`[]` handler's replacement — see `src/news/platforms/coindesk/DOCS.md`'s Gotchas); a
+valid JSON payload carrying no article list (the real API-bottom shape) still returns `[]`, now the
+only outcome that means it.
 
 ### test_proxy_pool.py (573 LOC)
 **Purpose:** `src/news/engine/proxy_pool/` — `janitor.py` window stats + job.md rendering
