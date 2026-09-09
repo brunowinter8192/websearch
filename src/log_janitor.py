@@ -14,10 +14,7 @@ _MARKER_MAX_AGE_SECS = 3600
 # FUNCTIONS
 
 def get_retention_days() -> int:
-    try:
-        return int(os.environ.get("WEBSEARCH_LOG_RETENTION_DAYS", 14))
-    except (ValueError, TypeError):
-        return 14
+    return int(os.environ.get("WEBSEARCH_LOG_RETENTION_DAYS", 14))
 
 
 def maybe_prune_jsonl(log_path: Path) -> None:

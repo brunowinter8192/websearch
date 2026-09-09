@@ -3,7 +3,7 @@
 ## Role
 The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`,
 `src/news/engine/proxy_pool/`, `src/news/engine/proxy_riding/` (abort.py only, as of 2026-09-09),
-and `src/news/platforms/theblock/` — pure-logic branch coverage,
+`src/news/platforms/theblock/`, and `src/log_janitor.py` (as of 2026-09-09) — pure-logic branch coverage,
 library-upgrade guards (live calls into installed `crawl4ai`), and production-failure regression
 repros. Almost entirely no network/browser dependency: I/O boundaries (HTTP clients, browser
 automation, subprocess) are mocked per-test; production logic itself is exercised for real. The one
@@ -104,6 +104,13 @@ happens, stays completely silent when the target was already dead (net-1-already
 and logs an intervention line only when it actually had to act. `_terminate_then_kill` gets its own
 mocked-psutil pure-logic tests separately. A killed dummy is OUR OWN child (unlike a real detached
 Chrome/Firefox) so it zombies until reaped — tests check `Popen.poll()`, not `psutil.pid_exists()`.
+
+### test_log_janitor.py (17 LOC)
+**Purpose:** `src/log_janitor.py::get_retention_days` — first test coverage for this module. As of
+2026-09-09: defaults to 14 when `WEBSEARCH_LOG_RETENTION_DAYS` is unset; raises `ValueError` when
+it is set to a non-integer string (the removed silent-fallback-to-14 behavior's replacement — see
+`src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
+`dev/logging/` for their own dev-script exploration, out of scope for this file.
 
 ### test_browser.py (268 LOC)
 **Purpose:** `src/search/browser.py` — `_reap_session_profile`/`_record_own_pids`/
