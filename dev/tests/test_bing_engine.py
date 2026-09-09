@@ -38,7 +38,7 @@ def test_clean_url_empty_href_returns_empty():
     assert _clean_url("") == ""
 
 
-def test_clean_url_falls_back_to_raw_href_when_decode_raises(monkeypatch):
+def test_clean_url_raises_when_decode_raises(monkeypatch):
     import src.search.engines.bing as bing_mod
 
     def _raise(*a, **kw):
@@ -46,7 +46,8 @@ def test_clean_url_falls_back_to_raw_href_when_decode_raises(monkeypatch):
 
     monkeypatch.setattr(bing_mod.base64, "urlsafe_b64decode", _raise)
     wrapped = "https://www.bing.com/ck/a?u=a1aHR0cHM6Ly9leGFtcGxlLmNvbQ&ntb=1"
-    assert _clean_url(wrapped) == wrapped
+    with pytest.raises(ValueError):
+        _clean_url(wrapped)
 
 
 # ---------------------------------------------------------------------------
