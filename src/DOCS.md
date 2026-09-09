@@ -6,9 +6,9 @@ Root of the source tree. `log_janitor.py` and `death_pipe.py` are the two `.py` 
 
 ## Modules
 
-### log_janitor.py (82 LOC)
+### log_janitor.py (79 LOC)
 
-**Purpose:** 14-day log retention janitor. On-write trigger with 1h marker-throttled slow path. Three public functions: `get_retention_days()` (env override), `maybe_prune_jsonl(log_path)` (timestamp-based JSONL filter + atomic rewrite), `maybe_prune_sidecars(sidecar_dir)` (mtime-based `.md` unlink). All failures logged as WARNING and swallowed.
+**Purpose:** 14-day log retention janitor. On-write trigger with 1h marker-throttled slow path. Three public functions: `get_retention_days()` (env override — as of 2026-09-09 raises on an unparsable value instead of swallowing it, see Gotchas), `maybe_prune_jsonl(log_path)` (timestamp-based JSONL filter + atomic rewrite), `maybe_prune_sidecars(sidecar_dir)` (mtime-based `.md` unlink). `maybe_prune_jsonl`/`maybe_prune_sidecars` still log every failure as WARNING and swallow it, including one raised by `get_retention_days()` reached through them — only `cli.py`'s own direct call site is a real, uncaught tripwire.
 **Reads:** JSONL log files, sidecar `.md` directories, `WEBSEARCH_LOG_RETENTION_DAYS` env var.
 **Writes:** rewrites pruned JSONL atomically, unlinks stale sidecar files.
 **Called by:** `src/search/query_logger.py`, `src/scraper/scrape_logger.py`, `cli.py` (imports `get_retention_days` for `TimedRotatingFileHandler` backupCount).
@@ -21,3 +21,7 @@ Root of the source tree. `log_janitor.py` and `death_pipe.py` are the two `.py` 
 **Writes:** one line to `src/logs/cli.log` ONLY when it actually kills a PID or removes a dir (silent otherwise); no other state.
 **Called by:** `src/search/browser.py` (`get_tab`, after `_record_own_pids`); `src/scraper/chromium_scrape.py` (`_acquire_cdp_headed`, after the cdp port resolves, via `spawn_watchdog`); `src/scraper/chromium_process.py` (`_kill_by_profile`/`_reap_orphaned_scrapes`, via `_terminate_then_kill`).
 **Calls out:** `psutil` (terminate/wait/kill); no project-internal imports (deliberately — this module must start and run correctly even if something else in the codebase is broken).
+
+## Gotchas
+
+- **REMOVED 2026-09-09: `get_retention_days`'s silent fallback to 14 on an unparsable `WEBSEARCH_LOG_RETENTION_DAYS` — user decision, Phase 4 control-flow review.** No supporting observation existed: the env var is set nowhere in the repo (`cli.py`, skills, configs). An invalid value now raises `ValueError` at first use. `cli.py`'s own call (`backupCount=get_retention_days()`, module-load time, outside any try/except) is the real, uncaught tripwire — a typo now fails CLI startup immediately. The two internal call sites (`_prune_jsonl`/`_prune_sidecars`) are UNCHANGED and stay out of scope: both are reached only through `maybe_prune_jsonl`/`maybe_prune_sidecars`, which wrap their own call in a pre-existing, deliberate `except Exception as e: logger.warning(...)` — a `ValueError` surfacing through that path is still caught and merely logged, not a crash. This is a separate, already-documented fail-soft design (see this module's own Purpose line above), not touched by this removal.
