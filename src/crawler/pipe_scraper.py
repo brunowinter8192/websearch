@@ -7,15 +7,10 @@ from pathlib import Path
 
 from crawl4ai import AsyncWebCrawler
 
-# From src/scraper/chromium_scrape.py: same config-hash algorithm used by the ad-hoc path's log
 from src.scraper.chromium_scrape import hash_config
-# From src/crawler/pipe_scraper_constants.py: shared pacing constants
 from src.crawler.pipe_scraper_constants import DOWNLOAD_DELAY, CONCURRENCY_PER_DOMAIN, CAMOUFOX_CONCURRENCY_PER_DOMAIN
-# From src/crawler/pipe_scraper_config.py: chromium browser/run config construction + config stamp
 from src.crawler.pipe_scraper_config import _build_configs, _extract_pipe_config_stamp
-# From src/crawler/pipe_scraper_acquisition.py: per-URL engine executors (chromium + camoufox)
 from src.crawler.pipe_scraper_acquisition import _scrape_one, _scrape_one_camoufox
-# From src/crawler/pipe_scraper_report.py: /tmp scrape report + onward-links file + console summary
 from src.crawler.pipe_scraper_report import (
     _domain_from_urls, _write_tmp_report, _print_summary, _collect_onward_links,
     _write_onward_links_file,
@@ -23,8 +18,6 @@ from src.crawler.pipe_scraper_report import (
 
 # ORCHESTRATOR
 
-# Scrape URL list with Scrapy-style per-domain pacing — write per-URL md files + /tmp report +
-# /tmp onward-links file (chromium engine only) + JSONL log
 async def scrape_urls_workflow(
     urls: list[str],
     output_dir: Path,
@@ -48,7 +41,6 @@ async def scrape_urls_workflow(
 
 # FUNCTIONS
 
-# Scrape all URLs with per-domain pacing, dispatching to ONE of two engines per RUN (never per-URL, never auto-selected)
 async def _scrape_all(
     urls: list[str],
     output_dir: Path,

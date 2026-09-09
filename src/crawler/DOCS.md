@@ -23,7 +23,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 
 ## Modules
 
-### crawl_site.py (371 LOC)
+### crawl_site.py (356 LOC)
 
 **Purpose:** Discovery engine + content crawl — Playwright-per-page BFS from a seed URL (`discover_urls_playwright`) followed by a parallel content crawl (`crawl_urls`) writing one markdown file per URL. `save_markdown`'s batch filter calls `garbage_filter.is_garbage_content` (see below) — an automatic garbage-content verdict, correct here since this is an unattended batch crawl with no agent reviewing its output.
 **Reads:** seed URL / `--url-file` list.
@@ -31,7 +31,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `crawl_site_workflow` (CLI entry); capture-and-index workflow.
 **Calls out:** `crawl4ai` (AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, UndetectedAdapter, AsyncPlaywrightCrawlerStrategy, DefaultMarkdownGenerator, SemaphoreDispatcher); `src.crawler.garbage_filter` (is_garbage_content).
 
-### garbage_filter.py (51 LOC)
+### garbage_filter.py (50 LOC)
 
 **Purpose:** `is_garbage_content` (error/cookie/login/nav-dump page classifier, 7 categories: `minimal_content`, `crawl4ai_error`, `http_error`, `nav_dump`, `cookie_wall`, `login_wall`, `cloudflare`) — split out of `crawl_site.py` into its own sibling module once that file crossed the 400-LOC split threshold (pure relocation, same behavior; originally lived in `src/scraper/chromium_scrape.py` before an earlier relocation into `crawl_site.py`).
 **Reads:** `content` arg only.
@@ -39,7 +39,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `crawl_site.py` (`save_markdown`) — the only caller.
 **Calls out:** none (stdlib `re` only).
 
-### pipe_scraper.py (121 LOC) — entry point
+### pipe_scraper.py (113 LOC) — entry point
 
 **Purpose:** Entry point + orchestrator for the capture-pipeline scrape step — dispatches a URL list per-RUN (never per-URL, never auto-selected) to one of two acquisition engines (chromium: shared crawler; camoufox: fresh browser per URL).
 **Reads:** URL list from `--url-file` or caller-supplied list.
@@ -53,19 +53,19 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `pipe_scraper.py`, `pipe_scraper_config.py`, `pipe_scraper_acquisition.py`.
 **Calls out:** none.
 
-### pipe_scraper_pacing.py (26 LOC)
+### pipe_scraper_pacing.py (24 LOC)
 
 **Purpose:** Per-domain Scrapy-style pacing gate (`_ensure_domain_state`, `_gate_domain`) — delay-gate + jitter + concurrency cap, engine-agnostic (used by both chromium and camoufox executors).
 **Called by:** `pipe_scraper_acquisition.py`.
 **Calls out:** none (stdlib only).
 
-### pipe_scraper_config.py (55 LOC)
+### pipe_scraper_config.py (51 LOC)
 
 **Purpose:** `_build_configs()` sets a fixed anti-bot posture for the chromium engine, optimized purely for reachability, not extraction quality (stealth + `magic=False` + `remove_consent_popups=True`); wires the curl_cffi fallback (path a) into `CrawlerRunConfig.fallback_fetch_function`.
 **Called by:** `pipe_scraper.py` (`_scrape_all`).
 **Calls out:** `crawl4ai` (BrowserConfig, CrawlerRunConfig, CacheMode, DefaultMarkdownGenerator); `pipe_scraper_acquisition.py` (`_fallback_fetch`); `pipe_scraper_constants.py`.
 
-### pipe_scraper_acquisition.py (214 LOC)
+### pipe_scraper_acquisition.py (176 LOC)
 
 **Purpose:** Per-URL engine executors for both acquisition engines (`_scrape_one` chromium, `_scrape_one_camoufox` camoufox) plus the chromium engine's two independent curl_cffi fallback paths for when the browser is the weaker client. Neither executor classifies anything anymore — see this file's own Gotchas for the `outcome` removal. `_scrape_one`'s success path also collects the page's own onward links (`_extract_onward_links`/`_onward_link_identity`) off the SAME crawl4ai result it already has in hand — chromium engine only, see this file's own Gotchas.
 **Reads:** URL list passed in from `pipe_scraper._scrape_all`.
@@ -73,19 +73,19 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `pipe_scraper.py` (`_scrape_all`); `pipe_scraper_report.py` imports `_onward_link_identity` directly, to normalize the run's own input URLs the identical way before excluding them from the onward-links file.
 **Calls out:** `crawl4ai` (AsyncWebCrawler, CrawlerRunConfig); `curl_cffi.requests` (AsyncSession); `src.scraper.chromium_scrape` (extract_crawl4ai_diagnosis); `src.scraper.camoufox_scrape` (try_scrape_camoufox); `src.crawler.seed_feeders_scope` (`host_key`); `pipe_scraper_pacing.py`; `pipe_scraper_records.py`; `pipe_scraper_constants.py`.
 
-### pipe_scraper_records.py (48 LOC)
+### pipe_scraper_records.py (40 LOC)
 
 **Purpose:** Assembles and writes one JSONL record per URL via `pipe_scrape_logger.log_pipe_scrape` — a chromium-engine function and a sibling camoufox-engine function, kept separate since the fallback fields are chromium-lane-only. As of 2026-09-03, `_log_pipe_camoufox_record` also carries `document_status_chain` straight off `meta` (`try_scrape_camoufox`'s own fact field — see `src/scraper/DOCS.md`'s Gotchas); `_log_pipe_camoufox_record` also now carries `acquisition_error` straight off `meta` for the same reason (see this file's own Gotchas on the `outcome` removal — this fact previously fed the removed camoufox `outcome="error"` branch and would otherwise have been silently dropped by removing it). `_log_pipe_record` (chromium engine, `_scrape_one`) has no equivalent — that engine's own `status_code`/listener fix was out of scope for this milestone, see `pipe_scraper_acquisition.py`'s own entry.
 **Called by:** `pipe_scraper_acquisition.py` (`_scrape_one`, `_scrape_one_camoufox`).
 **Calls out:** `src.crawler.pipe_scrape_logger` (log_pipe_scrape).
 
-### pipe_scraper_report.py (85 LOC)
+### pipe_scraper_report.py (62 LOC)
 
 **Purpose:** `/tmp/<domain>_scrape_report.md` per-URL status/bytes/wall_ms table + `/tmp/<domain>_scrape_links.txt` (the run's own onward links, see `_collect_onward_links`'s own Gotchas) + a one-line console status-code/zero-bytes/onward-link-count summary, all purely factual (no `outcome` verdict — see this file's own Gotchas), consumed only by `scrape_urls_workflow` at the end of a run.
 **Called by:** `pipe_scraper.py` (`scrape_urls_workflow`).
 **Calls out:** `pipe_scraper_acquisition.py` (`_onward_link_identity`).
 
-### seed_feeders.py (76 LOC) — entry point
+### seed_feeders.py (56 LOC) — entry point
 
 **Purpose:** Orchestrates all three feeders — `robots_feeder_workflow` (Allow/Disallow paths), `sitemap_feeder_workflow` (robots-declared `Sitemap:` locations, preferred, falling back to conventional paths only when robots declares none), and `navtree_feeder_workflow` (the site's own navigation tree, also passing through `FeederResult.version_keys` — see `seed_feeders_scope.py`; currently unconsumed outside this module, since `discovery.py`'s former link-graph traversal was its only external consumer and has been removed). All three validate `seed_url`, fetch, scope+dedup the result, tag `FeederResult.source`, and convert an unexpected orchestration failure (e.g. an unparseable `seed_url`) into `FeederResult(ok=False, error=...)` rather than raising — a normal per-fetch outcome (missing robots.txt, a 404 sitemap, no framework payload detected) stays `ok=True` with a possibly-empty `urls` list, never `ok=False`.
 **Reads:** live HTTP (robots.txt, sitemap, and navigation-tree-bearing HTML pages) via `httpx.AsyncClient`, one fresh client per workflow call.
@@ -99,25 +99,25 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `seed_feeders_robots.py`, `seed_feeders_sitemap.py`, `seed_feeders_navtree.py`, `seed_feeders.py`.
 **Calls out:** none.
 
-### seed_feeders_scope.py (106 LOC)
+### seed_feeders_scope.py (68 LOC)
 
 **Purpose:** `FeederResult` dataclass (including `version_keys`, populated only by the navtree feeder, `None` for a version-less site — see `seed_feeders_navtree.py`; surfaced originally for `discovery.py`'s former traversal to recognize an explicit-version duplicate of an already-known canonical page, now unconsumed since that traversal was removed); `normalize_url` (the merge-vs-keep-distinct boundary, deliberately NOT `crawl_site.normalize_url` — see Gotchas); `scope_and_dedup` (host-only scope, `www.`/apex collapsed for comparison only, order-preserving dedup, malformed URLs dropped not raised); `host_key` — promoted from a `seed_feeders.py`-private helper, used internally by `scope_and_dedup`/`_dedup_key`; `require_host` — seed_url validation, shared by all three feeders and by `discovery.py`.
 **Called by:** `seed_feeders.py` (all three workflows), `discovery.py` (`require_host` for seed_url validation).
 **Calls out:** none (stdlib only).
 
-### seed_feeders_robots.py (48 LOC)
+### seed_feeders_robots.py (41 LOC)
 
 **Purpose:** `fetch_robots_txt` (GET, `None` on any failure — normal outcome); `parse_robots_directives` (Allow/Disallow path values AND `Sitemap:` URLs, every `User-agent:` block collected together, not scoped to one).
 **Called by:** `seed_feeders.py` (both workflows).
 **Calls out:** `httpx`.
 
-### seed_feeders_sitemap.py (88 LOC)
+### seed_feeders_sitemap.py (76 LOC)
 
 **Purpose:** `fetch_sitemap` (GET, gunzips `.gz`, `None` on any failure — normal outcome); `parse_sitemap_xml` (namespace-agnostic `ElementTree`, distinguishes `<sitemapindex>` from `<urlset>`); `resolve_sitemap_urls` (recursive, bounded concurrency via a shared `asyncio.Semaphore`, cycle-guarded via a shared visited set, arbitrary nesting depth).
 **Called by:** `seed_feeders.py` (`sitemap_feeder_workflow`).
 **Calls out:** `httpx`.
 
-### seed_feeders_navtree.py (351 LOC)
+### seed_feeders_navtree.py (264 LOC)
 
 **Purpose:** `extract_payloads` (detection dispatch, extensible list of shape-extractors — currently the Next.js Pages Router `__NEXT_DATA__` blob and the App Router RSC `self.__next_f.push` stream); `find_navigation_tree` (tier 1: the largest dict subtree structurally shaped like a nav tree, found anywhere in the payload by shape, never a hardcoded key path; tier 2 fallback: a flat href/url scan, filtered, when tier 1 finds nothing); `resolve_navigation_tree` (orchestrates: fetch seed → detect → walk → find + fetch every OTHER version the same payload declares → canonicalize each version's URLs back to the default version's shape → union). `navtree_feeder_workflow` (seed_feeders.py) wraps this with the shared `FeederResult`/scope/dedup contract, tagging `source` "navtree_tree" or "navtree_flat" from whichever tier produced the DEFAULT tree, and passing through `version_keys`. `canonicalize_version_url` is PUBLIC (not `_`-prefixed); it was promoted for `discovery.py`'s former link-graph traversal to reuse for version-duplicate recognition (see that module's own Gotchas for the removal) — that traversal is gone, and this function is now only used internally by this module's own version union.
 **Reads:** live HTTP (the seed page + each detected version's own root page) via `httpx.AsyncClient`, passed in by the caller (no client of its own).
@@ -125,7 +125,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `seed_feeders.py` (`navtree_feeder_workflow`).
 **Calls out:** `httpx`; `seed_feeders_constants.py`.
 
-### discovery.py (97 LOC) — entry point
+### discovery.py (63 LOC) — entry point
 
 **Purpose:** The URL-discovery entry point: `discover_urls_workflow` runs all three feeders concurrently against `seed_url` over plain HTTP, then merges their output plus the literal `seed_url` into one `{url: source}` seed set (a failed feeder's name+error lands in `failed_feeders`, never silently treated as an empty result — see Gotchas). No page is ever fetched in a browser — a prior version of this module additionally traversed the resulting URL set with `crawl4ai`'s `BFSDeepCrawlStrategy` to read each page's links, looking for pages no feeder had listed; that traversal was removed as a duplicate fetch of every page in the run (measured: the feeders returned 3571 URLs in ~2s on a real site, the traversal over those same 3571 URLs was still running after 12 minutes — see Gotchas and `process-docs/url_discovery/` for the removal and the traversal's prior history). Every result URL is tagged only with what produced it ("seed" or a feeder's own `source`) — there is no fetch-confirmation or version-duplicate-canonicalization concept left, since both existed solely to make the removed traversal's own findings legible.
 **Reads:** feeder output via `seed_feeders.py` (each feeder does its own live HTTP fetch; this module fetches nothing itself).
@@ -133,7 +133,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `cli.py`'s `discover_urls` subcommand (`discover_urls_workflow(seed_url)`).
 **Calls out:** `seed_feeders.py` (all three workflows); `seed_feeders_scope.py` (`normalize_url`, `require_host`).
 
-### pipe_scrape_logger.py (27 LOC)
+### pipe_scrape_logger.py (25 LOC)
 
 **Purpose:** Per-URL JSONL log writer for pipe_scraper — one record per URL (`run_id`-grouped, `ts`=request start), shared by both acquisition engines (`"engine"` field discriminates), separate schema/file from `src/logs/scrape_log.jsonl`.
 **Reads:** `WEBSEARCH_PIPE_SCRAPE_LOG_PATH` env var (fallback `src/logs/pipe_scrape_log.jsonl`).

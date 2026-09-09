@@ -60,7 +60,6 @@ async def crawl_site_workflow(url: str, output_dir: str, depth: int, max_pages: 
 
 # FUNCTIONS
 
-# Strip query/fragment, @version path segments, trailing slash
 def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
@@ -68,7 +67,6 @@ def normalize_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
-# Fetch one page; return (status_code | None, internal_links, latency_ms)
 async def _fetch_page(crawler: AsyncWebCrawler, url: str,
                       run_cfg: CrawlerRunConfig) -> tuple:
     t0 = time.time()
@@ -84,7 +82,6 @@ async def _fetch_page(crawler: AsyncWebCrawler, url: str,
         return None, [], latency_ms
 
 
-# Build CrawlerRunConfig and AsyncWebCrawler keyword args for discovery (stealth or normal)
 def _build_crawler_config(delay_s: float, page_timeout_ms: int, stealth: bool) -> tuple:
     run_cfg = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
@@ -108,7 +105,6 @@ def _build_crawler_config(delay_s: float, page_timeout_ms: int, stealth: bool) -
     return run_cfg, kw
 
 
-# Account for 429s in a batch; back off once on first, stop on second consecutive; return updated counters
 async def _handle_429_batch(results: list, batch: list,
                             four_two_nine_count: int, consecutive_batches_429: int) -> tuple:
     batch_429 = sum(1 for status, _, _ in results if status == 429)
@@ -128,7 +124,6 @@ async def _handle_429_batch(results: list, batch: list,
     return four_two_nine_count, consecutive_batches_429, None
 
 
-# Filter page links against domain, include/exclude patterns, and visited; return new (url, depth) pairs
 def _extract_frontier_links(links: list, seed_netloc: str, include_pats: list,
                             exclude_pats: list, visited: set, depth: int) -> list:
     new_links = []
@@ -150,7 +145,6 @@ def _extract_frontier_links(links: list, seed_netloc: str, include_pats: list,
     return new_links
 
 
-# Classify one batch's fetch results, collect found URLs/latencies, and expand the frontier in place
 def _process_batch_results(batch: list, results: list, found: list, page_latencies: list,
                            visited: set, frontier: deque, seed_netloc: str,
                            include_pats: list, exclude_pats: list, max_depth: int) -> None:
@@ -172,7 +166,6 @@ def _process_batch_results(batch: list, results: list, found: list, page_latenci
             frontier.append((norm, next_depth))
 
 
-# Playwright-per-page BFS: render each page, extract links.internal from post-JS DOM
 async def discover_urls_playwright(seed: str, include_patterns: str | None,
                                    exclude_patterns: str | None, max_pages: int,
                                    max_depth: int, delay_s: float, page_timeout_ms: int,
@@ -217,7 +210,6 @@ async def discover_urls_playwright(seed: str, include_patterns: str | None,
     return found, stats
 
 
-# Pop up to `concurrency` frontier entries within max_depth into a batch.
 def _pop_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[str, int]]:
     batch: list[tuple[str, int]] = []
     while frontier and len(batch) < concurrency:
@@ -227,7 +219,6 @@ def _pop_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[
     return batch
 
 
-# Resolve stop_reason if the loop ended without one, and build the final stats dict.
 def _build_discovery_stats(
     frontier: deque, page_latencies: list[int], four_two_nine_count: int, stop_reason: str | None,
 ) -> dict:
@@ -241,13 +232,11 @@ def _build_discovery_stats(
     }
 
 
-# Read URL list from text file (one URL per line)
 def read_url_file(path: str) -> list[str]:
     with open(path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
 
-# Phase 2: Parallel crawl of discovered URLs
 async def crawl_urls(urls: list[str]) -> list:
     browser_config = BrowserConfig(headless=True, verbose=False)
     run_config = CrawlerRunConfig(
@@ -265,7 +254,6 @@ async def crawl_urls(urls: list[str]) -> list:
     return results if isinstance(results, list) else list(results)
 
 
-# Remove duplicate URLs (trailing slash normalization)
 def deduplicate(results: list) -> list:
     seen = set()
     unique = []
@@ -279,7 +267,6 @@ def deduplicate(results: list) -> list:
     return unique
 
 
-# Save crawled pages as markdown files
 def save_markdown(results: list, seed_url: str, output_dir: Path) -> int:
     saved = 0
     for r in results:
@@ -309,7 +296,6 @@ def save_markdown(results: list, seed_url: str, output_dir: Path) -> int:
     return saved
 
 
-# Domain to filename prefix mapping
 DOMAIN_PREFIX = {
     "docs.searxng.org": "searxng",
     "docs.crawl4ai.com": "crawl4ai",
@@ -324,7 +310,6 @@ DOMAIN_PREFIX = {
 }
 
 
-# Convert URL to safe filename with domain prefix
 def url_to_filename(url: str, seed_url: str) -> str:
     parsed = urlparse(url)
     domain = parsed.netloc

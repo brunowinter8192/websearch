@@ -2,14 +2,11 @@
 from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-# From src/crawler/pipe_scraper_constants.py: shared pacing/timeout values
 from src.crawler.pipe_scraper_constants import PAGE_TIMEOUT_MS, DELAY_BEFORE_RETURN_HTML
-# From src/crawler/pipe_scraper_acquisition.py: crawl4ai's own fallback_fetch_function wiring target
 from src.crawler.pipe_scraper_acquisition import _fallback_fetch
 
 # FUNCTIONS
 
-# Construct the fixed browser/run config actually used for a scrape run, optimized for reachability not extraction quality
 def _build_configs() -> tuple[BrowserConfig, CrawlerRunConfig]:
     browser_cfg = BrowserConfig(
         headless=True,
@@ -31,7 +28,6 @@ def _build_configs() -> tuple[BrowserConfig, CrawlerRunConfig]:
     )
     return browser_cfg, run_cfg
 
-# Read the pacing/browser config actually in effect off the real constructed objects, never re-declared
 def _extract_pipe_config_stamp(
     browser_cfg: BrowserConfig,
     run_cfg: CrawlerRunConfig,
