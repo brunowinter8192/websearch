@@ -29,10 +29,17 @@ production log paths.
 
 ## Modules
 
-### test_bing_engine.py (77 LOC)
+### test_bing_engine.py (105 LOC)
 **Purpose:** `src/search/engines/bing.py` — `_clean_url` (ck/a redirect unwrap, real captured
 sample), `_build_results`. `_classify_diagnosis` coverage removed with the function itself (the
 guessed-verdict-removal milestone) — its marker/ready_state inputs are now plain diagnosis fields.
+As of 2026-09-09, also `_parse_results`: `test_parse_results_raises_on_invalid_json` proves the
+removed `except (json.JSONDecodeError, TypeError): return []` handler's replacement — a `_FakeTab`
+whose `execute_script` returns a malformed JSON string makes `_parse_results` raise
+`json.JSONDecodeError` instead of silently returning `[]`. The five sibling engines
+(`brave`/`duckduckgo`/`google`/`startpage`/`yandex`) share the identical removed handler shape but
+are not separately tested for it — one engine's coverage stands for all six, since the code path
+is byte-for-byte the same.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
 ### test_brave_engine.py (42 LOC)
