@@ -16,11 +16,7 @@ def _abort_done(state: RiderState) -> None:
         file=sys.stderr,
     )
     state.termination = "all-done"
-    _abort_write_report_and_exit(
-        state, log_prefix="[watchdog]", exit_code=0,
-        fallback_title="# CoinDesk riding job — DONE (wedged slot)",
-        extra_fields=[],
-    )
+    _abort_write_report_and_exit(state, log_prefix="[watchdog]", exit_code=0)
 
 
 def _abort_interrupted(state: RiderState, signum: int) -> None:
@@ -31,11 +27,7 @@ def _abort_interrupted(state: RiderState, signum: int) -> None:
         file=sys.stderr,
     )
     state.termination = "interrupted"
-    _abort_write_report_and_exit(
-        state, log_prefix="[rider]", exit_code=exit_code,
-        fallback_title=f"# CoinDesk riding job — {name} ABORT",
-        extra_fields=[],
-    )
+    _abort_write_report_and_exit(state, log_prefix="[rider]", exit_code=exit_code)
 
 
 def _abort_stall(state: RiderState, idle_s: float) -> None:
@@ -45,20 +37,10 @@ def _abort_stall(state: RiderState, idle_s: float) -> None:
         file=sys.stderr,
     )
     state.termination = "stall"
-    _abort_write_report_and_exit(
-        state, log_prefix="[watchdog]", exit_code=1,
-        fallback_title="# CoinDesk riding job — STALL ABORT",
-        extra_fields=[f"idle_s: {idle_s:.0f}"],
-    )
+    _abort_write_report_and_exit(state, log_prefix="[watchdog]", exit_code=1)
 
 
-def _abort_write_report_and_exit(
-    state:          RiderState,
-    log_prefix:     str,
-    exit_code:      int,
-    fallback_title: str,
-    extra_fields:   list[str],
-) -> None:
+def _abort_write_report_and_exit(state: RiderState, log_prefix: str, exit_code: int) -> None:
     state.job_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -67,24 +49,6 @@ def _abort_write_report_and_exit(
         print(f"{log_prefix} job.md → {state.job_dir / 'job.md'}", file=sys.stderr)
     except Exception as exc:
         print(f"{log_prefix} write_riding_report WARN: {exc}", file=sys.stderr)
-        try:
-            (state.job_dir / "job.md").write_text(
-                "\n".join([
-                    fallback_title,
-                    "",
-                    f"termination: {state.termination}",
-                    *extra_fields,
-                    f"n_ok: {state.n_ok}",
-                    f"n_regwall: {state.n_regwall}",
-                    f"n_failed: {state.n_failed}",
-                    f"n_connect_fail: {state.n_connect_fail}",
-                    "",
-                    f"Reporter error: {exc}",
-                ]),
-                encoding="utf-8",
-            )
-        except Exception as write_exc:
-            print(f"{log_prefix} fallback job.md WARN: {write_exc}", file=sys.stderr)
 
     sys.stderr.flush()
     os._exit(exit_code)

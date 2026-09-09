@@ -93,12 +93,12 @@ on first-writer OK).
 **Calls out:** `crawl4ai` (`AsyncWebCrawler`, `CrawlerRunConfig`, `CacheMode`, `ProxyConfig`,
 `DefaultMarkdownGenerator`).
 
-### abort.py (90 LOC)
+### abort.py (54 LOC)
 
-**Purpose:** The three watchdog/signal abort paths (`_abort_done`, `_abort_interrupted`, `_abort_stall`) plus their shared write-report-and-exit helper `_abort_write_report_and_exit`.
-**Reads:** `RiderState` (in-memory, for the report + fallback stub).
-**Writes:** `state.job_dir/job.md` (+ `cumulative.png`/histograms via `write_riding_report`, or the
-minimal fallback stub on any reporter error).
+**Purpose:** The three watchdog/signal abort paths (`_abort_done`, `_abort_interrupted`, `_abort_stall`) plus their shared write-report-and-exit helper `_abort_write_report_and_exit`. `_abort_write_report_and_exit` is a tripwire on a reporter failure since 2026-09-09 — see this file's own Gotchas for the removed stub it replaces.
+**Reads:** `RiderState` (in-memory, for the report).
+**Writes:** `state.job_dir/job.md` (+ `cumulative.png`/histograms via `write_riding_report`) on
+success; nothing on a `write_riding_report` failure — a missing `job.md` is the signal.
 **Called by:** `rider.py:_watchdog` (`_abort_done`, `_abort_stall`); `rider.py:run_riding_pool`
 (`_abort_interrupted`, registered as the SIGINT/SIGTERM handler).
 **Calls out:** late import of `reporter.write_riding_report` inside `_abort_write_report_and_exit`
@@ -181,6 +181,18 @@ are safe without explicit locking. `proxy_lock` (asyncio.Lock) guards `proxy_cur
   (= `scrape_jobs/{job_id}/`), NOT to `output_dir`; each creates the dir itself (`mkdir`) before
   the first write because the dir may not exist at abort time. Exit codes follow Unix signal-kill
   convention: 130 = 128+SIGINT(2), 143 = 128+SIGTERM(15); 0 = wedge-after-done (work complete), 1 = stall.
+- **REMOVED 2026-09-09: the stub `job.md` written on a `write_riding_report` failure — user decision
+  in the Phase 4 control-flow review (a branch producing the same artifact by a second method is a
+  fallback, and a fallback is eliminated).** `_abort_write_report_and_exit`'s `except Exception`
+  branch used to write a minimal hand-built `job.md` (title from a per-caller `fallback_title`,
+  termination, the four counters, the reporter error) when the real reporter raised. That inner
+  `try`/`except` is gone, along with the `fallback_title`/`extra_fields` parameters every caller
+  (`_abort_done`, `_abort_interrupted`, `_abort_stall`) used to pass just to feed it —
+  `_abort_stall`'s `idle_s` value that used to also go into `extra_fields` is unaffected, since it
+  was already printed to stderr in `_abort_stall`'s own line. What stays is the tripwire: the WARN
+  line naming the reporter exception on stderr, `sys.stderr.flush()`, and `os._exit(exit_code)` — a
+  missing `job.md` after an abort is now the honest signal that the reporter itself failed, not a
+  stub that could be mistaken for a real report.
 - Late import of `reporter.write_riding_report` inside `abort.py`'s shared helper is intentional:
   `reporter.py` imports from `state.py` (directly, for the `RiderState` type hint) and from
   `metrics.py`/`plots.py` (which themselves import from `state.py`); importing `reporter` at
