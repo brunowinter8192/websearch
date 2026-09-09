@@ -39,7 +39,7 @@ guessed-verdict-removal milestone) — its marker/ready_state inputs are now pla
 **Purpose:** `src/search/engines/brave.py` — `_build_results`. `_classify_diagnosis` (PoW/CAPTCHA)
 coverage removed with the function itself (the guessed-verdict-removal milestone).
 
-### test_openalex_engine.py (248 LOC)
+### test_openalex_engine.py (274 LOC)
 **Purpose:** `src/search/engines/openalex.py` (2026 API migration) — `_extract_pdf_url`/
 `_parse_results` populate `SearchResult.pdf_url` from `best_oa_location.pdf_url` (null when the
 location or the pdf_url itself is null); `search_with_reason`'s 429/403/zero-results-at-200
@@ -50,6 +50,15 @@ param present only when `OPENALEX_API_KEY` is set, `mailto` never sent; `per_pag
 vendor's 100-max. Also covers the pdf_url chain end to end: `build_engine_pools` (merge.py) carries
 the winner's `pdf_url`, `format_engine_pool` (cache.py) renders a `PDF:` line directly after `URL:`
 when present and omits it when absent or when the cached dict predates the key (`.get()` compat).
+As of 2026-09-09, also the only file exercising `BaseEngine.search()` (the sole engine test that
+calls it at all): `test_search_base_method_returns_plain_list` (renamed from the old
+"legacy_wrapper" name — `search()` is no longer an engine-specific wrapper, it's `BaseEngine`'s own
+one concrete method) proves the success path still returns a plain list; the new
+`test_search_base_method_propagates_exception` proves the replacement contract — with the fake
+client's `get` raising, `await engine.search(...)` now raises too, since the per-engine
+`try/except Exception: return []` swallowing wrapper was removed (Phase 4 control-flow review,
+user decision) and `search()` is a bare delegation to `search_with_reason` with no exception
+handling of its own.
 **Calls out:** none (pure function tests, `httpx.AsyncClient` monkeypatched with a fake client
 that records request params, the pattern established in `test_seed_feeders.py`).
 
