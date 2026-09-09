@@ -225,14 +225,22 @@ distinguish once no page is fetched by discovery itself).
 beyond `src.crawler.discovery`/`src.crawler.seed_feeders_scope`, no network in the pure-logic
 section.
 
-### test_pipe_scraper.py (1201 LOC)
+### test_pipe_scraper.py (824 LOC)
 **Purpose:** `src/crawler/pipe_scraper*.py` — config stamp extraction off real
 BrowserConfig/CrawlerRunConfig, live crawl4ai `AsyncPlaywrightCrawlerStrategy`/`StealthAdapter`
 wiring guard, `pipe_scrape_logger.log_pipe_scrape` fail-soft JSONL, `_scrape_all` (run_id sharing,
-request-start `ts` timing regression, config hash), `is_blocked` real branch distinction,
-`pipe_scraper_acquisition._fallback_fetch`/`_own_fallback_rescue` (via the real `_scrape_one`
-except path), `landed_url` correctness across all three engines/routes, camoufox-engine dispatch
-switch (default/concurrency/block_images/record shape). No test asserts on an `outcome` field
+request-start `ts` timing regression, config hash). As of 2026-09-09, both curl_cffi fallback
+paths (a and b: crawl4ai's own `fallback_fetch_function` wiring and `_own_fallback_rescue`) were
+REMOVED — a user decision in the Phase 4 control-flow review that a branch producing output by a
+second method is a fallback. Every test whose subject was `_fallback_fetch`, `_own_fallback_rescue`,
+`fallback_armed`, or `is_blocked`'s branch-selection framing for that design was deleted with it
+(14 tests total); `test_scrape_one_exception_becomes_tripwire_record` replaces them, proving the
+new tripwire instead: a hard crawler exception now logs a `status=None`/`bytes=0` record with no
+`pipe_fallback_*` keys, writes no file for that URL, and the run continues to the next one — reusing
+the existing `_FakeCrawler` fixture (already raises on any URL containing `"fail"`), no new fixture
+needed. `landed_url` correctness across the remaining routes (plain success with/without a
+redirect), camoufox-engine dispatch switch (default/concurrency/block_images/record shape). No test
+asserts on an `outcome` field
 anywhere in this file anymore — it was removed from `pipe_scraper*.py` along with the field itself
 (see `src/crawler/DOCS.md`'s Gotchas); every assertion that used to read `outcome` now reads the
 underlying fact (`http_status`, `bytes`) directly. As of 2026-09-03, a resolved-challenge
