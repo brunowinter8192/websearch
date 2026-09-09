@@ -95,7 +95,7 @@ depended on getting right) and that the watchdog receives `_owned_pids` with no 
 its no-op path when the browser was never touched, and the PID-safety-net-and-lock-release-still-run
 path when `close_browser()` itself raises (Chrome already dead mid-sweep).
 
-### test_scrape_logger.py (33 LOC)
+### test_scrape_logger.py (44 LOC)
 **Purpose:** `src/scraper/scrape_logger.py` — `write_sidecar`'s real header content (no prior
 direct coverage; the scrape-lane tests only mock it as a no-op). Engine field present and correct
 per lane (chromium/camoufox), existing fields unaffected, empty-content still returns `None`.
@@ -128,7 +128,7 @@ fetch_with_retry` backoff/re-raise, `pool_loaders.load_backfill_pool` per-source
 `logger.AcquireLogger`/`_group_pool_sources`, `loop.run_loop` refresh-boundary integration
 (pool swap + wset state-continuity, confirmed production-correct not a test bug).
 
-### test_camoufox_scrape.py (795 LOC)
+### test_camoufox_scrape.py (813 LOC)
 **Purpose:** `src/scraper/camoufox_scrape.py` — `try_scrape_camoufox` acquisition-error states
 (budget/browser_missing/exception), the "Invalid IPv6 URL" urlsplit regression, HTML-preserved-
 on-markdown-conversion-failure, calibration surface (`_build_camoufox_kwargs`/
