@@ -147,11 +147,14 @@ async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
     stop_event = asyncio.Event()
 
     poll_task = asyncio.create_task(_poll_browser_and_focus(browser_info, focus_samples, poll_focus, stop_event))
-    launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
-
-    stop_event.set()
-    await poll_task
-    stop_probe_server(server, thread)
+    launch_success = False
+    error_message = None
+    try:
+        launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
+    finally:
+        stop_event.set()
+        await poll_task
+        stop_probe_server(server, thread)
 
     return {
         "headless": headless,
