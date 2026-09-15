@@ -192,6 +192,63 @@ return value; they only reach it transitively through `get_tab()`, whose signatu
 are unchanged. Their own code cannot observe this change except through whether the browser launches
 at all (the one risk above, which is Main's live run to confirm or refute).
 
+## REVERTED same day — the predicted failure happened exactly as predicted
+
+Main ran one live `search_web` search against this change. All 7 engines returned 0. The log:
+`No valid tab found among 0 targets`, then `Engine browser error: No valid attached tab found`,
+once per engine. This is exactly the failure mode named in the section above before Main ran
+anything — written down as a risk, now confirmed as the actual outcome, not a hypothesis anymore.
+
+**Reverted:** `options.add_argument("--no-startup-window")` in `build_options()`
+(`src/search/browser.py`), and the two tests that asserted on it
+(`test_build_options_carries_no_startup_window_flag`,
+`test_open_background_process_creator_forwards_no_startup_window_into_open_command`,
+`dev/tests/test_browser.py`) — reverted via `git checkout <pre-change-commit> --
+src/search/browser.py dev/tests/test_browser.py dev/tests/DOCS.md src/search/DOCS.md`, restoring
+all four files byte-for-byte to their state before the flag was added (LOC counts, Purpose prose,
+everything). `dev/tests/`: 377 passed, back to the pre-change baseline. The dev-wide launch helper
+milestone earlier in this same file (`dev/_lib/browser_launch.py` and everything documenting it) is
+untouched by this revert — only the search-lane flag attempt and its direct evidence are undone.
+
+**The finding, stated for whoever picks this up next, so nobody rediscovers it by hitting the same
+wall:**
+
+- The search lane flickers because Chrome creates a window at launch; the scrape lane does not,
+  because it passes `--no-startup-window`.
+- Adding that flag to the search lane ALONE does not work. The reason is not the flag itself — the
+  flag does exactly what it says, Chrome opens with zero windows. The reason is that pydoll's
+  `Chrome.start()` (`pydoll/browser/chromium/base.py`) requires an EXISTING page-type CDP target the
+  instant it asks for one (`_get_valid_tab_id(await self.get_targets())`, raises `NoValidTabFound`
+  otherwise) — and the search lane's whole `get_tab()` flow is built around calling `.start()` and
+  taking whatever tab it hands back. The scrape lane never calls `.start()` at all: it self-launches
+  the process directly, waits for the DevTools port file to appear, then connects over CDP
+  (`BrowserConfig(cdp_url=...)` + patchright's `connect_over_cdp`) and creates its OWN first page via
+  `context.new_page()` — a fresh `Target.createTarget`, not a lookup for one already there. Starting
+  with zero windows is only survivable if whatever attaches next creates its own first target instead
+  of expecting to find one.
+- **Closing this properly means the search lane adopting the scrape lane's whole launch shape, not
+  one flag: self-launch the process directly (not `Chrome(options).start()`), wait for the devtools
+  port file, connect over CDP, create the first page itself.** That is a real rework of `get_tab()`'s
+  launch sequence — it has to thread through the anchor-pid capture (currently taken right before
+  `Chrome(options)`/`.start()`), `_record_own_pids`, and `death_pipe.spawn_watchdog`, all of which
+  currently assume `.start()`'s return value is the first tab. Whether pydoll exposes a lower-level
+  "attach to an already-running CDP endpoint and create your own tab" path (something closer to its
+  own `connect(ws_address)` method, which itself currently does `tabs = await
+  self.get_opened_tabs(); return tabs[0]` — same "assumes an existing tab" shape, not checked in
+  detail this session) or whether the search lane needs to drop pydoll's `Chrome` class for its own
+  launch step entirely, the way the scrape lane dropped patchright's own `launch()` in favor of
+  self-launch-plus-connect, is the open question for whoever does this next.
+- **Measured evidence, both Main's, both 2026-09-15:** on the CURRENT (flag-less) integration state,
+  the search lane steals focus twice per `search_web` run, 0.5s and 1.03s, each reclaimed by the
+  existing PID-keyed watchdog. With `--no-startup-window` added alone, zero engines return results
+  (`No valid tab found among 0 targets` / `No valid attached tab found`, all 7 engines, one live run).
+
+This is unfinished work with the cause identified, not a failed attempt to be forgotten. The watchdog
+already bounds every steal to close to a second, so the search lane is not broken today — it is
+exactly as good as it was before this sub-milestone, flickering but recoverable. The next step is
+the launch-shape rework above, not another attempt at threading the single flag through pydoll's
+`.start()`.
+
 ## Main's live focus measurement, and a second finding it produced
 
 Main ran the focus proof this entry left outstanding: the helper, driven from a throwaway `/tmp`

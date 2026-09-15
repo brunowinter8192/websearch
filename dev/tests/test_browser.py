@@ -42,22 +42,6 @@ def _reset_state(monkeypatch):
     monkeypatch.setattr(browser, "_focus_watchdog_task", None)
 
 
-# build_options / _open_background_process_creator: launch command carries --no-startup-window
-
-def test_build_options_carries_no_startup_window_flag():
-    options = browser.build_options()
-    assert "--no-startup-window" in options.arguments
-
-
-def test_open_background_process_creator_forwards_no_startup_window_into_open_command(monkeypatch):
-    _reset_state(monkeypatch)
-    popen_calls = []
-    monkeypatch.setattr(browser.subprocess, "Popen", lambda cmd, **kw: popen_calls.append(cmd) or object())
-    command = ["/path/to/chrome", "--remote-debugging-port=1234", *browser.build_options().arguments]
-    browser._open_background_process_creator(command)
-    assert "--no-startup-window" in popen_calls[0]
-
-
 # _reap_session_profile / _record_own_pids: pgrep output parsing + kill dispatch
 
 def test_reap_session_profile_kills_parsed_pids(monkeypatch):
