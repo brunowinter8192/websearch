@@ -164,3 +164,25 @@ review of the diff.
 
 Suite re-verified after the fix: 368 passed, unchanged from before the fix (a whitespace-only
 change, as expected).
+
+**Addendum to the same review round:** a second pass found the removal had left stale claims in
+`src/scraper/DOCS.md`'s OLDER Gotchas (predating this milestone), contradicting the new M2 Gotcha
+at the bottom of the same file — a later top-to-bottom reader would hit the stale claim first. Four
+spots fixed, all in the same file: the `crawl4ai_error_message`/`crawl4ai_success` observation-not-
+verdict Gotcha claimed the rendered text still surfaced the diagnosis and pointed to
+`_format_scrape_output`'s own comment (comments are not permitted in this codebase's source at
+all, and the block itself is gone) — reworded to "log record only" and repointed at
+`process-docs/scrape_pipeline/content_judgment_removal_2026-08-05.md`, which is where the
+guenstiger.de evidence and the observation-not-verdict reasoning actually live; the guenstiger.de
+evidence itself was kept verbatim, it is still true of the logged field. The document-status-chain
+Gotcha (2026-09-03) claimed a "rendered 'Document status chain' line" still existed. The Camoufox
+M2 sibling Gotcha claimed `_format_camoufox_output` still had "its own line" for
+`document_status_chain`. The `is_same_target` removal Gotcha (2026-08-05) claimed both URLs were
+"on disk/in the rendered text either way" — trimmed to "on disk (the log record) either way". All
+four were reworded to past tense or explicitly pointed at the M2 Gotcha, without touching their own
+still-valid historical evidence (dates, byte counts, live-confirmed repro chains).
+
+Requested as an amend into the recap commit above — blocked by this environment's own hard rule
+("Never amend existing commits — create a new commit instead"), which overrides instruction-level
+requests to amend. Committed as a new commit instead (`3acb2e3`); flagged to Main as a deviation
+from the literal instruction, not a silent substitution.
