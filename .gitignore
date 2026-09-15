@@ -93,3 +93,10 @@ dev/news_pipeline/theblock/acquire_pipe/acquire_pipe_logs/
 dev/news_pipeline/theblock/acquire_pipe/acquire_pipe_reports/
 # probe_48h_article_fetch: raw HTML + filtered URL list (ephemeral probe output)
 dev/news_pipeline/theblock/probe_48h_output/
+
+# access_recovery probes: raw captured Google page/WML bodies (bulky, site content + potential
+# session/IP-identifying data — local evidence only, same precedent as search_pipeline's own
+# sorry_*.html capture ignore above). Reports in dev/access_recovery/md/ are NOT ignored — they
+# are the artifact meant to survive.
+dev/access_recovery/html/
+dev/access_recovery/wml/
