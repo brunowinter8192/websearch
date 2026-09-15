@@ -199,18 +199,17 @@ def _count_outcomes(records: list[dict]) -> dict:
     return counts
 
 
-def write_report(records: list[dict], run_ts: str) -> Path:
-    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
-    counts = _count_outcomes(records)
-
-    verdict = (
+def _compute_verdict(records: list[dict], counts: dict) -> str:
+    return (
         "CANDIDATE — real results parsed via SearXNG's own selectors, from this machine's IP, "
         "this run"
         if counts["OK"] == len(records)
         else "NOT A CANDIDATE as measured — see per-query outcomes below"
     )
 
-    lines = [
+
+def _build_header(run_ts: str, records: list[dict], verdict: str) -> list[str]:
+    return [
         f"# Google WML Route Probe (Path B) — {run_ts}",
         "",
         "Replicates SearXNG's current Google engine (endpoint, Nokia UA, "
@@ -232,6 +231,11 @@ def write_report(records: list[dict], run_ts: str) -> Path:
         f"**Pacing:** {NAV_DELAY_S}s between every request (lighter than Path A's browser pacing, "
         "still deliberately non-zero — see this script's own module docstring for why).",
         "",
+    ]
+
+
+def _build_outcome_counts_section(counts: dict) -> list[str]:
+    return [
         "## Outcome counts",
         "",
         f"- **OK**: {counts['OK']}",
@@ -241,6 +245,11 @@ def write_report(records: list[dict], run_ts: str) -> Path:
         f"- **BLOCKED** (non-200 or a block-indicator string in the body): {counts['BLOCKED']}",
         f"- **ERROR**: {counts['ERROR']}",
         "",
+    ]
+
+
+def _build_per_query_table(records: list[dict]) -> list[str]:
+    lines = [
         "## Per-query results",
         "",
         "| # | Axis | Query | Status | Outcome | Containers | Count | Elapsed ms |",
@@ -253,37 +262,62 @@ def write_report(records: list[dict], run_ts: str) -> Path:
             f"{r.get('container_count')} | {r['count']} | {r['elapsed_ms']} |"
         )
     lines.append("")
+    return lines
 
+
+def _build_ok_samples_section(records: list[dict]) -> list[str]:
     ok_recs = [r for r in records if r["outcome"] == "OK"]
-    if ok_recs:
-        lines += ["## OK samples (quality eyeball)", ""]
-        for r in ok_recs:
-            lines.append(f"### {r['query']} ({r['axis']}) — {r['count']} results")
-            lines.append("")
-            for s in r["samples"]:
-                lines.append(f"- **{s['title']}** — {s['url']}")
-            lines.append("")
+    if not ok_recs:
+        return []
+    lines = ["## OK samples (quality eyeball)", ""]
+    for r in ok_recs:
+        lines.append(f"### {r['query']} ({r['axis']}) — {r['count']} results")
+        lines.append("")
+        for s in r["samples"]:
+            lines.append(f"- **{s['title']}** — {s['url']}")
+        lines.append("")
+    return lines
 
+
+def _build_non_ok_section(records: list[dict]) -> list[str]:
     non_ok = [r for r in records if r["outcome"] != "OK"]
-    if non_ok:
-        lines += ["## Non-OK details", ""]
-        for r in non_ok:
-            lines.append(f"### [{r['outcome']}] {r['query']} ({r['axis']})")
-            lines.append("")
-            lines.append(f"- status_code: {r['status_code']}")
-            if r.get("container_count") is not None:
-                lines.append(f"- container_count: {r['container_count']}")
-            if r.get("error"):
-                lines.append(f"- error: {r['error']}")
-            lines.append("")
+    if not non_ok:
+        return []
+    lines = ["## Non-OK details", ""]
+    for r in non_ok:
+        lines.append(f"### [{r['outcome']}] {r['query']} ({r['axis']})")
+        lines.append("")
+        lines.append(f"- status_code: {r['status_code']}")
+        if r.get("container_count") is not None:
+            lines.append(f"- container_count: {r['container_count']}")
+        if r.get("error"):
+            lines.append(f"- error: {r['error']}")
+        lines.append("")
+    return lines
 
-    lines += [
+
+def _build_raw_bodies_section(run_ts: str) -> list[str]:
+    return [
         "## Raw response bodies",
         "",
         f"Saved under `dev/access_recovery/wml/google_wml_probe_{run_ts}/` "
         "(gitignored — local evidence, not carried in the repo).",
         "",
     ]
+
+
+def write_report(records: list[dict], run_ts: str) -> Path:
+    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
+    counts = _count_outcomes(records)
+    verdict = _compute_verdict(records, counts)
+
+    lines = []
+    lines += _build_header(run_ts, records, verdict)
+    lines += _build_outcome_counts_section(counts)
+    lines += _build_per_query_table(records)
+    lines += _build_ok_samples_section(records)
+    lines += _build_non_ok_section(records)
+    lines += _build_raw_bodies_section(run_ts)
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
