@@ -315,3 +315,37 @@ browser claim is enforced, not just described. Main will re-run the same externa
 measurement independently to confirm zero launches across a full suite run — that confirmation, if
 it comes back clean, is the actual close of this milestone; this entry records what shipped and
 why, not a claim that the live measurement has already happened.
+
+### Recap — 2026-09-15, same day, independent live re-measurement closes M4
+
+Main re-ran the exact measurement that originally caught this bug — full suite run from this
+worktree, external process-table poller at the same 0.3s interval — independently, not just a
+suite-green check. Before this milestone's fix: three Chrome launches on the search lane's
+`browser-session` profile, ports 9313/9237/9262, matching the original catch exactly. After: zero
+launches on that profile, zero on the ad-hoc scrape profile, zero `Chrome for Testing`, zero
+camoufox, across the whole run — 374 passed. Main also checked the ONE Chrome process still visible
+during the run by its start time (2026-09-11, the project owner's own, unrelated) rather than
+assuming any visible Chrome process was accounted for — the kind of check this whole milestone
+exists because it was skipped once already (grep instead of measurement, three turns of
+dismissed reports). This closes the "open, not yet independently confirmed" caveat the entry above
+ended on — the live measurement has now actually happened, and it holds.
+
+Main separately confirmed, unprompted, that targeting `chromium_scrape._self_launch_chrome` over
+`chromium_process`'s own copy was the correct call, and specifically endorsed firing the two
+throwaway scratch tests rather than reasoning about the aliasing risk from source alone. No code
+changed in this recap — verification-only, nothing to re-test beyond confirming `dev/tests/`
+still reports 374 at recap time.
+
+`dev/tests/` re-verified at recap time: 374 passed, unchanged.
+
+**For a future agent touching any of the four lanes' launch mechanics:** the aliasing trap this
+milestone caught — a name imported via `from module import name` resolves through the IMPORTING
+module's own globals at call time, not the defining module's — is not specific to
+`_self_launch_chrome`. Before patching ANY function-under-test by its defining module's own
+attribute path, grep the actual call site's module for its own `from ... import ...` line and patch
+THAT module's copy instead. `dev/tests/DOCS.md`'s `test_chromium_scrape.py` entry already states
+this pattern generally ("called from and monkeypatched on `chromium_scrape`... since
+`_acquire_cdp_headed`/`try_scrape` resolve them through `chromium_scrape`'s own imported names") —
+this session's contribution was applying that same already-documented pattern to a NEW guard
+(`dev/tests/conftest.py`) that didn't exist when that documentation was written, not discovering it
+fresh.
