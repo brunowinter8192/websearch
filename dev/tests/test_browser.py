@@ -217,14 +217,7 @@ def test_activate_pid_embeds_pid_in_applescript_command(monkeypatch):
     assert any("unix id is 1344" in arg for arg in commands[0])
 
 
-# _focus_steal_watchdog_by_pid: reclaims focus only for OWNED pids, never for a same-named
-# non-owned process (e.g. the user's own separate "Google Chrome") — the hazard this milestone
-# exists to avoid, since both processes share the same frontmost APP NAME and are only
-# distinguishable by pid. The known-good "last_other_pid" anchor is captured by the CALLER
-# (get_tab(), before Chrome ever launches) and passed in, not re-derived by the watchdog's own
-# first read — a live-verified bug (2026-09-15 probe run) showed the watchdog's own post-launch
-# self-capture can be poisoned by an owned pid already being frontmost from Chrome's own launch,
-# permanently disabling reclaim until Chrome happened to cede focus on its own.
+# _focus_steal_watchdog_by_pid: reclaims only OWNED pids, using an externally-supplied anchor
 
 @pytest.mark.asyncio
 async def test_focus_steal_watchdog_by_pid_ignores_non_owned_frontmost_pid(monkeypatch):
