@@ -111,32 +111,19 @@ async def attempt_backgrounded_launch() -> dict:
     return result
 
 
-# Write markdown report and return its path
-def write_report(record: dict) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"02_parallel_chrome_probe_{ts}.md"
-
-    # Focus-steal read: baseline is frontmost_before_sim, captured before either spawn — both the
-    # simulated user Chrome AND our own launch attempt use `-g`, so neither should ever move
-    # frontmost to Google Chrome relative to this baseline
+# Focus-steal read: baseline is frontmost_before_sim, captured before either spawn — both the
+# simulated user Chrome AND our own launch attempt use `-g`, so neither should ever move
+# frontmost to Google Chrome relative to this baseline
+def _compute_focus_steal(record: dict) -> tuple[bool, bool, bool]:
     baseline = record.get("frontmost_before_sim")
     sim_focus_stolen = baseline != "Google Chrome" and record.get("frontmost_after_sim") == "Google Chrome"
     launch_focus_stolen = baseline != "Google Chrome" and record.get("frontmost_after_attempt") == "Google Chrome"
     focus_stolen = sim_focus_stolen or launch_focus_stolen
+    return focus_stolen, sim_focus_stolen, launch_focus_stolen
 
-    clean_teardown = (
-        record.get("session_dir_processes_after_teardown", 1) == 0
-        and record.get("sim_user_processes_after_teardown", 1) == 0
-    )
 
-    lines = [
-        f"# Parallel-Chrome Collision Probe — {ts}",
-        "",
-        "Simulated already-running user Chrome (throwaway profile, `-g` backgrounded, never "
-        "foregrounded) + a production-shape headed-backgrounded launch attempt against the REAL "
-        "production SESSION_DIR (`~/.websearch/browser-session`), while the simulated user Chrome is "
-        "running.",
-        "",
+def _build_result_section(record: dict, focus_stolen: bool) -> list[str]:
+    return [
         "## Result",
         "",
         f"- **Frontmost app before either spawn (baseline):** {record.get('frontmost_before_sim')}",
@@ -153,16 +140,26 @@ def write_report(record: dict) -> Path:
         "`--user-data-dir` — not a count of distinct browser instances)",
         f"- **Frontmost app immediately after our launch attempt:** {record.get('frontmost_after_attempt')}",
         f"- **Focus stolen by our launch (frontmost became Google Chrome because of it):** {focus_stolen}",
+    ]
+
+
+def _build_teardown_section(record: dict) -> list[str]:
+    clean_teardown = (
+        record.get("session_dir_processes_after_teardown", 1) == 0
+        and record.get("sim_user_processes_after_teardown", 1) == 0
+    )
+    return [
         "",
         "## Teardown",
         "",
         f"- SESSION_DIR processes after teardown: {record.get('session_dir_processes_after_teardown')}",
         f"- Simulated-user-profile processes after teardown: {record.get('sim_user_processes_after_teardown')}",
         f"- **Clean teardown:** {clean_teardown}",
-        "",
-        "## Reading",
-        "",
     ]
+
+
+def _build_reading_section(record: dict, focus_stolen: bool, sim_focus_stolen: bool, launch_focus_stolen: bool) -> list[str]:
+    lines = ["", "## Reading", ""]
     if record.get("launch_success"):
         lines.append(
             "- `open -g -n -a \"Google Chrome\" --args ... --user-data-dir=<SESSION_DIR>` DID reach a "
@@ -193,6 +190,28 @@ def write_report(record: dict) -> Path:
             f"- Focus WAS stolen: frontmost app became Google Chrome "
             f"(sim-spawn steal={sim_focus_stolen}, our-launch steal={launch_focus_stolen})."
         )
+    return lines
+
+
+# Write markdown report and return its path
+def write_report(record: dict) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"02_parallel_chrome_probe_{ts}.md"
+
+    focus_stolen, sim_focus_stolen, launch_focus_stolen = _compute_focus_steal(record)
+
+    lines = [
+        f"# Parallel-Chrome Collision Probe — {ts}",
+        "",
+        "Simulated already-running user Chrome (throwaway profile, `-g` backgrounded, never "
+        "foregrounded) + a production-shape headed-backgrounded launch attempt against the REAL "
+        "production SESSION_DIR (`~/.websearch/browser-session`), while the simulated user Chrome is "
+        "running.",
+        "",
+    ]
+    lines += _build_result_section(record, focus_stolen)
+    lines += _build_teardown_section(record)
+    lines += _build_reading_section(record, focus_stolen, sim_focus_stolen, launch_focus_stolen)
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
