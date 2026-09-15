@@ -47,6 +47,7 @@ def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
 def build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.add_argument("--no-startup-window")
     options.block_popups = True
     options.block_notifications = True
 

@@ -127,8 +127,10 @@ it is set to a non-integer string (the removed silent-fallback-to-14 behavior's 
 `src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
 `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
-### test_browser.py (400 LOC)
-**Purpose:** `src/search/browser.py` — `_reap_session_profile`/`_record_own_pids`/
+### test_browser.py (416 LOC)
+**Purpose:** `src/search/browser.py` — `build_options()` carries `--no-startup-window` and
+`_open_background_process_creator` forwards it into the actual `open` command (subprocess.Popen
+mocked, no real launch); `_reap_session_profile`/`_record_own_pids`/
 `_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil mocked);
 `get_tab()`'s critical-section ordering (lock -> reap -> launch -> anchor-capture -> record-own-pids
 -> spawn death_pipe watchdog -> spawn the PID-keyed focus-steal watchdog with that anchor, the exact

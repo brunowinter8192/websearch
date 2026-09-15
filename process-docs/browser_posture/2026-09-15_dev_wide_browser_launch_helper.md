@@ -120,6 +120,78 @@ real probe run, watched by a human, matching exactly how the search-lane fix abo
 verified live before being trusted. That run is explicitly the next step, not part of what shipped
 in this entry.
 
+## `--no-startup-window` on the search lane — 2026-09-15, same day, third round
+
+Same worker session. Milestone: the scrape lane never flickers ("der scrape ist perfekt im
+background", user's own words); the search lane still does — Main measured 2 focus steals per
+`search_web` run (0.5s, 1.03s) on integration, both reclaimed but visible. Both lanes use `open -g
+-n` and both now have a watchdog. Main found the difference by reading both launch commands
+side-by-side: the scrape lane's `_self_launch_chrome` (`src/scraper/chromium_process.py`) passes
+`--no-startup-window`; the search lane's `_open_background_process_creator`
+(`src/search/browser.py`) does not. `--no-startup-window` means Chrome opens zero windows at
+launch — no window-creation event for the OS to activate at all, not merely a reclaim after one.
+
+**Change shipped:** one line, `options.add_argument("--no-startup-window")` in `build_options()`
+(`src/search/browser.py`). Nothing else in the launch path, the watchdog, PID keying, or teardown
+touched.
+
+**Whether pydoll already sets it or rejects it as a duplicate — checked in the installed package,
+not assumed:** `venv/lib/python3.14/site-packages/pydoll/browser/managers/
+browser_options_manager.py::add_default_arguments()` already calls `self.options.add_argument
+('--no-first-run')` and `('--no-default-browser-check')` unconditionally during
+`Chrome.start()` — this is exactly why Main hit `ArgumentAlreadyExistsInOptions` adding
+`--no-first-run` by hand earlier tonight; pydoll already owns that flag. Grepped the same file and
+the rest of `pydoll/browser/` for `no-startup-window`/`no_startup_window`: zero matches anywhere in
+the installed package. Safe to add — confirmed by reading the actual installed source, not by
+absence of an error in a run I'm not allowed to make.
+
+**A structural risk found by reading `Chrome.start()`, not yet resolved, and not resolvable without
+a live launch:** `pydoll/browser/chromium/base.py::start()` does `valid_tab_id = await
+self._get_valid_tab_id(await self.get_targets())` immediately after the process comes up —
+`_get_valid_tab_id` raises `NoValidTabFound` if `get_targets()` returns no `type == 'page'` entry.
+This assumes Chrome already has an existing tab the moment `.start()` asks for one. The scrape lane
+never hits this: it does not call `.start()` at all — it launches the process directly, waits for
+the DevTools port file, then hands a `cdp_url` to crawl4ai/patchright's `connect_over_cdp` path,
+which creates its OWN first page via `context.new_page()` (a fresh `Target.createTarget`) rather
+than looking for one that's already there. `--no-startup-window` is safe for that pattern by
+construction. Whether Chromium's CDP target list is truly empty of `page`-type entries under
+`--no-startup-window` + `--remote-debugging-port` — and therefore whether pydoll's `.start()` will
+raise `NoValidTabFound` on every single search — is NOT something I could establish by reading
+alone, and I did not launch a browser to check it, per the standing rule for this milestone. If this
+is wrong, the failure will not be silent or subtle: `get_tab()`'s own try/except will catch the
+raised exception, reset `_browser`/`_tab`, release the lock, and re-raise — every engine's
+`search_with_reason` would fail loudly and identically, not hang or degrade quietly. **If Main's
+live run produces exactly that (an exception naming `NoValidTabFound`, or every engine failing
+identically on the very first tab it tries to get), that is this mechanism, and the fix is reverting
+the one `add_argument` line above — not a deeper investigation.** Did not attempt any workaround
+(e.g. bypassing `.start()`'s own tab lookup and calling `new_tab()` manually instead, mirroring the
+scrape lane's own explicit-create pattern more closely) — that is a materially bigger change than
+one flag, was not asked for, and risks its own new bugs in a launch path three other things already
+depend on (the watchdog's anchor capture, `_record_own_pids`, `death_pipe`).
+
+**Second, separate difference — not touched, per explicit instruction:** the scrape lane launches a
+dedicated, dynamically-resolved Chromium bundle; the search lane launches the user's real "Google
+Chrome". Whether this also matters is Main's to decide after measuring `--no-startup-window` alone.
+
+**Test:** `dev/tests/test_browser.py`, two new tests — `test_build_options_carries_no_startup_window_
+flag` (`"--no-startup-window" in browser.build_options().arguments`, a pure function call, no
+mocking needed) and `test_open_background_process_creator_forwards_no_startup_window_into_open_
+command` (mocks `browser.subprocess.Popen`, captures the argv `_open_background_process_creator`
+actually invokes, asserts the flag survives the `command[1:]` reslice into the final `open` argv —
+the "launch command carries the flag" proof the milestone asked for). Neither test touches
+`browser.Chrome`, so `dev/tests/conftest.py`'s launch-primitive tripwire does not fire for either.
+Suite: 377 -> 379 passed (two new tests, nothing else changed count).
+
+**Callers checked, via import-grep, not assumed:** `build_options`/`_open_background_process_creator`
+are module-private to `src/search/browser.py` — grepped the whole repo for both names; the only call
+site for either is `get_tab()` in the same file. No external caller imports them directly. Grepped
+`from src.search.browser import` separately: `search_web.py` (`get_tab`, `kill_own_chrome`), all 6
+browser engine files (`new_tab`, `kill_tab`), and 20+ `dev/search_pipeline/*.py` scripts (`new_tab`/
+`close_browser` direct callers) — none of these call `build_options` themselves or inspect its
+return value; they only reach it transitively through `get_tab()`, whose signature and return type
+are unchanged. Their own code cannot observe this change except through whether the browser launches
+at all (the one risk above, which is Main's live run to confirm or refute).
+
 ## Main's live focus measurement, and a second finding it produced
 
 Main ran the focus proof this entry left outstanding: the helper, driven from a throwaway `/tmp`
