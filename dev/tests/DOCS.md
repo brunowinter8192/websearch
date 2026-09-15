@@ -113,15 +113,21 @@ it is set to a non-integer string (the removed silent-fallback-to-14 behavior's 
 `src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
 `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
-### test_browser.py (268 LOC)
+### test_browser.py (400 LOC)
 **Purpose:** `src/search/browser.py` — `_reap_session_profile`/`_record_own_pids`/
 `_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil mocked);
-`get_tab()`'s critical-section ordering (lock -> reap -> launch -> record-own-pids -> spawn
-death_pipe watchdog, the exact sequence the browser-lifecycle milestone's live parallel-run bug
-depended on getting right) and that the watchdog receives `_owned_pids` with no `cleanup_dir`
-(the session profile is persistent, never deleted); `kill_own_chrome()`'s full teardown sequence,
-its no-op path when the browser was never touched, and the PID-safety-net-and-lock-release-still-run
-path when `close_browser()` itself raises (Chrome already dead mid-sweep).
+`get_tab()`'s critical-section ordering (lock -> reap -> launch -> anchor-capture -> record-own-pids
+-> spawn death_pipe watchdog -> spawn the PID-keyed focus-steal watchdog with that anchor, the exact
+sequence both the browser-lifecycle milestone's live parallel-run bug and the M1 focus-steal
+milestone's anchor-race bug depended on getting right) and that the watchdog receives `_owned_pids`
+with no `cleanup_dir` (the session profile is persistent, never deleted); `kill_own_chrome()`'s full
+teardown sequence, its no-op path when the browser was never touched, and the
+PID-safety-net-and-lock-release-still-run path when `close_browser()` itself raises (Chrome already
+dead mid-sweep); `close_browser()`'s own unconditional cancellation of a live focus-steal watchdog
+task, and its no-op path when none was ever spawned; `_get_frontmost_pid`/`_activate_pid`'s
+subprocess wrapping; `_focus_steal_watchdog_by_pid`'s three PID-membership branches, including
+reclaiming immediately when an owned pid is already frontmost on the very first loop iteration
+given a valid externally-supplied anchor (the regression guard for the anchor-race bug above).
 
 ### test_scrape_logger.py (44 LOC)
 **Purpose:** `src/scraper/scrape_logger.py` — `write_sidecar`'s real header content (no prior
