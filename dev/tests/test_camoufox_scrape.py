@@ -601,45 +601,51 @@ async def test_scrape_url_camoufox_workflow_does_not_double_hash_config(monkeypa
 
 
 # ---------------------------------------------------------------------------
-# _format_camoufox_output: same fixed-shape philosophy as _format_scrape_output — facts always,
-# landed URL unconditional
+# _format_camoufox_output: minimal shape — heading + content, no facts block
 # ---------------------------------------------------------------------------
 
 def test_format_camoufox_output_normal_markdown_shape():
     text = camoufox_scrape._format_camoufox_output(
-        "https://x.test/a", "the real markdown content here", _meta())
-    assert "- Engine: camoufox" in text
-    assert "- HTTP status: 200" in text
-    assert "- Landed URL (the URL the browser actually returned content from): https://x.test/a" in text
-    assert "Content format" not in text  # the raw-HTML-as-content fallback was removed 2026-09-09
-    facts_idx = text.index("## Acquisition facts")
-    content_idx = text.index("## Content")
-    body_idx = text.index("the real markdown content here")
-    assert facts_idx < content_idx < body_idx
-
-
-def test_format_camoufox_output_landed_url_unconditional_even_when_absent():
-    """Same rule as the chromium lane: landed_url renders even when None (absent), literally."""
-    text = camoufox_scrape._format_camoufox_output(
-        "https://x.test/a", "", _meta(landed_url=None, acquisition_error="browser_missing"))
-    assert "- Landed URL (the URL the browser actually returned content from): None" in text
-
-
-def test_format_camoufox_output_renders_document_status_chain_line():
-    text = camoufox_scrape._format_camoufox_output(
-        "https://x.test/a", "the real page content",
-        _meta(status_code=200, document_status_chain=[403, 302, 200]))
-    assert "Document status chain" in text
-    assert "[403, 302, 200]" in text
+        "https://x.test/a", "the real markdown content here")
+    assert "# Content from: https://x.test/a" in text
+    assert "the real markdown content here" in text
 
 
 def test_format_camoufox_output_acquisition_failure_shape():
-    text = camoufox_scrape._format_camoufox_output(
-        "https://x.test/a", "",
-        _meta(status_code=None, landed_url=None, raw_markdown_bytes=0,
-              acquisition_error="budget_exhausted"))
+    text = camoufox_scrape._format_camoufox_output("https://x.test/a", "")
     assert "(no content returned)" in text
-    assert "Acquisition error: camoufox acquisition exceeded the total time budget" in text
+
+
+# ---------------------------------------------------------------------------
+# M2 milestone (2026-09-15): the printed acquisition-facts block is removed entirely — the facts
+# still exist, they just stop being printed. Output shrinks; the log record does not.
+# ---------------------------------------------------------------------------
+
+def test_format_camoufox_output_carries_no_acquisition_facts_preamble():
+    text = camoufox_scrape._format_camoufox_output("https://x.test/a", "the real page content")
+    assert "Acquisition facts" not in text
+    assert "the real page content" in text
+
+
+@pytest.mark.asyncio
+async def test_scrape_url_camoufox_workflow_logs_full_field_set_unchanged(monkeypatch):
+    captured = {}
+
+    async def _fake_try_scrape_camoufox(url, block_images=False):
+        return "real content", _meta()
+
+    monkeypatch.setattr(camoufox_scrape, "try_scrape_camoufox", _fake_try_scrape_camoufox)
+    monkeypatch.setattr(camoufox_scrape, "write_sidecar", lambda *a, **kw: None)
+    monkeypatch.setattr(camoufox_scrape, "log_scrape", lambda record: captured.update(record))
+
+    await camoufox_scrape.scrape_url_camoufox_workflow("https://x.test/a")
+
+    expected_fields = {
+        "ts", "url", "domain", "mode", "engine", "acquisition_error", "timings_ms",
+        "http_status", "bytes_returned", "bytes_raw_markdown", "content_path", "landed_url",
+        "markdown_conversion_error", "document_status_chain", "config_hash", "config",
+    }
+    assert expected_fields <= captured.keys()
 
 
 # ---------------------------------------------------------------------------

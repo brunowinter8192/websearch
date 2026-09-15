@@ -132,7 +132,7 @@ def main():
                         "openalex")
 
     # ── scrape_url_chromium ───────────────────────────────────────────────────
-    p = sub.add_parser("scrape_url_chromium", help="Scrape URL to filtered markdown (PruningContentFilter, full content, no length cap) plus acquisition facts.")
+    p = sub.add_parser("scrape_url_chromium", help="Scrape URL to filtered markdown (PruningContentFilter, full content, no length cap).")
     p.add_argument("url", help="URL to scrape")
 
     # ── discover_urls ─────────────────────────────────────────────────────────

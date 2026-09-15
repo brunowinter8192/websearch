@@ -182,7 +182,7 @@ raise writes NO `job.md`, prints the WARN line naming the exception to stderr, a
 directory — the package's other tests live as offline dev scripts under
 `dev/news_pipeline/coindesk_proxy_riding/`, not here.
 
-### test_camoufox_scrape.py (741 LOC)
+### test_camoufox_scrape.py (747 LOC)
 **Purpose:** `src/scraper/camoufox_scrape.py` — `try_scrape_camoufox` acquisition-error states
 (budget/browser_missing/exception), the "Invalid IPv6 URL" urlsplit regression. As of 2026-09-09,
 `test_try_scrape_camoufox_conversion_failure_yields_empty_content` replaces the three tests that
@@ -204,9 +204,9 @@ document response overriding the goto Response's own (possibly stale) status, th
 ordinary-page case, the empty-chain fallback, and non-document/non-main-frame responses excluded —
 `_FakePage.goto()` fires its configured `document_statuses` sequence before returning (render wait
 is zeroed in these tests, so there is no real "later" window to fire into; firing the whole chain
-inside `goto()` is an equivalent, deterministic stand-in).
+inside `goto()` is an equivalent, deterministic stand-in). As of the M2 acquisition-facts-removal milestone (2026-09-15), `_format_camoufox_output`'s tests were cut down to the two-arg `(url, content)` signature and now only check the printed shape (heading, content, no `## Acquisition facts` preamble) — the three tests that used to assert on removed block lines (landed URL, document status chain) were deleted, and a new test proves `scrape_url_camoufox_workflow`'s log record still carries its full pre-milestone field set.
 
-### test_chromium_scrape.py (1252 LOC)
+### test_chromium_scrape.py (1170 LOC)
 **Purpose:** `src/scraper/chromium_scrape.py` — `is_browser_launch_error`, `try_scrape` acquisition-
 error classification + HTTP-error-with-real-content preservation, `_format_scrape_output`,
 `extract_config_stamp`, cdp-headed self-launch teardown-on-every-exit-path — via `src/scraper/
@@ -227,7 +227,7 @@ young/legitimate parallel scrape, and sweeps only dirs with zero live processes)
 `async_crawler_strategy.py` makes, against a fake page/request/response trio): the last main-frame
 document response status overriding crawl4ai's own (earliest-hop) `status_code`, the single-entry
 ordinary-page case, the empty-chain fallback to crawl4ai's value, and non-document/non-main-frame
-responses being filtered out of the chain.
+responses being filtered out of the chain. As of the M2 acquisition-facts-removal milestone (2026-09-15), `_format_scrape_output`'s tests were cut down to the two-arg `(url, content)` signature: 11 tests asserting on removed block lines (landed URL, og:published_time, document status chain, the crawl4ai-diagnosis wording, the two `_acquisition_error_message`/`_ACQUISITION_ERROR_MESSAGES` tests — both symbols removed with the block) were deleted; 2 tests covering still-real behavior (content appears verbatim, zero content renders `(no content returned)`) were rewritten to the new signature; 2 new tests were added proving the printed text carries no `## Acquisition facts` preamble and that `scrape_url_chromium_workflow`'s log record still carries its full pre-milestone field set.
 
 ### test_seed_feeders.py (788 LOC)
 **Purpose:** `src/crawler/seed_feeders*.py` — the `normalize_url`/`scope_and_dedup` merge-vs-

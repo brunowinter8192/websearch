@@ -19,7 +19,6 @@ Run via `websearch <command>` (in PATH), foreground — no `&`, no redirect.
 | scrape_url_chromium | url | Page → full markdown |
 
 **One scrape lane, no per-call choice.**
-It returns pruned markdown (PruningContentFilter). Page didn't come through → report the failure plainly with the acquisition facts the command prints; do not retry silently.
 
 ## Search Strategy
 

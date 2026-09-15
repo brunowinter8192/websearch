@@ -325,14 +325,6 @@ async def test_scrape_url_chromium_workflow_log_record_has_no_fallback_to_raw_fi
     assert captured["bytes_raw_markdown"] == 100  # raw_markdown_bytes still reported, as a fact
 
 
-def test_format_scrape_output_has_no_raw_fallback_note():
-    """The " + raw fallback" selection note is gone from the content-bytes line — there is no
-    selection to note anymore, content is always the filtered fit_markdown."""
-    text = chromium_scrape._format_scrape_output("https://x.test", "some content", _meta(), None)
-    assert "raw fallback" not in text
-    assert "Bytes (content below, after PruningContentFilter):" in text
-
-
 # ---------------------------------------------------------------------------
 # try_scrape captures meta["landed_url"] RAW from result.redirected_url
 # ---------------------------------------------------------------------------
@@ -507,21 +499,6 @@ async def test_try_scrape_times_out_at_budget(monkeypatch, caplog):
     assert any("budget exhausted" in m.lower() for m in caplog.messages)
 
 
-def test_acquisition_error_messages_has_actionable_browser_missing_fix():
-    """The acquisition-error description for browser_missing names the concrete install command."""
-    msg = chromium_scrape._ACQUISITION_ERROR_MESSAGES["browser_missing"]
-    assert "patchright install chromium" in msg
-
-
-def test_acquisition_error_message_budget_exhausted_reads_real_budget():
-    """budget_exhausted's message reads the REAL budget that was in effect for that call
-    (config.total_budget_s) — not a re-declared literal."""
-    msg = chromium_scrape._acquisition_error_message(
-        "budget_exhausted", {"total_budget_s": chromium_scrape.TOTAL_SCRAPE_BUDGET_S})
-    assert str(chromium_scrape.TOTAL_SCRAPE_BUDGET_S) in msg
-    assert "budget" in msg.lower()
-
-
 # ---------------------------------------------------------------------------
 # extract_config_stamp — launch_mode is a fixed constant (LAUNCH_MODE) now that the
 # WEBSEARCH_HEADLESS escape hatch is gone; replaces the dead-on-the-cdp-path browser_config.headless
@@ -616,103 +593,52 @@ def _meta(**overrides):
     return base
 
 
-def test_format_scrape_output_facts_precede_content():
-    text = chromium_scrape._format_scrape_output("https://x.test", "the real page content here",
-                                              _meta(), None)
-    facts_idx = text.index("## Acquisition facts")
-    content_idx = text.index("## Content")
-    body_idx = text.index("the real page content here")
-    assert facts_idx < content_idx < body_idx
-
-
 def test_format_scrape_output_never_replaces_content_with_a_message():
     """Content appears verbatim in the output — not summarized, not replaced."""
     real_content = "SPECIFIC_MARKER_TEXT_12345 that must appear byte-for-byte in the output"
-    text = chromium_scrape._format_scrape_output("https://x.test", real_content, _meta(), None)
+    text = chromium_scrape._format_scrape_output("https://x.test", real_content)
     assert real_content in text
 
 
 def test_format_scrape_output_zero_content_is_explicit_not_suppressed():
     """Zero content renders as an explicit fact, not a discard message standing in for the page."""
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test", "", _meta(status_code=None, raw_markdown_bytes=0,
-                                     acquisition_error="budget_exhausted",
-                                     config={"total_budget_s": chromium_scrape.TOTAL_SCRAPE_BUDGET_S}), None)
+    text = chromium_scrape._format_scrape_output("https://x.test", "")
     assert "(no content returned)" in text
-    assert (f"Acquisition error: scrape exceeded the total time budget "
-            f"({chromium_scrape.TOTAL_SCRAPE_BUDGET_S}s)") in text
     assert "Error scraping" not in text  # the old discard-message phrasing must not reappear
 
 
 # ---------------------------------------------------------------------------
-# _format_scrape_output: the landed-URL line is UNCONDITIONAL — rendered on every scrape, exactly
-# like HTTP status, whether the landed URL matches the requested one, differs, or is absent. No
-# code-side verdict decides whether the agent gets to see this fact (milestone 5: same_target and
-# the conditional render it drove were both removed — see the module's own comment on this line).
+# M2 milestone (2026-09-15): the printed acquisition-facts block is removed entirely — the facts
+# still exist, they just stop being printed. Output shrinks; the log record does not.
 # ---------------------------------------------------------------------------
 
-def test_format_scrape_output_renders_landed_url_line_when_it_differs():
-    """A landed URL on a genuinely different host renders as an explicit, readable fact — wording
-    makes no claim about "redirect" or "different target", since nothing decides that anymore."""
-    text = chromium_scrape._format_scrape_output(
-        "https://docs.anthropic.com/en/api/getting-started",
-        "the real landed page content",
-        _meta(landed_url="https://platform.claude.com/en/api/getting-started"),
-        None)
-    assert ("Landed URL (the URL the browser actually returned content from): "
-            "https://platform.claude.com/en/api/getting-started") in text
+def test_format_scrape_output_carries_no_acquisition_facts_preamble():
+    text = chromium_scrape._format_scrape_output("https://x.test", "the real page content")
+    assert "Acquisition facts" not in text
+    assert "the real page content" in text
 
 
-def test_format_scrape_output_renders_landed_url_line_when_it_matches():
-    """landed_url identical to the requested URL — the overwhelming majority case — still renders
-    the line, unconditionally, exactly like HTTP status does."""
-    text = chromium_scrape._format_scrape_output(
-        "https://www.rfc-editor.org/info/rfc2616/", "the rfc content",
-        _meta(landed_url="https://www.rfc-editor.org/info/rfc2616/"), None)
-    assert ("Landed URL (the URL the browser actually returned content from): "
-            "https://www.rfc-editor.org/info/rfc2616/") in text
+@pytest.mark.asyncio
+async def test_scrape_url_chromium_workflow_logs_full_field_set_unchanged(monkeypatch):
+    captured = {}
 
+    async def _fake_try_scrape(url):
+        return "real content", _meta()
 
-def test_format_scrape_output_renders_landed_url_line_when_absent():
-    """No landed_url at all (e.g. acquisition failed before a result existed) still renders the
-    line — the absence itself is the fact, rendered literally (None), matching how every other
-    absent value in this block reads (e.g. HTTP status on a budget_exhausted record) rather than
-    being suppressed into a missing line."""
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test/a", "", _meta(landed_url=None, acquisition_error="browser_missing"), None)
-    assert "Landed URL (the URL the browser actually returned content from): None" in text
+    monkeypatch.setattr(chromium_scrape, "try_scrape", _fake_try_scrape)
+    monkeypatch.setattr(chromium_scrape, "write_sidecar", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "log_scrape", lambda record: captured.update(record))
 
+    await chromium_scrape.scrape_url_chromium_workflow("https://example.com")
 
-def test_format_scrape_output_renders_og_published_time_when_present():
-    """The page's own declared date renders verbatim, labeled as its own claim, not a guess."""
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test", "the real page content", _meta(), "2024-03-01T12:00:00+00:00")
-    assert "og:published_time" in text
-    assert "2024-03-01T12:00:00+00:00" in text
-    assert "the page's OWN declared value" in text
-
-
-def test_format_scrape_output_renders_og_published_time_line_unconditionally_when_absent():
-    """Same unconditional-fact treatment as landed_url/HTTP status — the line itself always
-    renders, even when the page declared nothing, rather than being suppressed."""
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test", "the real page content", _meta(), None)
-    assert "og:published_time" in text
-
-
-def test_format_scrape_output_crawl4ai_diagnosis_labeled_as_observation_not_verdict():
-    """The diagnosis line itself carries the observation-not-verdict caveat — a caller reading
-    only the output text (not the source) must see this, not just a code comment."""
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test", "full product page content here, well past any thin-page threshold",
-        _meta(status_code=403,
-              crawl4ai_error_message="Blocked by anti-bot protection: Cloudflare JS challenge"),
-        None)
-    assert "OBSERVATION" in text
-    assert "NOT a verdict" in text
-    assert "Cloudflare JS challenge" in text
-    # And the content is still there despite the diagnosis claiming a block
-    assert "full product page content here" in text
+    expected_fields = {
+        "ts", "url", "domain", "mode", "engine", "acquisition_error", "timings_ms",
+        "http_status", "content_type", "bytes_returned", "bytes_raw_markdown",
+        "content_path", "og_published_time", "landed_url", "crawl4ai_success",
+        "crawl4ai_error_message", "crawl4ai_attempts", "crawl4ai_resolved_by",
+        "crawl4ai_fallback_fetch_used", "document_status_chain", "config_hash", "config",
+    }
+    assert expected_fields <= captured.keys()
 
 
 # ---------------------------------------------------------------------------
@@ -1220,14 +1146,6 @@ async def test_scrape_url_chromium_workflow_logs_document_status_chain(monkeypat
     await chromium_scrape.scrape_url_chromium_workflow("https://example.com")
 
     assert captured["document_status_chain"] == [403, 302, 200]
-
-
-def test_format_scrape_output_renders_document_status_chain_line():
-    text = chromium_scrape._format_scrape_output(
-        "https://x.test", "the real page content",
-        _meta(status_code=200, document_status_chain=[403, 302, 200]), None)
-    assert "Document status chain" in text
-    assert "[403, 302, 200]" in text
 
 
 @pytest.mark.asyncio
