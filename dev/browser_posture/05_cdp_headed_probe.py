@@ -65,14 +65,15 @@ async def run_probe() -> None:
     await asyncio.to_thread(kill_survivors)
 
     user_data_dir = tempfile.mkdtemp(prefix="browser-posture-cdp-probe-")
-    run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
-
-    stage["name"] = "teardown"
-    await asyncio.to_thread(kill_by_profile, user_data_dir)
-    await asyncio.to_thread(kill_survivors)
-    shutil.rmtree(user_data_dir, ignore_errors=True)
-    stop_event.set()
-    await poll_task
+    try:
+        run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
+    finally:
+        stage["name"] = "teardown"
+        await asyncio.to_thread(kill_by_profile, user_data_dir)
+        await asyncio.to_thread(kill_survivors)
+        shutil.rmtree(user_data_dir, ignore_errors=True)
+        stop_event.set()
+        await poll_task
 
     orphans = check_orphans(user_data_dir)
     cmdline_diff = diff_cmdlines(run_result["self_cmdline"], reference["cmdline"])
