@@ -104,7 +104,7 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records, run_ts, html_run_dir, REPORT_DIR, NUM_VARIANTS, NAV_DELAY_S)
+    report_path = write_report(records, run_ts, REPORT_DIR, NUM_VARIANTS, NAV_DELAY_S)
     outcome_counts = count_outcomes(records)
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Outcomes: {outcome_counts}", file=sys.stderr)

@@ -151,7 +151,7 @@ def _build_error_section(records: list[dict]) -> list[str]:
     return lines
 
 
-def write_report(records: list[dict], run_ts: str, html_run_dir: Path, report_dir: Path,
+def write_report(records: list[dict], run_ts: str, report_dir: Path,
                   num_variants: list, nav_delay_s: float) -> Path:
     path = report_dir / f"google_dom_probe_{run_ts}.md"
     by_num = {n: [r for r in records if r["num"] == n] for n in num_variants}
