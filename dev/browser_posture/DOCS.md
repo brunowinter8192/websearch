@@ -21,7 +21,7 @@ rejected as a same-IP same-day confound. Backs `process-docs/browser_posture/`.
 
 ### _lib.py (307 LOC)
 
-**Purpose:** Shared launch/teardown/measurement primitives for all probe scripts — profile isolation, the proven `open -g` process_creator, a throwaway local HTTP server, stats helpers, CDP injection, settle-poll.
+**Purpose:** Shared launch/teardown/measurement primitives for THIS area's probe scripts (`01`-`03`) — profile isolation, the proven `open -g` process_creator, a throwaway local HTTP server, stats helpers, CDP injection, settle-poll. No focus-steal reclaim watchdog — see Gotchas.
 **Reads:** nothing (pure infra + subprocess/CDP calls it makes itself).
 **Writes:** nothing directly — returns data to callers; spawns/kills Chrome processes as a side effect.
 **Called by:** `01_launch_latency_probe.py`, `02_parallel_chrome_probe.py`, `03_fingerprint_patch_probe.py`.
@@ -93,6 +93,15 @@ launchd checks).
 
 ## Gotchas
 
+- None of `_lib.py`'s `open -g`-based launches (`open_background_process_creator`,
+  `spawn_plain_chrome`) run a focus-steal reclaim watchdog — `open -g` only suppresses activation at
+  the launch moment (playwright#42343), so a window from any of these can still steal focus later in
+  the probe run. This went unnoticed here because these probes are short/self-contained; it caused a
+  real, repeated focus-steal in `dev/access_recovery/01_google_dom_probe.py` (a longer-running,
+  multi-navigation probe using the same pattern), which is why `dev/_lib/browser_launch.py` (own
+  DOCS.md, dev-wide, not area-scoped) exists. Any NEW dev script that needs a headed-backgrounded
+  Chrome for more than a one-shot launch should use that helper, not `_lib.py`'s launch functions —
+  see `process-docs/browser_posture/` for the failure this addressed.
 - Both scripts open real, visible Chrome windows on macOS (headed configs) — not safe to run on a
   headless CI runner; developed and verified interactively on the target Mac.
 - `01`'s timer-drift measurement could NOT confirm real window occlusion in this environment
