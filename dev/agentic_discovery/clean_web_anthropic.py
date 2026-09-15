@@ -18,8 +18,7 @@ PATTERN = "anthropic__*.md"
 CARD_LINK_RE = re.compile(r'^\[.+?\]\(https?://[^)]+\)(\[.+?\]\(https?://[^)]+\))+\s*$')
 
 
-def clean_file(content: str) -> str:
-    lines = content.split("\n")
+def _compress_header_and_merge_headings(lines: list[str]) -> list[str]:
     result = []
     i = 0
 
@@ -56,6 +55,10 @@ def clean_file(content: str) -> str:
         result.append(line)
         i += 1
 
+    return result
+
+
+def _strip_trailing_card_nav(result: list[str]) -> list[str]:
     # --- Pass 2: Remove end-of-file card navigation ---
     # Walk backwards from the end, removing lines that are pure card-link concatenations
     # Stop as soon as we hit a line that isn't a card block or blank
@@ -75,6 +78,13 @@ def clean_file(content: str) -> str:
     while result and result[-1].strip() == "":
         result.pop()
 
+    return result
+
+
+def clean_file(content: str) -> str:
+    lines = content.split("\n")
+    result = _compress_header_and_merge_headings(lines)
+    result = _strip_trailing_card_nav(result)
     return "\n".join(result) + "\n"
 
 

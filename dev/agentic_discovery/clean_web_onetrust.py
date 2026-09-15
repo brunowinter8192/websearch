@@ -41,31 +41,19 @@ def is_footer_nav_line(line: str) -> bool:
     return bool(RE_NAV_LINK_LINE.match(stripped))
 
 
-def clean_content(text: str) -> str:
-    lines = text.split('\n')
-    result = []
-
+def _extract_source_and_content_start(lines: list[str]) -> tuple[str | None, int]:
     # --- Step 1: Preserve source comment, strip leading blanks before first heading ---
-    source_line = None
-    content_start = 0
-
     if lines and lines[0].startswith('<!-- source:'):
         source_line = lines[0]
         # Skip blank lines until first heading
         i = 1
         while i < len(lines) and not lines[i].startswith('#'):
             i += 1
-        content_start = i
-    else:
-        content_start = 0
+        return source_line, i
+    return None, 0
 
-    if source_line is not None:
-        result.append(source_line)
-        result.append('')
 
-    # --- Step 2: Process content lines ---
-    content_lines = lines[content_start:]
-
+def _strip_footer_nav(content_lines: list[str]) -> list[str]:
     # --- Step 3: Strip footer nav links from end ---
     # Find the last content line, removing trailing * * * + nav link block
     end = len(content_lines)
@@ -96,13 +84,35 @@ def clean_content(text: str) -> str:
     if temp_end < saved_end and temp_end > 0:
         end = temp_end
 
-    content_lines = content_lines[:end]
+    return content_lines[:end]
 
+
+def _try_merge_split_heading(content_lines: list[str], i: int) -> tuple[str, int] | None:
+    # Handle split headings: "# " alone on a line, followed by heading text on next line
+    line = content_lines[i]
+    split_match = RE_SPLIT_HEADING.match(line)
+    if not split_match:
+        return None
+
+    hashes = split_match.group(1)
+    # Check if next non-empty line is heading text (not another heading or anchor)
+    next_i = i + 1
+    while next_i < len(content_lines) and content_lines[next_i].strip() == '':
+        next_i += 1
+    if next_i < len(content_lines):
+        next_line = content_lines[next_i].strip()
+        # Next line is heading text if it doesn't start with # and isn't an anchor
+        if next_line and not next_line.startswith('#') and not RE_EMPTY_ANCHOR.match(next_line):
+            # Merge: emit combined heading, skip the split prefix
+            return f"{hashes} {next_line}", next_i + 1
+
+    # If no valid next line, just skip the bare heading prefix
+    return "", i + 1
+
+
+def _filter_content_lines(content_lines: list[str]) -> list[str]:
     # --- Step 4: Process remaining lines ---
-    # Track whether previous non-empty line was a split heading prefix
-    prev_was_split_heading = False
-    split_heading_prefix = ''
-
+    result = []
     i = 0
     while i < len(content_lines):
         line = content_lines[i]
@@ -117,33 +127,25 @@ def clean_content(text: str) -> str:
             i += 1
             continue
 
-        # Handle split headings: "# " alone on a line, followed by heading text on next line
-        split_match = RE_SPLIT_HEADING.match(line)
-        if split_match:
-            hashes = split_match.group(1)
-            # Check if next non-empty line is heading text (not another heading or anchor)
-            next_i = i + 1
-            while next_i < len(content_lines) and content_lines[next_i].strip() == '':
-                next_i += 1
-            if next_i < len(content_lines):
-                next_line = content_lines[next_i].strip()
-                # Next line is heading text if it doesn't start with # and isn't an anchor
-                if next_line and not next_line.startswith('#') and not RE_EMPTY_ANCHOR.match(next_line):
-                    # Merge: emit combined heading, skip the split prefix
-                    result.append(f"{hashes} {next_line}")
-                    i = next_i + 1
-                    continue
-            # If no valid next line, just skip the bare heading prefix
-            i += 1
+        merge = _try_merge_split_heading(content_lines, i)
+        if merge is not None:
+            merged_heading, next_i = merge
+            if merged_heading:
+                result.append(merged_heading)
+            i = next_i
             continue
 
         result.append(line)
         i += 1
 
+    return result
+
+
+def _collapse_and_trim(lines: list[str]) -> list[str]:
     # --- Step 5: Collapse multiple consecutive blank lines into one ---
     final = []
     prev_blank = False
-    for line in result:
+    for line in lines:
         is_blank = line.strip() == ''
         if is_blank and prev_blank:
             continue
@@ -154,6 +156,24 @@ def clean_content(text: str) -> str:
     while final and final[-1].strip() == '':
         final.pop()
 
+    return final
+
+
+def clean_content(text: str) -> str:
+    lines = text.split('\n')
+    result = []
+
+    source_line, content_start = _extract_source_and_content_start(lines)
+    if source_line is not None:
+        result.append(source_line)
+        result.append('')
+
+    # --- Step 2: Process content lines ---
+    content_lines = lines[content_start:]
+    content_lines = _strip_footer_nav(content_lines)
+    result.extend(_filter_content_lines(content_lines))
+
+    final = _collapse_and_trim(result)
     return '\n'.join(final) + '\n'
 
 
