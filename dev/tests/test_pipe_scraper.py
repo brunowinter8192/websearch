@@ -110,6 +110,40 @@ async def test_build_configs_produces_live_stealth_adapter():
     assert isinstance(strategy.browser_manager._stealth_adapter._stealth, Stealth)
 
 
+# ---------------------------------------------------------------------------
+# _build_configs(headed=...): M3 — the -g flag's config-level effect
+# ---------------------------------------------------------------------------
+
+def test_build_configs_default_stays_headless():
+    """headed omitted -> headless=True, today's behavior unchanged."""
+    browser_cfg, _ = pipe_scraper_config._build_configs()
+    assert browser_cfg.headless is True
+
+
+def test_build_configs_headed_true_sets_headless_false():
+    browser_cfg, _ = pipe_scraper_config._build_configs(headed=True)
+    assert browser_cfg.headless is False
+
+
+def test_build_configs_headed_does_not_change_anti_bot_posture():
+    """headed only flips headless — the fixed anti-bot calibration this module owns is
+    untouched either way."""
+    browser_cfg, run_cfg = pipe_scraper_config._build_configs(headed=True)
+    assert browser_cfg.enable_stealth is True
+    assert run_cfg.simulate_user is True
+    assert run_cfg.override_navigator is True
+    assert run_cfg.magic is False
+    assert run_cfg.remove_consent_popups is True
+
+
+def test_extract_pipe_config_stamp_reflects_headed():
+    """The config stamp reads headless straight off the real object — no separate wiring
+    needed for headed to reach the log."""
+    browser_cfg, run_cfg = pipe_scraper_config._build_configs(headed=True)
+    stamp = pipe_scraper_config._extract_pipe_config_stamp(browser_cfg, run_cfg, download_delay=1.0,
+                                                             concurrency_per_domain=8)
+    assert stamp["headless"] is False
+
 
 # ---------------------------------------------------------------------------
 # log_pipe_scrape: fail-soft + real write
@@ -215,6 +249,56 @@ async def test_scrape_all_logs_shared_run_id_across_urls(tmp_path, monkeypatch):
     assert by_url["https://x.test/fail"]["http_status"] is None
     assert by_url["https://x.test/fail"]["crawl4ai_success"] is None
     assert by_url["https://x.test/a"]["crawl4ai_success"] is True
+
+
+# ---------------------------------------------------------------------------
+# _scrape_all(headed=...): M3 — the -g flag's wiring into _build_configs
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_scrape_all_threads_headed_into_build_configs(tmp_path, monkeypatch):
+    """_scrape_all's own headed parameter reaches _build_configs unchanged — the wiring this
+    milestone adds, proven the same way the camoufox lane's block_images wiring already is."""
+    log_file = tmp_path / "pipe_scrape_log.jsonl"
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
+    monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
+
+    captured = []
+    real_build_configs = pipe_scraper_config._build_configs
+    def _capturing_build_configs(headed=False):
+        captured.append(headed)
+        return real_build_configs(headed=headed)
+    monkeypatch.setattr(pipe_scraper, "_build_configs", _capturing_build_configs)
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    await pipe_scraper._scrape_all(["https://x.test/a"], output_dir, download_delay=0.01,
+                                    concurrency_per_domain=8, headed=True)
+
+    assert captured == [True]
+
+
+@pytest.mark.asyncio
+async def test_scrape_all_default_headed_is_false(tmp_path, monkeypatch):
+    """headed omitted at the _scrape_all level -> False reaches _build_configs, today's
+    behavior unchanged."""
+    log_file = tmp_path / "pipe_scrape_log.jsonl"
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
+    monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
+
+    captured = []
+    real_build_configs = pipe_scraper_config._build_configs
+    def _capturing_build_configs(headed=False):
+        captured.append(headed)
+        return real_build_configs(headed=headed)
+    monkeypatch.setattr(pipe_scraper, "_build_configs", _capturing_build_configs)
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    await pipe_scraper._scrape_all(["https://x.test/a"], output_dir, download_delay=0.01,
+                                    concurrency_per_domain=8)
+
+    assert captured == [False]
 
 
 @pytest.mark.asyncio

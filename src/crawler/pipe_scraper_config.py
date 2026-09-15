@@ -6,9 +6,9 @@ from src.crawler.pipe_scraper_constants import PAGE_TIMEOUT_MS, DELAY_BEFORE_RET
 
 # FUNCTIONS
 
-def _build_configs() -> tuple[BrowserConfig, CrawlerRunConfig]:
+def _build_configs(headed: bool = False) -> tuple[BrowserConfig, CrawlerRunConfig]:
     browser_cfg = BrowserConfig(
-        headless=True,
+        headless=not headed,
         verbose=False,
         enable_stealth=True,
     )

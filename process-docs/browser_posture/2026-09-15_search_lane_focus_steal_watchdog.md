@@ -195,3 +195,157 @@ after a live probe caught it, not from review alone).
 
 No test was added for this — nothing to regress against without triggering the untested branch,
 and the instruction was explicitly not to guard speculatively.
+
+## M4 — the test suite launched real Chrome, and a tripwire now stops it happening again silently
+
+Same worker session, same day, several milestones later (after M2's acquisition-facts removal and
+M3's pipe_scraper `-g` flag, both in separate process-docs areas). New topic, same area: this is
+squarely about browser launch discipline across all four lanes, not specific to the search lane's
+own watchdog — placed here because `process-docs/browser_posture/` is where this whole session's
+browser-launch-behavior findings already live, not because M4 touches `src/search/browser.py`
+itself (it does not).
+
+### What Main measured, and what I did not catch on my own
+
+Main had told me earlier this session that `dev/tests/` launches no real browser and every browser
+entry point in it is mocked — I took that as given and never independently verified it against a
+real process table. It was wrong: Main re-measured by running each `dev/tests/` file separately
+with an external process-table poller (0.3s interval, matching Chrome/Chromium/camoufox/firefox
+process names) and caught real Chrome processes carrying
+`--user-data-dir=~/.websearch/browser-session` appearing during `test_query_logger.py`'s own run —
+three real launches in a full-suite run, at different debugging ports, a few seconds apart,
+matching three windows the project owner had been reporting and Main had been dismissing.
+
+### Root cause
+
+`dev/tests/test_query_logger.py` had three tests (`test_search_web_workflow_writes_log`,
+`test_search_web_workflow_propagates_diagnosis_into_both_records`,
+`test_search_web_workflow_writes_search_key_matching_cache_key`) calling
+`search_web.search_web_workflow(...)` directly, patching `ENGINES`/`_DEFAULT_ENGINES`/`cache_write`
+but nothing on the browser path. `search_web_workflow`'s own `if _BROWSER_ENGINES &
+selected.keys(): await _prewarm_browser()` gate is keyed on ENGINE NAME STRINGS
+(`"google"`/`"duckduckgo"`), not on whether the actual engine objects are real or mocked — since
+`_DEFAULT_ENGINES` was patched to a set containing those names, the gate fired regardless of
+mocking, `_prewarm_browser()` ran, `get_tab()` (`src/search/browser.py`) launched real Chrome, and
+`kill_own_chrome()` in the same call's own `finally` tore it down before anyone downstream could
+observe it — the exact shape of bug that survives a grep audit and defeats one.
+
+### The fix Main specifically rejected, and why
+
+My first-pass plan was to patch `search_web._BROWSER_ENGINES` to an empty `frozenset()` for the
+three tests, making the gate condition false. Main rejected this: it makes the test's setup assert
+something untrue (that no browser engines were selected, when google/duckduckgo genuinely were),
+and it protects the test only as long as the gate sits exactly where it is today — if the gate
+condition is ever restructured (prewarm made unconditional, moved inside `_run_engine_fanout`,
+etc.), a `_BROWSER_ENGINES` patch stops protecting anything with no signal to anyone that it
+stopped. **Shipped instead:** patch `search_web._prewarm_browser` itself, with an async no-op
+(`_fake_prewarm_browser`, defined once, reused across all three tests) — the one function whose
+entire purpose is starting the browser, so the patch states the actual intent and keeps protecting
+the test regardless of how the gate around it moves.
+
+### The widened check — every other `dev/tests/` file
+
+Read (not grepped) every call site into a workflow-level function that can reach a real browser
+launch, across all four lanes, before touching anything. Full file-by-file verdict lives in the
+chat transcript for this milestone; summary: `test_chromium_scrape.py` (27 call sites),
+`test_camoufox_scrape.py` (21 call sites), `test_pipe_scraper.py` (19 call sites), and
+`test_browser.py` were all already clean — every real launch primitive already mocked in the same
+test function, by an existing established pattern (`_patch_cdp_launch_mechanics`,
+`AsyncCamoufox`/`launch_options` patches, `AsyncWebCrawler` fakes, `Chrome`-class fakes). Only
+`test_query_logger.py`'s three tests were reaching a real launch. Engine-level test files
+(`test_bing_engine.py` etc.) never call `search_with_reason` at all; `test_openalex_engine.py` does
+call the real method, but OpenAlex is the one HTTP-only engine in the active set, confirmed against
+`src/search/DOCS.md`'s own Gotchas, not a browser engine.
+
+### The tripwire — `dev/tests/conftest.py`, new file
+
+Main's second instruction: the three-test fix closes the known cases but does nothing about a
+fourth one someone writes next month, especially given a launch that tears itself down in its own
+`finally` leaves nothing behind to find after the fact — this is precisely how the bug survived
+being reported and dismissed for ten turns. Added an autouse pytest fixture, keyed on the actual
+launch PRIMITIVES rather than on any caller: `src.search.browser.Chrome`,
+`src.scraper.chromium_scrape._self_launch_chrome`, `src.scraper.camoufox_scrape.AsyncCamoufox`,
+`src.crawler.pipe_scraper.AsyncWebCrawler`. Each is replaced, before every test, with a callable
+that calls `pytest.fail(..., pytrace=False)` naming exactly what it tried to launch. A test that
+legitimately needs the real mechanism overrides the same name itself via its own
+`monkeypatch.setattr` inside the test body — since fixture setup always completes before a test
+body runs, and since the autouse fixture and every test's own `monkeypatch` parameter resolve to
+the SAME cached `MonkeyPatch` instance for that test (a standard pytest fixture-caching guarantee,
+not something re-verified per file), the test's own patch simply overwrites the trap for that
+test's duration; monkeypatch's teardown still restores the true original afterward regardless of
+how many times a given attribute was set during the test.
+
+**One real subtlety caught by reading, not assumed:** `chromium_scrape.py` imports
+`_self_launch_chrome` from `chromium_process.py` via `from src.scraper.chromium_process import
+(..., _self_launch_chrome, ...)` — `_acquire_cdp_headed` (in `chromium_scrape.py`) resolves that
+name through chromium_scrape's OWN module globals at call time, not through
+`chromium_process.py`'s. Patching `chromium_process._self_launch_chrome` would have had ZERO effect
+on the actual call site and the tripwire would never have fired for the ad-hoc lane. This exact
+aliasing is already documented in `dev/tests/DOCS.md`'s own `test_chromium_scrape.py` entry
+("called from and monkeypatched on `chromium_scrape` for these orchestration-level tests, since
+`_acquire_cdp_headed`/`try_scrape` resolve them through `chromium_scrape`'s own imported names") —
+the existing `_patch_cdp_launch_mechanics` helper already patches `chromium_scrape._self_launch_chrome`,
+not `chromium_process`'s, for the identical reason. The fixture targets `chromium_scrape._self_launch_chrome`
+to match.
+
+### Verification that existing tests survive the tripwire — checked, not assumed
+
+Per Main's explicit instruction not to assume the claim that legitimate mocks are unaffected: ran
+the full suite after adding the fixture — 374 passed, unchanged from before, with the fixture in
+place. Then wrote two throwaway scratch tests (never staged, deleted immediately after use, per
+this project's own worktree-scratch convention) that deliberately did NOT mock the browser layer —
+one calling `search_web_workflow` with only engine-level mocks (matching the ORIGINAL bug shape
+before the fix), one calling `pipe_scraper._scrape_all` with nothing mocked at all. Both failed
+immediately with the expected `pytest.fail` message naming the exact primitive
+(`src.search.browser.Chrome` and `src.crawler.pipe_scraper.AsyncWebCrawler` respectively) — live
+confirmation the tripwire actually fires, not just that it exists in source. The other two
+primitives (`chromium_scrape._self_launch_chrome`, `camoufox_scrape.AsyncCamoufox`) were not
+separately live-fired this session — same trap-factory code path as the two that were, and this
+was judged sufficient; a future agent doubting this should feel free to re-run the same throwaway-
+scratch-test check against either of those two specifically before relying on it further.
+
+### Outcome
+
+`dev/tests/`: 374 passed, same count as before this milestone (a pure fix + a new suite-wide guard,
+no test count change). Two files changed (`test_query_logger.py`: `_fake_prewarm_browser` helper +
+one new patch line in each of three `with` blocks), one file added (`dev/tests/conftest.py`, 41
+LOC). `dev/tests/DOCS.md` updated: new `conftest.py` module entry, `test_query_logger.py`'s entry
+updated with the fix and its reasoning, the directory's own Role paragraph now states the no-real-
+browser claim is enforced, not just described. Main will re-run the same external-poller
+measurement independently to confirm zero launches across a full suite run — that confirmation, if
+it comes back clean, is the actual close of this milestone; this entry records what shipped and
+why, not a claim that the live measurement has already happened.
+
+### Recap — 2026-09-15, same day, independent live re-measurement closes M4
+
+Main re-ran the exact measurement that originally caught this bug — full suite run from this
+worktree, external process-table poller at the same 0.3s interval — independently, not just a
+suite-green check. Before this milestone's fix: three Chrome launches on the search lane's
+`browser-session` profile, ports 9313/9237/9262, matching the original catch exactly. After: zero
+launches on that profile, zero on the ad-hoc scrape profile, zero `Chrome for Testing`, zero
+camoufox, across the whole run — 374 passed. Main also checked the ONE Chrome process still visible
+during the run by its start time (2026-09-11, the project owner's own, unrelated) rather than
+assuming any visible Chrome process was accounted for — the kind of check this whole milestone
+exists because it was skipped once already (grep instead of measurement, three turns of
+dismissed reports). This closes the "open, not yet independently confirmed" caveat the entry above
+ended on — the live measurement has now actually happened, and it holds.
+
+Main separately confirmed, unprompted, that targeting `chromium_scrape._self_launch_chrome` over
+`chromium_process`'s own copy was the correct call, and specifically endorsed firing the two
+throwaway scratch tests rather than reasoning about the aliasing risk from source alone. No code
+changed in this recap — verification-only, nothing to re-test beyond confirming `dev/tests/`
+still reports 374 at recap time.
+
+`dev/tests/` re-verified at recap time: 374 passed, unchanged.
+
+**For a future agent touching any of the four lanes' launch mechanics:** the aliasing trap this
+milestone caught — a name imported via `from module import name` resolves through the IMPORTING
+module's own globals at call time, not the defining module's — is not specific to
+`_self_launch_chrome`. Before patching ANY function-under-test by its defining module's own
+attribute path, grep the actual call site's module for its own `from ... import ...` line and patch
+THAT module's copy instead. `dev/tests/DOCS.md`'s `test_chromium_scrape.py` entry already states
+this pattern generally ("called from and monkeypatched on `chromium_scrape`... since
+`_acquire_cdp_headed`/`try_scrape` resolve them through `chromium_scrape`'s own imported names") —
+this session's contribution was applying that same already-documented pattern to a NEW guard
+(`dev/tests/conftest.py`) that didn't exist when that documentation was written, not discovering it
+fresh.
