@@ -10,6 +10,10 @@ purpose: this probe measures why PRODUCTION fails, not whether a more-stealthed 
 succeed). SOCS consent cookie + inline-consent click-through are also copied verbatim, so a
 probe-only consent wall cannot masquerade as a DOM break or a block.
 
+Launch/watchdog/teardown go through dev/_lib/browser_launch.py (dev-wide shared helper, see its own
+DOCS.md) — `open -g` alone only suppresses activation at the launch moment, so the helper also runs
+a PID-keyed focus-steal reclaim watchdog for this probe's whole run.
+
 Self-contained: does NOT import src/ (dev-script isolation, matching dev/search_pipeline/
 26_brave_probe.py's own convention) — the selectors, cookie injection, and consent handling below
 are a COPY of google.py's shape as it stood 2026-09-15, not a shared import; this probe keeps
@@ -38,18 +42,20 @@ constant below for the exact value and why.
 import asyncio
 import json
 import logging
-import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse, parse_qs
 
-from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
-from pydoll.commands import TargetCommands
 from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+
+from dev._lib.browser_launch import launch_backgrounded_chrome, close_tab, teardown
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
@@ -168,7 +174,7 @@ return JSON.stringify({
 });
 """
 
-_browser = None
+_handle = None
 
 
 # ORCHESTRATOR
@@ -199,7 +205,7 @@ async def run_probe() -> None:
                     print(f"  (pacing {NAV_DELAY_S}s before next navigation)", file=sys.stderr)
                     await asyncio.sleep(NAV_DELAY_S)
     finally:
-        await close_browser()
+        await _close_browser()
 
     report_path = write_report(records, run_ts, html_run_dir)
     outcome_counts = _count_outcomes(records)
@@ -212,10 +218,6 @@ async def run_probe() -> None:
 def _load_queries() -> list[dict]:
     with open(QUERIES_PATH, encoding="utf-8") as f:
         return json.load(f)["queries"]
-
-
-def _kill_stale_chrome() -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
 
 
 def _build_options() -> ChromiumOptions:
@@ -231,46 +233,23 @@ def _build_options() -> ChromiumOptions:
     return options
 
 
-def _open_background_process_creator(command: list[str]):
-    import subprocess as _sp
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
-    return _sp.Popen(open_cmd, stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
-
-
 async def _new_tab():
-    global _browser
-    if _browser is None:
-        _kill_stale_chrome()
-        from pydoll.browser.managers import BrowserProcessManager
-        _browser = Chrome(_build_options())
-        _browser._browser_process_manager = BrowserProcessManager(
-            process_creator=_open_background_process_creator
-        )
-        await _browser.start()
-    return await _browser.new_tab()
+    global _handle
+    if _handle is None:
+        _handle = await launch_backgrounded_chrome(SESSION_DIR, _build_options())
+    return await _handle.browser.new_tab()
 
 
 async def _kill_tab(tab) -> None:
-    global _browser
-    target_id = getattr(tab, "_target_id", None)
-    if _browser is None or target_id is None:
-        return
-    try:
-        await asyncio.wait_for(
-            _browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0
-        )
-    except Exception as e:
-        logging.warning("kill_tab failed (target_id=%s): %s", target_id, e)
-    finally:
-        _browser._tabs_opened.pop(target_id, None)
+    if _handle is not None:
+        await close_tab(_handle.browser, tab)
 
 
-async def close_browser() -> None:
-    global _browser
-    if _browser is not None:
-        await _browser.stop()
-        _browser = None
+async def _close_browser() -> None:
+    global _handle
+    if _handle is not None:
+        await teardown(_handle)
+        _handle = None
 
 
 def _extract_value(result):
