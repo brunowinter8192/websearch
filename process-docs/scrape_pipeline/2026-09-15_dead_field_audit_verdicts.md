@@ -158,3 +158,29 @@ headers present), not a new one.
 actually lands correctly in a real `scrape_log.jsonl` record. That is the project owner's own
 verification step, per the standing no-live-browser rule — this entry stops at what a fake-result
 unit test and a source trace can show.
+
+## Recap — 2026-09-15, same day, live confirmation closes the outstanding item
+
+The project owner ran a real scrape of `https://example.com/` from this worktree and read the
+`scrape_log.jsonl` record it wrote: `content_type: "text/html"` — a real, non-null value, the first
+one this field has ever carried across the entire 14-day window that produced this milestone.
+`http_status` 200, field count down from 22 to 21 (`crawl4ai_fallback_fetch_used` confirmed absent),
+suite re-run at 377 green. The outstanding item this entry named above is closed, in the fix's
+favor: it works against a real `CrawlResult` from a real navigation, not only against the fake this
+worker's own tests were limited to under the standing no-live-browser rule.
+
+**The lesson, stated plainly because it is the real point of this milestone, not a footnote to it:**
+this field sat null in 91 consecutive records and read as "empty" to everyone who looked at the
+log, including the project owner earlier the same day. It was not empty. It was unreachable. A field
+guarded by `hasattr(result, "headers")` against an attribute name that does not exist on the object
+at all fails silently, forever, with no signal anywhere in the data that distinguishes "this is
+genuinely absent" from "this code path can never run." The audit that started this milestone
+(`adhoc_output_audit_2026-09-15.md`) could not have told the two apart by looking at the log alone —
+91 nulls looks identical either way. The only way to tell them apart was to read the actual class
+the code was checking `hasattr` against, which is the whole reason this milestone was scoped as a
+code-reading task and not a further measurement pass. A future agent staring at a field that is
+constant across an entire retention window should treat "structurally unreachable" as at least as
+likely as "genuinely empty," and check the former by reading the object's real shape before trusting
+the latter.
+
+`dev/tests/`: 377 passed, unchanged from before this recap (a docs-only addition).
