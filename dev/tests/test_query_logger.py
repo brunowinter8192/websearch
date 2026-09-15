@@ -33,6 +33,10 @@ def _make_mock_engine_with_reason(
     return eng
 
 
+async def _fake_prewarm_browser() -> None:
+    return None
+
+
 # Current-time ts — log_janitor prunes lines with a "ts" older than the 14-day retention window on every write.
 def _now_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -180,6 +184,7 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
         patch.object(search_web, "ENGINES", mock_engines),
         patch.object(search_web, "_DEFAULT_ENGINES", {"google", "duckduckgo"}),
         patch.object(search_web, "cache_write"),
+        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
     ):
         await search_web.search_web_workflow("test query", language="en")
 
@@ -235,6 +240,7 @@ async def test_search_web_workflow_propagates_diagnosis_into_both_records(tmp_pa
         patch.object(search_web, "ENGINES", mock_engines),
         patch.object(search_web, "_DEFAULT_ENGINES", {"google", "duckduckgo"}),
         patch.object(search_web, "cache_write"),
+        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
     ):
         await search_web.search_web_workflow("test query", language="en")
 
@@ -291,6 +297,7 @@ async def test_search_web_workflow_writes_search_key_matching_cache_key(tmp_path
         patch.object(search_web, "ENGINES", mock_engines),
         patch.object(search_web, "_DEFAULT_ENGINES", {"google"}),
         patch.object(search_web, "cache_write"),
+        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
     ):
         await search_web.search_web_workflow("test query", language="en")
 

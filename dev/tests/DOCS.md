@@ -7,7 +7,7 @@ The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/
 and `src/log_janitor.py` (as of 2026-09-09) — pure-logic branch coverage,
 library-upgrade guards (live calls into installed `crawl4ai`), and production-failure regression
 repros. Almost entirely no network/browser dependency: I/O boundaries (HTTP clients, browser
-automation, subprocess) are mocked per-test; production logic itself is exercised for real. The one
+automation, subprocess) are mocked per-test; production logic itself is exercised for real — as of the M4 milestone (2026-09-15) this is enforced, not just described: `conftest.py`'s autouse tripwire fails any test outright the moment it reaches a real browser-launch primitive unmocked (see its own entry below). The one
 deliberate exception is `test_discovery.py`/`test_seed_feeders.py`'s fixture-backed sections, which
 run real network (plain HTTP only — neither file constructs a `crawl4ai` browser), but ONLY ever
 against the local `dev/url_discovery/_fixture_site.py` server, never a live host or a third-party
@@ -30,7 +30,21 @@ production log paths.
 
 ## Modules
 
-### test_bing_engine.py (106 LOC)
+### conftest.py (41 LOC)
+**Purpose:** Suite-wide autouse tripwire (M4, 2026-09-15) — replaces `src.search.browser.Chrome`,
+`src.scraper.chromium_scrape._self_launch_chrome`, `src.scraper.camoufox_scrape.AsyncCamoufox`, and
+`src.crawler.pipe_scraper.AsyncWebCrawler` with a failing stand-in before every test, so a test that
+reaches a real browser-launch primitive without having mocked it fails loudly and by name instead
+of silently opening a real window. Not a fallback: it produces no output and refuses to let the
+test continue. A test's own `monkeypatch.setattr` on the same target, inside the test body, runs
+after this fixture's setup and simply wins for that test's duration — this is a standard pytest
+fixture-ordering guarantee, not something each test has to opt into. See
+`process-docs/browser_posture/` for the investigation this closes: three real Chrome launches per
+full suite run, all inside `test_query_logger.py`, invisible to a grep-only audit.
+**Calls out:** `src.search.browser`, `src.scraper.chromium_scrape`, `src.scraper.camoufox_scrape`,
+`src.crawler.pipe_scraper` (import only, to reach the four names above).
+
+### test_bing_engine.py
 **Purpose:** `src/search/engines/bing.py` — `_clean_url` (ck/a redirect unwrap, real captured
 sample), `_build_results`. `_classify_diagnosis` coverage removed with the function itself (the
 guessed-verdict-removal milestone) — its marker/ready_state inputs are now plain diagnosis fields.
@@ -134,10 +148,19 @@ given a valid externally-supplied anchor (the regression guard for the anchor-ra
 direct coverage; the scrape-lane tests only mock it as a no-op). Engine field present and correct
 per lane (chromium/camoufox), existing fields unaffected, empty-content still returns `None`.
 
-### test_query_logger.py (358 LOC)
+### test_query_logger.py (365 LOC)
 **Purpose:** `src/search/query_logger.py` (`log_query` fail-soft JSONL write) + per-engine timing
 capture in `src/search/search_web.py` (`_engine_with_timing`, `search_web_workflow` log shape,
 `search_key` matches real `cache.cache_key`) + `cli.py:_log_drilldown` via an isolated subprocess.
+As of the M4 milestone (2026-09-15), the three tests calling `search_web_workflow` directly also
+patch `search_web._prewarm_browser` with an async no-op (`_fake_prewarm_browser`) — before this
+fix, `_DEFAULT_ENGINES={"google","duckduckgo"}` intersecting `_BROWSER_ENGINES` made
+`search_web_workflow` launch a REAL Chrome via `get_tab()` on every one of these three tests, torn
+down again in the same call's own `finally` before anyone could observe it. Patching
+`_prewarm_browser` itself (the one function whose entire purpose is starting the browser) rather
+than `_BROWSER_ENGINES` keeps the fix correct even if the gate condition around it moves later —
+see `process-docs/browser_posture/` for the investigation and why `_BROWSER_ENGINES` was
+deliberately NOT the patch target.
 **Gotchas:** the subprocess test resolves repo root as `Path(__file__).parent.parent.parent`
 (three levels — `dev/tests/<file>` → `dev/tests` → `dev` → repo root); this depth was silently
 wrong (`.parent.parent`) for one relocation cycle when the file lived at `tests/` before the
