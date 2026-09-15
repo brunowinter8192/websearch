@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import subprocess
+import time
 from pathlib import Path
 
 import psutil
@@ -9,6 +10,7 @@ from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
 from pydoll.browser.managers import BrowserProcessManager
 from pydoll.commands import TargetCommands
+from pydoll.connection import ConnectionHandler
 
 from src.search import browser_lock
 from src import death_pipe
@@ -21,6 +23,7 @@ LOCK_PATH = Path(SESSION_DIR).parent / "browser-session.lock"
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
 
 FOCUS_STEAL_POLL_INTERVAL_S = 0.25
+CDP_PORT_WAIT_TIMEOUT_S = 10.0
 
 BACKGROUNDING_FLAGS = [
     "--disable-background-timer-throttling",
@@ -29,7 +32,6 @@ BACKGROUNDING_FLAGS = [
 ]
 
 _browser = None
-_tab = None
 _init_lock = asyncio.Lock()
 _lock_handle: browser_lock.LockHandle | None = None
 _owned_pids: list[int] = []
@@ -47,6 +49,7 @@ def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
 def build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.add_argument("--no-startup-window")
     options.block_popups = True
     options.block_notifications = True
 
@@ -92,6 +95,22 @@ def _record_own_pids() -> None:
     logger.info("Own Chrome pids: %s", _owned_pids)
 
 
+def _clear_stale_devtools_port() -> None:
+    Path(SESSION_DIR, "DevToolsActivePort").unlink(missing_ok=True)
+
+
+def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
+    port_file = Path(user_data_dir) / "DevToolsActivePort"
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if port_file.exists():
+            lines = port_file.read_text().splitlines()
+            if lines and lines[0].strip().isdigit():
+                return int(lines[0].strip())
+        time.sleep(0.1)
+    raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
+
+
 def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
     procs = []
     for pid in pids:
@@ -110,7 +129,7 @@ def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
 
 
 async def get_tab():
-    global _browser, _tab, _lock_handle
+    global _browser, _lock_handle
     async with _init_lock:
         if _browser is None:
             logger.info("Acquiring cross-process browser-session lock")
@@ -120,23 +139,29 @@ async def get_tab():
             try:
                 logger.info("Starting Chrome session")
                 _reap_session_profile()
+                _clear_stale_devtools_port()
                 anchor_pid = _get_frontmost_pid()
                 options = build_options()
                 _browser = Chrome(options)
                 _browser._browser_process_manager = BrowserProcessManager(
                     process_creator=_open_background_process_creator
                 )
-                _tab = await _browser.start()
+                _browser._setup_user_dir()
+                binary_location = _browser.options.binary_location or _browser._get_default_binary_location()
+                _browser._browser_process_manager.start_browser_process(
+                    binary_location, 0, _browser.options.arguments
+                )
+                port = await asyncio.to_thread(_wait_for_devtools_port, SESSION_DIR, CDP_PORT_WAIT_TIMEOUT_S)
+                _browser._connection_port = port
+                _browser._connection_handler = ConnectionHandler(port)
                 _record_own_pids()
                 death_pipe.spawn_watchdog(_owned_pids)
                 _spawn_focus_watchdog(_owned_pids, anchor_pid)
             except Exception:
                 _browser = None
-                _tab = None
                 _lock_handle.release()
                 _lock_handle = None
                 raise
-    return _tab
 
 
 def _get_frontmost_pid() -> int | None:
@@ -212,23 +237,21 @@ async def kill_tab(tab) -> None:
 
 
 async def close_browser():
-    global _browser, _tab
+    global _browser
     await _cancel_focus_watchdog()
     if _browser is not None:
         await _browser.stop()
         _browser = None
-        _tab = None
 
 
 async def kill_own_chrome() -> None:
-    global _browser, _tab, _owned_pids, _lock_handle
+    global _browser, _owned_pids, _lock_handle
     if _browser is not None:
         try:
             await close_browser()
         except Exception as e:
             logger.warning("close_browser failed (Chrome likely already dead): %s", e)
             _browser = None
-            _tab = None
     if _owned_pids:
         logger.info("Killing own Chrome (safety net): pids=%s", _owned_pids)
         _terminate_then_kill(_owned_pids, timeout_s=10.0)
