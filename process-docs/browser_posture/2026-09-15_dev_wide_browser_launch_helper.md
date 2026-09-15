@@ -120,6 +120,266 @@ real probe run, watched by a human, matching exactly how the search-lane fix abo
 verified live before being trusted. That run is explicitly the next step, not part of what shipped
 in this entry.
 
+## `--no-startup-window` on the search lane — 2026-09-15, same day, third round
+
+Same worker session. Milestone: the scrape lane never flickers ("der scrape ist perfekt im
+background", user's own words); the search lane still does — Main measured 2 focus steals per
+`search_web` run (0.5s, 1.03s) on integration, both reclaimed but visible. Both lanes use `open -g
+-n` and both now have a watchdog. Main found the difference by reading both launch commands
+side-by-side: the scrape lane's `_self_launch_chrome` (`src/scraper/chromium_process.py`) passes
+`--no-startup-window`; the search lane's `_open_background_process_creator`
+(`src/search/browser.py`) does not. `--no-startup-window` means Chrome opens zero windows at
+launch — no window-creation event for the OS to activate at all, not merely a reclaim after one.
+
+**Change shipped:** one line, `options.add_argument("--no-startup-window")` in `build_options()`
+(`src/search/browser.py`). Nothing else in the launch path, the watchdog, PID keying, or teardown
+touched.
+
+**Whether pydoll already sets it or rejects it as a duplicate — checked in the installed package,
+not assumed:** `venv/lib/python3.14/site-packages/pydoll/browser/managers/
+browser_options_manager.py::add_default_arguments()` already calls `self.options.add_argument
+('--no-first-run')` and `('--no-default-browser-check')` unconditionally during
+`Chrome.start()` — this is exactly why Main hit `ArgumentAlreadyExistsInOptions` adding
+`--no-first-run` by hand earlier tonight; pydoll already owns that flag. Grepped the same file and
+the rest of `pydoll/browser/` for `no-startup-window`/`no_startup_window`: zero matches anywhere in
+the installed package. Safe to add — confirmed by reading the actual installed source, not by
+absence of an error in a run I'm not allowed to make.
+
+**A structural risk found by reading `Chrome.start()`, not yet resolved, and not resolvable without
+a live launch:** `pydoll/browser/chromium/base.py::start()` does `valid_tab_id = await
+self._get_valid_tab_id(await self.get_targets())` immediately after the process comes up —
+`_get_valid_tab_id` raises `NoValidTabFound` if `get_targets()` returns no `type == 'page'` entry.
+This assumes Chrome already has an existing tab the moment `.start()` asks for one. The scrape lane
+never hits this: it does not call `.start()` at all — it launches the process directly, waits for
+the DevTools port file, then hands a `cdp_url` to crawl4ai/patchright's `connect_over_cdp` path,
+which creates its OWN first page via `context.new_page()` (a fresh `Target.createTarget`) rather
+than looking for one that's already there. `--no-startup-window` is safe for that pattern by
+construction. Whether Chromium's CDP target list is truly empty of `page`-type entries under
+`--no-startup-window` + `--remote-debugging-port` — and therefore whether pydoll's `.start()` will
+raise `NoValidTabFound` on every single search — is NOT something I could establish by reading
+alone, and I did not launch a browser to check it, per the standing rule for this milestone. If this
+is wrong, the failure will not be silent or subtle: `get_tab()`'s own try/except will catch the
+raised exception, reset `_browser`/`_tab`, release the lock, and re-raise — every engine's
+`search_with_reason` would fail loudly and identically, not hang or degrade quietly. **If Main's
+live run produces exactly that (an exception naming `NoValidTabFound`, or every engine failing
+identically on the very first tab it tries to get), that is this mechanism, and the fix is reverting
+the one `add_argument` line above — not a deeper investigation.** Did not attempt any workaround
+(e.g. bypassing `.start()`'s own tab lookup and calling `new_tab()` manually instead, mirroring the
+scrape lane's own explicit-create pattern more closely) — that is a materially bigger change than
+one flag, was not asked for, and risks its own new bugs in a launch path three other things already
+depend on (the watchdog's anchor capture, `_record_own_pids`, `death_pipe`).
+
+**Second, separate difference — not touched, per explicit instruction:** the scrape lane launches a
+dedicated, dynamically-resolved Chromium bundle; the search lane launches the user's real "Google
+Chrome". Whether this also matters is Main's to decide after measuring `--no-startup-window` alone.
+
+**Test:** `dev/tests/test_browser.py`, two new tests — `test_build_options_carries_no_startup_window_
+flag` (`"--no-startup-window" in browser.build_options().arguments`, a pure function call, no
+mocking needed) and `test_open_background_process_creator_forwards_no_startup_window_into_open_
+command` (mocks `browser.subprocess.Popen`, captures the argv `_open_background_process_creator`
+actually invokes, asserts the flag survives the `command[1:]` reslice into the final `open` argv —
+the "launch command carries the flag" proof the milestone asked for). Neither test touches
+`browser.Chrome`, so `dev/tests/conftest.py`'s launch-primitive tripwire does not fire for either.
+Suite: 377 -> 379 passed (two new tests, nothing else changed count).
+
+**Callers checked, via import-grep, not assumed:** `build_options`/`_open_background_process_creator`
+are module-private to `src/search/browser.py` — grepped the whole repo for both names; the only call
+site for either is `get_tab()` in the same file. No external caller imports them directly. Grepped
+`from src.search.browser import` separately: `search_web.py` (`get_tab`, `kill_own_chrome`), all 6
+browser engine files (`new_tab`, `kill_tab`), and 20+ `dev/search_pipeline/*.py` scripts (`new_tab`/
+`close_browser` direct callers) — none of these call `build_options` themselves or inspect its
+return value; they only reach it transitively through `get_tab()`, whose signature and return type
+are unchanged. Their own code cannot observe this change except through whether the browser launches
+at all (the one risk above, which is Main's live run to confirm or refute).
+
+## REVERTED same day — the predicted failure happened exactly as predicted
+
+Main ran one live `search_web` search against this change. All 7 engines returned 0. The log:
+`No valid tab found among 0 targets`, then `Engine browser error: No valid attached tab found`,
+once per engine. This is exactly the failure mode named in the section above before Main ran
+anything — written down as a risk, now confirmed as the actual outcome, not a hypothesis anymore.
+
+**Reverted:** `options.add_argument("--no-startup-window")` in `build_options()`
+(`src/search/browser.py`), and the two tests that asserted on it
+(`test_build_options_carries_no_startup_window_flag`,
+`test_open_background_process_creator_forwards_no_startup_window_into_open_command`,
+`dev/tests/test_browser.py`) — reverted via `git checkout <pre-change-commit> --
+src/search/browser.py dev/tests/test_browser.py dev/tests/DOCS.md src/search/DOCS.md`, restoring
+all four files byte-for-byte to their state before the flag was added (LOC counts, Purpose prose,
+everything). `dev/tests/`: 377 passed, back to the pre-change baseline. The dev-wide launch helper
+milestone earlier in this same file (`dev/_lib/browser_launch.py` and everything documenting it) is
+untouched by this revert — only the search-lane flag attempt and its direct evidence are undone.
+
+**The finding, stated for whoever picks this up next, so nobody rediscovers it by hitting the same
+wall:**
+
+- The search lane flickers because Chrome creates a window at launch; the scrape lane does not,
+  because it passes `--no-startup-window`.
+- Adding that flag to the search lane ALONE does not work. The reason is not the flag itself — the
+  flag does exactly what it says, Chrome opens with zero windows. The reason is that pydoll's
+  `Chrome.start()` (`pydoll/browser/chromium/base.py`) requires an EXISTING page-type CDP target the
+  instant it asks for one (`_get_valid_tab_id(await self.get_targets())`, raises `NoValidTabFound`
+  otherwise) — and the search lane's whole `get_tab()` flow is built around calling `.start()` and
+  taking whatever tab it hands back. The scrape lane never calls `.start()` at all: it self-launches
+  the process directly, waits for the DevTools port file to appear, then connects over CDP
+  (`BrowserConfig(cdp_url=...)` + patchright's `connect_over_cdp`) and creates its OWN first page via
+  `context.new_page()` — a fresh `Target.createTarget`, not a lookup for one already there. Starting
+  with zero windows is only survivable if whatever attaches next creates its own first target instead
+  of expecting to find one.
+- **Closing this properly means the search lane adopting the scrape lane's whole launch shape, not
+  one flag: self-launch the process directly (not `Chrome(options).start()`), wait for the devtools
+  port file, connect over CDP, create the first page itself.** That is a real rework of `get_tab()`'s
+  launch sequence — it has to thread through the anchor-pid capture (currently taken right before
+  `Chrome(options)`/`.start()`), `_record_own_pids`, and `death_pipe.spawn_watchdog`, all of which
+  currently assume `.start()`'s return value is the first tab. Whether pydoll exposes a lower-level
+  "attach to an already-running CDP endpoint and create your own tab" path (something closer to its
+  own `connect(ws_address)` method, which itself currently does `tabs = await
+  self.get_opened_tabs(); return tabs[0]` — same "assumes an existing tab" shape, not checked in
+  detail this session) or whether the search lane needs to drop pydoll's `Chrome` class for its own
+  launch step entirely, the way the scrape lane dropped patchright's own `launch()` in favor of
+  self-launch-plus-connect, is the open question for whoever does this next.
+- **Measured evidence, both Main's, both 2026-09-15:** on the CURRENT (flag-less) integration state,
+  the search lane steals focus twice per `search_web` run, 0.5s and 1.03s, each reclaimed by the
+  existing PID-keyed watchdog. With `--no-startup-window` added alone, zero engines return results
+  (`No valid tab found among 0 targets` / `No valid attached tab found`, all 7 engines, one live run).
+
+This is unfinished work with the cause identified, not a failed attempt to be forgotten. The watchdog
+already bounds every steal to close to a second, so the search lane is not broken today — it is
+exactly as good as it was before this sub-milestone, flickering but recoverable. The next step is
+the launch-shape rework above, not another attempt at threading the single flag through pydoll's
+`.start()`.
+
+## The full rework — 2026-09-15, same day, fourth round: search lane adopts the scrape lane's shape
+
+Same worker session. This is the launch-shape rework the section above named as the actual fix.
+`get_tab()` (`src/search/browser.py`) no longer calls `Chrome.start()` or `Chrome.connect()` at all.
+
+**Three things this needed that weren't obvious from the two source files alone, each verified by
+reading the installed pydoll source, not assumed:**
+
+1. **No `connect()` call is needed.** `ConnectionHandler.execute_command()` resolves its own
+   WebSocket address lazily, on first use, via `get_browser_ws_address(port)`
+   (`pydoll/utils/general.py`) — a plain `GET http://localhost:{port}/json/version`, a browser-level
+   HTTP endpoint Chrome serves with zero tabs open. So the "connect" step is just: get the right port
+   into the `Browser` instance, and let the first real CDP call do the rest. `Chrome.connect()`
+   itself was checked and confirmed broken the same way `.start()` was (`tabs = await
+   self.get_opened_tabs(); return tabs[0]` — `IndexError` on an empty list) and is not called
+   anywhere in the new code.
+2. **`Chrome.start()`'s `_setup_user_dir()` is the ONLY place `block_popups`/`block_notifications`/
+   `browser_preferences` reach disk.** These are not CLI arguments — `ChromiumOptions.block_popups`
+   etc. write into an in-memory `_browser_preferences` dict, and `_setup_user_dir()` is what
+   serializes that dict into `<user-data-dir>/Default/Preferences` before Chrome reads its profile.
+   Skipping `.start()` without also calling `_setup_user_dir()` would have silently dropped these —
+   a real behavior change wearing a "just a launch mechanism change" disguise. `get_tab()` now calls
+   `_browser._setup_user_dir()` directly, before self-launching.
+3. **A stale-`DevToolsActivePort`-file race the scrape lane cannot have.** The scrape lane uses a
+   fresh `tempfile.mkdtemp()` per scrape, so no prior file can ever be sitting there. This module
+   reuses one persistent `SESSION_DIR` across every run — a crashed prior Chrome can leave the file
+   behind, and the new port-wait loop could read that stale, dead port on its very first poll instead
+   of waiting for the new one. Fixed by unlinking the file (`_clear_stale_devtools_port()`) right
+   after `_reap_session_profile()`, before every launch.
+
+**The new sequence in `get_tab()`:** lock -> reap stale processes -> clear stale devtools-port file
+-> capture the focus anchor (unchanged position, before anything launches) -> `Chrome(options)`
+(construction alone already runs pydoll's own `--no-first-run`/`--no-default-browser-check`
+defaulting, confirmed by reading `ChromiumOptionsManager.add_default_arguments()` — this is why
+`--no-first-run` collided when added by hand in the reverted attempt) -> `_setup_user_dir()` ->
+self-launch via the existing `_open_background_process_creator` with `--remote-debugging-port=0`
+(OS-assigned, matching the scrape lane, not a guessed port) -> wait for `DevToolsActivePort` -> patch
+`_browser._connection_port`/`_browser._connection_handler` to the real, now-known port (both needed:
+`_connection_port` feeds every future `Tab`'s own kwargs via `_get_tab_kwargs`, `_connection_handler`
+is what browser-level commands go through) -> record own PIDs -> spawn `death_pipe` watchdog -> spawn
+the focus watchdog. No tab is created during any of this.
+
+**`_tab` is gone, not left as a `None` vestige.** Checked every consumer via grep before deciding:
+`get_tab()`'s return value was discarded by both its only two callers
+(`search_web.py::_prewarm_browser`, `browser.py::new_tab` itself) and by nothing else in `src/` or
+`dev/`. Every engine already creates its own tab via `new_tab()` -> `_browser.new_tab()`, which
+issues `TargetCommands.create_target` directly with no dependency on a pre-existing tab (confirmed by
+reading pydoll's `new_tab()` — this is exactly why engines were never affected by any of this). The
+module global, its two reset sites (`close_browser()`, `kill_own_chrome()`'s except-branch), and
+`get_tab()`'s `return _tab` are all removed; `get_tab()` now returns `None` implicitly, matching what
+every caller already assumed.
+
+**Deliberately not replicated, and said once so it isn't rediscovered as a mystery:** `.start()`'s
+proxy-credential configuration (`_configure_proxy`) and `--user-agent=` override plumbing
+(`_apply_user_agent_override`/`_setup_worker_user_agent_override`) are not called anywhere in the new
+sequence. `build_options()` sets neither a `--proxy-server=` nor a `--user-agent=` argument today, so
+both are dead code paths regardless of launch mechanism — this is a no-op gap, not an observed
+regression. Whoever adds proxy or UA-override support later needs to wire the equivalent calls into
+`get_tab()` explicitly; they will not come back "for free" by touching `build_options()` alone the way
+`webrtc_leak_protection`/`BACKGROUNDING_FLAGS` do. Documented in `src/search/DOCS.md`'s Gotchas too.
+
+**`--remote-debugging-port=0` reaching the actual `open` command, confirmed by reading, not trusted:**
+`BrowserProcessManager.start_browser_process(binary_location, port, arguments)` builds `command =
+[binary_location, f'--remote-debugging-port={port}', *arguments]` and hands the whole list to
+`_process_creator`. `_open_background_process_creator` does `args = command[1:]` — slices off only
+`command[0]` (the resolved binary path, unused since `open -a "Google Chrome"` targets the bundle by
+name) — so `--remote-debugging-port=0` and the rest of `arguments` both survive into the final `open
+... --args` list unchanged. Verified against the actual `start_browser_process` source before relying
+on it, per the specific instruction to check this rather than trust that passing `0` was enough.
+
+**Tests:** `dev/tests/test_browser.py`'s three `get_tab()` tests were rewritten, not patched, per
+instruction. `FakeChrome` lost its `.start()`/`"fake-tab"` shape and gained `_setup_user_dir()`
+(flag-setting) and `_get_default_binary_location()` stand-ins; a new `FakeProcessManager` records
+`start_browser_process(binary_location, port, arguments)` calls instead of returning `None` (the old
+`BrowserProcessManager` mock, `lambda process_creator: None`, would have made the new code crash on
+`_browser_process_manager.start_browser_process(...)` — caught before it became a real bug, not
+after). `_wait_for_devtools_port` and `ConnectionHandler` are mocked at the module boundary in every
+`get_tab()` test — no real filesystem polling or websocket construction. The ordering assertion
+(`lock -> reap -> anchor -> launch -> record -> watchdog -> focus_watchdog`) is kept exactly as it
+was, per instruction; it turned out the pre-existing `dev/tests/DOCS.md` prose for this test already
+had "launch" and "anchor-capture" in the wrong order relative to the actual code (a pre-existing doc
+drift, not something this session introduced) — corrected while touching that line anyway. One new
+test added (`test_get_tab_self_launches_with_port_zero_and_forwards_arguments`) asserting the port-0
+and `--no-startup-window` claims above directly against `FakeProcessManager.start_calls`, not just
+against `build_options()` in isolation. Suite: 377 -> 378 (one net new test; the three rewrites
+replace their old bodies in place).
+
+**Callers checked, via import-grep, not assumed:** grepped `from src.search.browser import` across
+the whole repo — `search_web.py` (`get_tab`, `kill_own_chrome`), all 6 browser engine files
+(`new_tab`, `kill_tab`), 20+ `dev/search_pipeline/*.py` scripts (`new_tab`/`close_browser` direct
+callers), and `dev/tests/conftest.py` (imports the module itself to patch `browser.Chrome`, still the
+same patch point, still fires the same way — confirmed by the suite staying green). None of these
+call `build_options`, `get_tab`'s removed internals, or read `get_tab()`'s return value — every one
+of them reaches this only through `get_tab()`/`new_tab()`/`kill_tab()`/`close_browser()`, whose
+external signatures are unchanged.
+
+**What I could not verify, and what remains outstanding:** whether this actually launches, whether
+all 7 engines return results, and whether the flicker is gone or merely reduced. I did not launch a
+browser at any point in this milestone, per the standing rule. That live run, and the frontmost-app
+measurement around it, is Main's to produce next.
+
+## Closed — 2026-09-15, same day, live confirmation
+
+Main ran one live `search_web` on this worktree after the rework landed. All 7 engines reached, no
+`NoValidTabFound` anywhere — the exact failure mode the one-line attempt hit is gone. Per-engine
+counts from the `workflow_summary` record: duckduckgo 10, startpage 10, openalex 100, bing 3, google
+1, brave 0, yandex 0 — brave/yandex at their pre-existing block rate, nothing regressed relative to
+before this whole sub-milestone started. This closes the self-launch rework: the search lane now
+launches with no window at all, matching the scrape lane's shape, with the pydoll-internals risk
+identified in advance (`NoValidTabFound`) resolved rather than rediscovered live a second time.
+
+Not yet separately re-measured in this session: the frontmost-app flicker count with the self-launch
+in place (the earlier RUN 1/RUN 2 tab-reuse measurement earlier in this file was against the
+`.start()`-based code, before this rework). Given no window is created at launch anymore, the
+launch-moment steal that motivated this whole line of work should be gone by construction — but that
+is reasoning, not a new measurement, and is worth a fresh frontmost-app poll in a future session if
+the question comes up again.
+
+**One unrelated finding Main surfaced while doing the live run, recorded here since this file is
+where the session's browser-launch findings live, not because it's part of this milestone:** the
+printed breakdown showed `1` for every engine that returned anything, not each engine's real count
+(duckduckgo 10, openalex 100, etc.). Cause: `search_web.py`'s post-dedup pool cap sizes every engine's
+pool to Google's pool size (`src/search/DOCS.md`'s own Gotchas already documents "Post-dedup pool cap
+keys off Google's pool size — if Google was CAPTCHA'd or excluded, K falls back to 10"). Google
+returned `1` result this run (not CAPTCHA'd, not excluded — just genuinely one result for whatever
+this run's query was), so every other engine's real pool got silently truncated down to `1` in the
+printed table despite having many more results underneath. Out of scope for this milestone, not
+touched — Main is recording it separately in the sprint writeup.
+
+`dev/tests/`: 378 passed at recap time, unchanged since the implementation commit.
+
 ## Main's live focus measurement, and a second finding it produced
 
 Main ran the focus proof this entry left outstanding: the helper, driven from a throwaway `/tmp`

@@ -127,14 +127,20 @@ it is set to a non-integer string (the removed silent-fallback-to-14 behavior's 
 `src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
 `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
-### test_browser.py (400 LOC)
+### test_browser.py (446 LOC)
 **Purpose:** `src/search/browser.py` — `_reap_session_profile`/`_record_own_pids`/
 `_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil mocked);
-`get_tab()`'s critical-section ordering (lock -> reap -> launch -> anchor-capture -> record-own-pids
+`get_tab()`'s critical-section ordering (lock -> reap -> anchor-capture -> launch -> record-own-pids
 -> spawn death_pipe watchdog -> spawn the PID-keyed focus-steal watchdog with that anchor, the exact
 sequence both the browser-lifecycle milestone's live parallel-run bug and the M1 focus-steal
 milestone's anchor-race bug depended on getting right) and that the watchdog receives `_owned_pids`
-with no `cleanup_dir` (the session profile is persistent, never deleted); `kill_own_chrome()`'s full
+with no `cleanup_dir` (the session profile is persistent, never deleted). As of the self-launch
+milestone (2026-09-15), also covers `get_tab()`'s self-launch sequence with `FakeChrome`/
+`FakeProcessManager` (no more `.start()`): `_setup_user_dir()` called directly, `--remote-debugging-
+port=0` and the full `options.arguments` (including `--no-startup-window`) reaching
+`start_browser_process`, and the post-launch `_connection_port`/`_connection_handler` fixup once
+`_wait_for_devtools_port` resolves a port — `_wait_for_devtools_port`/`_clear_stale_devtools_port`/
+`ConnectionHandler` are all mocked at the module boundary, no real filesystem/network I/O; `kill_own_chrome()`'s full
 teardown sequence, its no-op path when the browser was never touched, and the
 PID-safety-net-and-lock-release-still-run path when `close_browser()` itself raises (Chrome already
 dead mid-sweep); `close_browser()`'s own unconditional cancellation of a live focus-steal watchdog
