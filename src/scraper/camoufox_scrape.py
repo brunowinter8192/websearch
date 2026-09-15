@@ -30,12 +30,6 @@ _GOTO_WAIT_UNTIL = "domcontentloaded"
 CAMOUFOX_RENDER_WAIT_S = 5.0
 TOTAL_CAMOUFOX_BUDGET_S = 245.0
 
-_CAMOUFOX_ACQUISITION_ERROR_MESSAGES = {
-    "browser_missing": "camoufox browser binary missing — run `./venv/bin/python -m camoufox fetch` to install it",
-    "budget_exhausted": f"camoufox acquisition exceeded the total time budget ({TOTAL_CAMOUFOX_BUDGET_S}s)",
-}
-
-
 # ORCHESTRATOR
 
 async def scrape_url_camoufox_workflow(url: str, block_images: bool = False) -> list[TextContent]:
@@ -64,7 +58,7 @@ async def scrape_url_camoufox_workflow(url: str, block_images: bool = False) -> 
     })
     logger.info("Camoufox scrape complete: %s (%d chars, acquisition_error=%s)",
                 url, len(content), meta.get("acquisition_error"))
-    return [TextContent(type="text", text=_format_camoufox_output(url, content, meta))]
+    return [TextContent(type="text", text=_format_camoufox_output(url, content))]
 
 
 # FUNCTIONS
@@ -227,21 +221,6 @@ async def _html_to_markdown(html: str) -> tuple[str, str | None]:
     return "", (getattr(result, "error_message", None) or "crawl4ai raw: conversion produced no markdown")
 
 
-def _format_camoufox_output(url: str, content: str, meta: dict) -> str:
-    lines = [
-        f"# Content from: {url}", "",
-        "## Acquisition facts",
-        "- Engine: camoufox",
-        f"- HTTP status: {meta.get('status_code')}",
-        f"- Document status chain (ordered main-frame document response statuses observed before "
-        f"capture; a fact, not a verdict — never read as challenge-solved/blocked): "
-        f"{meta.get('document_status_chain')}",
-        f"- Landed URL (the URL the browser actually returned content from): {meta.get('landed_url')}",
-        f"- Bytes (raw markdown from crawl4ai's raw: conversion): {meta.get('raw_markdown_bytes', 0)}",
-        f"- Bytes (content below): {len(content.encode('utf-8')) if content else 0}",
-    ]
-    if meta.get("acquisition_error"):
-        reason = _CAMOUFOX_ACQUISITION_ERROR_MESSAGES.get(meta["acquisition_error"], meta["acquisition_error"])
-        lines.append(f"- Acquisition error: {reason}")
-    lines += ["", "## Content", "", content if content else "(no content returned)"]
+def _format_camoufox_output(url: str, content: str) -> str:
+    lines = [f"# Content from: {url}", "", "## Content", "", content if content else "(no content returned)"]
     return "\n".join(lines)

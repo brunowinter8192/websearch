@@ -28,10 +28,6 @@ logger = logging.getLogger(__name__)
 
 LAUNCH_MODE = "cdp_headed_backgrounded"
 
-_ACQUISITION_ERROR_MESSAGES = {
-    "browser_missing": "browser binary missing — run `./venv/bin/python -m patchright install chromium` to install it",
-}
-
 _BROWSER_LAUNCH_SIGNATURES = (
     "executable doesn't exist",
     "playwright install",
@@ -76,7 +72,7 @@ async def scrape_url_chromium_workflow(url: str) -> list[TextContent]:
     })
     logger.info("Scrape complete: %s (%d chars, acquisition_error=%s)",
                 url, len(content), meta.get("acquisition_error"))
-    return [TextContent(type="text", text=_format_scrape_output(url, content, meta, og_published_time))]
+    return [TextContent(type="text", text=_format_scrape_output(url, content))]
 
 
 # FUNCTIONS
@@ -264,35 +260,7 @@ def is_browser_launch_error(exc: Exception) -> bool:
     return any(sig in msg for sig in _BROWSER_LAUNCH_SIGNATURES)
 
 
-def _format_scrape_output(url: str, content: str, meta: dict, og_published_time: str | None) -> str:
+def _format_scrape_output(url: str, content: str) -> str:
     lines = [f"# Content from: {url}", ""]
-    lines += [
-        "## Acquisition facts",
-        f"- HTTP status: {meta.get('status_code')}",
-        f"- Document status chain (ordered main-frame document response statuses observed before "
-        f"capture; a fact, not a verdict — never read as challenge-solved/blocked): "
-        f"{meta.get('document_status_chain')}",
-        f"- Landed URL (the URL the browser actually returned content from): {meta.get('landed_url')}",
-        f"- og:published_time (the page's OWN declared value, verbatim from its <head> meta tag — "
-        f"null when the page declares none; never a third-party guess): {og_published_time}",
-        f"- Bytes (raw markdown from crawl4ai): {meta.get('raw_markdown_bytes', 0)}",
-        f"- Bytes (content below, after PruningContentFilter): "
-        f"{len(content.encode('utf-8')) if content else 0}",
-        "- crawl4ai diagnosis (an OBSERVATION off crawl4ai's own anti-bot detector, NOT a "
-        "verdict — it has documented false positives and is not acted on by this scraper): "
-        f"success={meta.get('crawl4ai_success')}, resolved_by={meta.get('crawl4ai_resolved_by')}, "
-        f"attempts={meta.get('crawl4ai_attempts')}, "
-        f"error_message={meta.get('crawl4ai_error_message') or 'none'}",
-    ]
-    if meta.get("acquisition_error"):
-        reason = _acquisition_error_message(meta["acquisition_error"], meta.get("config") or {})
-        lines.append(f"- Acquisition error: {reason}")
-    lines += ["", "## Content", "", content if content else "(no content returned)"]
+    lines += ["## Content", "", content if content else "(no content returned)"]
     return "\n".join(lines)
-
-
-def _acquisition_error_message(acquisition_error: str, config: dict) -> str:
-    if acquisition_error == "budget_exhausted":
-        budget = config.get("total_budget_s", "?")
-        return f"scrape exceeded the total time budget ({budget}s)"
-    return _ACQUISITION_ERROR_MESSAGES.get(acquisition_error, acquisition_error)
