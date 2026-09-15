@@ -160,18 +160,12 @@ def check_orphans() -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-# Write markdown report and return its path
-def write_report(results: dict, orphans: list[str]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
+def _fmt_stats(s: dict) -> str:
+    return f"{s['min']}/{s['median']}/{s['max']}" if s["n"] else "n/a"
 
+
+def _build_config_table() -> list[str]:
     lines = [
-        f"# Launch Latency + Flag Probe — {ts}",
-        "",
-        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
-        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
-        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
-        "",
         "## Configurations",
         "",
         "| # | Config | headless | backgrounded (`open -g`) | flags |",
@@ -180,8 +174,11 @@ def write_report(results: dict, orphans: list[str]) -> Path:
     for cfg in CONFIGS:
         flags = ", ".join(cfg["flags"]) if cfg["flags"] else "(none)"
         lines.append(f"| {cfg['label'][0]} | {cfg['label'][3:]} | {cfg['headless']} | {cfg['backgrounded']} | {flags} |")
+    return lines
 
-    lines += [
+
+def _build_latency_table(results: dict) -> list[str]:
+    lines = [
         "",
         "## Launch + Navigation Latency (ms, min/median/max, N=5)",
         "",
@@ -190,11 +187,12 @@ def write_report(results: dict, orphans: list[str]) -> Path:
     ]
     for cfg in CONFIGS:
         r = results[cfg["slug"]]["latency"]
-        def fmt(s):
-            return f"{s['min']}/{s['median']}/{s['max']}" if s["n"] else "n/a"
-        lines.append(f"| {cfg['label']} | {fmt(r['start_to_tab'])} | {fmt(r['start_to_drivable'])} | {fmt(r['navigation'])} | {r['nav_failures']}/{N_LATENCY} |")
+        lines.append(f"| {cfg['label']} | {_fmt_stats(r['start_to_tab'])} | {_fmt_stats(r['start_to_drivable'])} | {_fmt_stats(r['navigation'])} | {r['nav_failures']}/{N_LATENCY} |")
+    return lines
 
-    lines += [
+
+def _build_drift_table(results: dict) -> list[str]:
+    lines = [
         "",
         "## Background-Timer-Throttling Drift (expected 40 ticks / ~4000ms nominal, N=3)",
         "",
@@ -228,7 +226,10 @@ def write_report(results: dict, orphans: list[str]) -> Path:
             "a single-user, single-session machine, or a CDP-level way to force renderer occlusion that "
             "does not depend on real window-manager stacking.",
         ]
+    return lines
 
+
+def _build_watchdog_fit(results: dict) -> list[str]:
     watchdog_lines = ["", "## Watchdog Fit", ""]
     for cfg in CONFIGS:
         r = results[cfg["slug"]]["latency"]
@@ -242,9 +243,11 @@ def write_report(results: dict, orphans: list[str]) -> Path:
             f"{'fits' if fits_default else 'EXCEEDS'} the 3.6s default watchdog, "
             f"{'fits' if fits_override else 'EXCEEDS'} the 6.0s override ceiling."
         )
-    lines += watchdog_lines
+    return watchdog_lines
 
-    lines += [
+
+def _build_excluded_flag_note() -> list[str]:
+    return [
         "",
         "## Excluded: `--disable-new-content-rendering-timeout`",
         "",
@@ -253,6 +256,11 @@ def write_report(results: dict, orphans: list[str]) -> Path:
         "is CDP/DOM: `execute_script`, `Runtime.evaluate`), so a blanked compositor frame is invisible "
         "to every signal this probe or production consumes. Revisit only if a future milestone adds "
         "screenshot-based extraction.",
+    ]
+
+
+def _build_teardown_section(orphans: list[str]) -> list[str]:
+    lines = [
         "",
         "## Teardown",
         "",
@@ -261,6 +269,28 @@ def write_report(results: dict, orphans: list[str]) -> Path:
     if orphans:
         lines.append("")
         lines.extend(f"    {o}" for o in orphans)
+    return lines
+
+
+# Write markdown report and return its path
+def write_report(results: dict, orphans: list[str]) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
+
+    lines = [
+        f"# Launch Latency + Flag Probe — {ts}",
+        "",
+        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
+        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
+        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
+        "",
+    ]
+    lines += _build_config_table()
+    lines += _build_latency_table(results)
+    lines += _build_drift_table(results)
+    lines += _build_watchdog_fit(results)
+    lines += _build_excluded_flag_note()
+    lines += _build_teardown_section(orphans)
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
