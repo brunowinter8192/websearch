@@ -186,3 +186,30 @@ Requested as an amend into the recap commit above — blocked by this environmen
 ("Never amend existing commits — create a new commit instead"), which overrides instruction-level
 requests to amend. Committed as a new commit instead (`3acb2e3`); flagged to Main as a deviation
 from the literal instruction, not a silent substitution.
+
+## SKILL.md — reworded, then ruled out of scope and deleted instead, same day (2026-09-15)
+
+Sequence, in order, for a later agent to read plainly: the original milestone prompt listed
+`skills/websearch-web-research/SKILL.md` as one of the files in scope, on the reasoning that its
+scrape-lane sentence ("report the failure plainly with the acquisition facts the command prints")
+made a claim the milestone was about to falsify. That sentence was REWORDED (not deleted) in the
+first pass of this milestone, to describe failure-recognition moving from a printed status line to
+the returned content itself. The project owner then ruled, explicitly and after the fact, that
+listing SKILL.md in scope at all had been a mistake — skill files are off limits for edits driven
+from this module, now and going forward — and instructed the line be DELETED outright instead of
+carrying any reworded version. Line deleted; the bold line above it (`**One scrape lane, no
+per-call choice.**`) stays, since it makes no claim about printed output and was never in question.
+
+**For a later agent: do not edit `skills/websearch-web-research/SKILL.md` (or any other skill file)
+from work scoped to this module again.** The reword-then-delete detour above cost a full extra
+round trip for something that should simply never have been touched. If a future change to this
+module's printed or logged output makes a skill file's own wording stale, say so in your findings
+and stop there — flag it, do not edit it. Skill files are a different owner's surface.
+
+## Blocked-amend deviation, repeated
+
+The second Gotcha-cleanup round (SKILL.md wording split in the M2 Gotcha, this section itself) was
+also requested as an amend into the recap commit. Same hard environment rule blocked it again
+(`git commit --amend` is refused outright, "create a new commit instead"). Same resolution: a new
+commit, not a silent substitution — see the commit list at the end of this file's own git history
+for the exact SHAs, not repeated here since this entry is not maintained after today.
