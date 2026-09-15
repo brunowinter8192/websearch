@@ -140,3 +140,58 @@ the anchor-capture bug was found via live probing and fixed); 377 passed after t
 regression test were added — no other file in the suite needed a change, confirming the callers
 identified via the DOCS.md map (`cli.py`, `search_web.py`, `engines/`, the 40+ dev-script direct
 callers of `close_browser`/`new_tab`) still behave as before.
+
+## Recap — 2026-09-15, same day, review round
+
+Main reviewed the implementation commit above (`380d534`) and reran the suite independently (377
+green, confirmed). Accepted as correct: PID keying, the anchor capture in `get_tab()` before
+launch, `close_browser()` as the cancellation chokepoint, and the live-caught anchor-race bug.
+Three follow-ups, all addressed in commit `22b98fa`:
+
+**1. `src/search/DOCS.md` format violation.** The three new Gotchas this milestone added carried
+measured numbers (`~0.45s`/`~0.9s`/`~2.6s` flicker durations, `FOCUS_STEAL_POLL_INTERVAL_S=0.25s`,
+subprocess round-trip estimates) and a specific test-function-name citation — DOCS.md is supposed
+to answer "where does what live", not repeat measurements or cite specific tests by name; those
+belong in process-docs (this file already had them, in better context). Trimmed all three Gotchas
+down to the constraining statement only, with a pointer to `process-docs/browser_posture/` for the
+evidence. Lesson for next time touching a module's DOCS.md after a live-verification-heavy
+milestone: draft the Gotcha, then re-read it asking "would this survive if I deleted every number
+and every test name from it" — if not, the number/name belongs in process-docs, not DOCS.md, even
+when it feels like exactly the kind of fact a Gotcha is FOR (it's the evidence for the fact, not
+the fact's own shape, that has to leave).
+
+**2. Test file comment bloat.** `dev/tests/test_browser.py` had grown a 7-line prose comment above
+the watchdog tests retelling the same anchor-race story already told in DOCS.md and process-docs —
+a third copy of the same narrative, in a place (a test file, where every other section marker in
+the file is a single line) that doesn't need it. Collapsed to one line, matching the file's own
+existing convention (compare the `_get_frontmost_pid`/`_activate_pid` section marker a few lines
+above it).
+
+**3. A genuine open question, deliberately left unguarded.** Main asked, without instructing a fix:
+when `_get_frontmost_pid()` returns `None` (osascript failure or unparseable stdout), the watchdog
+loop's `else` branch does `last_other_pid = None`, unconditionally — including when `None` isn't a
+"real" observation at all, just a failed read. If a genuine steal is in progress on the VERY NEXT
+tick, the reclaim guard (`last_other_pid is not None and ...`) is false, and reclaim is skipped —
+structurally the exact same "poisoned anchor" failure class as the bug this milestone already fixed
+(a bad value landing in `last_other_pid`, un-correctable until a tick observes a genuine non-owned,
+non-`None` pid, which cannot happen while Chrome keeps holding focus). This is real and reachable.
+
+What makes it different from the anchor-race bug, and why I left it unguarded: the anchor-race bug
+was a near-guaranteed, ROUTINE timing collision — the watchdog's first read structurally tends to
+land while Chrome is still frontmost from its own launch, and I hit it on roughly half of ~6 live
+runs without trying to provoke it. A `None` return requires an ACTUAL `osascript`/System Events
+failure (permission revocation, System Events unresponsive, a transient subprocess spawn failure) —
+a materially rarer trigger class. Across this whole session's live verification (roughly 150+ real
+`osascript` calls across ~6 full `search_web` runs plus the standalone Finder-reactivation check
+before implementation even started) I never once observed a failure or unparseable stdout from
+`_get_frontmost_pid`/`_activate_pid`. Per this project's standing rule that a guard needs a real
+observed failure behind it, not a hypothetical, I did not add one. If a future agent ever catches
+this live (a probe or a user report showing a sustained multi-second steal with a bare/failed
+osascript read in the trace right before it), the fix is narrow and already known: only let the
+`else` branch overwrite `last_other_pid` when `current_pid is not None` — a transient read failure
+should never be allowed to clobber a known-good anchor. Do not add this guard pre-emptively; wait
+for the observation, per the same standard the anchor-race fix itself was held to (it shipped only
+after a live probe caught it, not from review alone).
+
+No test was added for this — nothing to regress against without triggering the untested branch,
+and the instruction was explicitly not to guard speculatively.
