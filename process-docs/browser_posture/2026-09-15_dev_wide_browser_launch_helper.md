@@ -119,3 +119,59 @@ the reclaim watchdog actually stops a real focus steal during a live, multi-navi
 real probe run, watched by a human, matching exactly how the search-lane fix above was itself
 verified live before being trusted. That run is explicitly the next step, not part of what shipped
 in this entry.
+
+## Main's live focus measurement, and a second finding it produced
+
+Main ran the focus proof this entry left outstanding: the helper, driven from a throwaway `/tmp`
+script against 5 real live Google navigations on an isolated profile, with an external `osascript`
+poller sampling the frontmost app every 0.2s for the whole run. One run per variant — a clear
+signal, not a large sample.
+
+**RUN 1 — fresh tab per navigation (what `01_google_dom_probe.py` does today):** 84 samples, 6
+non-ghostty (i.e. 6 samples where some other app briefly held frontmost). Four separate focus
+steals, every one reclaimed: 0.70s, 0.68s, 0.38s, 0.35s. Watchdog behavior matches production's own
+documented guarantee (`process-docs/browser_posture/2026-09-15_search_lane_focus_steal_watchdog.md`)
+— every steal bounded, none stuck.
+
+**RUN 2 — identical script, one change: a single tab created once and reused for all 5
+navigations instead of `new_tab` per navigation:** 83 samples, 2 non-ghostty. ONE steal, at launch,
+0.69s. Nothing for the remaining four navigations.
+
+**Conclusion:** four steals vs. one, same helper, same pages, same pacing — the steals are not
+caused by navigation, they are caused by TARGET CREATION. Every `new_tab()` call is a separate CDP
+window-creation event, and playwright#42343 says each one can re-activate the app regardless of
+`open -g`. The watchdog reclaims the symptom (bounds every steal to well under a second); not
+creating the extra targets removes the cause outright — roughly three quarters of the steals in this
+5-navigation run. Both are real, complementary findings, not competing ones: a script that both
+reuses tabs where it safely can AND keeps the watchdog running gets fewer steals, each shorter.
+
+## Is `01_google_dom_probe.py`'s fresh-tab-per-navigation load-bearing for its own measurement?
+
+Checked before changing anything, per instruction. Answer: **yes, load-bearing — left alone.**
+
+The reason is not primarily cookie isolation — `NetworkCommands.set_cookie` (the SOCS injection both
+the probe and production call before every navigation) writes to the browser's shared cookie jar,
+scoped to the profile, not the tab; a reused tab would see the same cookies a fresh tab does, since
+they live in the same `user-data-dir`.
+
+The real reason: `src/search/engines/google.py`'s `GoogleEngine.search_with_reason` — the exact
+production code path this probe exists to reproduce — does `tab = await new_tab()` at the top of
+every single search call and `await kill_tab(tab)` in its own `finally`, unconditionally, one fresh
+tab per query, every time (confirmed by reading the method body, not assumed). This is not a probe-
+specific design choice sitting on top of a shared browser session; it is the identical shape
+production itself uses per search. `01_google_dom_probe.py`'s `run_navigation()` — `tab = await
+_new_tab()` ... `finally: await _kill_tab(tab)`, called once per navigation — reproduces that shape
+navigation-for-navigation (this probe runs 2 navigations per query, matching 2 separate
+`search_with_reason` calls production would make for num=100 and num=10 if it ever varied `num`).
+
+A reused tab across the probe's 20 navigations (10 queries x 2 num-variants) would stop measuring
+what production's actual per-search tab lifecycle produces and start measuring an untested-in-
+production code path instead. RUN 2 above already shows that reusing the tab measurably changes
+browser-level behavior (focus steals, 4 vs. 1) even though nothing about the pages themselves
+changed — proof that tab lifecycle is not a neutral harness detail here, and no reason to assume it
+is neutral for the thing this probe actually measures (Google's DOM/selector behavior) either. A
+reused tab also accumulates `sessionStorage` across navigations to the same origin, tab-scoped state
+a fresh tab never carries — an unmeasured, plausible confound for a probe whose entire purpose is
+telling a real DOM break apart from an artifact of the harness. The probe pays four flickers (now
+bounded to well under a second each by the watchdog) for a clean, production-faithful measurement —
+a fair trade. Not changed.
