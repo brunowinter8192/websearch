@@ -126,3 +126,41 @@ the log record is untouched while the printed text shrank.
   `_CAMOUFOX_ACQUISITION_ERROR_MESSAGES` on the reasoning that "the human-readable form was nicer"
   — the raw `acquisition_error` string is already a logged fact on its own; a prose mapping has no
   consumer left once nothing prints it.
+
+## Recap — 2026-09-15, same day, review round
+
+Main reviewed independently: reran the suite (368 green, confirmed), ran a live
+`cli.py scrape_url_chromium https://example.com/` directly (not the `python -c` workaround this
+entry describes above — Main's own environment did not hit the redirect conflict this session's
+sandbox hit, or worked around it differently; not investigated further, out of scope for a
+cosmetic-only review round) and confirmed heading/blank/`## Content`/blank/page text with no
+preamble, and confirmed the matching `scrape_log.jsonl` record still carries all 22 fields. Both
+new tests (no-preamble, full-log-field-set) were confirmed as exactly the right shape for this
+milestone. Substance accepted outright — one cosmetic defect only.
+
+**The defect:** deleting `_CAMOUFOX_ACQUISITION_ERROR_MESSAGES` from `camoufox_scrape.py` (a
+4-line dict plus its own blank-line padding) took one blank line with it that didn't belong to the
+dict at all — the `# ORCHESTRATOR` section marker immediately below ended up with only ONE blank
+line above it, where every other section marker in both scraper modules (and, by established
+convention across this codebase's `# INFRASTRUCTURE`/`# ORCHESTRATOR`/`# FUNCTIONS` markers) has
+two. Root cause: my original removal edit replaced the dict's own line range with a single blank
+line, but the line ranges I computed for the chromium-side removal and the camoufox-side removal
+weren't symmetric — chromium's got a follow-up fix in the same work session (caught by my own
+`Read` verification immediately after that edit), camoufox's did not get the same visual check
+before moving on to the next file. Fixed by inserting the missing blank line at the correct spot
+(line 32, immediately before the marker) and re-verified: `wc -l` on the file went from 226 to 227,
+`src/scraper/DOCS.md`'s own LOC line for this module was stale at 226 and bumped to 227 in the same
+pass — a DOCS.md going stale from a one-line whitespace fix is easy to miss if the LOC check isn't
+re-run as the literal last step after ANY edit to a module, not just after edits that look
+"substantial."
+
+**Lesson for future sessions doing multi-file symmetric edits (chromium lane + camoufox lane, same
+shape of change in both):** after editing the SECOND of two structurally-parallel files, diff the
+immediate context around every touched boundary against the FIRST file's equivalent boundary,
+rather than trusting that an edit "shaped the same way" produced the same spacing. A syntax check
+(`ast.parse`) catches broken code; it does not catch a single missing blank line, and neither does
+a green test suite — this defect shipped through both untouched, only caught by Main's own visual
+review of the diff.
+
+Suite re-verified after the fix: 368 passed, unchanged from before the fix (a whitespace-only
+change, as expected).

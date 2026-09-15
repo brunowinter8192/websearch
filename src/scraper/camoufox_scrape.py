@@ -30,6 +30,7 @@ _GOTO_WAIT_UNTIL = "domcontentloaded"
 CAMOUFOX_RENDER_WAIT_S = 5.0
 TOTAL_CAMOUFOX_BUDGET_S = 245.0
 
+
 # ORCHESTRATOR
 
 async def scrape_url_camoufox_workflow(url: str, block_images: bool = False) -> list[TextContent]:
