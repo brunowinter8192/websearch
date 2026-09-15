@@ -350,6 +350,36 @@ all 7 engines return results, and whether the flicker is gone or merely reduced.
 browser at any point in this milestone, per the standing rule. That live run, and the frontmost-app
 measurement around it, is Main's to produce next.
 
+## Closed — 2026-09-15, same day, live confirmation
+
+Main ran one live `search_web` on this worktree after the rework landed. All 7 engines reached, no
+`NoValidTabFound` anywhere — the exact failure mode the one-line attempt hit is gone. Per-engine
+counts from the `workflow_summary` record: duckduckgo 10, startpage 10, openalex 100, bing 3, google
+1, brave 0, yandex 0 — brave/yandex at their pre-existing block rate, nothing regressed relative to
+before this whole sub-milestone started. This closes the self-launch rework: the search lane now
+launches with no window at all, matching the scrape lane's shape, with the pydoll-internals risk
+identified in advance (`NoValidTabFound`) resolved rather than rediscovered live a second time.
+
+Not yet separately re-measured in this session: the frontmost-app flicker count with the self-launch
+in place (the earlier RUN 1/RUN 2 tab-reuse measurement earlier in this file was against the
+`.start()`-based code, before this rework). Given no window is created at launch anymore, the
+launch-moment steal that motivated this whole line of work should be gone by construction — but that
+is reasoning, not a new measurement, and is worth a fresh frontmost-app poll in a future session if
+the question comes up again.
+
+**One unrelated finding Main surfaced while doing the live run, recorded here since this file is
+where the session's browser-launch findings live, not because it's part of this milestone:** the
+printed breakdown showed `1` for every engine that returned anything, not each engine's real count
+(duckduckgo 10, openalex 100, etc.). Cause: `search_web.py`'s post-dedup pool cap sizes every engine's
+pool to Google's pool size (`src/search/DOCS.md`'s own Gotchas already documents "Post-dedup pool cap
+keys off Google's pool size — if Google was CAPTCHA'd or excluded, K falls back to 10"). Google
+returned `1` result this run (not CAPTCHA'd, not excluded — just genuinely one result for whatever
+this run's query was), so every other engine's real pool got silently truncated down to `1` in the
+printed table despite having many more results underneath. Out of scope for this milestone, not
+touched — Main is recording it separately in the sprint writeup.
+
+`dev/tests/`: 378 passed at recap time, unchanged since the implementation commit.
+
 ## Main's live focus measurement, and a second finding it produced
 
 Main ran the focus proof this entry left outstanding: the helper, driven from a throwaway `/tmp`
