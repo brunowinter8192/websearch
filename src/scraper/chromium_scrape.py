@@ -66,7 +66,6 @@ async def scrape_url_chromium_workflow(url: str) -> list[TextContent]:
         "crawl4ai_error_message": meta.get("crawl4ai_error_message"),
         "crawl4ai_attempts": meta.get("crawl4ai_attempts"),
         "crawl4ai_resolved_by": meta.get("crawl4ai_resolved_by"),
-        "crawl4ai_fallback_fetch_used": meta.get("crawl4ai_fallback_fetch_used"),
         "document_status_chain": meta.get("document_status_chain"),
         "config_hash": config_hash, "config": config,
     })
@@ -87,8 +86,8 @@ async def _acquire_scrape(
     if document_status_chain:
         status_code = document_status_chain[-1]
     ct = None
-    if hasattr(result, "headers") and result.headers:
-        ct = result.headers.get("content-type") or result.headers.get("Content-Type")
+    if hasattr(result, "response_headers") and result.response_headers:
+        ct = result.response_headers.get("content-type")
     landed_url = getattr(result, "redirected_url", None)
     meta: dict = {**empty_meta, "status_code": status_code, "content_type": ct,
                   "landed_url": landed_url, "document_status_chain": list(document_status_chain)}
@@ -126,7 +125,7 @@ async def try_scrape(url: str) -> tuple[str, dict]:
         "raw_markdown_bytes": 0, "og_published_time": None,
         "crawl4ai_success": None, "crawl4ai_error_message": None,
         "crawl4ai_attempts": None, "crawl4ai_resolved_by": None,
-        "crawl4ai_fallback_fetch_used": None, "landed_url": None,
+        "landed_url": None,
         "document_status_chain": [],
         "config": {"config_incomplete": True, "launch_mode": LAUNCH_MODE, "total_budget_s": budget_s},
     }
