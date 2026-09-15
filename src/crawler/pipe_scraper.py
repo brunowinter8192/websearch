@@ -25,11 +25,12 @@ async def scrape_urls_workflow(
     concurrency_per_domain: int | None = None,
     engine: str = "chromium",
     block_images: bool = False,
+    headed: bool = False,
 ) -> list[dict]:
     output_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     results = await _scrape_all(urls, output_dir, download_delay, concurrency_per_domain,
-                                 engine, block_images)
+                                 engine, block_images, headed)
     wall_s = time.time() - t0
     domain = _domain_from_urls(urls)
     onward_links = _collect_onward_links(urls, results, engine)
@@ -48,6 +49,7 @@ async def _scrape_all(
     concurrency_per_domain: int | None,
     engine: str = "chromium",
     block_images: bool = False,
+    headed: bool = False,
 ) -> list[dict]:
     resolved_concurrency = concurrency_per_domain if concurrency_per_domain is not None else (
         CAMOUFOX_CONCURRENCY_PER_DOMAIN if engine == "camoufox" else CONCURRENCY_PER_DOMAIN
@@ -63,7 +65,7 @@ async def _scrape_all(
             return_exceptions=True,
         )
     else:
-        browser_cfg, run_cfg = _build_configs()
+        browser_cfg, run_cfg = _build_configs(headed=headed)
         config_stamp = _extract_pipe_config_stamp(browser_cfg, run_cfg, download_delay, resolved_concurrency)
         run_ctx = {
             "run_id": str(uuid.uuid4()),
@@ -103,11 +105,14 @@ if __name__ == '__main__':
                               'image-blocking as a WAF detection signal)')
     parser.add_argument('--no-block-images', dest='block_images', action='store_false',
                          help='camoufox engine only: allow image requests (default)')
+    parser.add_argument('-g', '--headed', action='store_true', default=False,
+                         help='chromium engine only: run the browser visible instead of headless '
+                              '(default: headless, unchanged)')
     args = parser.parse_args()
 
     urls = [ln.strip() for ln in Path(args.url_file).read_text(encoding='utf-8').splitlines()
             if ln.strip()]
     asyncio.run(scrape_urls_workflow(
         urls, Path(args.output_dir), args.download_delay, args.concurrency_per_domain,
-        args.engine, args.block_images,
+        args.engine, args.block_images, args.headed,
     ))

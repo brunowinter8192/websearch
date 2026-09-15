@@ -283,7 +283,7 @@ distinguish once no page is fetched by discovery itself).
 beyond `src.crawler.discovery`/`src.crawler.seed_feeders_scope`, no network in the pure-logic
 section.
 
-### test_pipe_scraper.py (822 LOC)
+### test_pipe_scraper.py (906 LOC)
 **Purpose:** `src/crawler/pipe_scraper*.py` — config stamp extraction off real
 BrowserConfig/CrawlerRunConfig, live crawl4ai `AsyncPlaywrightCrawlerStrategy`/`StealthAdapter`
 wiring guard, `pipe_scrape_logger.log_pipe_scrape` fail-soft JSONL, `_scrape_all` (run_id sharing,
@@ -325,7 +325,7 @@ fixture); `_print_summary`'s new onward-link wording (a plain count, or the expl
 "not collected (camoufox engine)" string — never a bare `0` a reader could mistake for "chromium
 looked and found nothing"); and the wiring itself — `_scrape_one` populates `'links'` from a fake
 result carrying a real `.links` attribute, `_scrape_one_camoufox`'s own return dict is asserted to
-never carry a `'links'` key at all, the engine-scope distinction the milestone requires.
+never carry a `'links'` key at all, the engine-scope distinction the milestone requires. As of the M3 milestone (2026-09-15), `_build_configs(headed=...)`'s config-level effect (`headless` flips, the fixed anti-bot posture and the config stamp's own `headless` key do not diverge) and `_scrape_all`'s own `headed` parameter reaching `_build_configs` unchanged (mirroring the existing `block_images`/camoufox wiring test pattern) — no test exercises the `-g`/`--headed` argparse flag itself, matching this file's own established boundary (`--engine`/`--block-images` have no argparse-level test either).
 
 ## Gotchas
 Any file under this directory that resolves its own path to locate the repo root (subprocess
