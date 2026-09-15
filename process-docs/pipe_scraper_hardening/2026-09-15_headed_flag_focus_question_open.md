@@ -1,12 +1,12 @@
-# M3 — pipe_scraper's -g/--headed flag, and the focus question left open, 2026-09-15
+# M3 — pipe_scraper's -g/--headed flag, and the focus question, 2026-09-15
 
 Worker session (worktree `mechanics`). Milestone: `pipe_scraper` (`src/crawler/pipe_scraper.py`,
 the batch capture-pipeline scrape step) gets a `-g`/`--headed` flag so its chromium-engine browser
 runs visible instead of headless. This entry records what shipped, the reasoning behind shipping it
-WITHOUT a focus-defense mechanism, and — this is the part to read carefully — leaves the actual
-focus-stealing behavior of the shipped flag as an OPEN QUESTION, not a closed one. Do not read this
-entry as settling that question. It settles nothing about what the flag actually does on a real
-desktop; it only settles what was decided and why, on paper, without a live run.
+WITHOUT a focus-defense mechanism on the first pass, and — same day, same session — the project
+owner's own live measurement that answers what the reasoning alone could not: see "The open
+question, answered by live measurement" below for the numbers. Read the reasoning section as the
+state of knowledge BEFORE that measurement, not as this entry's own final word.
 
 ## New standing rule this milestone operated under
 
@@ -74,26 +74,49 @@ still not want the window grabbing the keyboard every few seconds. That distinct
 license a conclusion either way here — it is the exact shape of the question that stays open below,
 not an argument that settles it.
 
-## The open question, and what would close it
+## The open question, answered by live measurement (2026-09-15, same day)
 
-**Open, as of 2026-09-15: does `pipe_scraper -g` actually steal focus in practice, and if so, how
-often and how disruptively over a real multi-URL run?** Nothing in this entry, in the code, or in
-the reasoning above answers that — it is a claim about real macOS window-activation behavior for a
-launch path (crawl4ai's `ManagedBrowser`, plain `playwright`, no `open -g`) that has never been
-observed running headed by anyone on this project before this milestone.
+The project owner ran the exact command named above, once, live: 3 URLs (`example.com`,
+`rfc-editor.org/rfc/rfc7231.html`, `iana.org/domains/reserved`), this worktree, `-g` on, with an
+external `osascript` poller sampling the frontmost app every 0.2s for the whole run — 56 samples
+total. The scrape completed in 4s, 3/3 at HTTP 200, all three `.md` files written. Frontmost app
+went `ghostty` → `"Google Chrome for Testing"` → `ghostty`; 6 of the 56 samples were non-`ghostty`.
+The steal lasted roughly 2 seconds and released on its own — nothing reclaimed it, because nothing
+was watching.
 
-**What closes it:** the project owner runs `pipe_scraper -g` live, once, against a small URL file,
-and reports what happens to focus during the run — whether the window steals focus at launch, at
-each new URL/tab, both, or neither, and how disruptive that was in practice. That report is the
-next entry in this area, not a revision of this one (this file is not maintained after today, per
-the project's own process-docs convention). If the answer is "disruptive," the follow-up is a
-watchdog analogous to M1's — PID-keyed (name-keying is unsafe here for a different reason than the
-search lane's: not user-Chrome collision, but the unconfirmed-bundle-identity risk above), built and
-verified the same way M1's was: implemented, then caught and fixed against real live-probe evidence,
-not shipped on reasoning alone. If the answer is "tolerable," the flag ships as-is and this question
-closes without further code.
+Sample size, stated honestly: three URLs, one run. This does not generalize to a hundred-URL batch
+on its own; it establishes the SHAPE of one real run, not a distribution.
 
-## Verification actually performed this session
+Three findings, in the order the owner gave them:
+
+1. **The name-keying blocker from the reasoning section above is resolved by observation, not by
+   further argument.** The app that took focus reports as `"Google Chrome for Testing"` — a
+   different name from the user's own `"Google Chrome"` AND from the ad-hoc lane's own bundle name.
+   The concern that a name-keyed watchdog might key against the wrong process, or collide with the
+   user's own separate Chrome the way the search lane's did, does not apply here: this app name is
+   unambiguous on this machine, confirmed live, not assumed from reading `browser_manager.py` alone.
+2. **The predicted "stream of window-creation events over N URLs" did not materialize.** One steal,
+   at launch, for the whole 3-URL run — not one per URL. The chromium engine shares a single
+   crawler across the whole URL list (`async with AsyncWebCrawler(...) as crawler:` wraps the
+   entire `asyncio.gather` in `_scrape_all`), so per-URL page fetches are not separate window
+   creations from the OS's point of view, at least at this sample size.
+3. **The steal is both RARER and LONGER than the other two lanes'.** One occurrence per run here,
+   versus a genuine stream of potential steals in the ad-hoc/search lanes' own architectures. But
+   its duration (~2s, self-released) is well over an order of magnitude past the sub-second flicker
+   both of those lanes bound their own watchdog-defended steals to (`FOCUS_STEAL_POLL_INTERVAL_S
+   =0.25s` plus subprocess overhead, consistently under ~1s in every live measurement recorded for
+   those two lanes).
+
+**Whether to build a watchdog for this lane is a follow-up nobody has decided yet.** The blocker
+that stopped this milestone from attempting one is gone (finding 1), but building one is explicitly
+OUT OF SCOPE for this milestone by the project owner's own instruction, separate from and after
+this measurement. If a future milestone picks this up: the simple, name-keyed
+`_focus_steal_watchdog` already in `src/scraper/chromium_process.py` — not M1's PID-keyed
+machinery, which existed specifically to solve the search lane's user's-own-Chrome collision, a
+problem this lane does not have — is the mechanism finding 1 says would be unambiguous here. That
+is a statement about which existing mechanism would fit, not an instruction to build it now.
+
+## Verification actually performed this session (worker side)
 
 `dev/tests/` — 374 passed (368 baseline + 6 new: 4 on `_build_configs(headed=...)`'s config-level
 effect including the config-stamp reflection, 2 on `_scrape_all`'s own `headed` parameter reaching
@@ -103,6 +126,7 @@ boundary — `--engine`/`--block-images` have none either, only the functions th
 Every caller of `_build_configs`, `scrape_urls_workflow`, and `_scrape_all` was found by
 whole-repo grep (`_build_configs`: only `pipe_scraper.py` and its own tests;
 `scrape_urls_workflow`: `pipe_scraper.py` and `dev/news_pipeline/prod_scrape_smoke.py`, both
-unaffected by the new trailing-default parameter). No live browser was launched, per the standing
-rule — everything above the "Verification actually performed" heading is reasoning from source
-reading, not observation.
+unaffected by the new trailing-default parameter). No live browser was launched by the worker, per
+the standing rule — the worker's own contribution is the mocked-suite result and the source-reading
+above; the live measurement in "The open question, answered by live measurement" section above is
+the project owner's own run, reported back the same day, not a worker observation.
