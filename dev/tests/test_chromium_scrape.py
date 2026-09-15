@@ -135,13 +135,13 @@ class _FakeMarkdown:
 
 class _FakeResult:
     def __init__(self, raw_markdown, status_code=200, success=True, error_message=None, html="",
-                 redirected_url=None):
+                 redirected_url=None, response_headers=None):
         self.markdown = _FakeMarkdown(raw_markdown)
         self.status_code = status_code
         self.success = success
         self.error_message = error_message
         self.html = html
-        self.headers = {}
+        self.response_headers = response_headers if response_headers is not None else {}
         self.crawl_stats = {"attempts": 1, "resolved_by": "direct", "fallback_fetch_used": False}
         self.redirected_url = redirected_url
 
@@ -178,6 +178,93 @@ async def test_try_scrape_returns_content_on_http_403(monkeypatch):
     # crawl4ai's diagnosis is recorded, not acted on — content came through despite it
     assert meta["crawl4ai_error_message"] == "Blocked by anti-bot protection: Cloudflare JS challenge"
 
+
+
+# ---------------------------------------------------------------------------
+# content_type — M0 milestone (2026-09-15): read off result.response_headers, not the
+# nonexistent result.headers attribute (hasattr(result, "headers") was False on every real
+# CrawlResult, so this branch never once executed — a defect, not a structural gap; see
+# process-docs/scrape_pipeline/ for the crawl4ai-source verification).
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_try_scrape_extracts_content_type_from_response_headers(monkeypatch):
+    """A real result carrying response_headers (the actual CrawlResult field) yields a real
+    content_type — the fix this milestone makes."""
+    _patch_cdp_launch_mechanics(monkeypatch)
+
+    class _FakeCrawler:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def arun(self, url, config=None):
+            return _FakeResult(raw_markdown="x" * 300,
+                                response_headers={"content-type": "text/html; charset=utf-8"})
+
+    monkeypatch.setattr(chromium_scrape, "AsyncWebCrawler", _FakeCrawler)
+
+    _, meta = await chromium_scrape.try_scrape("https://example.com")
+
+    assert meta["content_type"] == "text/html; charset=utf-8"
+
+
+@pytest.mark.asyncio
+async def test_try_scrape_content_type_none_when_response_headers_empty(monkeypatch):
+    """No response_headers at all (the _FakeResult default) still degrades to None gracefully —
+    same neutral outcome as before this milestone, for the same reason (no headers present), not
+    a new one."""
+    _patch_cdp_launch_mechanics(monkeypatch)
+
+    class _FakeCrawler:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def arun(self, url, config=None):
+            return _FakeResult(raw_markdown="x" * 300)
+
+    monkeypatch.setattr(chromium_scrape, "AsyncWebCrawler", _FakeCrawler)
+
+    _, meta = await chromium_scrape.try_scrape("https://example.com")
+
+    assert meta["content_type"] is None
+
+
+# ---------------------------------------------------------------------------
+# crawl4ai_fallback_fetch_used — M0 milestone (2026-09-15): removed from the ad-hoc lane's own
+# logged record. Structurally always False on this project's configuration (no
+# fallback_fetch_function is ever set), confirmed against the installed crawl4ai source — see
+# process-docs/scrape_pipeline/. extract_crawl4ai_diagnosis itself is UNCHANGED (still computes
+# this key) since src/crawler/pipe_scraper_records.py reads the identical shared function's
+# output for the batch lane's own log — only this lane's final log_scrape(...) dict stopped
+# surfacing it.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_scrape_url_chromium_workflow_log_record_has_no_fallback_fetch_used_field(monkeypatch):
+    captured = {}
+
+    async def _fake_try_scrape(url):
+        return "real content", _meta()
+
+    monkeypatch.setattr(chromium_scrape, "try_scrape", _fake_try_scrape)
+    monkeypatch.setattr(chromium_scrape, "write_sidecar", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "log_scrape", lambda record: captured.update(record))
+
+    await chromium_scrape.scrape_url_chromium_workflow("https://example.com")
+
+    assert "crawl4ai_fallback_fetch_used" not in captured
 
 # ---------------------------------------------------------------------------
 # og_published_time — read off crawl4ai's own already-parsed result.metadata (an og:-prefixed meta
@@ -636,7 +723,7 @@ async def test_scrape_url_chromium_workflow_logs_full_field_set_unchanged(monkey
         "http_status", "content_type", "bytes_returned", "bytes_raw_markdown",
         "content_path", "og_published_time", "landed_url", "crawl4ai_success",
         "crawl4ai_error_message", "crawl4ai_attempts", "crawl4ai_resolved_by",
-        "crawl4ai_fallback_fetch_used", "document_status_chain", "config_hash", "config",
+        "document_status_chain", "config_hash", "config",
     }
     assert expected_fields <= captured.keys()
 
