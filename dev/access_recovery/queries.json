@@ -1,0 +1,15 @@
+{
+  "_comment": "Shared query set for both access-recovery Google probes (01_google_dom_probe.py, 02_google_wml_probe.py). Reused verbatim from dev/search_pipeline/26_brave_probe.py's own axis-tagged set (mainstream-de/en, docs-de/en, local-biz-de) so results are comparable to that probe's precedent and so a later re-run of either script uses the identical set this report's numbers are based on. Do not edit without updating any report that cites 'the same 10 queries'.",
+  "queries": [
+    {"query": "beste kaffeemaschine test", "axis": "mainstream-de"},
+    {"query": "python asyncio tutorial", "axis": "docs-en"},
+    {"query": "gebrauchte waschmaschine frankfurt", "axis": "local-biz-de"},
+    {"query": "hausgeräte händler frankfurt", "axis": "local-biz-de"},
+    {"query": "gebrauchtwagen ankauf frankfurt", "axis": "local-biz-de"},
+    {"query": "best noise cancelling headphones 2025", "axis": "mainstream-en"},
+    {"query": "how does DNS work", "axis": "docs-en"},
+    {"query": "fastapi websocket reconnect handler", "axis": "docs-en"},
+    {"query": "climate change carbon capture technology 2025", "axis": "mainstream-en"},
+    {"query": "Mietvertrag Kündigungsfrist gesetzliche Regelung", "axis": "docs-de"}
+  ]
+}
