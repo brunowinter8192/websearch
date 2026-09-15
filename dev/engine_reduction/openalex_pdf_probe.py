@@ -155,21 +155,8 @@ def build_eyeball_rows(works: list[dict]) -> list[dict]:
 
 # --- Report ---
 
-def write_report(records: list[dict], error: str | None) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
-
+def _build_per_query_table(records: list[dict]) -> list[str]:
     lines = [
-        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
-        "",
-        "Measurement only — no src/ touched, no wiring. Direct httpx against "
-        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
-        "",
-    ]
-    if error:
-        lines += [f"**Stopped early due to: {error}**", ""]
-
-    lines += [
         "## Per-Query Counts",
         "",
         "| # | Query | Total | pdf_url | landing-only | no OA | Top-10 total | Top-10 pdf_url | Top-10 landing-only | Top-10 no OA |",
@@ -196,16 +183,22 @@ def write_report(records: list[dict], error: str | None) -> Path:
         f"| **{sum_t10_total}** | **{sum_t10_pdf}** | **{sum_t10_landing}** | **{sum_t10_no_oa}** |"
     )
     lines.append("")
+    return lines
 
-    lines += ["## Type Breakdown of pdf_url-Present Works (full result set)", ""]
+
+def _build_type_breakdown_section(records: list[dict]) -> list[str]:
+    lines = ["## Type Breakdown of pdf_url-Present Works (full result set)", ""]
     for r in records:
         lines.append(f"**Q{r['qi']}** `{r['query'][:60]}`: " + (
             ", ".join(f"{t}={c}" for t, c in sorted(r["type_breakdown"].items(), key=lambda x: -x[1]))
             if r["type_breakdown"] else "(none)"
         ))
     lines.append("")
+    return lines
 
-    lines += ["## Eyeball: First 10 Results — Chosen URL vs best_oa_location.pdf_url", ""]
+
+def _build_eyeball_section(records: list[dict]) -> list[str]:
+    lines = ["## Eyeball: First 10 Results — Chosen URL vs best_oa_location.pdf_url", ""]
     for r in records:
         if r["eyeball"] is None:
             continue
@@ -217,6 +210,26 @@ def write_report(records: list[dict], error: str | None) -> Path:
             title = row["title"].replace("|", "\\|")
             lines.append(f"| {i} | {title} | {row['type']} | {row['chosen_url']} | {row['pdf_url']} |")
         lines.append("")
+    return lines
+
+
+def write_report(records: list[dict], error: str | None) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
+
+    lines = [
+        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
+        "",
+        "Measurement only — no src/ touched, no wiring. Direct httpx against "
+        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
+        "",
+    ]
+    if error:
+        lines += [f"**Stopped early due to: {error}**", ""]
+
+    lines += _build_per_query_table(records)
+    lines += _build_type_breakdown_section(records)
+    lines += _build_eyeball_section(records)
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
