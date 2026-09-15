@@ -20,6 +20,8 @@ LOCK_PATH = Path(SESSION_DIR).parent / "browser-session.lock"
 
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
 
+FOCUS_STEAL_POLL_INTERVAL_S = 0.25
+
 BACKGROUNDING_FLAGS = [
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
@@ -31,6 +33,7 @@ _tab = None
 _init_lock = asyncio.Lock()
 _lock_handle: browser_lock.LockHandle | None = None
 _owned_pids: list[int] = []
+_focus_watchdog_task: asyncio.Task | None = None
 
 
 # FUNCTIONS
@@ -117,6 +120,7 @@ async def get_tab():
             try:
                 logger.info("Starting Chrome session")
                 _reap_session_profile()
+                anchor_pid = _get_frontmost_pid()
                 options = build_options()
                 _browser = Chrome(options)
                 _browser._browser_process_manager = BrowserProcessManager(
@@ -125,6 +129,7 @@ async def get_tab():
                 _tab = await _browser.start()
                 _record_own_pids()
                 death_pipe.spawn_watchdog(_owned_pids)
+                _spawn_focus_watchdog(_owned_pids, anchor_pid)
             except Exception:
                 _browser = None
                 _tab = None
@@ -132,6 +137,55 @@ async def get_tab():
                 _lock_handle = None
                 raise
     return _tab
+
+
+def _get_frontmost_pid() -> int | None:
+    result = subprocess.run(
+        [
+            "osascript", "-e",
+            'tell application "System Events" to get unix id of first application process whose frontmost is true',
+        ],
+        capture_output=True, text=True,
+    )
+    pid = result.stdout.strip()
+    return int(pid) if pid.isdigit() else None
+
+
+def _activate_pid(pid: int) -> None:
+    subprocess.run(
+        [
+            "osascript", "-e",
+            f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true',
+        ],
+        capture_output=True, text=True,
+    )
+
+
+async def _focus_steal_watchdog_by_pid(owned_pids: set[int], last_other_pid: int | None) -> None:
+    while True:
+        current_pid = await asyncio.to_thread(_get_frontmost_pid)
+        if current_pid in owned_pids:
+            if last_other_pid is not None and last_other_pid not in owned_pids:
+                await asyncio.to_thread(_activate_pid, last_other_pid)
+        else:
+            last_other_pid = current_pid
+        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
+
+
+def _spawn_focus_watchdog(pids: list[int], anchor_pid: int | None) -> None:
+    global _focus_watchdog_task
+    _focus_watchdog_task = asyncio.create_task(_focus_steal_watchdog_by_pid(set(pids), anchor_pid))
+
+
+async def _cancel_focus_watchdog() -> None:
+    global _focus_watchdog_task
+    if _focus_watchdog_task is not None:
+        _focus_watchdog_task.cancel()
+        try:
+            await _focus_watchdog_task
+        except asyncio.CancelledError:
+            pass
+        _focus_watchdog_task = None
 
 
 async def new_tab():
@@ -159,6 +213,7 @@ async def kill_tab(tab) -> None:
 
 async def close_browser():
     global _browser, _tab
+    await _cancel_focus_watchdog()
     if _browser is not None:
         await _browser.stop()
         _browser = None
