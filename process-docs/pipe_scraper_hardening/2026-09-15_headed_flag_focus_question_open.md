@@ -130,3 +130,31 @@ unaffected by the new trailing-default parameter). No live browser was launched 
 the standing rule — the worker's own contribution is the mocked-suite result and the source-reading
 above; the live measurement in "The open question, answered by live measurement" section above is
 the project owner's own run, reported back the same day, not a worker observation.
+
+## Recap — 2026-09-15, same day, after the live measurement landed
+
+Two edits followed the live measurement above, both in this same session: this entry gained "The
+open question, answered by live measurement" (replacing the earlier open-question framing this
+file's own title still carries — the title was NOT renamed, by design; the h1 and intro paragraph
+were reworded instead to point forward to the answered section rather than claim the question open,
+since renaming an already-committed process-docs filename felt like more churn than the instruction
+asked for and the content is what a reader actually needs). `src/crawler/DOCS.md`'s own `-g` Gotcha
+was rewritten from "OPEN QUESTION" framing to stating the observed steal directly (app name,
+duration, self-released, no watchdog) with a pointer back here for the measurement itself — kept
+short and load-bearing, per instruction, not a restatement of the numbers already living in this
+file.
+
+**Explicitly not done, by direct instruction:** no watchdog was built. The blocker that stopped this
+milestone from attempting one (unconfirmed process identity) is gone per finding 1 above, but
+building one was named out of scope for this milestone specifically, separately from and after the
+measurement — a future agent picking this up should treat "the blocker is gone" and "build it" as
+two different decisions, only the first of which has been made.
+
+**For a future agent:** if you are the one deciding whether to build the watchdog, the three
+findings above (name unambiguous, one-steal-per-run at this sample size, ~2s duration) are your
+starting evidence, not a full case — the owner's own words: "three URLs is a small sample and I am
+not claiming it generalises to hundreds." A batch run against a real multi-hundred-URL list, with
+the same external-poller methodology, would be the natural next live-verification step if this gets
+picked up — ask Main for that live run rather than assuming three URLs' shape holds at scale.
+
+`dev/tests/` re-verified after both edits: 374 passed, unchanged (both edits were docs-only).
