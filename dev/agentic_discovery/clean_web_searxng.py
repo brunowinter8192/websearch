@@ -217,21 +217,7 @@ def clean_file(path: Path) -> tuple[int, int]:
     return chars_before, chars_after
 
 
-def main():
-    if not INPUT_DIR.exists():
-        print(f"ERROR: Input directory not found: {INPUT_DIR}")
-        sys.exit(1)
-
-    files = sorted(INPUT_DIR.glob("*.md"))
-    if not files:
-        print("No .md files found.")
-        sys.exit(0)
-
-    # Allow single-file test mode
-    test_file = None
-    if len(sys.argv) > 1:
-        test_file = sys.argv[1]
-
+def _process_files(files: list, test_file: str | None) -> tuple[int, int, int, int, dict]:
     total_before = 0
     total_after = 0
     processed = 0
@@ -256,8 +242,11 @@ def main():
             print(f"  ERROR {path.name}: {e}")
             skipped += 1
 
-    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    return total_before, total_after, processed, skipped, prefix_counts
 
+
+def _print_report(processed: int, skipped: int, prefix_counts: dict, total_before: int,
+                   total_after: int, reduction: float) -> None:
     print(f"\nFILES PROCESSED: {processed} (skipped: {skipped})")
     print(f"\nPATTERNS DETECTED:")
     for prefix, count in sorted(prefix_counts.items()):
@@ -268,6 +257,28 @@ def main():
     print(f"  Reduction:          {reduction:.1f}%")
     print(f"\nSCRIPT: dev/agentic_discovery/clean_web_searxng.py")
     print(f"OUTPUT: in-place (originals overwritten)")
+
+
+def main():
+    if not INPUT_DIR.exists():
+        print(f"ERROR: Input directory not found: {INPUT_DIR}")
+        sys.exit(1)
+
+    files = sorted(INPUT_DIR.glob("*.md"))
+    if not files:
+        print("No .md files found.")
+        sys.exit(0)
+
+    # Allow single-file test mode
+    test_file = None
+    if len(sys.argv) > 1:
+        test_file = sys.argv[1]
+
+    total_before, total_after, processed, skipped, prefix_counts = _process_files(files, test_file)
+
+    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+
+    _print_report(processed, skipped, prefix_counts, total_before, total_after, reduction)
 
 
 if __name__ == "__main__":
