@@ -212,12 +212,20 @@ def format_table(results: list[dict]) -> str:
 
 # Format aggregate summary section
 def format_summary(results: list[dict]) -> str:
-    total = len(results)
     cf_fronted = [r for r in results if r["cf_fronted"]]
     md_served = [r for r in results if r["md_served"]]
-    md_among_cf = [r for r in cf_fronted if r["md_served"]]
     errors = [r for r in results if r["error"]]
 
+    lines = _format_summary_stats(results, cf_fronted, md_served)
+    lines += _format_summary_errors(errors)
+    lines += _format_summary_positive_urls(md_served)
+    lines += _format_summary_server_distribution(cf_fronted)
+    return "\n".join(lines)
+
+
+def _format_summary_stats(results: list[dict], cf_fronted: list[dict], md_served: list[dict]) -> list:
+    total = len(results)
+    md_among_cf = [r for r in cf_fronted if r["md_served"]]
     reductions = [
         (1 - r["resp_bytes"] / r["html_bytes"]) * 100
         for r in md_served
@@ -241,18 +249,30 @@ def format_summary(results: list[dict]) -> str:
             "**Mean byte-reduction:** — (no positive cases with baseline)  ",
             "**Median byte-reduction:** —  ",
         ]
+    return lines
 
+
+def _format_summary_errors(errors: list[dict]) -> list:
+    lines = []
     if errors:
         lines += ["", f"**Request errors:** {len(errors)}  "]
         for r in errors:
             lines.append(f"- `{r['url']}`: {r['error']}  ")
+    return lines
 
+
+def _format_summary_positive_urls(md_served: list[dict]) -> list:
+    lines = []
     if md_served:
         lines += ["", "### Positive-Case URLs (for future run comparison)\n"]
         for r in md_served:
             token_note = f" · {r['x_md_tokens']} tokens" if r["x_md_tokens"] else ""
             lines.append(f"- {r['url']}{token_note}  ")
+    return lines
 
+
+def _format_summary_server_distribution(cf_fronted: list[dict]) -> list:
+    lines = []
     if cf_fronted:
         server_counts: dict[str, int] = {}
         for r in cf_fronted:
@@ -261,8 +281,7 @@ def format_summary(results: list[dict]) -> str:
         lines += ["", "### Server Header Distribution (CF-fronted sites)\n"]
         for s, n in sorted(server_counts.items(), key=lambda x: -x[1]):
             lines.append(f"- `{s}`: {n}  ")
-
-    return "\n".join(lines)
+    return lines
 
 
 def main() -> None:

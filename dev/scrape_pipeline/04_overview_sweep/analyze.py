@@ -207,6 +207,13 @@ def find_latest_dir(base: Path) -> Path:
 # ===================== REPORT =====================
 
 def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list, cleanraw_by_url: dict, drill_count: int) -> None:
+    lines = _format_header_and_ranking(sweep_dir, cleanraw_dir, configs)
+    lines += _format_per_shape_breakdown(configs)
+    lines += _format_drill_down(configs, cleanraw_by_url, sweep_dir, drill_count)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _format_header_and_ranking(sweep_dir: Path, cleanraw_dir: Path, configs: list) -> list:
     lines = [
         "# Overview Sweep Analysis",
         "",
@@ -225,9 +232,12 @@ def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list,
             f"| {c['median_f1']:.3f} | {c['min_f1']:.3f} | {c['mean_recall']:.3f} | {c['mean_precision']:.3f} "
             f"| {c['median_bytes_diff']:+,} | {c['fail_count']} | {c['elapsed_seconds']:.0f}s |"
         )
+    return lines
 
-    # Per-shape breakdown for top 10 configs
-    lines += [
+
+# Per-shape breakdown for top 10 configs
+def _format_per_shape_breakdown(configs: list) -> list:
+    lines = [
         "",
         "## Per-Shape Median F1 (top 10 configs)",
         "",
@@ -250,9 +260,12 @@ def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list,
     ]
     for i, c in enumerate(top, 1):
         lines.append(f"- **#{i}** = `{c['config_name']}`")
+    return lines
 
-    # Drill-down: unified_diff for top-3 configs × representative URLs
-    lines += ["", "## Diff Drill-Down — Top 3 Configs"]
+
+# Drill-down: unified_diff for top-3 configs × representative URLs
+def _format_drill_down(configs: list, cleanraw_by_url: dict, sweep_dir: Path, drill_count: int) -> list:
+    lines = ["", "## Diff Drill-Down — Top 3 Configs"]
     top3 = configs[:3]
     drill_urls = pick_drill_urls(cleanraw_by_url, drill_count)
     for c in top3:
@@ -278,8 +291,7 @@ def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list,
             lines.append(diff)
             lines.append("```")
             lines.append("")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
+    return lines
 
 
 def pick_drill_urls(cleanraw_by_url: dict, n: int) -> list:

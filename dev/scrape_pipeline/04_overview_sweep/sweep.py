@@ -60,7 +60,20 @@ async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
     print(f"output: {output_dir}\n", file=sys.stderr)
 
     browser_config = BrowserConfig(headless=True, verbose=False)
-    metadata = {
+    metadata = build_initial_metadata(query_id, query_text, urls, combos)
+
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        for i, combo in enumerate(combos, 1):
+            config_entry = await run_one_combo(crawler, combo, i, len(combos), urls, output_dir)
+            metadata["configs"].append(config_entry)
+
+    metadata["finished"] = datetime.now().isoformat(timespec="seconds")
+    (output_dir / "_run_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    print(f"\nDone. Metadata: {output_dir}/_run_metadata.json", file=sys.stderr)
+
+
+def build_initial_metadata(query_id: int, query_text: str, urls: list, combos: list) -> dict:
+    return {
         "started": datetime.now().isoformat(timespec="seconds"),
         "query_id": query_id,
         "query_text": query_text,
@@ -69,43 +82,38 @@ async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
         "configs": [],
     }
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        for i, combo in enumerate(combos, 1):
-            config_name = combo["name"]
-            config_dir = output_dir / config_name
-            config_dir.mkdir(parents=True, exist_ok=True)
 
-            print(f"  [{i:02d}/{len(combos)}] {config_name}", file=sys.stderr)
-            t0 = time.time()
-            run_config = build_run_config(combo)
-            try:
-                results = await crawler.arun_many(urls=urls, config=run_config)
-            except Exception as e:
-                elapsed = time.time() - t0
-                print(f"    EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
-                metadata["configs"].append({
-                    "name": config_name, "filter": combo["filter"], "content_source": combo["content_source"],
-                    "selector": combo["selector"], "elapsed_seconds": round(elapsed, 1),
-                    "exception": f"{type(e).__name__}: {e}", "outputs": [],
-                })
-                continue
-            elapsed = time.time() - t0
+async def run_one_combo(crawler, combo: dict, index: int, total: int, urls: list, output_dir: Path) -> dict:
+    config_name = combo["name"]
+    config_dir = output_dir / config_name
+    config_dir.mkdir(parents=True, exist_ok=True)
 
-            outputs = save_combo_outputs(combo, results, urls, config_dir)
-            metadata["configs"].append({
-                "name": config_name,
-                "filter": combo["filter"],
-                "content_source": combo["content_source"],
-                "selector": combo["selector"],
-                "elapsed_seconds": round(elapsed, 1),
-                "outputs": outputs,
-            })
-            success_count = sum(1 for o in outputs if o["status"] == "ok")
-            print(f"    {success_count}/{len(urls)} ok in {elapsed:.0f}s", file=sys.stderr)
+    print(f"  [{index:02d}/{total}] {config_name}", file=sys.stderr)
+    t0 = time.time()
+    run_config = build_run_config(combo)
+    try:
+        results = await crawler.arun_many(urls=urls, config=run_config)
+    except Exception as e:
+        elapsed = time.time() - t0
+        print(f"    EXCEPTION: {type(e).__name__}: {e}", file=sys.stderr)
+        return {
+            "name": config_name, "filter": combo["filter"], "content_source": combo["content_source"],
+            "selector": combo["selector"], "elapsed_seconds": round(elapsed, 1),
+            "exception": f"{type(e).__name__}: {e}", "outputs": [],
+        }
+    elapsed = time.time() - t0
 
-    metadata["finished"] = datetime.now().isoformat(timespec="seconds")
-    (output_dir / "_run_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    print(f"\nDone. Metadata: {output_dir}/_run_metadata.json", file=sys.stderr)
+    outputs = save_combo_outputs(combo, results, urls, config_dir)
+    success_count = sum(1 for o in outputs if o["status"] == "ok")
+    print(f"    {success_count}/{len(urls)} ok in {elapsed:.0f}s", file=sys.stderr)
+    return {
+        "name": config_name,
+        "filter": combo["filter"],
+        "content_source": combo["content_source"],
+        "selector": combo["selector"],
+        "elapsed_seconds": round(elapsed, 1),
+        "outputs": outputs,
+    }
 
 
 # ===================== CONFIG / COMBO GENERATION =====================
