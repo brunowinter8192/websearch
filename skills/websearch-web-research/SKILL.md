@@ -5,45 +5,45 @@ description:
 
 # Web Research — Skill
 
-**Default = Permanent Capture Workflow.**
-Assume permanent capture into RAG — always. Ad-hoc in-chat scraping only when the user EXPLICITLY asks for it. (PDF → MD conversion is a separate flow — see the `websearch-pdf` skill.)
+**Der Standard ist der Permanent Capture Workflow.**
+Gehe immer von einem permanenten Capture nach RAG aus. Ein Ad-hoc-Scrape direkt im Chat passiert nur, wenn der Nutzer AUSDRÜCKLICH danach fragt. Die Umwandlung von PDF nach MD ist ein eigener Ablauf und steht im Skill `websearch-pdf`.
 
-Run via `websearch <command>` (in PATH), foreground — no `&`, no redirect.
+Alles läuft über `websearch <command>`, das im PATH liegt, und zwar im Vordergrund, also ohne `&` und ohne Redirect.
 
 ## Commands
 
-| Command | Args | Does |
+| Command | Argumente | Tut |
 |---|---|---|
-| search_web | query (2–5 keywords) | Search: counts per engine |
-| search_engine_drilldown | query --engine <name> | URLs for one engine from the prior search_web |
-| scrape_url_chromium | url | Page → full markdown |
+| search_web | query (2 bis 5 Keywords) | Sucht und liefert die Trefferzahlen pro Engine |
+| search_engine_drilldown | query --engine <name> | Liefert die URLs einer Engine aus dem vorangegangenen search_web |
+| scrape_url_chromium | url | Wandelt eine Seite in vollständiges Markdown |
 
-**One scrape lane, no per-call choice.**
+**Es gibt genau eine Scrape-Lane, du wählst also nicht pro Aufruf.**
 
-## Search Strategy
+## Suchstrategie
 
-1. `search_web` for the engine breakdown. For a deep dive, fire 2–4 parallel calls with query variations.
-2. `search_engine_drilldown` to get an engine's URLs — which engine(s) is your free choice, guided by the breakdown counts.
-   - For papers and books, prefer drilling `openalex` — its entries carry a `PDF:` line with the direct full-text URL.
-3. `scrape_url_chromium` the relevant URLs. PDFs and books: give the user the exact URLs from the search results — the user downloads them. Do not scrape a `.pdf` URL (it returns an error: the PDF must be downloaded by the user).
+1. Rufe `search_web` auf, um die Aufteilung nach Engines zu sehen. Für einen Deep-Dive feuerst du 2 bis 4 parallele Aufrufe mit Varianten der Query ab.
+2. Rufe `search_engine_drilldown` auf, um die URLs einer Engine zu bekommen. Welche Engines du nimmst, ist deine freie Wahl, geleitet von den Trefferzahlen.
+   - Bei Papers und Büchern bevorzugst du `openalex`, denn dessen Einträge tragen eine `PDF:`-Zeile mit der direkten URL zum Volltext.
+3. Rufe `scrape_url_chromium` auf den relevanten URLs auf. Bei PDFs und Büchern gibst du dem Nutzer die exakten URLs aus den Suchergebnissen, und der Nutzer lädt sie selbst herunter. Scrape niemals eine `.pdf`-URL, denn das liefert einen Fehler, das PDF muss vom Nutzer heruntergeladen werden.
 
-**Write the query in the language you want results in.**
-The user-chat language does not apply here — a German conversation still gets English queries when English results are wanted.
+**Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
+Die Sprache des Chats gilt hier nicht. Eine Unterhaltung auf Deutsch bekommt trotzdem englische Queries, wenn englische Ergebnisse gewünscht sind.
 
 ---
 
 ## Permanent Capture Workflow
 
-**Errors the worker reports do not stop the flow.**
-- Carry it through to the end, unless an error is severe enough to make continuing impossible.
+**Fehler, die der Worker meldet, stoppen den Ablauf nicht.**
+- Trage den Ablauf bis zum Ende durch, es sei denn ein Fehler ist so schwer, dass ein Weitermachen unmöglich wird.
 
-### Step 1 — Source
+### Schritt 1 — Quelle
 
-1. Ask the user for the target collection and propose `<current_project>-reference`.
+1. Frage den Nutzer nach der Ziel-Collection und schlage `<current_project>-reference` vor.
 
-2. Drill down to the seed URL via `search_web` → `search_engine_drilldown`.
+2. Steige über `search_web` und danach `search_engine_drilldown` zur Seed-URL hinab.
 
-3. Write the worker prompt to `/tmp/spawn-capture-<domain>.md`.
+3. Schreibe den Worker-Prompt nach `/tmp/spawn-capture-<domain>.md`.
 
    ```markdown
    You are a WORKER.
@@ -51,56 +51,56 @@ The user-chat language does not apply here — a German conversation still gets 
    SEED_URL: <seed url>
    ```
 
-4. Spawn the worker.
+4. Spawne den Worker.
 
    ```bash
    worker-cli spawn capture-<domain> /tmp/spawn-capture-<domain>.md <current_project_root> sonnet
    ```
 
-**Insight**
-- The worker runs discovery, reports the path of the full URL list, and goes idle.
+**Hinweis**
+- Der Worker führt die Discovery aus, meldet den Pfad der vollständigen URL-Liste und geht idle.
 
-### Step 2 — Cull Review
+### Schritt 2 — Cull Review
 
-**Input, handed over by the worker.**
-- `/tmp/<domain>_urls.txt` holds the full discovery list, one URL per line.
+**Input, den der Worker übergibt.**
+- `/tmp/<domain>_urls.txt` hält die vollständige Discovery-Liste, eine URL pro Zeile.
 
-1. Shrink the list by pattern until the rest is readable in one pass. No judgment, pure matching.
-   - On `platform.claude.com` that was: keep one language, drop the console routes, drop the API reference. 3571 lines became 242.
+1. Schrumpfe die Liste über Muster, bis der Rest in einem Durchgang lesbar ist. Das ist reines Matching und keine inhaltliche Beurteilung.
+   - Auf `platform.claude.com` hieß das: eine Sprache behalten, die Console-Routen streichen, die API-Referenz streichen. Aus 3571 Zeilen wurden 242.
 
-2. Read every remaining line in full, with the Read tool.
+2. Lies jede verbleibende Zeile vollständig, mit dem Read-Tool.
 
-3. Write the kept URLs to `/tmp/<domain>_urls_culled.txt` yourself, and leave `/tmp/<domain>_urls.txt` untouched.
+3. Schreibe die behaltenen URLs selbst nach `/tmp/<domain>_urls_culled.txt` und lass `/tmp/<domain>_urls.txt` unangetastet.
 
-4. Confirm every kept URL appears in `/tmp/<domain>_urls.txt`.
+4. Bestätige, dass jede behaltene URL auch in `/tmp/<domain>_urls.txt` steht.
 
    ```bash
    comm -23 <(sort /tmp/<domain>_urls_culled.txt) <(sort /tmp/<domain>_urls.txt)
    ```
 
-5. Give the worker the go and name `/tmp/<domain>_urls_culled.txt` as the file to scrape.
-   - Or tell the worker that nothing gets scraped anymore.
+5. Gib dem Worker das Go und nenne `/tmp/<domain>_urls_culled.txt` als die Datei, die gescrapet wird.
+   - Oder sag dem Worker, dass nichts mehr gescrapet wird.
 
-**Insight**
-- The worker scrapes and hands you another txt of URLs, the ones it found on the scraped pages. Decide which of them get scraped, and treat any you keep exactly like the initial URLs in Step 2.
-- Once nothing gets scraped anymore, the worker cleans the scraped content.
+**Hinweis**
+- Der Worker scrapet und übergibt dir eine weitere txt mit URLs, nämlich denen, die er auf den gescrapeten Seiten gefunden hat. Entscheide, welche davon gescrapet werden, und behandle jede behaltene genau wie die ursprünglichen URLs in Schritt 2.
+- Sobald nichts mehr gescrapet wird, bereinigt der Worker die gescrapeten Inhalte.
 
-### Step 3 — Index
+### Schritt 3 — Index
 
-**Input, handed over by the worker.**
-- `/tmp/<domain>/` holds the cleaned `.md` files.
+**Input, den der Worker übergibt.**
+- `/tmp/<domain>/` hält die bereinigten `.md`-Dateien.
 
-1. Copy them into the collection directory.
+1. Kopiere sie in das Verzeichnis der Collection.
 
    ```bash
    D=~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<collection>
    mkdir -p $D && cp /tmp/<domain>/*.md $D/
    ```
 
-2. Sample the copied files and confirm the noise the worker cut is gone.
-   - Report leftover noise and stop.
+2. Ziehe Stichproben aus den kopierten Dateien und bestätige, dass das vom Worker geschnittene Rauschen weg ist.
+   - Melde übrig gebliebenes Rauschen und stoppe.
 
-3. Diff the domain's URLs in the collection against the full discovery list.
+3. Diffe die URLs der Domain in der Collection gegen die vollständige Discovery-Liste.
 
    ```bash
    grep -h -m1 '<!-- source:' $D/*.md | sed 's|.*source: ||;s| -->||' \
@@ -108,22 +108,22 @@ The user-chat language does not apply here — a German conversation still gets 
    comm -23 /tmp/<domain>_indexed_urls.txt <(sort /tmp/<domain>_urls.txt)
    ```
 
-4. Show the user every URL the diff printed, and delete on their word.
+4. Zeige dem Nutzer jede URL, die der Diff ausgegeben hat, und lösche auf sein Wort.
 
    ```bash
    grep -l 'source: <url> -->' $D/*.md
    rag-cli delete --collection <collection> --document <file>
    ```
 
-5. Index the collection.
+5. Indexiere die Collection.
 
    ```bash
    PYTHONUNBUFFERED=1 rag-cli index --collection <collection> > /tmp/<collection>_index.log 2>&1
    ```
 
-6. Go idle once that command has been run, and never poll it.
+6. Geh idle, sobald dieses Command läuft, und polle es nie.
 
-7. Read `/tmp/<collection>_index.log` in full when the run has finished.
+7. Lies `/tmp/<collection>_index.log` vollständig, sobald der Lauf beendet ist.
 
-8. Tell the user every error, and nothing else.
-   - The indexing errors from the log, plus everything the worker reported and everything you ran into yourself.
+8. Nenne dem Nutzer jeden Fehler, und sonst nichts.
+   - Das sind die Indexierungsfehler aus dem Log, alles was der Worker gemeldet hat und alles worüber du selbst gestolpert bist.

@@ -5,100 +5,107 @@ description:
 
 # PDF → MD → Index — Skill
 
-Interactive. The USER runs the convert command; Claude does ONLY: naming, cleanup, index.
-ONE command converts ALL PDFs in the batch sequentially, each as a whole document,
-MinerU `vlm-auto-engine` (mlx).
+Dieser Ablauf ist interaktiv. Der NUTZER führt das Convert-Command aus, Claude macht NUR Benennung, Cleanup und Index.
+EIN Command wandelt ALLE PDFs des Batches nacheinander um, jedes als ganzes Dokument,
+über MinerU mit `vlm-auto-engine` (mlx).
 
-## Paths
+## Pfade
 - MINERU = `~/Documents/ai/Mineru/venv/bin/python ~/Documents/ai/Mineru/workflow.py`
-- COLLECTION = `trading-reference` (default; confirm only if user names another)
+- COLLECTION = `trading-reference`, der Standard, den du nur bestätigst wenn der Nutzer eine andere nennt
 - OUTPUT_DIR = `~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<COLLECTION>/`
 
-## Rule
-The CONVERT command → USER runs it. Claude runs: naming, cleanup scripts, `rag-cli index`.
+## Regel
+Das CONVERT-Command führt der NUTZER aus. Claude führt die Benennung, die Cleanup-Skripte und `rag-cli index` aus.
 
-## Phase 0 — Naming + skip-check (CLAUDE)
-1. Per PDF: assign a PascalCase STEM, alphanumeric + underscore ONLY — no brackets, parentheses,
-   dots, commas, spaces. Rename the source PDF in place → `<STEM>.pdf`.
-2. Skip-check: drop any PDF that already has `<OUTPUT_DIR>/<STEM>.md` — only un-converted PDFs go
-   into the command.
-3. Backend is always `vlm-auto-engine` (mlx).
+## Phase 0 — Benennung und Skip-Check (CLAUDE)
+1. Vergib pro PDF einen STEM in PascalCase, ausschließlich alphanumerisch plus Unterstrich, also keine eckigen
+   Klammern, keine runden Klammern, keine Punkte, keine Kommas und keine Leerzeichen. Benenne das Quell-PDF
+   direkt an Ort und Stelle um nach `<STEM>.pdf`.
+2. Skip-Check: Wirf jedes PDF raus, zu dem es bereits `<OUTPUT_DIR>/<STEM>.md` gibt. Nur noch nicht umgewandelte
+   PDFs gehen in das Command.
+3. Das Backend ist immer `vlm-auto-engine` (mlx).
 
-## Phase 1 — MinerU convert (USER runs, ONE command for the whole batch)
-POST THE COMMAND IN CHAT — never write it to a file. ONE fenced block listing ALL non-skipped
-PDFs (whole document), and nothing else around it but the caveats that matter:
+## Phase 1 — MinerU convert (der NUTZER führt aus, EIN Command für den ganzen Batch)
+POSTE DAS COMMAND IM CHAT und schreibe es niemals in eine Datei. Es ist EIN Codeblock, der ALLE nicht
+übersprungenen PDFs auflistet, jedes als ganzes Dokument, und drumherum steht nichts außer den Vorbehalten, die zählen:
 ```
 mkdir -p <OUTPUT_DIR>
 PYTHONUNBUFFERED=1 ~/Documents/ai/Mineru/venv/bin/python ~/Documents/ai/Mineru/workflow.py convert \
   --pdf "<PDF1>" "<PDF2>" "<PDF3>" ... \
   --out-dir <OUTPUT_DIR> 2>&1 | tee /tmp/<batch>_mineru.log
 ```
-- Output: flat `<OUTPUT_DIR>/<STEM>.md` per PDF.
-- USER runs the block, reports done.
+- Die Ausgabe ist eine flache `<OUTPUT_DIR>/<STEM>.md` pro PDF.
+- Der NUTZER führt den Block aus und meldet, dass er fertig ist.
 
-## Phase 2 — Clean (CLAUDE)
-Run on each `<OUTPUT_DIR>/<STEM>.md`. Audit FIRST — sample the hits, then strip.
+## Phase 2 — Cleanup (CLAUDE)
+Laufe über jede `<OUTPUT_DIR>/<STEM>.md`. Prüfe ZUERST, zieh also Stichproben aus den Treffern, und strippe erst danach.
 
-Per-class detection + action:
-- **A — lost formula (UNRECOVERABLE → do NOT clean):** `??`, `` (U+FFFD), empty/`?`-containing
-  `<sub>`/`<sup>` (`<su[bp]>[[:space:]]*</su[bp]>|<su[bp]>[^<]*\?[^<]*</su[bp]>`), whitespace-only
-  `$$…$$` blocks (split on `$$`, test odd segments). Any A hit → do NOT clean.
-  **Report the symbol/page to the user.**
-- **B — spaced math (RECOVERABLE → de-space):** `_ {`, `^ {`, `\ [a-z]( [a-z])+`, spaced single-char
-  runs `([A-Za-z] ){3,}[A-Za-z]`. Collapse runs to real tokens (`\mathrm { a r g m i n }` →
-  `\mathrm{argmin}`). Invariant: alphanumeric-char count EXACTLY stable; word count drops.
-- **C — encoding (RECOVERABLE → unescape):** HTML entities
-  `&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-fA-F]+);`, mojibake `Ã.`/`â€`. Entity count → 0.
-- **D — prose char-typos:** ignore. Pervasive prose garble → treat as A, report.
-- **E — backmatter (MANDATORY STRIP):** from the first
-  References/Bibliography/Index/Symbols/Abbreviations/Nomenclature heading in the last ~40% (or
-  headingless reference run: most non-blank lines match `\(\d{4}[a-z]?\)`/`^Surname, Init.`; index run:
-  `,\s*\d+([–-]\d+)?`) through EOF. Confirm 3 lines above the cut are real content. Do NOT cut numbered
-  content subsections (heading text starts with a digit) or per-chapter "Bibliographic Notes".
-- **F — table markup (RECOVERABLE → pipe-text):** MinerU `<table>` HTML, markup ratio > 50%. Strip
-  tags, one row per `</tr>`, cells `|`-separated, content unchanged, no truncation. Validate cell-text
-  token set unchanged.
-- **G — image tags (MANDATORY STRIP):** `!\[[^\]]*\]\([^)]*\)` → remove every match. Drop lines
-  emptied by the removal; collapse 3+ consecutive blank lines → 1. Re-scan: count → 0.
-- **H — block noise (MANDATORY STRIP):** consecutive runs ≥ 2 of bare fence lines (line = optional
-  whitespace + 3+ backticks + optional whitespace, nothing else) → remove the whole run. KEEP isolated
-  fences and language-tagged openers (```` ```txt ````, ```` ```csv ````).
-  Separator lines: on the space-stripped line, if the most-common char ∈ `=#-~*_.+` is > 70% of chars
-  AND length ≥ 20 → remove the line. Re-scan: max consecutive bare-fence run = 1.
-- **I — run-on tokens (CONDITIONAL → user decision):** whitespace-split; flag tokens ≥ 46 chars with
-  alpha-ratio > 0.7, excluding tokens containing `\` / `http` / `/`. Any flagged token > 2000 chars →
-  STOP, list doc + token to the user, wait for decision. All flagged ≤ 2000 chars → leave in place, do
-  NOT strip.
-- **J — oversized spans (MANDATORY):** scan BOTH granularities, report every hit with line number +
-  first 200 chars:
+Erkennung und Aktion pro Klasse:
+- **A — verlorene Formel (NICHT WIEDERHERSTELLBAR, also NICHT reinigen):** `??`, `` (U+FFFD), leere oder ein `?`
+  enthaltende `<sub>` und `<sup>` (`<su[bp]>[[:space:]]*</su[bp]>|<su[bp]>[^<]*\?[^<]*</su[bp]>`), dazu
+  `$$…$$`-Blöcke aus reinem Whitespace (auf `$$` splitten, die ungeraden Segmente prüfen). Jeder Treffer in A heißt,
+  dass NICHT gereinigt wird.
+  **Melde das Symbol und die Seite an den Nutzer.**
+- **B — zerrissene Mathematik (WIEDERHERSTELLBAR, also Leerzeichen entfernen):** `_ {`, `^ {`, `\ [a-z]( [a-z])+`,
+  dazu Läufe aus einzelnen Zeichen mit Leerzeichen `([A-Za-z] ){3,}[A-Za-z]`. Ziehe diese Läufe zu echten Tokens
+  zusammen, also `\mathrm { a r g m i n }` zu `\mathrm{argmin}`. Die Invariante ist, dass die Anzahl der
+  alphanumerischen Zeichen EXAKT gleich bleibt und die Wortanzahl sinkt.
+- **C — Encoding (WIEDERHERSTELLBAR, also unescapen):** HTML-Entities
+  `&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-fA-F]+);` und Mojibake wie `Ã.` oder `â€`. Die Anzahl der Entities muss danach 0 sein.
+- **D — Zeichenfehler im Fließtext:** ignorieren. Ist der Fließtext durchgängig zerschossen, behandle es wie A und melde es.
+- **E — Backmatter (ZWINGEND STRIPPEN):** ab der ersten Überschrift
+  References, Bibliography, Index, Symbols, Abbreviations oder Nomenclature in den letzten rund 40 Prozent bis EOF.
+  Das gilt auch für einen Referenz-Lauf ohne Überschrift, bei dem die meisten nicht-leeren Zeilen auf
+  `\(\d{4}[a-z]?\)` oder `^Surname, Init.` passen, sowie für einen Index-Lauf mit `,\s*\d+([–-]\d+)?`.
+  Bestätige, dass 3 Zeilen über dem Schnitt echter Inhalt stehen. Schneide KEINE nummerierten Unterabschnitte mit
+  Inhalt, deren Überschrift mit einer Ziffer beginnt, und keine Bibliographic Notes einzelner Kapitel.
+- **F — Tabellen-Markup (WIEDERHERSTELLBAR, also in Pipe-Text wandeln):** MinerU schreibt `<table>` als HTML, mit einem
+  Markup-Anteil über 50 Prozent. Strippe die Tags, mache eine Zeile pro `</tr>`, trenne die Zellen mit `|`, lass den
+  Inhalt unverändert und kürze nichts. Validiere, dass die Token-Menge des Zelltexts unverändert ist.
+- **G — Image-Tags (ZWINGEND STRIPPEN):** `!\[[^\]]*\]\([^)]*\)`, entferne jeden Treffer. Wirf Zeilen weg, die durch das
+  Entfernen leer werden, und ziehe 3 oder mehr aufeinanderfolgende Leerzeilen auf 1 zusammen. Scanne erneut, die Anzahl muss 0 sein.
+- **H — Block-Rauschen (ZWINGEND STRIPPEN):** Läufe von 2 oder mehr nackten Fence-Zeilen, wobei eine Zeile aus
+  optionalem Whitespace, 3 oder mehr Backticks und optionalem Whitespace besteht und sonst nichts. Entferne den ganzen
+  Lauf. BEHALTE einzelne Fences und Opener mit Sprach-Tag, also ```` ```txt ```` und ```` ```csv ````.
+  Bei Trennlinien gilt: Wenn auf der von Leerzeichen befreiten Zeile das häufigste Zeichen aus `=#-~*_.+` über
+  70 Prozent aller Zeichen ausmacht UND die Länge mindestens 20 beträgt, entferne die Zeile. Scanne erneut, der längste
+  Lauf nackter Fences muss 1 sein.
+- **I — zusammengelaufene Tokens (BEDINGT, der Nutzer entscheidet):** Splitte an Whitespace und markiere Tokens ab
+  46 Zeichen mit einem Alpha-Anteil über 0.7, wobei Tokens mit `\`, `http` oder `/` ausgenommen sind. Ist ein markiertes
+  Token länger als 2000 Zeichen, STOPPE, liste dem Nutzer Dokument und Token und warte auf seine Entscheidung. Sind alle
+  markierten Tokens höchstens 2000 Zeichen lang, lass sie stehen und strippe NICHT.
+- **J — übergroße Passagen (ZWINGEND):** Scanne BEIDE Granularitäten und melde jeden Treffer mit Zeilennummer und den
+  ersten 200 Zeichen:
   ```bash
   awk '{ if (length($0) > 1000) print NR, length($0) }' "$MD"                       # long lines
   awk 'BEGIN{RS="\n\n"} { gsub(/\n/," "); if (length($0) > 1000) print NR, length($0) }' "$MD"  # long blocks
   ```
-  Per hit, classify and act:
-  - **repeated-char run** (`(.)\1{39,}`) → collapse to 3 chars:
+  Klassifiziere jeden Treffer und handle danach:
+  - **Lauf aus wiederholten Zeichen** (`(.)\1{39,}`) zieht auf 3 Zeichen zusammen:
     `re.sub(r"(.)\1{39,}", lambda m: m.group(1)*3, text)`.
-  - **real prose/table/formula** → leave in place.
-  Re-scan: report max line length + max block length; name every remaining > 1000 span as real content.
+  - **echter Fließtext, echte Tabelle oder echte Formel** bleibt stehen.
+  Scanne erneut und melde die maximale Zeilenlänge und die maximale Blocklänge. Benenne jede verbleibende Passage über
+  1000 Zeichen als echten Inhalt.
 
-Prose window (every md): pull 1–2 body lines (len > 70, starts alpha, > 10 spaces, alpha-ratio > 0.78)
-from the middle third and READ. Coherent → pass; garbled → A → report (unrecoverable).
+Fließtext-Fenster für jede md: Zieh 1 bis 2 Textzeilen aus dem mittleren Drittel, mit einer Länge über 70, beginnend mit
+einem Buchstaben, mit mehr als 10 Leerzeichen und einem Alpha-Anteil über 0.78, und LIES sie. Ist der Text kohärent, ist
+der Test bestanden. Ist er zerschossen, ist es Klasse A und du meldest es als nicht wiederherstellbar.
 
-Per-issue scripts: one `/tmp/fix_<issue>_<STEM>.py` each, test on the file, re-scan that class to 0,
-spot-check 10–15 middle lines. Preserve source content; overwrite in place; back up to
-`/tmp/backup_<STEM>.md` first.
+Skripte pro Problem: je ein `/tmp/fix_<issue>_<STEM>.py`, teste es an der Datei, scanne diese Klasse erneut auf 0 und
+prüfe stichprobenartig 10 bis 15 Zeilen aus der Mitte. Erhalte den Quellinhalt, überschreibe direkt an Ort und Stelle und
+sichere vorher nach `/tmp/backup_<STEM>.md`.
 
 ## Phase 3 — Index (CLAUDE)
 ```
 rag-cli index --collection <COLLECTION>
 ```
-Incremental (hash-skip). Must be the ONLY command in its Bash call — assignments, a `cd` and a
-redirect may accompany it, nothing else, no command substitution.
+Das läuft inkrementell und überspringt über den Hash. Es muss das EINZIGE Command in seinem Bash-Aufruf sein. Zuweisungen,
+ein `cd` und ein Redirect dürfen dabeistehen, sonst nichts, und keine Command-Substitution.
 
-When it returns: READ THE OUTPUT IN FULL before reporting or diagnosing.
-The error sits in the FIRST line. A stalled chunk counter = run ENDED, never "slow".
+Wenn es zurückkommt, LIES DIE AUSGABE VOLLSTÄNDIG, bevor du meldest oder diagnostizierst.
+Der Fehler sitzt in der ERSTEN Zeile. Ein stehender Chunk-Zähler heißt, dass der Lauf BEENDET ist, und niemals dass er langsam ist.
 
-`HTTP 400 … exceeds the available context size` → re-run class J's scan on the named document, fix,
-re-index.
+Bei `HTTP 400 … exceeds the available context size` lässt du den Scan aus Klasse J erneut über das genannte Dokument
+laufen, behebst den Fund und indexierst erneut.
 
-Report files indexed + chunks. Confirm docs in the collection.
+Melde die Anzahl der indexierten Dateien und der Chunks. Bestätige, dass die Dokumente in der Collection liegen.
