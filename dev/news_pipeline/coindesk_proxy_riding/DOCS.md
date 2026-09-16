@@ -100,7 +100,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Writes:** stdout PASS/FAIL, exit code.
 **Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_cooldown_policy.py`.
 
-### smoke_stage1.py (254 LOC)
+### smoke_stage1.py (274 LOC)
 
 **Purpose:** Stage 1 smoke validating the `src/news/engine/proxy_riding/` package — import check, deterministic watchdog test, and a mini live run (10 inventory URLs, 2 slots, 1 browser).
 **Reads:** `src/news/engine/proxy_riding/` package (import validation); 10 inventory URLs (live run).
