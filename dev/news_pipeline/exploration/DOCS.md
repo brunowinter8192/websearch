@@ -49,12 +49,21 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Writes:** `05_data/walk_<ts>.md`, `05_data/walk_<ts>_articles.json`, `05_data/fixed_<ts>.md`, `05_data/deep_<ts>.md`.
 **Called by:** CLI only. `--mode walk|fixed`, `--n N` (default 25), `--invalid-types T1,T2` (fixed mode), `--delay S` (default 0.3).
 
-### 05b_coindesk_warmth_probe.py (422 LOC)
+### 05b_coindesk_warmth_probe.py (354 LOC)
 
 **Purpose:** Measures IP warmth duration after a browser session closes. Captures the first timeline API URL + headers via Chrome (same mechanism as 04), saves to `state.json`, closes Chrome, replays the SAME URL at cumulative intervals (T=0,10,20,30,60,120,180,300s). At first 403: tests httpx feedpage GET re-warm + subprocess cold call. Findings: warmth lasts ≥300s for repeated-URL replays after browser close; warmth is IP-level (fresh subprocess with no prior coindesk connection returns 200 when IP warm); Phase C (rewarm/cold path) not triggered in first run — warmth outlasted the 300s ladder; a deep loop of 350 cursor advances (~4-5min) also fully succeeded.
 **Reads:** live CoinDesk site + timeline API.
 **Writes:** `05b_output/warmth_<ts>.md`, `05b_output/state.json`.
 **Called by:** CLI only.
+**Calls out:** `_05b_report.py` (this directory) for the markdown report renderer.
+
+### _05b_report.py (107 LOC)
+
+**Purpose:** Markdown report assembly for `05b_coindesk_warmth_probe.py` — one section-builder helper per report section (header, timing ladder, feedpage rewarm test, subprocess cold test).
+**Reads:** nothing — takes `05b`'s result values as arguments.
+**Writes:** nothing directly — returns rendered lines; `write_warmth_report` performs the actual file write to the path given by `05b_coindesk_warmth_probe.py`.
+**Called by:** `05b_coindesk_warmth_probe.py` only.
+**Calls out:** none.
 
 ### 06_coindesk_full_discovery.py (508 LOC)
 
