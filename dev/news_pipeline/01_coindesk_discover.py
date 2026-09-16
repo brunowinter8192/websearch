@@ -130,52 +130,9 @@ async def discover_workflow():
     chrome = Chrome()
     tab = await chrome.connect(ws_url)
     try:
-        print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
-        await tab.go_to(TARGET_URL, timeout=60)
-        await asyncio.sleep(3.0)
-
-        initial = await extract_articles(tab)
-        all_urls: dict[str, dict] = {a["url"]: a for a in initial}
-        print(f"Batch 0: {len(initial)} initial articles", file=sys.stderr)
-
-        for click_n in range(1, MAX_CLICK_ROUNDS + 1):
-            pre = count_older_than_cutoff(list(all_urls.values()), cutoff)
-            if pre >= PRE_48H_THRESHOLD:
-                print(f"Coverage reached: {pre} articles older than 48h (before click {click_n}).", file=sys.stderr)
-                break
-
-            prev_count = len(all_urls)
-            clicked = await click_button(tab)
-            if not clicked:
-                print(f"Button gone at click {click_n} — end of feed.", file=sys.stderr)
-                break
-
-            await asyncio.sleep(2.0)
-            await wait_for_new_articles(tab, prev_count)
-            fresh = await extract_articles(tab)
-            added = {a["url"]: a for a in fresh if a["url"] not in all_urls}
-            all_urls.update(added)
-            pre = count_older_than_cutoff(list(all_urls.values()), cutoff)
-            print(f"Batch {click_n}: +{len(added)} | total={len(all_urls)} | older-than-48h={pre}", file=sys.stderr)
-
-            if pre >= PRE_48H_THRESHOLD:
-                print(f"Coverage reached: {pre} articles older than 48h after {click_n} click(s).", file=sys.stderr)
-                break
-        else:
-            print(
-                "WARNING: MAX_CLICK_ROUNDS reached without termination — coverage may be incomplete",
-                file=sys.stderr,
-            )
-
+        all_urls = await run_click_loop(tab, cutoff)
     finally:
-        await tab.close()
-        try:
-            await chrome.close()
-        except Exception as e:
-            print(f"Chrome WS close (non-fatal): {e}", file=sys.stderr)
-        kill_chrome_on_port(port)
-        shutil.rmtree(session_dir, ignore_errors=True)
-        print(f"Chrome on port {port} killed, session dir removed.", file=sys.stderr)
+        await teardown_chrome_session(tab, chrome, port, session_dir)
 
     entries = build_entries(all_urls)
     # Live-blogs are continuously-updated multi-story containers that don't fit a daily-cron
@@ -188,6 +145,63 @@ async def discover_workflow():
 
 
 # FUNCTIONS
+async def run_click_loop(tab, cutoff) -> dict:
+    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+
+    initial = await extract_articles(tab)
+    all_urls: dict[str, dict] = {a["url"]: a for a in initial}
+    print(f"Batch 0: {len(initial)} initial articles", file=sys.stderr)
+
+    for click_n in range(1, MAX_CLICK_ROUNDS + 1):
+        pre = count_older_than_cutoff(list(all_urls.values()), cutoff)
+        if pre >= PRE_48H_THRESHOLD:
+            print(f"Coverage reached: {pre} articles older than 48h (before click {click_n}).", file=sys.stderr)
+            break
+
+        should_stop = await run_one_click(tab, click_n, all_urls, cutoff)
+        if should_stop:
+            break
+    else:
+        print(
+            "WARNING: MAX_CLICK_ROUNDS reached without termination — coverage may be incomplete",
+            file=sys.stderr,
+        )
+
+    return all_urls
+
+
+async def run_one_click(tab, click_n: int, all_urls: dict, cutoff) -> bool:
+    prev_count = len(all_urls)
+    clicked = await click_button(tab)
+    if not clicked:
+        print(f"Button gone at click {click_n} — end of feed.", file=sys.stderr)
+        return True
+
+    await asyncio.sleep(2.0)
+    await wait_for_new_articles(tab, prev_count)
+    fresh = await extract_articles(tab)
+    added = {a["url"]: a for a in fresh if a["url"] not in all_urls}
+    all_urls.update(added)
+    pre = count_older_than_cutoff(list(all_urls.values()), cutoff)
+    print(f"Batch {click_n}: +{len(added)} | total={len(all_urls)} | older-than-48h={pre}", file=sys.stderr)
+
+    if pre >= PRE_48H_THRESHOLD:
+        print(f"Coverage reached: {pre} articles older than 48h after {click_n} click(s).", file=sys.stderr)
+        return True
+    return False
+
+
+async def teardown_chrome_session(tab, chrome, port: int, session_dir: str) -> None:
+    await tab.close()
+    try:
+        await chrome.close()
+    except Exception as e:
+        print(f"Chrome WS close (non-fatal): {e}", file=sys.stderr)
+    kill_chrome_on_port(port)
+    shutil.rmtree(session_dir, ignore_errors=True)
+    print(f"Chrome on port {port} killed, session dir removed.", file=sys.stderr)
 
 # Bind to port 0 to get a free OS-assigned port
 def get_free_port() -> int:
