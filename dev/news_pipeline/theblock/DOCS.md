@@ -36,7 +36,7 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Writes:** `discover_coverage_report.md`; per-sub checkpoints in `cache/`.
 **Called by:** CLI only.
 
-### probe_pool_size.py (335 LOC)
+### probe_pool_size.py (357 LOC)
 
 **Purpose:** Measures raw proxy pool size from 68 public source URLs — pure fetch+parse+count, NO liveness checking, NO proxy contacted. Fetches all sources concurrently (`httpx.AsyncClient`, `Semaphore(20)`, 15s timeout), parses `host:port` entries from bare/`proto://`/`proto://user:pass@` formats. Exports `HTTP_SOURCES`, `SOCKS4_SOURCES`, `SOCKS5_SOURCES` (reused by `probe_repo_cf_survey.py`).
 **Reads:** 68 public proxy-list source URLs.
