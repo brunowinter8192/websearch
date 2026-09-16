@@ -139,6 +139,3 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 
 ## State
 `raw/` — one HTML per ok URL fetched (output-dir scoped, not committed). `png/` — historical throughput reconstruction plots (tracked).
-
-## Gotchas
-`--page-timeout` (default 8000ms) is the dead-proxy timeout lever — dead proxies hit this before rotating. Regwall detection reads `result.markdown.raw_markdown`, not raw HTML (REGWALL_SIGNALS are hidden React components always present in HTML, so raw-HTML matching would false-positive on every page).

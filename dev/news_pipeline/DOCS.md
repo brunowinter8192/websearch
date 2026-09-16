@@ -73,6 +73,3 @@ Per-domain news scraping pipeline for the trading-bot data layer. CoinDesk → R
 
 ## State
 `01_json/`, `02_output/`, `02b_data/`, `03_data/`, `04_json/`, `smoke_output/` — all pipeline-stage intermediate outputs, gitignored. `md/` — 2 historical run-analysis reports (coindesk_scrape_2026-05-27[_freshctx].md), tracked.
-
-## Gotchas
-`02_coindesk_scrape.py` writes no report file — console-only progress; the two `md/coindesk_scrape_2026-05-27*.md` reports were produced by a separate historical run-analysis pass, not by the script itself.
