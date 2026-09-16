@@ -33,7 +33,7 @@ gets checked against `ground_truth()`, computed from those same source lists.
 
 ## Modules
 
-### 01_resume_state_probe.py (280 LOC)
+### 01_resume_state_probe.py (295 LOC)
 
 **Purpose:** Verifies, by running it, whether `BFSDeepCrawlStrategy(resume_state=...)` can
 pre-populate the BFS frontier with an arbitrary URL set instead of a single `start_url` — and, if
@@ -48,25 +48,34 @@ after a `crawl4ai` version bump).
 
 ---
 
-### _fixture_site.py (415 LOC)
+### _fixture_site.py (167 LOC)
 
-**Purpose:** Deterministic local HTTP fixture for `src/crawler/discovery.py`'s three seed feeders
-and their merge into one seed set — a documentation site with a nested `<sitemapindex>`, a
-`robots.txt` carrying `Allow`/`Disallow`/`Sitemap`, a 3-version `__NEXT_DATA__` navtree (2 pages
-exclusive to the oldest version), an isolated RSC (`self.__next_f.push`) demo page, and two
-switchable failure modes: thin-body-200 (on/off), and a genuine SLIDING-WINDOW 429
-(`/_control/rate_limit?limit=M&window=T` — "at most M requests in the trailing T seconds",
-recoverable once a caller slows down, not an absolute counter that trips once and never recovers) —
-neither failure mode is currently exercised by any test, since `discover_urls_workflow` no longer
-fetches a page itself; both remain for whichever future caller (e.g. the scrape step) needs a
-fetch-failure/rate-limit target. `ground_truth()` states total/navtree/sitemap-listed/robots-listed
-counts, computed from the same source lists that generate the served pages.
-**Reads:** nothing on disk — ground truth is stated as source lists in this file itself.
+**Purpose:** The HTTP serving mechanics for the fixture site — request handling, the two switchable
+failure modes (thin-body-200, sliding-window 429), and server lifecycle. Re-exports the constants
+and `ground_truth()`/`seed_url()` from `_fixture_site_content.py` so `dev.url_discovery._fixture_site`
+stays the one import surface `dev/tests/` and `02_fixture_site_server.py` already depend on.
+**Reads:** nothing on disk — ground truth is stated as source lists in `_fixture_site_content.py`.
 **Writes:** nothing (in-memory HTTP responses only).
-**Called by:** `02_fixture_site_server.py` (standalone use); any future dev script/test needing a
-deterministic discovery target.
-**Calls out:** stdlib only (`http.server`, `threading`, `json`, `urllib.parse`) — no
-`crawl4ai`/`httpx` dependency, since this module is a target, never a client.
+**Called by:** `02_fixture_site_server.py` (standalone use); `dev/tests/test_discovery.py` and
+`dev/tests/test_seed_feeders.py` (`start_fixture_server`/`stop_fixture_server`/`ground_truth`/
+`seed_url` plus re-exported constants); any future dev script/test needing a deterministic
+discovery target.
+**Calls out:** `_fixture_site_content.py` (same directory, `sys.path`-inserted import, matching
+`02_fixture_site_server.py`'s own convention); stdlib only otherwise (`http.server`, `threading`,
+`json`, `urllib.parse`) — no `crawl4ai`/`httpx` dependency, since this module is a target, never a
+client.
+
+### _fixture_site_content.py (263 LOC)
+
+**Purpose:** Defines the fixture site's shape — every constant (navtree/sitemap/robots page lists),
+every page/route content generator (`__NEXT_DATA__` pages, leaf pages, the RSC demo page, robots.txt,
+sitemap XML), `_build_routes()`, and `ground_truth()`/`_expected_seeds()`/`seed_url()` computed off
+those same source lists.
+**Reads:** nothing on disk — ground truth is stated as source lists in this file itself.
+**Writes:** nothing.
+**Called by:** `_fixture_site.py` (imports constants + `_build_routes`/`ground_truth`/`seed_url` for
+re-export and for `start_fixture_server`).
+**Calls out:** stdlib only (`json`, `urllib.parse`).
 
 ### 02_fixture_site_server.py (45 LOC)
 

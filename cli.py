@@ -107,7 +107,7 @@ def _write_discovery_output(result, url_file: str) -> None:
     print(f"url-file: {url_file} ({len(scrape_urls)} URLs written)")
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = NoHelpParser(
         prog="cli.py",
         description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls."
@@ -145,33 +145,40 @@ def main():
     p.add_argument("--url-file", required=True,
                    help="Path to write the discovered URL list (one per line, for pipe_scraper --url-file)")
 
-    # ── Dispatch ──────────────────────────────────────────────────────────────
-    args = parser.parse_args()
+    return parser
+
+
+def _dispatch_search_engine_drilldown(args) -> None:
+    key = cache_key(args.query, "en", None, None)
+    hit = cache_read(key)
+    cache_status = "hit"
+    if hit is None:
+        asyncio.run(search_web_workflow(args.query, "en", None, None))
+        hit = cache_read(key)
+        cache_status = "miss_then_searched" if hit is not None else "miss_then_search_failed"
+    if hit is None:
+        _log_drilldown(args.query, "en", args.engine, key, cache_status, False, [])
+        print(f'# search_engine_drilldown: cache write failed for "{args.query}"')
+        return
+    pools = hit.get("pools", {})
+    if args.engine not in pools:
+        _log_drilldown(args.query, "en", args.engine, key, cache_status, False, [])
+        avail = ", ".join(sorted(pools.keys())) or "(none)"
+        print(f"Engine '{args.engine}' not in cached pools. Available: {avail}")
+        return
+    urls = [entry["url"] for entry in pools[args.engine]]
+    _log_drilldown(args.query, "en", args.engine, key, cache_status, True, urls)
+    print(format_engine_pool(pools[args.engine], args.engine, args.query))
+
+
+def main():
+    args = build_parser().parse_args()
 
     if args.cmd == "search_web":
         result = asyncio.run(search_web_workflow(args.query, "en", None, None))
 
     elif args.cmd == "search_engine_drilldown":
-        key = cache_key(args.query, "en", None, None)
-        hit = cache_read(key)
-        cache_status = "hit"
-        if hit is None:
-            asyncio.run(search_web_workflow(args.query, "en", None, None))
-            hit = cache_read(key)
-            cache_status = "miss_then_searched" if hit is not None else "miss_then_search_failed"
-        if hit is None:
-            _log_drilldown(args.query, "en", args.engine, key, cache_status, False, [])
-            print(f'# search_engine_drilldown: cache write failed for "{args.query}"')
-            return
-        pools = hit.get("pools", {})
-        if args.engine not in pools:
-            _log_drilldown(args.query, "en", args.engine, key, cache_status, False, [])
-            avail = ", ".join(sorted(pools.keys())) or "(none)"
-            print(f"Engine '{args.engine}' not in cached pools. Available: {avail}")
-            return
-        urls = [entry["url"] for entry in pools[args.engine]]
-        _log_drilldown(args.query, "en", args.engine, key, cache_status, True, urls)
-        print(format_engine_pool(pools[args.engine], args.engine, args.query))
+        _dispatch_search_engine_drilldown(args)
         return
 
     elif args.cmd == "scrape_url_chromium":

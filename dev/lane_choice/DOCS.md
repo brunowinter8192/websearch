@@ -81,7 +81,7 @@ runs against the original complaint's own sustained-load, multi-URL workload sha
 **Calls out:** the `websearch` PATH command indirectly (via `01_backfill_pairs.py`); macOS
 `osascript`/System Events for the poll.
 
-### 03_live_focus_probe.py (364 LOC)
+### 03_live_focus_probe.py (386 LOC)
 
 **Purpose:** Live HUMAN focus-steal verification for one or more ad-hoc URLs — one visible countdown
 so the human can switch away and start typing, then a real scrape per `--url` (repeatable) via this
@@ -113,35 +113,84 @@ verdict, full sample series).
 **Calls out:** this worktree's own `venv/bin/python cli.py` (subprocess, real production entry
 point, one call per URL); macOS `osascript`/System Events (via the imported `02_` function).
 
-### 04_lane_metrics.py (520 LOC)
+### 04_lane_metrics.py (62 LOC)
 
-**Purpose:** Classifies every block (non-empty, non-full-comment-line) of each paired chromium/
-camoufox scrape_content `.md` file as CONTENT or BOILERPLATE — Kohlschuetter/Fankhauser/Nejdl
-(WSDM 2010) Algorithm 2's decision tree over `numWords`/`linkDensity`, adapted to markdown image/
-link syntax, plus the jusText-style short-heading rescue rule applied once afterwards. On top of
-that, a block-level PROSE test — CONTENT, word count at or under a corpus-derived length cap, and
-containing a sentence-ending mark (`.`/`!`/`?`) — added because a single very long markdown line
-(embedded JSON/CSS/markup) can pass the CONTENT tree with a huge word count no real prose block
-has (real corpus evidence: a 404 page scoring 91% CONTENT off a 5,521-word "block"). The cap itself
-is derived at runtime, never hardcoded: the 99th percentile of the pooled block-word-count
-distribution across every chromium file in the corpus (chromium output is post-`PruningContentFilter`,
-the best available proxy for prose length in this project) — see
-`process-docs/lane_choice/2026-08-27_prose_cap_and_corpus_wide_run.md` for the full distribution and
-the reasoning. Builds its own pair list from the production log (see Gotchas) rather than a fixed
-file, so the corpus grows automatically as production scraping continues. Reports content-word/
-block/PROSE counts, overall link density and the longest content block per lane per URL, plus a
-cross-pair aggregate (CONTENT-word/percentage wins, cap-exclusion totals per lane, and how many
-chromium-zero-CONTENT pairs camoufox rescues with a PROSE block). Purely descriptive: neither the
-script nor its report ever states which lane is "better".
-**Reads:** the production `scrape_log.jsonl` (hardcoded absolute path to the MAIN repo, never a
-worktree copy — same convention as `01_backfill_pairs.py`, see Gotchas); the scrape_content `.md`
-files its freshest-ok records name, each read once, line-by-line (several camoufox files run past
-1MB, the largest so far ~52MB).
-**Writes:** `md/04_lane_metrics_report_<ts>.md` only; never touches the production log, the source
-`scrape_content` files, or `01_`'s resume state.
+**Purpose:** Orchestrates the pair-collection → PROSE-cap → per-URL classification → aggregate →
+report pipeline, importing each step from its own sibling module below. Neither the script nor its
+report ever states which lane is "better" — purely descriptive.
+**Reads:** nothing directly — delegates to `_lane_metrics_pairing.py`.
+**Writes:** nothing directly — delegates to `_lane_metrics_report.py`.
 **Called by:** run directly, ad hoc, whenever the full paired corpus needs a fresh content-density
 measurement.
-**Calls out:** none — stdlib only (`json`, `re`, `statistics`).
+**Calls out:** none — stdlib only (`sys`, `time`).
+
+### _lane_metrics_pairing.py (68 LOC)
+
+**Purpose:** Builds the URL pair list from the production log — freshest no-`acquisition_error`,
+real-`bytes_returned`, `content_path`-bearing record per `(url, engine)`, paired across both lanes.
+**Reads:** the production `scrape_log.jsonl` (hardcoded absolute path to the MAIN repo, never a
+worktree copy — same convention as `01_backfill_pairs.py`, see Gotchas).
+**Writes:** nothing.
+**Called by:** `04_lane_metrics.py`.
+**Calls out:** none — stdlib only (`json`).
+
+### _lane_metrics_blocks.py (77 LOC)
+
+**Purpose:** Reads one scrape_content `.md` file into blocks (non-comment, non-empty lines with
+>=1 token), each carrying its own word count, link density, heading flag and sentence-end flag.
+**Reads:** the scrape_content `.md` file passed to `read_blocks`, line-by-line (several camoufox
+files run past 1MB, the largest so far ~52MB).
+**Writes:** nothing.
+**Called by:** `04_lane_metrics.py`, `_lane_metrics_prose.py`.
+**Calls out:** none — stdlib only (`re`).
+
+### _lane_metrics_classify.py (66 LOC)
+
+**Purpose:** Kohlschuetter/Fankhauser/Nejdl (WSDM 2010) Algorithm 2's decision tree over
+`numWords`/`linkDensity`, adapted to markdown image/link syntax, plus the jusText-style
+short-heading rescue rule applied once afterwards.
+**Reads:** nothing — pure functions over an already-read block list.
+**Writes:** nothing.
+**Called by:** `_lane_metrics_prose.py`.
+**Calls out:** none — stdlib only.
+
+### _lane_metrics_prose.py (90 LOC)
+
+**Purpose:** The PROSE test layered on top of Algorithm 2's CONTENT/BOILERPLATE verdict — CONTENT,
+word count at or under a corpus-derived length cap, and containing a sentence-ending mark
+(`.`/`!`/`?`) — added because a single very long markdown line (embedded JSON/CSS/markup) can pass
+the CONTENT tree with a huge word count no real prose block has (real corpus evidence: a 404 page
+scoring 91% CONTENT off a 5,521-word "block"). The cap itself is derived at runtime, never
+hardcoded: the 99th percentile of the pooled block-word-count distribution across every chromium
+file in the corpus (chromium output is post-`PruningContentFilter`, the best available proxy for
+prose length in this project) — see
+`process-docs/lane_choice/2026-08-27_prose_cap_and_corpus_wide_run.md` for the full distribution
+and the reasoning.
+**Reads:** nothing directly — takes already-read block lists, or a path via `compute_file_metrics`.
+**Writes:** nothing.
+**Called by:** `04_lane_metrics.py`.
+**Calls out:** `_lane_metrics_blocks.py`, `_lane_metrics_classify.py`; stdlib `statistics`.
+
+### _lane_metrics_aggregate.py (55 LOC)
+
+**Purpose:** Cross-pair aggregate over every URL's per-lane metrics — CONTENT-word/percentage
+wins, cap-exclusion totals per lane, and how many chromium-zero-CONTENT pairs camoufox rescues
+with a PROSE block.
+**Reads:** nothing.
+**Writes:** nothing.
+**Called by:** `04_lane_metrics.py`.
+**Calls out:** none — stdlib only.
+
+### _lane_metrics_report.py (136 LOC)
+
+**Purpose:** Renders the per-URL sections, the all-pairs table, the PROSE-cap section and the
+aggregate/rescue sections into one markdown report and writes it.
+**Reads:** nothing.
+**Writes:** `md/04_lane_metrics_report_<ts>.md` only; never touches the production log, the source
+`scrape_content` files, or `01_`'s resume state.
+**Called by:** `04_lane_metrics.py`.
+**Calls out:** `_lane_metrics_aggregate.py` (for `LANES`), `_lane_metrics_prose.py` (for
+`PROSE_PERCENTILE`).
 
 ---
 
@@ -184,7 +233,7 @@ four scripts, timestamped, never overwritten.
   and `process-docs/camoufox_lane/` — the same pattern (edit on a never-merged branch, run, revert in
   the same session, verify an empty `git diff integration -- src/`) applies to any future throwaway
   A/B question against this lane, but nothing here should be built to support it permanently.
-- **`04_lane_metrics.py`'s `PROD_SCRAPE_LOG_PATH` is the same hardcoded-absolute-path-into-the-MAIN-repo
+- **`_lane_metrics_pairing.py`'s `PROD_SCRAPE_LOG_PATH` is the same hardcoded-absolute-path-into-the-MAIN-repo
   convention as `01_backfill_pairs.py`'s constant of the same name, and for the same reason** —
   worktrees have their own separate, gitignored `src/logs/` tree, so a worktree-relative path would
   silently see nothing. As of 2026-08-27 this REPLACED the earlier fixed `/tmp/lane_pairs_20.json`
@@ -209,7 +258,7 @@ four scripts, timestamped, never overwritten.
   process-docs entry. See `process-docs/lane_choice/2026-08-27_prose_cap_and_corpus_wide_run.md` for
   the distribution that produced the first cap value (72 words) and why p99 was chosen over other
   percentiles.
-- **A "comment line" for `04_lane_metrics.py`'s block filter means the ENTIRE line is one or more
+- **A "comment line" for `_lane_metrics_blocks.py`'s block filter means the ENTIRE line is one or more
   HTML comments** (`COMMENT_LINE_RE = ^<!--.*-->$`), matching the sidecar header exactly. A line
   with a comment mixed into other content (e.g. `</div><!-- #page -->`, seen in real camoufox
   `mode: markdown` output) is NOT stripped and becomes a normal block, tag text and all — this is

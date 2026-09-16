@@ -40,7 +40,29 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
     log = []
     t0 = time.time()
 
-    # Step 1: fetch root __NEXT_DATA__ (GENERIC — works for any Next.js site)
+    blob = fetch_root_nextdata(log)
+    if blob is None:
+        return {"log": log, "urls": []}
+
+    mc, fpt_rest, cats_fpt = parse_fpt_sidebar(log, blob)
+    all_versions = detect_versions(log, mc)
+    ghec_rest = fetch_ghec_sidebar(log, include_ghec, all_versions, cats_fpt)
+    ghec_normalized = normalize_ghec_urls(log, ghec_rest, fpt_rest)
+    ghes_rest, ghes_normalized = fetch_ghes_sidebars(log, include_ghes, all_versions, fpt_rest, ghec_normalized)
+    all_normalized, all_raw, all_urls = union_discovered_urls(
+        log, fpt_rest, ghec_rest, ghec_normalized, ghes_rest, ghes_normalized)
+    save_discovered_urls(log, all_urls)
+    gold, recall, elapsed_total = score_against_gold(log, gold_path, all_urls, t0)
+    report_path = save_full_report(
+        log, recall, gold, elapsed_total, fpt_rest, ghec_rest, ghes_rest, ghec_normalized, all_normalized)
+
+    return {"log": log, "recall": recall, "report_path": report_path}
+
+
+# FUNCTIONS
+
+# Step 1: fetch root __NEXT_DATA__ (GENERIC — works for any Next.js site)
+def fetch_root_nextdata(log: list) -> dict | None:
     log.append("## Step 1: __NEXT_DATA__ from seed page")
     log.append("Generic move: Next.js embeds full nav tree in initial HTML — no browser needed.")
     t1 = time.time()
@@ -49,10 +71,13 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
     elapsed_fetch = time.time() - t1
     if not blob:
         log.append("FAIL: no __NEXT_DATA__ found — site may not be Next.js SSR.")
-        return {"log": log, "urls": []}
+        return None
     log.append(f"Found __NEXT_DATA__: {len(json.dumps(blob))} chars  ({elapsed_fetch:.1f}s)")
+    return blob
 
-    # Step 2: parse FPT sidebar (GENERIC — walk sidebarTree recursively)
+
+# Step 2: parse FPT sidebar (GENERIC — walk sidebarTree recursively)
+def parse_fpt_sidebar(log: list, blob: dict) -> tuple[dict, list, dict]:
     log.append("\n## Step 2: parse sidebarTree (free-pro-team@latest)")
     log.append("Generic move: sidebarTree in mainContext contains full product nav.")
     mc = blob["props"]["pageProps"]["mainContext"]
@@ -61,15 +86,21 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
     log.append(f"FPT sidebarTree: {len(fpt_rest)} URLs matching /rest")
     cats_fpt = count_categories(fpt_rest, "/de/rest/")
     log.append(f"FPT categories: {len(cats_fpt)}")
+    return mc, fpt_rest, cats_fpt
 
-    # Step 3: detect available versions (GENERIC — allVersions in mainContext)
+
+# Step 3: detect available versions (GENERIC — allVersions in mainContext)
+def detect_versions(log: list, mc: dict) -> dict:
     log.append("\n## Step 3: detect versions via allVersions")
     log.append("Generic move: allVersions lists all content variants — check each for extra nav entries.")
     all_versions = mc.get("allVersions", {})
     log.append(f"Versions found: {list(all_versions.keys())}")
+    return all_versions
 
-    # Step 4: fetch GHEC sidebar (SITE-SPECIFIC: knowing GHEC has enterprise-admin etc.)
-    # Generic framing: for each version, construct version-prefixed URL and compare nav.
+
+# Step 4: fetch GHEC sidebar (SITE-SPECIFIC: knowing GHEC has enterprise-admin etc.)
+# Generic framing: for each version, construct version-prefixed URL and compare nav.
+def fetch_ghec_sidebar(log: list, include_ghec: bool, all_versions: dict, cats_fpt: dict) -> list:
     ghec_rest = []
     if include_ghec and "enterprise-cloud@latest" in all_versions:
         log.append("\n## Step 4: GHEC sidebarTree (enterprise-cloud@latest)")
@@ -94,11 +125,14 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
             log.append(f"GHEC-only categories: {sorted(ghec_only)}")
         else:
             log.append("WARN: no __NEXT_DATA__ on GHEC page")
+    return ghec_rest
 
-    # Step 4b: normalize GHEC URLs to canonical /de/rest/... form
-    # Key insight: goldstandard uses /de/rest/enterprise-admin/... (pre-redirect form),
-    # not /de/enterprise-cloud@latest/rest/enterprise-admin/... (post-redirect).
-    # Generic move: strip version prefix to get canonical short-form URL.
+
+# Step 4b: normalize GHEC URLs to canonical /de/rest/... form
+# Key insight: goldstandard uses /de/rest/enterprise-admin/... (pre-redirect form),
+# not /de/enterprise-cloud@latest/rest/enterprise-admin/... (post-redirect).
+# Generic move: strip version prefix to get canonical short-form URL.
+def normalize_ghec_urls(log: list, ghec_rest: list, fpt_rest: list) -> list:
     ghec_normalized = []
     if ghec_rest:
         for u in ghec_rest:
@@ -107,10 +141,14 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
         log.append(f"GHEC normalized to /de/rest/: {len(ghec_normalized)} URLs")
         ghec_only_normalized = set(ghec_normalized) - set(fpt_rest)
         log.append(f"GHEC-only pages (not in FPT): {len(ghec_only_normalized)}")
+    return ghec_normalized
 
-    # Step 5: GHES sidebars — ALL versions (generic: check every version listed in allVersions)
-    # Key insight: deprecated pages disappear from newer versions but persist in older ones.
-    # Generic move: iterate ALL versions, union their normalized sidebars.
+
+# Step 5: GHES sidebars — ALL versions (generic: check every version listed in allVersions)
+# Key insight: deprecated pages disappear from newer versions but persist in older ones.
+# Generic move: iterate ALL versions, union their normalized sidebars.
+def fetch_ghes_sidebars(log: list, include_ghes: bool, all_versions: dict,
+                        fpt_rest: list, ghec_normalized: list) -> tuple[list, list]:
     ghes_rest = []
     ghes_normalized_set: set = set()
     if include_ghes:
@@ -147,8 +185,12 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
         ghes_only = ghes_normalized_set - set(fpt_rest) - set(ghec_normalized)
         log.append(f"GHES union: {len(ghes_normalized_set)} normalized, {len(ghes_only)} net new vs FPT+GHEC "
                    f"({elapsed_ghes:.1f}s)")
+    return ghes_rest, ghes_normalized
 
-    # Step 6: union all discovered URLs (all normalized to /de/rest/... form)
+
+# Step 6: union all discovered URLs (all normalized to /de/rest/... form)
+def union_discovered_urls(log: list, fpt_rest: list, ghec_rest: list, ghec_normalized: list,
+                          ghes_rest: list, ghes_normalized: list) -> tuple[list, list, list]:
     log.append("\n## Step 6: union discovered URLs (all normalized to /de/rest/...)")
     log.append("Generic move: strip version prefix to collapse all variant URLs to canonical form.")
     all_normalized = sorted(set(fpt_rest) | set(ghec_normalized) | set(ghes_normalized))
@@ -160,12 +202,17 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
     log.append(f"  GHEC raw: {len(ghec_rest)}  →  normalized unique additions: {len(set(ghec_normalized) - set(fpt_rest))}")
     log.append(f"  GHES (all versions) raw: {len(ghes_rest)}  →  "
                f"normalized unique additions: {len(set(ghes_normalized) - set(fpt_rest) - set(ghec_normalized))}")
+    return all_normalized, all_raw, all_urls
 
-    # Step 7: save discovered set
+
+# Step 7: save discovered set
+def save_discovered_urls(log: list, all_urls: list) -> None:
     save_discovered(all_urls)
     log.append(f"Discovered URLs saved to: {DISCOVERED_FILE}")
 
-    # Step 8: score vs goldstandard
+
+# Step 8: score vs goldstandard
+def score_against_gold(log: list, gold_path: Path, all_urls: list, t0: float) -> tuple[frozenset, dict, float]:
     log.append("\n## Step 8: recall vs goldstandard")
     gold = load_gold(gold_path)
     recall = compute_recall(all_urls, gold)
@@ -186,17 +233,20 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
         for u in sorted(recall["noise_urls"])[:20]:
             log.append(f"  - {u}")
 
-    # Step 9: save report
+    return gold, recall, elapsed_total
+
+
+# Step 9: save report
+def save_full_report(log: list, recall: dict, gold: frozenset, elapsed_total: float,
+                     fpt_rest: list, ghec_rest: list, ghes_rest: list,
+                     ghec_normalized: list, all_normalized: list) -> Path:
     report = build_report(log, recall, gold, elapsed_total, len(fpt_rest), len(ghec_rest), len(ghes_rest),
                           len(set(ghec_normalized) - set(fpt_rest)),
                           len(all_normalized))
     report_path = save_report(report)
     log.append(f"\nReport: {report_path}")
+    return report_path
 
-    return {"log": log, "recall": recall, "report_path": report_path}
-
-
-# FUNCTIONS
 
 # Fetch HTML via urllib (no browser — generic for any HTTP site)
 def fetch_html(url: str) -> str:

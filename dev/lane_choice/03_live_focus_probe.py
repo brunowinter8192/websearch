@@ -285,7 +285,18 @@ def write_report(
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_path = REPORT_DIR / f"03_live_focus_probe_report_{ts}.md"
 
-    lines = [
+    lines = _format_report_header(ts, lane, url_runs, baseline_app)
+    lines += _format_url_spans(url_runs)
+    lines += _format_verdict_sections(verdict)
+    lines += _format_per_url_verdict_sections(per_url_verdicts)
+    lines += _format_sample_series(frontmost_samples)
+
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report_path
+
+
+def _format_report_header(ts: str, lane: str, url_runs: list[dict], baseline_app: str) -> list:
+    return [
         f"## Live focus-steal probe ({ts})",
         f"- Lane: {lane}",
         f"- URLs ({len(url_runs)}): {', '.join(run['url'] for run in url_runs)}",
@@ -298,13 +309,20 @@ def write_report(
         "## Per-URL launch spans (elapsed seconds since the countdown ended — the instrument polled "
         "continuously across all of them, one fresh browser per URL)",
     ]
+
+
+def _format_url_spans(url_runs: list[dict]) -> list:
+    lines = []
     for i, run in enumerate(url_runs, start=1):
         lines.append(
             f"- [{i}] `{run['url']}`: t={run['start_s']}s-{run['end_s']}s "
             f"(wall {round(run['end_s'] - run['start_s'], 2)}s), exit code {run['returncode']}"
         )
+    return lines
 
-    lines += [
+
+def _format_verdict_sections(verdict: dict) -> list:
+    lines = [
         "",
         "## Overall verdict (whole sequence, all URLs pooled)",
         f"- {verdict['fm_total']} samples, {verdict['fm_dev_count']} deviations, "
@@ -319,8 +337,11 @@ def write_report(
         f"## Deviation offsets ({verdict['fm_dev_count']} of {verdict['fm_total']})",
     ]
     lines.append("NONE" if not verdict["fm_dev_offsets"] else ", ".join(f"t={t}s" for t in verdict["fm_dev_offsets"]))
+    return lines
 
-    lines += ["", "## Per-URL verdict (instrument samples sliced to each URL's own launch span above)"]
+
+def _format_per_url_verdict_sections(per_url_verdicts: list[tuple[dict, dict]]) -> list:
+    lines = ["", "## Per-URL verdict (instrument samples sliced to each URL's own launch span above)"]
     for run, url_verdict in per_url_verdicts:
         lines += [
             f"### `{run['url']}` — t={run['start_s']}s-{run['end_s']}s, exit code {run['returncode']}",
@@ -328,12 +349,13 @@ def write_report(
             f"longest continuous deviation {url_verdict['fm_longest_s']}s",
             "",
         ]
+    return lines
 
-    lines += ["## Full sample series"]
+
+def _format_sample_series(frontmost_samples: list[tuple[float, str]]) -> list:
+    lines = ["## Full sample series"]
     lines += [f"- t={t}s: {app}" for t, app in frontmost_samples]
-
-    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return report_path
+    return lines
 
 
 def main():

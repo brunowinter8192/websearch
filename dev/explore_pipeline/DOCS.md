@@ -26,21 +26,21 @@ URL discovery and traversal testing for Crawl4AI's BFS deep crawl strategy — r
 **Writes:** `md/03_explore_strategies_<domain>_<timestamp>.md` — strategy comparison table (pages, time, per-page ms, duplicates), speedup calc, depth distribution per strategy.
 **Called by:** CLI only.
 
-### 04_render_recall.py (299 LOC)
+### 04_render_recall.py (321 LOC)
 
 **Purpose:** Measures URL discovery recall on docs.github.com/de/rest against a 305-URL gold standard. Compares three BFS strategies (prefetch+dCL baseline, prefetch+NI, full-render NI) to isolate JS-rendering effect on discovered URL count. CLI flags: `--gold PATH`, `--max-pages INT`, `--depth INT`, `--no-regression`, `--strategies COMMA_LIST`, `--delay INT`.
 **Reads:** `goldstandard/docs_github_rest.txt` (305 URLs, github/docs content/rest repo tree).
 **Writes:** `md/04_docs_github_rest_<YYYYMMDD>.md`.
 **Called by:** CLI only. Strategy C (prefetch=False) resilient to GitHub WAF rate-limiting; other strategies need `--delay`.
 
-### 05_playwright_bfs.py (328 LOC)
+### 05_playwright_bfs.py (382 LOC)
 
 **Purpose:** Manual Playwright-per-page BFS — renders each page via `AsyncWebCrawler.arun()` (real browser, post-JS DOM), extracts `result.links.internal`, follows matching `--include-pattern` URLs. Measures recall vs goldstandard. Contrasts with `04_render_recall.py` (HTTP BFS). CLI flags: `--gold PATH`, `--seed URL`, `--include-pattern STR`, `--max-pages INT`, `--max-depth INT`, `--delay N.N`, `--page-timeout INT`, `--concurrency {1,2,3}`, `--stealth`.
 **Reads:** `goldstandard/docs_github_rest.txt`.
 **Writes:** `md/05_docs_github_rest_<YYYYMMDD>.md` — recall table (found/matched/missing/noise/latency), baseline comparison, sample missing URLs.
 **Called by:** CLI only.
 
-### 06_nextdata_probe.py (339 LOC)
+### 06_nextdata_probe.py (389 LOC)
 
 **Purpose:** Agentic discovery via `__NEXT_DATA__` nav-tree extraction — fetches seed HTML via plain HTTP (no browser), parses `sidebarTree` from the Next.js SSR blob, detects all versions via `allVersions`, fetches each version's REST root page, unions all sidebar trees normalized to canonical `/de/rest/…` form. Scores recall vs goldstandard. Generic to any Next.js SSR doc site. CLI flags: `--gold PATH`, `--no-ghec`, `--no-ghes`.
 **Reads:** `goldstandard/docs_github_rest.txt`.
