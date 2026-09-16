@@ -197,6 +197,15 @@ async def run_regression() -> list[dict]:
 
 # Build full markdown report from main eval results + regression rows
 def format_report(gold: frozenset, main_results: dict, regression_rows: list[dict]) -> str:
+    lines = _format_main_results_table(gold, main_results)
+    lines += _format_key_url_check(main_results)
+    lines += _format_recovery_analysis(gold, main_results)
+    lines += _format_best_strategy_missing(main_results)
+    lines += _format_regression_check(regression_rows)
+    return "\n".join(lines)
+
+
+def _format_main_results_table(gold: frozenset, main_results: dict) -> list:
     lines = [
         "# Recall Probe — docs.github.com/de/rest",
         "",
@@ -213,14 +222,21 @@ def format_report(gold: frozenset, main_results: dict, regression_rows: list[dic
             f"| {name} | {s['found']} | {s['matched']} | {s['recall_pct']:.1f}% "
             f"| {s['missing']} | {s['noise']} | {s['elapsed_s']} | {s['per_page_ms']} |"
         )
+    return lines
 
-    # Key URL check
-    lines += ["", "## Key URL Check", ""]
+
+# Key URL check
+def _format_key_url_check(main_results: dict) -> list:
+    lines = ["", "## Key URL Check", ""]
     for name, s in main_results.items():
         hit = "FOUND" if AGENT_TASKS_URL in s["found_urls"] else "MISSING"
         lines.append(f"- `agent-tasks/agent-tasks` in {name}: **{hit}**")
+    return lines
 
-    # Recovery analysis: URLs A missed that B or C found
+
+# Recovery analysis: URLs A missed that B or C found
+def _format_recovery_analysis(gold: frozenset, main_results: dict) -> list:
+    lines = []
     a_found = main_results.get("A_prefetch_domcontentloaded", {}).get("found_urls", set())
     for cand_name in ["B_prefetch_networkidle", "C_bfs_networkidle"]:
         if cand_name not in main_results:
@@ -239,10 +255,13 @@ def format_report(gold: frozenset, main_results: dict, regression_rows: list[dic
             lines.append(f"- {u}")
         if len(in_gold) > RECOVERED_SAMPLE:
             lines.append(f"- ... ({len(in_gold) - RECOVERED_SAMPLE} more)")
+    return lines
 
-    # Best strategy missing sample
+
+# Best strategy missing sample
+def _format_best_strategy_missing(main_results: dict) -> list:
     best_name = max(main_results, key=lambda n: main_results[n]["recall_pct"])
-    lines += [
+    lines = [
         "",
         f"## Still Missing from Best Strategy ({best_name})",
         "",
@@ -251,7 +270,11 @@ def format_report(gold: frozenset, main_results: dict, regression_rows: list[dic
     ]
     for u in main_results[best_name]["missing_sample"]:
         lines.append(f"- {u}")
+    return lines
 
+
+def _format_regression_check(regression_rows: list[dict]) -> list:
+    lines = []
     if regression_rows:
         lines += [
             "",
@@ -264,8 +287,7 @@ def format_report(gold: frozenset, main_results: dict, regression_rows: list[dic
             lines.append(
                 f"| {r['domain']} | {r['strategy']} | {r['found']} | {r['elapsed_s']} | {r['per_page_ms']} |"
             )
-
-    return "\n".join(lines)
+    return lines
 
 
 # Save report to md/04_docs_github_rest_YYYYMMDD.md, return path

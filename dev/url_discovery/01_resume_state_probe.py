@@ -222,20 +222,32 @@ def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
 
     lines = [f"# resume_state probe ({ts})", "",
              "Target: books.toscrape.com (static, stable). crawl4ai 0.9.2.", ""]
+    lines += _format_experiment_1_section(exp1)
+    lines += _format_experiment_2_section(exp2)
+    lines += _format_experiment_3_section(exp3)
+    lines += _format_experiment_4_section(exp4)
 
-    lines += ["## Experiment 1 — existence + start_url fate", "",
-              f"- start_url: `{exp1['start_url']}`",
-              f"- resume_state pending ({len(exp1['pending_urls'])}): "
-              f"{', '.join(exp1['pending_urls'])}",
-              f"- max_depth=0 (isolates: exactly {len(exp1['pending_urls'])} requests if start_url ignored)",
-              f"- total results returned: {exp1['total_results']}",
-              f"- all 3 pending URLs crawled: {exp1['all_pending_crawled']}",
-              f"- start_url crawled too: {exp1['start_url_crawled']}", ""]
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report_path
+
+
+def _format_experiment_1_section(exp1: dict) -> list:
+    lines = ["## Experiment 1 — existence + start_url fate", "",
+             f"- start_url: `{exp1['start_url']}`",
+             f"- resume_state pending ({len(exp1['pending_urls'])}): "
+             f"{', '.join(exp1['pending_urls'])}",
+             f"- max_depth=0 (isolates: exactly {len(exp1['pending_urls'])} requests if start_url ignored)",
+             f"- total results returned: {exp1['total_results']}",
+             f"- all 3 pending URLs crawled: {exp1['all_pending_crawled']}",
+             f"- start_url crawled too: {exp1['start_url_crawled']}", ""]
     for row in exp1["results"]:
         lines.append(f"  - `{row['url']}` success={row['success']} status={row['status_code']} depth={row['depth']}")
     lines.append("")
+    return lines
 
-    lines += ["## Experiment 2 — resume_state dict shape", ""]
+
+def _format_experiment_2_section(exp2: dict) -> list:
+    lines = ["## Experiment 2 — resume_state dict shape", ""]
     for key, label in [("minimal_correct", "2a. minimal correct: {\"pending\": [{url, parent_url}]}, no other keys"),
                         ("wrong_key", "2b. wrong key: {\"seed_urls\": [...]} (dict truthy, \"pending\" missing)"),
                         ("empty_dict", "2c. empty dict: {} (falsy -> falls back to plain start_url crawl)")]:
@@ -246,8 +258,11 @@ def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
         for row in sub["results"]:
             lines.append(f"  - `{row['url']}` success={row['success']} status={row['status_code']} depth={row['depth']}")
         lines.append("")
+    return lines
 
-    lines += ["## Experiment 3 — depth bookkeeping vs max_depth", ""]
+
+def _format_experiment_3_section(exp3: dict) -> list:
+    lines = ["## Experiment 3 — depth bookkeeping vs max_depth", ""]
     va = exp3["variant_a_seeded_depth_2"]
     lines += [f"### Variant A — depths={{{MYSTERY_URL}: 2}}, max_depth=2",
               f"- seed fetched: {va['seed_result']}",
@@ -259,21 +274,21 @@ def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
               f"- children discovered (next BFS level size): {vb['children_discovered_count']}",
               f"- sample assigned child depth: {vb['sample_child_depth']}",
               "- expectation: next_depth=1 <= max_depth=2 -> children discovered, each stamped depth=1", ""]
+    return lines
 
-    lines += ["## Experiment 4 — FilterChain bypass for the injected seed", "",
-              f"- seed: `{exp4['seed_url']}`",
-              f"- filter: {exp4['blocking_pattern']}",
-              f"- seed fetch result: {exp4['seed_result']}",
-              f"- children discovered: {exp4['children_discovered_count']}",
-              f"- philosophy_7 self-link present among children: {exp4['philosophy_self_link_in_children']}",
-              f"- filter_chain.stats: total={exp4['filter_stats']['total']} "
-              f"passed={exp4['filter_stats']['passed']} rejected={exp4['filter_stats']['rejected']}",
-              "- expectation: seed fetched despite matching the blocking pattern (seeds bypass "
-              "can_process_url entirely); the SAME URL, rediscovered as a child via the sidebar's "
-              "self-link, gets rejected by the filter chain (rejected count >= 1).", ""]
 
-    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return report_path
+def _format_experiment_4_section(exp4: dict) -> list:
+    return ["## Experiment 4 — FilterChain bypass for the injected seed", "",
+            f"- seed: `{exp4['seed_url']}`",
+            f"- filter: {exp4['blocking_pattern']}",
+            f"- seed fetch result: {exp4['seed_result']}",
+            f"- children discovered: {exp4['children_discovered_count']}",
+            f"- philosophy_7 self-link present among children: {exp4['philosophy_self_link_in_children']}",
+            f"- filter_chain.stats: total={exp4['filter_stats']['total']} "
+            f"passed={exp4['filter_stats']['passed']} rejected={exp4['filter_stats']['rejected']}",
+            "- expectation: seed fetched despite matching the blocking pattern (seeds bypass "
+            "can_process_url entirely); the SAME URL, rediscovered as a child via the sidebar's "
+            "self-link, gets rejected by the filter chain (rejected count >= 1).", ""]
 
 
 if __name__ == "__main__":

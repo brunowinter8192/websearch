@@ -128,61 +128,94 @@ async def bfs_crawl(seed: str, include_pattern: str, max_pages: int, max_depth: 
 
     async with AsyncWebCrawler(**kw) as crawler:
         while frontier and len(found) < max_pages and stop_reason is None:
-            # Build batch of up to `concurrency` depth-valid items
-            batch: list[tuple[str, int]] = []
-            while frontier and len(batch) < concurrency:
-                url, depth = frontier.popleft()
-                if depth <= max_depth:
-                    batch.append((url, depth))
+            batch = _build_batch(frontier, concurrency, max_depth)
             if not batch:
                 continue
 
-            # Fetch batch (sequential when concurrency=1)
-            tasks = [fetch_page(crawler, url, run_cfg) for url, _ in batch]
-            results = await asyncio.gather(*tasks)
+            results = await _fetch_batch(crawler, batch, run_cfg)
 
-            # 429 batch accounting — back off once, stop on second consecutive batch
-            batch_429 = sum(1 for status, _, _ in results if status == 429)
-            if batch_429 > 0:
-                four_two_nine_count += batch_429
-                consecutive_batches_429 += 1
-                urls_429 = [url for (url, _), (s, _, _) in zip(batch, results) if s == 429]
-                print(f"  429 on: {urls_429}")
-                if consecutive_batches_429 == 1:
-                    print("  Backing off 5s (first 429 batch)...")
-                    await asyncio.sleep(5)
-                else:
-                    print("  429 persists — stopping BFS.")
-                    stop_reason = "429_persistent"
-            else:
-                consecutive_batches_429 = 0
+            four_two_nine_count, consecutive_batches_429, stop_reason = await _handle_429_batch(
+                batch, results, four_two_nine_count, consecutive_batches_429,
+            )
 
-            # Per-page: record latency, add to found, enqueue new links
-            for (url, depth), (status, links, latency_ms) in zip(batch, results):
-                page_latencies.append(latency_ms)
-                if status == 429:
-                    continue
-                if status is not None and status >= 400:
-                    print(f"  WARN: HTTP {status} on {url}")
-                    continue
-                found.append(url)
-                print(f"  [{len(found):3d}] {url}  ({latency_ms}ms)")
-                if depth >= max_depth:
-                    continue
-                for lk in links:
-                    href = lk.get("href", "") if isinstance(lk, dict) else str(lk)
-                    if not href.startswith("http"):
-                        continue
-                    norm = normalize_url(href)
-                    if urlparse(norm).netloc != seed_netloc:
-                        continue
-                    if include_pattern and include_pattern not in norm:
-                        continue
-                    if norm not in visited:
-                        visited.add(norm)
-                        frontier.append((norm, depth + 1))
+            _process_batch_results(
+                batch, results, found, page_latencies, visited, frontier,
+                max_depth, seed_netloc, include_pattern,
+            )
 
-    stats = {
+    stats = _build_bfs_stats(page_latencies, four_two_nine_count, stop_reason)
+    return found, stats
+
+
+# Build batch of up to `concurrency` depth-valid items
+def _build_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[str, int]]:
+    batch: list[tuple[str, int]] = []
+    while frontier and len(batch) < concurrency:
+        url, depth = frontier.popleft()
+        if depth <= max_depth:
+            batch.append((url, depth))
+    return batch
+
+
+# Fetch batch (sequential when concurrency=1)
+async def _fetch_batch(crawler: AsyncWebCrawler, batch: list[tuple[str, int]],
+                       run_cfg: CrawlerRunConfig) -> list:
+    tasks = [fetch_page(crawler, url, run_cfg) for url, _ in batch]
+    return await asyncio.gather(*tasks)
+
+
+# 429 batch accounting — back off once, stop on second consecutive batch
+async def _handle_429_batch(batch: list[tuple[str, int]], results: list,
+                            four_two_nine_count: int, consecutive_batches_429: int) -> tuple:
+    stop_reason: str | None = None
+    batch_429 = sum(1 for status, _, _ in results if status == 429)
+    if batch_429 > 0:
+        four_two_nine_count += batch_429
+        consecutive_batches_429 += 1
+        urls_429 = [url for (url, _), (s, _, _) in zip(batch, results) if s == 429]
+        print(f"  429 on: {urls_429}")
+        if consecutive_batches_429 == 1:
+            print("  Backing off 5s (first 429 batch)...")
+            await asyncio.sleep(5)
+        else:
+            print("  429 persists — stopping BFS.")
+            stop_reason = "429_persistent"
+    else:
+        consecutive_batches_429 = 0
+    return four_two_nine_count, consecutive_batches_429, stop_reason
+
+
+# Per-page: record latency, add to found, enqueue new links
+def _process_batch_results(batch: list[tuple[str, int]], results: list, found: list[str],
+                           page_latencies: list[int], visited: set[str], frontier: deque,
+                           max_depth: int, seed_netloc: str, include_pattern: str) -> None:
+    for (url, depth), (status, links, latency_ms) in zip(batch, results):
+        page_latencies.append(latency_ms)
+        if status == 429:
+            continue
+        if status is not None and status >= 400:
+            print(f"  WARN: HTTP {status} on {url}")
+            continue
+        found.append(url)
+        print(f"  [{len(found):3d}] {url}  ({latency_ms}ms)")
+        if depth >= max_depth:
+            continue
+        for lk in links:
+            href = lk.get("href", "") if isinstance(lk, dict) else str(lk)
+            if not href.startswith("http"):
+                continue
+            norm = normalize_url(href)
+            if urlparse(norm).netloc != seed_netloc:
+                continue
+            if include_pattern and include_pattern not in norm:
+                continue
+            if norm not in visited:
+                visited.add(norm)
+                frontier.append((norm, depth + 1))
+
+
+def _build_bfs_stats(page_latencies: list[int], four_two_nine_count: int, stop_reason: str | None) -> dict:
+    return {
         "pages_fetched": len(page_latencies),
         "four_two_nine_count": four_two_nine_count,
         "stop_reason": stop_reason,
@@ -190,7 +223,6 @@ async def bfs_crawl(seed: str, include_pattern: str, max_pages: int, max_depth: 
         "min_latency_ms": min(page_latencies) if page_latencies else 0,
         "max_latency_ms": max(page_latencies) if page_latencies else 0,
     }
-    return found, stats
 
 
 # Fetch one page; return (status_code | None, internal_links, latency_ms)
@@ -231,8 +263,18 @@ def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
 def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
                   elapsed: float, concurrency: int, stealth: bool,
                   delay_s: float, page_timeout_ms: int) -> str:
-    agent_hit = AGENT_TASKS_URL in recall["found_set"]
-    lines = [
+    lines = _format_header_and_recall_table(
+        seed, gold, recall, bfs_stats, elapsed, concurrency, stealth, delay_s, page_timeout_ms)
+    lines += _format_key_url_and_baseline(recall, concurrency, delay_s)
+    lines += _format_missing_sample(recall)
+    lines += _format_early_stop(bfs_stats)
+    return "\n".join(lines)
+
+
+def _format_header_and_recall_table(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
+                                    elapsed: float, concurrency: int, stealth: bool,
+                                    delay_s: float, page_timeout_ms: int) -> list:
+    return [
         "# Playwright-per-page BFS — docs.github.com/de/rest",
         "",
         f"Seed: {seed}  |  Gold: {len(gold)} URLs",
@@ -255,6 +297,12 @@ def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
         f"| Min / Max latency | {bfs_stats['min_latency_ms']}ms / {bfs_stats['max_latency_ms']}ms |",
         f"| 429 incidents | {bfs_stats['four_two_nine_count']} |",
         f"| Stop reason | {bfs_stats['stop_reason'] or 'completed'} |",
+    ]
+
+
+def _format_key_url_and_baseline(recall: dict, concurrency: int, delay_s: float) -> list:
+    agent_hit = AGENT_TASKS_URL in recall["found_set"]
+    return [
         "",
         "## Key URL Check",
         "",
@@ -269,6 +317,9 @@ def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
         f"domcontentloaded + {delay_s}s delay, concurrency={concurrency} |",
     ]
 
+
+def _format_missing_sample(recall: dict) -> list:
+    lines = []
     if recall["missing_sample"]:
         lines += [
             "",
@@ -277,7 +328,11 @@ def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
         ]
         for u in recall["missing_sample"]:
             lines.append(f"- {u}")
+    return lines
 
+
+def _format_early_stop(bfs_stats: dict) -> list:
+    lines = []
     if bfs_stats["stop_reason"]:
         lines += [
             "",
@@ -285,8 +340,7 @@ def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
             "",
             f"BFS halted: {bfs_stats['four_two_nine_count']} 429 incidents total.",
         ]
-
-    return "\n".join(lines)
+    return lines
 
 
 # Save report to md/05_docs_github_rest_YYYYMMDD.md, return path
