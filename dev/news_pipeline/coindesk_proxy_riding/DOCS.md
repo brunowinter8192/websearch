@@ -114,12 +114,21 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Writes:** `job.md`, `cumulative.png` to a temp dir (assertion targets).
 **Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_sigint_report.py`.
 
-### test_tail_race.py (445 LOC)
+### test_tail_race.py (367 LOC)
 
-**Purpose:** Deterministic tail-race tests (5 cases) for `rider.py:_run_slot`/`_watchdog` with `_fetch_one_url`/`_next_proxy` mocked — no browser or proxy infrastructure.
+**Purpose:** Deterministic tail-race tests (5 cases, tests 1-5) for `rider.py:_run_slot` with `_fetch_one_url`/`_next_proxy` mocked — no browser or proxy infrastructure. Test 3 (`no_spurious_requeue`) has two sub-cases, each its own private helper (`_test_3_sub_a`/`_test_3_sub_b`) called from the one public `test_3_no_spurious_requeue` so the printed test name/count stay unchanged.
 **Reads:** none (mocked fetch/proxy).
 **Writes:** none beyond test assertions.
 **Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_tail_race.py`.
+**Calls out:** `_test_tail_race_watchdog.py` (this directory, tests 6-7).
+
+### _test_tail_race_watchdog.py (104 LOC)
+
+**Purpose:** Deterministic watchdog tests (tests 6-7) for `rider.py:_watchdog` — wedge-after-all-resolved (`os._exit(0)`) and pool-refresh-on-interval.
+**Reads:** none (mocked fetch/proxy).
+**Writes:** none beyond test assertions.
+**Called by:** `test_tail_race.py` only.
+**Calls out:** none.
 
 ### test_watchdog.py (159 LOC)
 

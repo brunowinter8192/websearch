@@ -31,6 +31,10 @@ _WORKTREE = Path(__file__).parents[3]
 if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
 
+if str(Path(__file__).parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent))
+from _test_tail_race_watchdog import test_6_watchdog_wedge_after_all_resolved, test_7_watchdog_pool_refresh
+
 
 # ORCHESTRATOR
 
@@ -162,14 +166,13 @@ def test_2_write_exactly_once_per_url() -> None:
         assert len(raw_files) == 1,            f"raw file count={len(raw_files)} (expected 1)"
 
 
-# Two sub-cases: (a) stale dequeue skipped without fetch; (b) raced-fail not re-queued.
-def test_3_no_spurious_requeue() -> None:
+# Sub-case A: url_x already in done_urls, url_x stale-queued, url_y is the open one.
+# Slot must skip url_x (no fetch), race url_y, write url_y. fetch_call_count == 1.
+def _test_3_sub_a() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
-    # Sub-case A: url_x already in done_urls, url_x stale-queued, url_y is the open one.
-    # Slot must skip url_x (no fetch), race url_y, write url_y. fetch_call_count == 1.
     url_x = "https://cd.com/stale"
     url_y = "https://cd.com/open"
     fetch_calls: list[str] = []
@@ -209,9 +212,18 @@ def test_3_no_spurious_requeue() -> None:
         assert url_y in fetch_calls,           f"url_y was not fetched"
         assert state_a.done_urls == {url_x, url_y}, f"done_urls={state_a.done_urls}"
 
-    # Sub-case B: url_x not done, queue empty → slot races url_x.
-    # First fetch → "failed" (raced, dequeued=False) → must NOT be re-queued.
-    # Second fetch → "ok" → done. Verify no put_nowait call for url_x after the failure.
+
+# Sub-case B: url_x not done, queue empty → slot races url_x.
+# First fetch → "failed" (raced, dequeued=False) → must NOT be re-queued.
+# Second fetch → "ok" → done. Verify no put_nowait call for url_x after the failure.
+def _test_3_sub_b() -> None:
+    from src.news.engine.proxy_riding import rider as rider_mod
+    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
+
+    async def fixed_proxy(state):
+        return ("http", "p:1")
+
     url_x2 = "https://cd.com/race-fail"
     put_calls: list[str] = []
     call_n = [0]
@@ -249,6 +261,12 @@ def test_3_no_spurious_requeue() -> None:
         assert url_x2 not in put_calls,        f"raced-fail was re-queued: {put_calls}"
         assert state_b.n_ok == 1,              f"n_ok={state_b.n_ok} (expected 1)"
         assert state_b.done_urls == {url_x2},  f"done_urls={state_b.done_urls}"
+
+
+# Two sub-cases: (a) stale dequeue skipped without fetch; (b) raced-fail not re-queued.
+def test_3_no_spurious_requeue() -> None:
+    _test_3_sub_a()
+    _test_3_sub_b()
 
 
 # 4 URLs, 4 slots: each slot dequeues one distinct URL. No racing. n_ok=4.
@@ -343,102 +361,6 @@ def test_5_fail_before_success_done_once() -> None:
         assert state.done_urls == {url_x},    f"done_urls={state.done_urls}"
         raw_files = list((p / RAW_SUBDIR).iterdir())
         assert len(raw_files) == 1,           f"raw file count={len(raw_files)} (expected 1)"
-
-
-# all_resolved=True (last URL in done_urls) but in_flight=1 (one wedged slot) →
-# _watchdog must call os._exit(0) and set termination='all-done', NOT return silently.
-def test_6_watchdog_wedge_after_all_resolved() -> None:
-    from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
-    from src.news.engine.proxy_riding.rider import _watchdog
-    from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
-
-    url_done = "https://cd.com/already-done"
-    exit_calls: list[int] = []
-
-    def fake_exit(code: int) -> None:
-        exit_calls.append(code)
-        raise SystemExit(code)
-
-    with tempfile.TemporaryDirectory() as tmp:
-        p = Path(tmp)
-        (p / RAW_SUBDIR).mkdir()
-
-        async def run() -> RiderState:
-            q = asyncio.Queue()
-            state = RiderState(
-                url_queue=q, proxy_pool=[],
-                cooldown_mgr=PersistentCooldownManager(),
-                output_dir=p, job_dir=p / "jobs",
-                burn_threshold=2, page_timeout_ms=8_000,
-                total_urls=1, target_urls=frozenset([url_done]),
-            )
-            # Simulate: last URL written by first-writer winner → all_resolved=True.
-            state.done_urls.add(url_done)
-            # Simulate: one slot still suspended inside await _fetch_one_url on dup-race.
-            state.in_flight = 1
-
-            with (
-                unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit),
-                unittest.mock.patch("src.news.engine.proxy_riding.reporter.write_riding_report"),
-            ):
-                try:
-                    await _watchdog(state, poll_interval=0.1)
-                except SystemExit:
-                    return state   # os._exit(0) raised by fake_exit — expected termination
-            return state
-
-        state = asyncio.run(run())
-
-    assert exit_calls == [0],               f"expected os._exit(0), got {exit_calls}"
-    assert state.termination == "all-done", f"termination={state.termination!r}"
-
-
-# pool_provider is called once per refresh interval; proxy_pool is atomically replaced.
-# Patches POOL_REFRESH_INTERVAL_S=0.0 so the first poll always triggers refresh.
-# State has all_resolved=True + in_flight=0 → watchdog returns cleanly after the refresh.
-def test_7_watchdog_pool_refresh() -> None:
-    from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
-    from src.news.engine.proxy_riding.rider import _watchdog
-    from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
-
-    pool_a = [("http", "proxy-a1:1"), ("http", "proxy-a2:2")]
-    pool_b = [("http", "proxy-b1:1"), ("socks5", "proxy-b2:2"), ("http", "proxy-b3:3")]
-    refresh_count = [0]
-
-    async def mock_provider() -> list:
-        refresh_count[0] += 1
-        return pool_b
-
-    url_done = "https://cd.com/refreshed"
-
-    with tempfile.TemporaryDirectory() as tmp:
-        p = Path(tmp)
-        (p / RAW_SUBDIR).mkdir()
-
-        async def run():
-            q = asyncio.Queue()
-            state = RiderState(
-                url_queue=q, proxy_pool=pool_a,
-                cooldown_mgr=PersistentCooldownManager(),
-                output_dir=p, job_dir=p / "jobs",
-                burn_threshold=2, page_timeout_ms=8_000,
-                total_urls=1, target_urls=frozenset([url_done]),
-                pool_provider=mock_provider,
-            )
-            # all_resolved=True + in_flight=0 → watchdog returns cleanly after refresh
-            state.done_urls.add(url_done)
-
-            # POOL_REFRESH_INTERVAL_S=0.0: any elapsed time satisfies the refresh check
-            with unittest.mock.patch.object(rider_mod, "POOL_REFRESH_INTERVAL_S", 0.0):
-                await _watchdog(state, poll_interval=0.05)
-            return state
-
-        state = asyncio.run(run())
-
-    assert refresh_count[0] >= 1,      f"pool_provider not called (refresh_count={refresh_count[0]})"
-    assert state.proxy_pool is pool_b, f"proxy_pool not replaced: {state.proxy_pool}"
 
 
 if __name__ == "__main__":
