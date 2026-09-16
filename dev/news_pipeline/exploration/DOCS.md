@@ -21,12 +21,45 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `01_coindesk_ui_probe.py` only.
 **Calls out:** `pydoll`.
 
-### 02_coindesk_pagination_probe.py (609 LOC)
+### 02_coindesk_pagination_probe.py (24 LOC)
 
-**Purpose:** Playwright probe (system Chrome via `channel="chrome"`, headless) of `/latest-crypto-news`. Two modes: quick (5 clicks + full HAR) and `--depth` (click until disabled/plateau/150-cap + lightweight coindesk-only network log). Reverse-engineers the "More stories" pagination mechanism. Finding: first ~5 clicks reveal pre-embedded SSR articles (Next.js RSC payload, no network); after that, each click fires a cursor-based timeline API (`GET /api/v1/articles/timeline?size=16&lastId=<UUID>&lastDisplayDate=<ISO>`). Depth run: 150 clicks → 2414 unique URLs, oldest 2026-01-23 (~5 months), no ceiling hit. API returns 403 to plain curl and curl_cffi-chrome (needs exact browser header/cookie/token set).
-**Reads:** live CoinDesk site.
-**Writes:** `02_output/session.har` (quick-mode, ~19MB), `02_output/report_<UTC-timestamp>.md` (quick-mode), `02_output/depth_report_<UTC-timestamp>.md` (depth-mode).
+**Purpose:** CLI entry point — parses `--depth` and dispatches to quick mode or depth mode.
+**Reads:** nothing.
+**Writes:** nothing directly.
 **Called by:** CLI only. `--depth` for ceiling-finder mode.
+**Calls out:** `_02_quick.py`, `_02_depth.py` (this directory).
+
+### _02_dom.py (139 LOC)
+
+**Purpose:** Shared Playwright page-scripting layer for both `02` modes — JS snippets + wrappers for article extraction, feed-count polling, and oldest-date computation.
+**Reads:** nothing — takes a Playwright `page` handle from the caller.
+**Writes:** nothing.
+**Called by:** `_02_quick.py`, `_02_depth.py`.
+**Calls out:** none.
+
+### _02_quick.py (220 LOC)
+
+**Purpose:** Quick-mode probe (`probe_workflow`) — Playwright system Chrome (headless) against `/latest-crypto-news`, 5 clicks + full HAR capture, live network-response logging keyed by click number. Finding: first ~5 clicks reveal pre-embedded SSR articles (Next.js RSC payload, no network); after that, each click fires a cursor-based timeline API (`GET /api/v1/articles/timeline?size=16&lastId=<UUID>&lastDisplayDate=<ISO>`).
+**Reads:** live CoinDesk site.
+**Writes:** `02_output/session.har` (~19MB), `02_output/report_<UTC-timestamp>.md`.
+**Called by:** `02_coindesk_pagination_probe.py` only.
+**Calls out:** `playwright`; `_02_dom.py`, `_02_report.py` (this directory).
+
+### _02_depth.py (167 LOC)
+
+**Purpose:** Depth-mode probe (`depth_workflow`) — click until disabled/plateau/150-cap, lightweight coindesk-only network log (no HAR). Finding: 150 clicks → 2414 unique URLs, oldest 2026-01-23 (~5 months), no ceiling hit. API returns 403 to plain curl and curl_cffi-chrome (needs exact browser header/cookie/token set).
+**Reads:** live CoinDesk site.
+**Writes:** `02_output/depth_report_<UTC-timestamp>.md`.
+**Called by:** `02_coindesk_pagination_probe.py` only.
+**Calls out:** `playwright`; `_02_dom.py`, `_02_report.py` (this directory).
+
+### _02_report.py (192 LOC)
+
+**Purpose:** Markdown report assembly for both quick mode (`write_report`, including the click-1-vs-click-2 request diff) and depth mode (`write_depth_report`).
+**Reads:** nothing — takes each mode's result data as arguments.
+**Writes:** nothing directly — the `write_*` functions perform the file writes to paths given by the caller.
+**Called by:** `_02_quick.py`, `_02_depth.py`.
+**Calls out:** none.
 
 ### 03_coindesk_backfill_traversal.py (622 LOC)
 
