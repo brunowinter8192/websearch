@@ -25,32 +25,8 @@ async def _run(args: argparse.Namespace) -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    urls = sample_urls(args.n_urls)
-    if not urls:
-        print(
-            f"[main] FATAL: sample_urls({args.n_urls}) returned 0 URLs.\n"
-            f"  INVENTORY_DIR resolution failed — check p3_url_sampler._repo_root().\n"
-            f"  Expected: data/news/coindesk/inventory/ under repo root.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    url_queue = asyncio.Queue()
-    for u in urls:
-        url_queue.put_nowait(u)
-    print(
-        f"[main] {len(urls)} URLs queued, concurrency={args.concurrency}, "
-        f"browsers={args.browsers}, burn-threshold={args.burn_threshold}, page-timeout={args.page_timeout}ms",
-        file=sys.stderr,
-    )
-
-    print("[main] loading proxy pool ...", file=sys.stderr)
-    raw_pool, _ = await asyncio.get_running_loop().run_in_executor(None, load_backfill_pool)
-    proxy_pool  = [(p, hp) for p, hp in raw_pool if p in BROWSER_ELIGIBLE_PROTOS]
-    print(
-        f"[main] pool: {len(raw_pool)} total, {len(proxy_pool)} browser-eligible (http+socks5)",
-        file=sys.stderr,
-    )
+    url_queue  = _prepare_url_queue(args)
+    proxy_pool = await _prepare_proxy_pool()
 
     cm          = PersistentCooldownManager()
     t_job_start = datetime.now(timezone.utc)
@@ -81,6 +57,38 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 # FUNCTIONS
+def _prepare_url_queue(args: argparse.Namespace) -> asyncio.Queue:
+    urls = sample_urls(args.n_urls)
+    if not urls:
+        print(
+            f"[main] FATAL: sample_urls({args.n_urls}) returned 0 URLs.\n"
+            f"  INVENTORY_DIR resolution failed — check p3_url_sampler._repo_root().\n"
+            f"  Expected: data/news/coindesk/inventory/ under repo root.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    url_queue = asyncio.Queue()
+    for u in urls:
+        url_queue.put_nowait(u)
+    print(
+        f"[main] {len(urls)} URLs queued, concurrency={args.concurrency}, "
+        f"browsers={args.browsers}, burn-threshold={args.burn_threshold}, page-timeout={args.page_timeout}ms",
+        file=sys.stderr,
+    )
+    return url_queue
+
+
+async def _prepare_proxy_pool() -> list:
+    print("[main] loading proxy pool ...", file=sys.stderr)
+    raw_pool, _ = await asyncio.get_running_loop().run_in_executor(None, load_backfill_pool)
+    proxy_pool  = [(p, hp) for p, hp in raw_pool if p in BROWSER_ELIGIBLE_PROTOS]
+    print(
+        f"[main] pool: {len(raw_pool)} total, {len(proxy_pool)} browser-eligible (http+socks5)",
+        file=sys.stderr,
+    )
+    return proxy_pool
+
 
 # Raise RLIMIT_NOFILE soft limit to target; warn if it fails (do not abort).
 def _raise_fd_limit(target: int = 16_384) -> None:

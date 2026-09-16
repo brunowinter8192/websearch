@@ -79,7 +79,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Called by:** `p4_reporter.py` only.
 **Calls out:** `matplotlib`.
 
-### run_coindesk_riding.py (115 LOC)
+### run_coindesk_riding.py (123 LOC)
 
 **Purpose:** CLI orchestrator — loads pool via `load_backfill_pool()`, wires `run_riding_pool` + `write_riding_report` end-to-end; raises `RLIMIT_NOFILE` at startup.
 **Reads:** CLI args (`--n-urls` default 500, `--concurrency` default 20, `--burn-threshold` default 2, `--output-dir` default `output`, `--page-timeout` default 8000, `--browsers` default 1, `--stall-timeout` default 3600).
