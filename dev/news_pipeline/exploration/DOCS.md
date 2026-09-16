@@ -5,12 +5,21 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 
 ## Modules
 
-### 01_coindesk_ui_probe.py (454 LOC)
+### 01_coindesk_ui_probe.py (236 LOC)
 
 **Purpose:** Pydoll-driven playthrough of `https://www.coindesk.com/latest-crypto-news`. Learns the "More stories" button selector, click mechanics, article URL pattern, and how many clicks cover a 24h window. Outputs per-batch article URLs + time labels + button descriptor.
 **Reads:** live CoinDesk site.
 **Writes:** `01_output/probe_<UTC-timestamp>.json` (per-batch breakdown + button descriptor + summary), `~/tmp/coindesk_button_pos.png` (screenshot for selector debugging).
 **Called by:** CLI only. `--headless` to run headless.
+**Calls out:** `_01_dom.py` (this directory) for the pydoll/CDP DOM-scripting layer.
+
+### _01_dom.py (239 LOC)
+
+**Purpose:** pydoll/CDP DOM-scripting layer for `01_coindesk_ui_probe.py` — Chromium launch options and the JS snippets + async wrappers that inspect, extract, count, find and click against the live page.
+**Reads:** nothing — takes a pydoll `tab` handle from `01_coindesk_ui_probe.py`.
+**Writes:** nothing directly — returns data to `01_coindesk_ui_probe.py`.
+**Called by:** `01_coindesk_ui_probe.py` only.
+**Calls out:** `pydoll`.
 
 ### 02_coindesk_pagination_probe.py (609 LOC)
 
