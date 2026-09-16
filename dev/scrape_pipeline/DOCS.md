@@ -11,13 +11,45 @@ Quality monitoring and configuration testing for the URL scraper module (`src/sc
 **Calls out:** `crawl4ai` (AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, DefaultMarkdownGenerator).
 **Called by:** `07_pipe_scrape_eval.py`.
 
-### 07_pipe_scrape_eval.py (482 LOC)
+### 07_pipe_scrape_eval.py (64 LOC)
 
-**Purpose:** Eval harness — three phases via argparse: `phase1` (concurrency/WAF sweep), `phase2` (delay sweep, completeness proxy), `phase3` (full 316-URL run: WAF probe + batched pacing + position-tracked 429s + retry pass).
-**Reads:** URL list (hardcoded 316-URL corpus / stratified subset for phase1/2).
-**Writes:** `md/07_concurrency_sweep_<ts>.md` (phase1), `md/07_delay_sweep_<ts>.md` (phase2, incl. WAF-contamination note), `md/07_full_run_<ts>.md` (phase3 summary); phase3 also `07_pipe_scrape_eval_data/full_run_<ts>/` — raw markdown corpus, one .md per URL.
-**Calls out:** `p1_pipe_scraper.scrape_urls`.
-**Called by:** CLI only. `./venv/bin/python dev/scrape_pipeline/07_pipe_scrape_eval.py {phase1,phase2,phase3}`.
+**Purpose:** CLI entry point and dispatch — routes `{smoke,phase1,phase2,phase3}` to the matching sibling module below; owns the smoke test.
+**Reads:** URL list via `_pipe_scrape_eval_common.load_urls`.
+**Writes:** nothing directly — delegates to the phase modules.
+**Calls out:** `p1_pipe_scraper.scrape_urls` (smoke test only); `_pipe_scrape_eval_common.py`, `_pipe_scrape_eval_phase1.py`, `_pipe_scrape_eval_phase2.py`, `_pipe_scrape_eval_phase3.py`.
+**Called by:** CLI only. `./venv/bin/python dev/scrape_pipeline/07_pipe_scrape_eval.py {smoke,phase1,phase2,phase3}`.
+
+### _pipe_scrape_eval_common.py (47 LOC)
+
+**Purpose:** Utilities shared by all three eval phases — URL list loading, stratified sampling, aggregate latency/outcome metrics.
+**Reads:** URL list file (`DISCOVERED_URLS`, default path into `../explore_pipeline/06_discovered_urls.txt`).
+**Writes:** nothing.
+**Called by:** `07_pipe_scrape_eval.py`, `_pipe_scrape_eval_phase1.py`, `_pipe_scrape_eval_phase2.py`, `_pipe_scrape_eval_phase3.py`.
+**Calls out:** none — stdlib only (`statistics`).
+
+### _pipe_scrape_eval_phase1.py (95 LOC)
+
+**Purpose:** Phase 1 — concurrency/WAF sweep at `concurrency ∈ {1,3,5,10}`, stops early on first 429, recommends the highest WAF-safe level.
+**Reads:** nothing directly — takes an already-loaded URL list.
+**Writes:** `md/07_concurrency_sweep_<ts>.md`.
+**Called by:** `07_pipe_scrape_eval.py`.
+**Calls out:** `p1_pipe_scraper.scrape_urls`; `_pipe_scrape_eval_common.py`.
+
+### _pipe_scrape_eval_phase2.py (99 LOC)
+
+**Purpose:** Phase 2 — delay sweep at fixed concurrency, `bytes_p50` completeness proxy, picks the plateau delay (≤5% marginal byte gain).
+**Reads:** nothing directly — takes an already-loaded URL list.
+**Writes:** `md/07_delay_sweep_<ts>.md` (incl. WAF-contamination note).
+**Called by:** `07_pipe_scrape_eval.py`.
+**Calls out:** `p1_pipe_scraper.scrape_urls`; `_pipe_scrape_eval_common.py`.
+
+### _pipe_scrape_eval_phase3.py (273 LOC)
+
+**Purpose:** Phase 3 — full 316-URL run: WAF probe, batched pacing with inter-batch pause, position-tracked 429s, one retry pass after cooldown.
+**Reads:** nothing directly — takes an already-loaded URL list.
+**Writes:** `md/07_full_run_<ts>.md`; `07_pipe_scrape_eval_data/full_run_<ts>/` — raw markdown corpus, one `.md` per URL.
+**Called by:** `07_pipe_scrape_eval.py`.
+**Calls out:** `p1_pipe_scraper.scrape_urls`; `_pipe_scrape_eval_common.py`.
 
 ### 01_dual_mode_smoke.py (373 LOC)
 
@@ -33,7 +65,7 @@ Quality monitoring and configuration testing for the URL scraper module (`src/sc
 **Writes:** `02_raw_data/<ts>/` — 20 `<slug>_<6-char-md5>.md` files + `02_raw_report.md` triage table. Status `empty` includes optional annotation `(PDF)` or `(plugin-domain: github)`.
 **Called by:** CLI only.
 
-### 06_cloudflare_md_adoption.py (282 LOC)
+### 06_cloudflare_md_adoption.py (301 LOC)
 
 **Purpose:** Adoption probe for the `Accept: text/markdown` server-side markdown convention (Cloudflare Markdown-for-Agents, Vercel edge, others). Probes a curated 29-URL set across three categories (Cloudflare-owned positive controls, likely-CF-fronted candidate sites, non-CF negative controls) with the markdown Accept header via httpx async (Semaphore concurrency 10, 15s timeout). For URLs responding `text/markdown`, fetches a baseline HTML GET to compute byte-reduction. Baseline measurement for Phase-0-fast-path adoption (`fetch_markdown_fastpath` in production); re-run periodically to track adoption growth.
 **Reads:** hardcoded 29-URL set.

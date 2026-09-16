@@ -68,6 +68,25 @@ def run_pipeline_debug(url: str, raw_html: str, profile: dict, profile_name: str
     parsed = parse_html(raw_html)
     nodes = parsed.get("nodes", [])
 
+    steps, after_text = run_node_level_filter_steps(nodes, profile)
+    raw_md = convert_nodes_to_markdown(after_text)
+    md_steps, after_whitespace = run_markdown_cleanup_steps(raw_md, profile)
+
+    return {
+        "url": url,
+        "profile_name": profile_name,
+        "profile_config": profile,
+        "timestamp": datetime.now().isoformat(),
+        "html_length": len(raw_html),
+        "filter_steps": steps,
+        "markdown_steps": md_steps,
+        "final_chars": len(after_whitespace),
+        "raw_markdown": raw_md,
+        "clean_markdown": after_whitespace,
+    }
+
+
+def run_node_level_filter_steps(nodes: list, profile: dict) -> tuple[list, list]:
     steps = []
     steps.append(make_step("parse_html", None, nodes))
 
@@ -102,7 +121,10 @@ def run_pipeline_debug(url: str, raw_html: str, profile: dict, profile_name: str
         after_text = after_links
     steps.append(make_step("remove_noise_text", after_links, after_text, config=noise_text))
 
-    raw_md = convert_nodes_to_markdown(after_text)
+    return steps, after_text
+
+
+def run_markdown_cleanup_steps(raw_md: str, profile: dict) -> tuple[list, str]:
     cleanup_tags = profile.get("markdown_cleanup", [])
     after_cleanup = clean_markdown_artifacts(raw_md, cleanup_tags)
     after_generic = clean_generic_artifacts(after_cleanup)
@@ -114,18 +136,7 @@ def run_pipeline_debug(url: str, raw_html: str, profile: dict, profile_name: str
     md_steps.append(make_md_step("generic_cleanup", after_cleanup, after_generic))
     md_steps.append(make_md_step("whitespace_clean", after_generic, after_whitespace))
 
-    return {
-        "url": url,
-        "profile_name": profile_name,
-        "profile_config": profile,
-        "timestamp": datetime.now().isoformat(),
-        "html_length": len(raw_html),
-        "filter_steps": steps,
-        "markdown_steps": md_steps,
-        "final_chars": len(after_whitespace),
-        "raw_markdown": raw_md,
-        "clean_markdown": after_whitespace,
-    }
+    return md_steps, after_whitespace
 
 
 # Build step dict for a node-level filter step
