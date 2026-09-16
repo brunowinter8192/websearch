@@ -161,6 +161,23 @@ async def test_engine_with_timing_empty():
 # test_search_web_workflow_writes_log (integration, no network)
 # ---------------------------------------------------------------------------
 
+async def _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, default_engines,
+                                                     query="test query"):
+    from src.search import search_web
+    log_file = tmp_path / "query_log.jsonl"
+    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
+
+    with (
+        patch.object(search_web, "ENGINES", mock_engines),
+        patch.object(search_web, "_DEFAULT_ENGINES", default_engines),
+        patch.object(search_web, "cache_write"),
+        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
+    ):
+        await search_web.search_web_workflow(query, language="en")
+
+    return log_file.read_text().splitlines()
+
+
 @pytest.mark.asyncio
 async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
     """search_web_workflow writes 2 JSONL records — "engine_run" (from _query_engines_concurrent)
@@ -168,10 +185,6 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
     one's full field shape (current shape: record_type/ts/query/language/engines_requested/
     engines_excluded/total_wall_ms/bottleneck_engine/engines/search_key — no preview pipeline,
     that was removed from search_web_workflow)."""
-    from src.search import search_web
-    log_file = tmp_path / "query_log.jsonl"
-    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
-
     result_a = _fake_result("https://a.com", engine="google")
     result_b = _fake_result("https://b.com", engine="duckduckgo")
 
@@ -180,15 +193,9 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
         "duckduckgo": _make_mock_engine_with_reason("duckduckgo", [result_b]),
     }
 
-    with (
-        patch.object(search_web, "ENGINES", mock_engines),
-        patch.object(search_web, "_DEFAULT_ENGINES", {"google", "duckduckgo"}),
-        patch.object(search_web, "cache_write"),
-        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
-    ):
-        await search_web.search_web_workflow("test query", language="en")
+    lines = await _run_search_web_workflow_and_get_log_lines(
+        tmp_path, monkeypatch, mock_engines, {"google", "duckduckgo"})
 
-    lines = log_file.read_text().splitlines()
     assert len(lines) == 2, f"Expected 2 log lines (engine_run + workflow_summary), got {len(lines)}: {lines}"
 
     records = [json.loads(l) for l in lines]

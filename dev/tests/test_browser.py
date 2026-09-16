@@ -14,32 +14,7 @@ import asyncio
 import pytest
 
 import src.search.browser as browser
-
-
-class FakeChrome:
-    def __init__(self, options):
-        self.options = options
-        self._connection_port = None
-        self._connection_handler = None
-        self.setup_user_dir_called = False
-
-    def _setup_user_dir(self):
-        self.setup_user_dir_called = True
-
-    def _get_default_binary_location(self):
-        return "/fake/Google Chrome"
-
-    async def stop(self):
-        pass
-
-
-class FakeProcessManager:
-    def __init__(self, process_creator=None):
-        self.process_creator = process_creator
-        self.start_calls = []
-
-    def start_browser_process(self, binary_location, port, arguments):
-        self.start_calls.append((binary_location, port, arguments))
+from dev.tests._browser_fakes import FakeChrome, _reset_state
 
 
 class FakeCompletedProcess:
@@ -47,17 +22,10 @@ class FakeCompletedProcess:
         self.stdout = stdout
 
 
-def _reset_state(monkeypatch):
-    monkeypatch.setattr(browser, "_browser", None)
-    monkeypatch.setattr(browser, "_lock_handle", None)
-    monkeypatch.setattr(browser, "_owned_pids", [])
-    monkeypatch.setattr(browser, "_focus_watchdog_task", None)
-
-
 # _reap_session_profile / _record_own_pids: pgrep output parsing + kill dispatch
 
 def test_reap_session_profile_kills_parsed_pids(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("111\n222\n"))
     killed = []
     monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
@@ -66,7 +34,7 @@ def test_reap_session_profile_kills_parsed_pids(monkeypatch):
 
 
 def test_reap_session_profile_no_survivors_is_noop(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess(""))
     killed = []
     monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
@@ -75,7 +43,7 @@ def test_reap_session_profile_no_survivors_is_noop(monkeypatch):
 
 
 def test_record_own_pids_sets_module_state(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("333\n444\n"))
     browser._record_own_pids()
     assert browser._owned_pids == [333, 444]
@@ -84,7 +52,7 @@ def test_record_own_pids_sets_module_state(monkeypatch):
 # _terminate_then_kill: terminate every resolvable pid, kill only what's still alive after wait_procs
 
 def test_terminate_then_kill_terminates_and_waits(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     calls = {"terminated": [], "killed": [], "waited": None}
 
     class FakeProc:
@@ -111,7 +79,7 @@ def test_terminate_then_kill_terminates_and_waits(monkeypatch):
 
 
 def test_terminate_then_kill_force_kills_survivors(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     calls = {"killed": []}
 
     class FakeProc:
@@ -131,7 +99,7 @@ def test_terminate_then_kill_force_kills_survivors(monkeypatch):
 
 
 def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
 
     def raise_no_such_process(pid):
         raise browser.psutil.NoSuchProcess(pid)
@@ -143,120 +111,22 @@ def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
     assert waited == [[]]
 
 
-# get_tab: critical-section ordering — lock acquired, then reap, then self-launch (no .start(),
-# no initial tab — see src/search/DOCS.md for why), then own-pids recorded once the devtools port
-# confirms Chrome is actually up
-
-@pytest.mark.asyncio
-async def test_get_tab_orders_lock_reap_launch_anchor_record(monkeypatch):
-    _reset_state(monkeypatch)
-    order = []
-
-    def fake_acquire(lock_path, hard_budget_s, on_stale=None):
-        order.append("lock")
-        return "fake-lock-handle"
-
-    monkeypatch.setattr(browser.browser_lock, "acquire", fake_acquire)
-    monkeypatch.setattr(browser, "_reap_session_profile", lambda: order.append("reap"))
-    monkeypatch.setattr(browser, "_clear_stale_devtools_port", lambda: None)
-    monkeypatch.setattr(browser, "_get_frontmost_pid", lambda: order.append("anchor") or 42)
-    monkeypatch.setattr(browser, "Chrome", lambda options: order.append("launch") or FakeChrome(options))
-    monkeypatch.setattr(browser, "BrowserProcessManager", FakeProcessManager)
-    monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 54321)
-    monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
-    monkeypatch.setattr(browser, "_record_own_pids", lambda: order.append("record"))
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: order.append("watchdog"))
-    monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: order.append(("focus_watchdog", anchor_pid)))
-
-    await browser.get_tab()
-
-    assert order == ["lock", "reap", "anchor", "launch", "record", "watchdog", ("focus_watchdog", 42)]
-    assert browser._lock_handle == "fake-lock-handle"
-    assert browser._browser.setup_user_dir_called is True
-    assert browser._browser._connection_port == 54321
-    assert browser._browser._connection_handler == "fake-conn-54321"
-
-
-@pytest.mark.asyncio
-async def test_get_tab_self_launches_with_port_zero_and_forwards_arguments(monkeypatch):
-    _reset_state(monkeypatch)
-    monkeypatch.setattr(browser.browser_lock, "acquire", lambda *a, **kw: "fake-lock-handle")
-    monkeypatch.setattr(browser, "_reap_session_profile", lambda: None)
-    monkeypatch.setattr(browser, "_clear_stale_devtools_port", lambda: None)
-    monkeypatch.setattr(browser, "_get_frontmost_pid", lambda: 999)
-    monkeypatch.setattr(browser, "Chrome", lambda options: FakeChrome(options))
-    monkeypatch.setattr(browser, "BrowserProcessManager", FakeProcessManager)
-    monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 12345)
-    monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
-    monkeypatch.setattr(browser, "_record_own_pids", lambda: None)
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
-    monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: None)
-
-    await browser.get_tab()
-
-    manager = browser._browser._browser_process_manager
-    assert len(manager.start_calls) == 1
-    binary_location, port, arguments = manager.start_calls[0]
-    assert binary_location == "/fake/Google Chrome"
-    assert port == 0
-    assert "--no-startup-window" in arguments
-    assert f"--user-data-dir={browser.SESSION_DIR}" in arguments
-
-
-@pytest.mark.asyncio
-async def test_get_tab_spawns_focus_watchdog_with_owned_pids_and_anchor(monkeypatch):
-    _reset_state(monkeypatch)
-    monkeypatch.setattr(browser.browser_lock, "acquire", lambda *a, **kw: "fake-lock-handle")
-    monkeypatch.setattr(browser, "_reap_session_profile", lambda: None)
-    monkeypatch.setattr(browser, "_clear_stale_devtools_port", lambda: None)
-    monkeypatch.setattr(browser, "_get_frontmost_pid", lambda: 999)
-    monkeypatch.setattr(browser, "Chrome", lambda options: FakeChrome(options))
-    monkeypatch.setattr(browser, "BrowserProcessManager", FakeProcessManager)
-    monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 54321)
-    monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
-
-    def _fake_record_own_pids():
-        monkeypatch.setattr(browser, "_owned_pids", [111, 222])
-
-    monkeypatch.setattr(browser, "_record_own_pids", _fake_record_own_pids)
-
-    calls = []
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
-    focus_calls = []
-    monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: focus_calls.append((pids, anchor_pid)))
-
-    await browser.get_tab()
-
-    assert calls == [([111, 222], None)]
-    assert focus_calls == [([111, 222], 999)]
-
-
-@pytest.mark.asyncio
-async def test_get_tab_reuses_existing_browser_without_relocking(monkeypatch):
-    _reset_state(monkeypatch)
-    monkeypatch.setattr(browser, "_browser", FakeChrome(None))
-    called = []
-    monkeypatch.setattr(browser.browser_lock, "acquire", lambda *a, **kw: called.append(1))
-    await browser.get_tab()
-    assert called == []
-
-
 # _get_frontmost_pid / _activate_pid: osascript stdout parsing + pid embedded in the AppleScript call
 
 def test_get_frontmost_pid_parses_stdout(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("54620\n"))
     assert browser._get_frontmost_pid() == 54620
 
 
 def test_get_frontmost_pid_returns_none_on_unparseable_stdout(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess(""))
     assert browser._get_frontmost_pid() is None
 
 
 def test_activate_pid_embeds_pid_in_applescript_command(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     commands = []
     monkeypatch.setattr(browser.subprocess, "run", lambda cmd, **kw: commands.append(cmd) or FakeCompletedProcess(""))
     browser._activate_pid(1344)
@@ -267,7 +137,7 @@ def test_activate_pid_embeds_pid_in_applescript_command(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_focus_steal_watchdog_by_pid_ignores_non_owned_frontmost_pid(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "FOCUS_STEAL_POLL_INTERVAL_S", 0)
     pid_sequence = iter([999, 999])
 
@@ -289,7 +159,7 @@ async def test_focus_steal_watchdog_by_pid_ignores_non_owned_frontmost_pid(monke
 
 @pytest.mark.asyncio
 async def test_focus_steal_watchdog_by_pid_reclaims_on_owned_pid_steal(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "FOCUS_STEAL_POLL_INTERVAL_S", 0)
     pid_sequence = iter([999, 123])
 
@@ -311,7 +181,7 @@ async def test_focus_steal_watchdog_by_pid_reclaims_on_owned_pid_steal(monkeypat
 
 @pytest.mark.asyncio
 async def test_focus_steal_watchdog_by_pid_reclaims_immediately_when_already_stolen_at_start(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "FOCUS_STEAL_POLL_INTERVAL_S", 0)
     pid_sequence = iter([123, 123])
 
@@ -333,7 +203,7 @@ async def test_focus_steal_watchdog_by_pid_reclaims_immediately_when_already_sto
 
 @pytest.mark.asyncio
 async def test_close_browser_cancels_live_focus_watchdog_before_stopping(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
 
     async def never_ending():
@@ -351,7 +221,7 @@ async def test_close_browser_cancels_live_focus_watchdog_before_stopping(monkeyp
 
 @pytest.mark.asyncio
 async def test_close_browser_noop_watchdog_cancel_when_never_started(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
 
     await browser.close_browser()
@@ -364,7 +234,7 @@ async def test_close_browser_noop_watchdog_cancel_when_never_started(monkeypatch
 
 @pytest.mark.asyncio
 async def test_kill_own_chrome_noop_when_browser_never_started(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     close_called = []
     monkeypatch.setattr(browser, "close_browser", _make_async_recorder(close_called))
     await browser.kill_own_chrome()
@@ -373,7 +243,7 @@ async def test_kill_own_chrome_noop_when_browser_never_started(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_kill_own_chrome_full_teardown_sequence(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
     monkeypatch.setattr(browser, "_owned_pids", [1, 2])
 
@@ -401,7 +271,7 @@ async def test_kill_own_chrome_full_teardown_sequence(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_kill_own_chrome_runs_safety_net_and_release_when_close_browser_raises(monkeypatch):
-    _reset_state(monkeypatch)
+    _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
     monkeypatch.setattr(browser, "_owned_pids", [7])
 
