@@ -42,12 +42,45 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Writes:** `04_output/report_<ts>.md`.
 **Called by:** CLI only. `--loop N` (default 3, cursor-loop calls after initial capture), `--delay S` (default 0.3), `--rate-test` (rerun loop with 2s delay).
 
-### 05_coindesk_cursor_probe.py (592 LOC)
+### 05_coindesk_cursor_probe.py (244 LOC)
 
 **Purpose:** Investigates cursor validity and storyType distribution across paginated timeline calls. Walk mode: pages through N calls logging all article `_id`/`storyType`/`pathname`/`displayDate`, producing storyType distribution. Fixed mode: chains cursor calls with optional storyType filtering (retry-fallback on 403: falls back to N-1/N-2 cursor article). Findings: storyType distribution (128 articles) News 91.4% / live_news 5.5% / Opinion 3.1%; a deterministic 403 cursor turned out to be a standard "News" article (storyType hypothesis disproved) — the 403 was transient article unavailability, not a storyType rule (confirmed 200 on fresh session); valid anchor rule: any article can be a cursor anchor, fall back to N-1 on 403.
 **Reads:** live CoinDesk timeline API.
 **Writes:** `05_data/walk_<ts>.md`, `05_data/walk_<ts>_articles.json`, `05_data/fixed_<ts>.md`, `05_data/deep_<ts>.md`.
 **Called by:** CLI only. `--mode walk|fixed`, `--n N` (default 25), `--invalid-types T1,T2` (fixed mode), `--delay S` (default 0.3).
+**Calls out:** `_05_capture.py`, `_05_parse.py`, `_05_fixed.py`, `_05_report.py` (this directory).
+
+### _05_capture.py (132 LOC)
+
+**Purpose:** pydoll/CDP browser launch + timeline-request capture layer for `05_coindesk_cursor_probe.py`.
+**Reads:** nothing — takes a pydoll `tab` handle and a `mode` label from the caller.
+**Writes:** nothing directly — returns captured headers/URL/body to the caller.
+**Called by:** `05_coindesk_cursor_probe.py` only.
+**Calls out:** `pydoll`.
+
+### _05_parse.py (49 LOC)
+
+**Purpose:** Shared article-body parsing and standard-cursor/URL-building utilities used by both walk and fixed modes.
+**Reads:** nothing — pure functions over the caller's response bodies/article lists.
+**Writes:** nothing.
+**Called by:** `05_coindesk_cursor_probe.py`, `_05_fixed.py`.
+**Calls out:** none.
+
+### _05_fixed.py (125 LOC)
+
+**Purpose:** Fixed-cursor mode algorithm — skips invalid-storyType anchors, chains cursor calls, and builds the per-call result rows.
+**Reads:** nothing — takes headers/body from the caller.
+**Writes:** nothing.
+**Called by:** `05_coindesk_cursor_probe.py` only.
+**Calls out:** `httpx`; `_05_parse.py` (this directory).
+
+### _05_report.py (158 LOC)
+
+**Purpose:** Markdown report assembly for both walk mode and fixed mode — one section-builder helper per report section per mode.
+**Reads:** nothing — takes each mode's result data as arguments.
+**Writes:** nothing directly — `write_walk_report`/`write_fixed_report` perform the file writes to paths given by `05_coindesk_cursor_probe.py`.
+**Called by:** `05_coindesk_cursor_probe.py` only.
+**Calls out:** none.
 
 ### 05b_coindesk_warmth_probe.py (354 LOC)
 
