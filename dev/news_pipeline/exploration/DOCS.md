@@ -61,12 +61,37 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `_02_quick.py`, `_02_depth.py`.
 **Calls out:** none.
 
-### 03_coindesk_backfill_traversal.py (622 LOC)
+### 03_coindesk_backfill_traversal.py (345 LOC)
 
 **Purpose:** Uncapped browser-driven backfill of `/latest-crypto-news`. Reuses production `discover.py` Chrome machinery (pydoll headed Chrome via `open -gna`, CDP). Clicks "More stories" until button GONE / persistently DISABLED (3 retries, 2s wait + scroll nudge each) / plateau (3 consecutive no-growth clicks). Live-blog URLs (slug starts with `live-`) filtered from output. Known issue: `timeLabel` DOM walk in `_JS_EXTRACT` causes +3.23s/160-click slowdown — fix required before uncapped Stage B run.
 **Reads:** live CoinDesk site.
-**Writes:** `03_output/progress_<ts>.log` (live-tailable, flush per click), `03_output/checkpoint_urls.json` (crash-safe, overwritten every 50 clicks + on exit), `03_output/urls_<ts>.json` (final, production `build_entries()` shape `{url, lastmod, publication_date, title, section}`), `03_output/report_stage_a_<ts>.md`.
+**Writes:** `03_output/urls_<ts>.json` (final, production `build_entries()` shape `{url, lastmod, publication_date, title, section}`), `03_output/checkpoint_urls.json` (crash-safe, overwritten every 50 clicks + on exit).
 **Called by:** CLI only. No flag: bounded run cap=`STAGE_A_CAP`(400); `--cap N` override; `--full` uncapped Stage B.
+**Calls out:** `_03_capture.py`, `_03_log.py`, `_03_report.py` (this directory).
+
+### _03_capture.py (240 LOC)
+
+**Purpose:** pydoll/CDP browser launch + click/extract/button-state JS wrappers for `03`, including the disabled-button retry-with-scroll-nudge mechanism.
+**Reads:** nothing — takes a pydoll `tab` handle from the caller.
+**Writes:** nothing.
+**Called by:** `03_coindesk_backfill_traversal.py` only.
+**Calls out:** `pydoll`.
+
+### _03_log.py (25 LOC)
+
+**Purpose:** Live-tailable progress log writer (header + per-click line) for `03_coindesk_backfill_traversal.py`.
+**Reads:** nothing — writes to the log file handle given by the caller.
+**Writes:** `03_output/progress_<ts>.log` (flush per click).
+**Called by:** `03_coindesk_backfill_traversal.py` only.
+**Calls out:** none.
+
+### _03_report.py (141 LOC)
+
+**Purpose:** Stage A sanity report assembly — timing stats, DOM growth trend, and the Stage B click/time projection to CoinDesk's founding date.
+**Reads:** nothing — takes `03`'s result values as arguments.
+**Writes:** nothing directly — `write_run_report` performs the file write to the path given by `03_coindesk_backfill_traversal.py`. Produces `03_output/report_stage_a_<ts>.md`.
+**Called by:** `03_coindesk_backfill_traversal.py` only.
+**Calls out:** none.
 
 ### 04_coindesk_timeline_replay_probe.py (652 LOC)
 
