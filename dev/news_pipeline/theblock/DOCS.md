@@ -29,14 +29,23 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Called by:** `probe_liveness.py`, `curated_sources.py`, `acquire_pipe/p2_cooldown.py`, `acquire_pipe/p5_logger.py`.
 **Gotcha:** `load_cooled_at`/`mark_cooled_batch`/`_parse_proxy_key` functions were added then removed in a later iteration when cooldown reverted to in-memory; a `cooled_at` field may still appear in legacy log entries — `probe_liveness.py` never reads it.
 
-### probe_discovery.py (457 LOC)
+### probe_discovery.py (308 LOC)
 
 **Purpose:** Measures discovery coverage + URL taxonomy. Fetches the 64-sub sitemap union, news sitemap, RSS, and bounded UI crawl. Resume-safe via per-sub checkpoint files in `cache/`. CF behaviour: IP-level 403/429 fires after ~21 sequential sub-sitemap fetches.
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
 **Writes:** `discover_coverage_report.md`; per-sub checkpoints in `cache/`.
-**Called by:** CLI only.
+**Called by:** CLI only; `pipe_theblock.py` (imports `load_sub_cache`, `save_sub_cache`, `extract_locs`, `normalize_url`, `CACHE_DIR`).
+**Calls out:** `_probe_discovery_report.py` (this directory).
 
-### probe_pool_size.py (335 LOC)
+### _probe_discovery_report.py (228 LOC)
+
+**Purpose:** Coverage report assembly — cross-method comparison (sitemap union / news sitemap / RSS / UI crawl), gap-candidate detection, URL-type/post-ID taxonomy helpers (`url_type`, `post_id`).
+**Reads:** nothing — takes each method's result data as arguments.
+**Writes:** nothing directly — returns the rendered markdown string.
+**Called by:** `probe_discovery.py` only.
+**Calls out:** none.
+
+### probe_pool_size.py (357 LOC)
 
 **Purpose:** Measures raw proxy pool size from 68 public source URLs — pure fetch+parse+count, NO liveness checking, NO proxy contacted. Fetches all sources concurrently (`httpx.AsyncClient`, `Semaphore(20)`, 15s timeout), parses `host:port` entries from bare/`proto://`/`proto://user:pass@` formats. Exports `HTTP_SOURCES`, `SOCKS4_SOURCES`, `SOCKS5_SOURCES` (reused by `probe_repo_cf_survey.py`).
 **Reads:** 68 public proxy-list source URLs.

@@ -231,11 +231,8 @@ def _source_label(url: str) -> str:
     return "/".join(parts[-3:]) if len(parts) >= 3 else url
 
 
-def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> str:
-    lines: list[str] = []
-    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    lines += [
+def _render_header(results: list[dict], stats: dict, ts_str: str, elapsed: float) -> list:
+    return [
         f"# Proxy Pool Size — {ts_str}",
         "",
         f"**Wall-clock:** {elapsed:.1f}s  |  **Sources:** {len(results)}  |  "
@@ -243,8 +240,10 @@ def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: flo
         "",
     ]
 
-    # Headline
-    lines += [
+
+# Headline
+def _render_headline(stats: dict) -> list:
+    return [
         "## Headline",
         "",
         f"| Metric | Count |",
@@ -258,16 +257,22 @@ def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: flo
         "",
     ]
 
-    # Per-bucket summary
-    lines += ["## Per-Protocol Bucket Summary", ""]
+
+# Per-bucket summary
+def _render_bucket_summary(results: list[dict], stats: dict) -> list:
+    lines = ["## Per-Protocol Bucket Summary", ""]
     lines += ["| Bucket | Sources | Raw | Unique |", "|---|---|---|---|"]
     for bucket in ("http", "socks4", "socks5"):
         b     = stats["buckets"][bucket]
         count = sum(1 for r in results if r["bucket"] == bucket)
         lines.append(f"| {bucket} | {count} | {b['raw']:,} | {b['unique']:,} |")
     lines.append("")
+    return lines
 
-    # Per-source detail — one table per bucket
+
+# Per-source detail — one table per bucket
+def _render_source_detail(results: list[dict]) -> list:
+    lines: list[str] = []
     for bucket in ("http", "socks4", "socks5"):
         bucket_results = [r for r in results if r["bucket"] == bucket]
         lines += [f"## Source Detail — {bucket}", ""]
@@ -281,18 +286,23 @@ def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: flo
             else:
                 lines.append(f"| `{label}` | FAIL | 0 | {r['error']} |")
         lines.append("")
+    return lines
 
-    # Failed sources
+
+# Failed sources
+def _render_failed_sources(stats: dict) -> list:
     if stats["failed"]:
-        lines += ["## Failed Sources", ""]
+        lines = ["## Failed Sources", ""]
         for r in stats["failed"]:
             lines.append(f"- `{r['url']}`  →  {r['error']}")
         lines.append("")
-    else:
-        lines += ["## Failed Sources", "", "None.", ""]
+        return lines
+    return ["## Failed Sources", "", "None.", ""]
 
-    # Baseline comparison
-    lines += [
+
+# Baseline comparison
+def _render_baseline_comparison(stats: dict) -> list:
+    return [
         "## Baseline Comparison",
         "",
         f"Previous baseline (monosans single-source, OldThemes 16): **~{BASELINE_RAW:,} raw** proxies.",
@@ -302,6 +312,18 @@ def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: flo
         f"(which was itself un-deduped).",
         "",
     ]
+
+
+def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> str:
+    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    lines: list[str] = []
+    lines += _render_header(results, stats, ts_str, elapsed)
+    lines += _render_headline(stats)
+    lines += _render_bucket_summary(results, stats)
+    lines += _render_source_detail(results)
+    lines += _render_failed_sources(stats)
+    lines += _render_baseline_comparison(stats)
 
     return "\n".join(lines)
 
