@@ -13,13 +13,38 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Called by:** `run_coindesk_riding.py`, `p2_browser_rider.py`.
 **Gotcha:** local copy, not an import from `src/` — hookify blocks `from src.` imports in dev/ scripts.
 
-### p2_browser_rider.py (498 LOC)
+### p2_browser_rider.py (283 LOC)
 
-**Purpose:** Core riding pool — B `AsyncWebCrawler` instances, N rider tasks round-robin across browsers, per-URL proxy context with burn/fail rotation, plus the stall watchdog (`_watchdog` → `_abort_stall` → `os._exit(1)`).
+**Purpose:** Core riding pool orchestrator — B `AsyncWebCrawler` instances, N rider tasks round-robin across browsers, per-URL proxy context with burn/fail rotation.
 **Reads:** proxy pool (via `p0_pool`), URL queue.
-**Writes:** `raw/<12-char-sha256-hash>.html` per ok URL; on stall, `remaining_urls.txt`.
-**Called by:** `run_coindesk_riding.py`, `smoke_stage1.py`.
-**Exports:** `run_riding_pool(n_browsers=1, stall_timeout_s=3600)`, `RiderState`, `RideRecord`, `JobRecord`, `FAIL_THRESHOLD`, `_watchdog`, `_abort_stall`.
+**Writes:** `raw/<12-char-sha256-hash>.html` per ok URL (via `_p2_fetch.py`); on stall, `remaining_urls.txt` (via `_p2_watchdog.py`).
+**Called by:** `run_coindesk_riding.py`, `smoke_stage1.py`, `test_watchdog.py`, `test_tail_race.py`, `p4_reporter.py`.
+**Exports:** `run_riding_pool(n_browsers=1, stall_timeout_s=3600)`, `RiderState`, `RideRecord`, `JobRecord`, `FAIL_THRESHOLD`, `_watchdog`, `_abort_stall` — the last four are re-exports from `_p2_state.py`/`_p2_watchdog.py`, kept resolvable from `p2_browser_rider` for `p4_reporter.py` and `test_watchdog.py`.
+**Calls out:** `_p2_state.py`, `_p2_fetch.py`, `_p2_watchdog.py` (this directory).
+
+### _p2_state.py (77 LOC)
+
+**Purpose:** Data model for the riding pool — `RideRecord`, `JobRecord`, `RiderState` (incl. `all_resolved` property) and the `STALL_TIMEOUT_S` default.
+**Reads:** nothing.
+**Writes:** nothing.
+**Called by:** `p2_browser_rider.py`, `_p2_watchdog.py`.
+**Calls out:** `p0_pool.py` (this directory, for the `PersistentCooldownManager` type).
+
+### _p2_fetch.py (104 LOC)
+
+**Purpose:** Single-URL fetch mechanics — proxy-context `crawler.arun()` call, result classification (ok/regwall/empty/failed/connect_fail), regwall detection, raw-HTML write, URL hashing.
+**Reads:** nothing — takes a live `crawler` and a URL from the caller.
+**Writes:** `raw/<12-char-sha256-hash>.html` per ok URL.
+**Called by:** `p2_browser_rider.py` only.
+**Calls out:** `crawl4ai`.
+
+### _p2_watchdog.py (111 LOC)
+
+**Purpose:** Stall detection and abort-report writing — `_watchdog` polls for progress staleness; `_abort_stall` drains the queue, writes `remaining_urls.txt`, writes `job.md` (via a late import of `p4_reporter` to avoid a module-level cycle, falling back to a minimal stub on any reporter error), then `os._exit(1)`.
+**Reads:** nothing.
+**Writes:** `remaining_urls.txt`, `job.md` (on stall).
+**Called by:** `p2_browser_rider.py`, `test_watchdog.py` (via `p2_browser_rider`'s re-export).
+**Calls out:** `p4_reporter.py` (this directory, lazy import inside `_write_stall_job_md`).
 
 ### p3_url_sampler.py (136 LOC)
 
