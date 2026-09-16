@@ -16,6 +16,9 @@ from pathlib import Path
 import httpx
 from pydoll.browser import Chrome
 
+sys.path.insert(0, str(Path(__file__).parent))
+from _05b_report import write_warmth_report  # noqa: E402
+
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 TIMELINE_API_PATH = "/api/v1/articles/timeline"
 OUTPUT_DIR = Path(__file__).parent / "05b_output"
@@ -74,14 +77,13 @@ async def warmth_probe_workflow() -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_path = OUTPUT_DIR / f"warmth_{ts}.md"
 
-    test_url = None
-    test_headers = None
-    baseline_status = None
-
     port = get_free_port()
     session_dir = tempfile.mkdtemp(prefix="coindesk_warmth_")
     chrome = None
     tab = None
+    test_url = None
+    test_headers = None
+    baseline_status = None
 
     try:
         print("Phase W: launching Chrome …", file=sys.stderr)
@@ -90,50 +92,13 @@ async def warmth_probe_workflow() -> None:
         chrome = Chrome()
         tab = await chrome.connect(ws_url)
 
-        print(f"Phase W: navigating to {TARGET_URL} …", file=sys.stderr)
-        await tab.go_to(TARGET_URL, timeout=60)
-        await asyncio.sleep(3.0)
-
-        raw = await tab.execute_script(_JS_DISMISS_COOKIE)
-        print(f"Phase W: cookie consent: {_extract_value(raw)}", file=sys.stderr)
-        await asyncio.sleep(0.5)
-
-        print(f"Phase W: capturing timeline request ({CLICKS_TO_TRIGGER} clicks) …", file=sys.stderr)
-        timeline_entry = await capture_timeline_request(tab, CLICKS_TO_TRIGGER)
-
+        timeline_entry = await run_capture_phase(tab)
         if timeline_entry is None:
             print("ERROR: Timeline API not found in HAR.", file=sys.stderr)
             return
-
-        test_url = timeline_entry["request"]["url"]
-        raw_hdrs = {h["name"]: h["value"] for h in timeline_entry["request"]["headers"]}
-        test_headers = filter_headers(raw_hdrs)
-        print(f"Phase W: captured URL: {test_url}", file=sys.stderr)
-
-        # Baseline: verify URL works while Chrome is still open (warm)
-        baseline = httpx.get(test_url, headers=test_headers, follow_redirects=True, timeout=30)
-        baseline_status = baseline.status_code
-        print(f"Phase W: baseline (Chrome open) → {baseline_status}", file=sys.stderr)
-
-        # Save state to disk (subprocess cold test reads this)
-        state = {"url": test_url, "headers": test_headers}
-        STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        print(f"Phase W: state saved → {STATE_FILE}", file=sys.stderr)
-
+        test_url, test_headers, baseline_status = save_baseline_state(timeline_entry)
     finally:
-        if tab:
-            try:
-                await tab.close()
-            except Exception as e:
-                print(f"tab.close (non-fatal): {e}", file=sys.stderr)
-        if chrome:
-            try:
-                await chrome.close()
-            except Exception as e:
-                print(f"chrome.close (non-fatal): {e}", file=sys.stderr)
-        kill_chrome_on_port(port)
-        shutil.rmtree(session_dir, ignore_errors=True)
-        print("Phase W: Chrome closed — timing ladder starts now.", file=sys.stderr)
+        await teardown_chrome_session(tab, chrome, port, session_dir)
 
     if test_url is None or test_headers is None:
         print("ERROR: State not captured — aborting.", file=sys.stderr)
@@ -142,44 +107,63 @@ async def warmth_probe_workflow() -> None:
     # Phase W continued: timing ladder
     ladder_results = run_warmth_ladder(test_url, test_headers, WARMTH_INTERVALS)
 
-    # Phase C: feedpage rewarm + subprocess cold test (only if ladder hit a 403)
-    feedpage_result = None
-    subprocess_result = None
-
-    first_403 = next((r for r in ladder_results if r["status"] != 200), None)
-    if first_403 is not None:
-        print("Phase C: feedpage rewarm test …", file=sys.stderr)
-        feedpage_status, feedpage_bytes = fetch_feedpage(test_headers)
-        print(f"Phase C: feedpage GET → {feedpage_status} ({feedpage_bytes} bytes)", file=sys.stderr)
-
-        time.sleep(1.0)
-        rewarm = httpx.get(test_url, headers=test_headers, follow_redirects=True, timeout=30)
-        print(f"Phase C: API after feedpage GET → {rewarm.status_code}", file=sys.stderr)
-        feedpage_result = {
-            "feedpage_status": feedpage_status,
-            "feedpage_bytes": feedpage_bytes,
-            "api_after_feedpage": rewarm.status_code,
-            "api_after_feedpage_snippet": rewarm.content[:200].decode("utf-8", errors="replace")
-            if rewarm.status_code != 200 else None,
-        }
-
-        print("Phase C: subprocess cold test …", file=sys.stderr)
-        subprocess_result = subprocess_cold_test(STATE_FILE)
-        print(f"Phase C: subprocess result: {subprocess_result}", file=sys.stderr)
-    else:
-        print(
-            f"Phase C: skipped — no 403 in {WARMTH_INTERVALS[-1]}s ladder.",
-            file=sys.stderr,
-        )
+    feedpage_result, subprocess_result = run_phase_c(test_url, test_headers, ladder_results)
 
     write_warmth_report(
-        report_path, ts, test_url, baseline_status,
+        report_path, ts, TARGET_URL, test_url, baseline_status,
         WARMTH_INTERVALS, ladder_results, feedpage_result, subprocess_result,
     )
     print(f"Warmth report → {report_path}")
 
 
 # FUNCTIONS
+async def run_capture_phase(tab) -> dict | None:
+    print(f"Phase W: navigating to {TARGET_URL} …", file=sys.stderr)
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+
+    raw = await tab.execute_script(_JS_DISMISS_COOKIE)
+    print(f"Phase W: cookie consent: {_extract_value(raw)}", file=sys.stderr)
+    await asyncio.sleep(0.5)
+
+    print(f"Phase W: capturing timeline request ({CLICKS_TO_TRIGGER} clicks) …", file=sys.stderr)
+    return await capture_timeline_request(tab, CLICKS_TO_TRIGGER)
+
+
+def save_baseline_state(timeline_entry: dict) -> tuple:
+    test_url = timeline_entry["request"]["url"]
+    raw_hdrs = {h["name"]: h["value"] for h in timeline_entry["request"]["headers"]}
+    test_headers = filter_headers(raw_hdrs)
+    print(f"Phase W: captured URL: {test_url}", file=sys.stderr)
+
+    # Baseline: verify URL works while Chrome is still open (warm)
+    baseline = httpx.get(test_url, headers=test_headers, follow_redirects=True, timeout=30)
+    baseline_status = baseline.status_code
+    print(f"Phase W: baseline (Chrome open) → {baseline_status}", file=sys.stderr)
+
+    # Save state to disk (subprocess cold test reads this)
+    state = {"url": test_url, "headers": test_headers}
+    STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    print(f"Phase W: state saved → {STATE_FILE}", file=sys.stderr)
+
+    return test_url, test_headers, baseline_status
+
+
+async def teardown_chrome_session(tab, chrome, port: int, session_dir: str) -> None:
+    if tab:
+        try:
+            await tab.close()
+        except Exception as e:
+            print(f"tab.close (non-fatal): {e}", file=sys.stderr)
+    if chrome:
+        try:
+            await chrome.close()
+        except Exception as e:
+            print(f"chrome.close (non-fatal): {e}", file=sys.stderr)
+    kill_chrome_on_port(port)
+    shutil.rmtree(session_dir, ignore_errors=True)
+    print("Phase W: Chrome closed — timing ladder starts now.", file=sys.stderr)
+
 
 # Bind port 0 to get a free OS-assigned port
 def get_free_port() -> int:
@@ -284,6 +268,38 @@ def run_warmth_ladder(url: str, headers: dict, intervals: list) -> list:
     return results
 
 
+# Phase C: feedpage rewarm + subprocess cold test (only if ladder hit a 403)
+def run_phase_c(test_url: str, test_headers: dict, ladder_results: list) -> tuple:
+    first_403 = next((r for r in ladder_results if r["status"] != 200), None)
+    if first_403 is None:
+        print(
+            f"Phase C: skipped — no 403 in {WARMTH_INTERVALS[-1]}s ladder.",
+            file=sys.stderr,
+        )
+        return None, None
+
+    print("Phase C: feedpage rewarm test …", file=sys.stderr)
+    feedpage_status, feedpage_bytes = fetch_feedpage(test_headers)
+    print(f"Phase C: feedpage GET → {feedpage_status} ({feedpage_bytes} bytes)", file=sys.stderr)
+
+    time.sleep(1.0)
+    rewarm = httpx.get(test_url, headers=test_headers, follow_redirects=True, timeout=30)
+    print(f"Phase C: API after feedpage GET → {rewarm.status_code}", file=sys.stderr)
+    feedpage_result = {
+        "feedpage_status": feedpage_status,
+        "feedpage_bytes": feedpage_bytes,
+        "api_after_feedpage": rewarm.status_code,
+        "api_after_feedpage_snippet": rewarm.content[:200].decode("utf-8", errors="replace")
+        if rewarm.status_code != 200 else None,
+    }
+
+    print("Phase C: subprocess cold test …", file=sys.stderr)
+    subprocess_result = subprocess_cold_test(STATE_FILE)
+    print(f"Phase C: subprocess result: {subprocess_result}", file=sys.stderr)
+
+    return feedpage_result, subprocess_result
+
+
 # Fetch feed HTML page via plain httpx (no browser); return (status, byte_count)
 def fetch_feedpage(api_headers: dict) -> tuple:
     feed_headers = {
@@ -332,90 +348,6 @@ def subprocess_cold_test(state_file: Path) -> dict:
     finally:
         if tmp_script and os.path.exists(tmp_script):
             os.unlink(tmp_script)
-
-
-# Write warmth probe report (MD)
-def write_warmth_report(
-    path: Path,
-    ts: str,
-    test_url: str,
-    baseline_status: int | None,
-    intervals: list,
-    ladder_results: list,
-    feedpage_result: dict | None,
-    subprocess_result: dict | None,
-) -> None:
-    lines = ["# CoinDesk IP Warmth Probe Report"]
-    lines.append(f"\n**Run:** {ts}\n")
-    lines.append(f"**Test URL (fixed for all calls):** `{test_url}`\n")
-    lines.append(f"**Baseline (Chrome still open):** `{baseline_status}`\n")
-
-    lines.append("## Phase W — Warmth Timing Ladder\n")
-    lines.append("Same URL replayed at cumulative T seconds after Chrome closes.\n")
-    lines.append("| T (s after close) | Status | Call elapsed | Notes |")
-    lines.append("|-------------------|--------|--------------|-------|")
-    for r in ladder_results:
-        snippet = r.get("body_snippet") or ""
-        notes = f"`{snippet[:60]}`" if snippet else "—"
-        lines.append(
-            f"| {r['t_seconds']} | **{r['status']}** |"
-            f" {r.get('call_elapsed', r.get('error', '?'))}s | {notes} |"
-        )
-
-    first_403 = next((r for r in ladder_results if r["status"] != 200), None)
-    last_200_idx = max(
-        (i for i, r in enumerate(ladder_results) if r["status"] == 200), default=-1
-    )
-
-    if first_403 is None:
-        lines.append(f"\n✅ **No 403 in {intervals[-1]}s** — warmth lasts at least {intervals[-1]}s.\n")
-    else:
-        last_200_t = ladder_results[last_200_idx]["t_seconds"] if last_200_idx >= 0 else "?"
-        lines.append(
-            f"\n**Warmth window:** last 200 at T={last_200_t}s,"
-            f" first non-200 at T={first_403['t_seconds']}s.\n"
-        )
-
-    if feedpage_result is not None:
-        lines.append("## Phase C-1 — Feedpage Rewarm Test\n")
-        lines.append(
-            "Plain `httpx.get` of the feed HTML page (no browser) after warmth expired:\n"
-        )
-        lines.append(
-            f"- `httpx.get(\"{TARGET_URL}\")` → HTTP {feedpage_result['feedpage_status']}"
-            f" ({feedpage_result['feedpage_bytes']} bytes)"
-        )
-        api_after = feedpage_result["api_after_feedpage"]
-        lines.append(f"- API call immediately after → **{api_after}**\n")
-        if api_after == 200:
-            lines.append("✅ **httpx feedpage GET IS sufficient to re-warm the IP.**\n")
-        else:
-            snip = feedpage_result.get("api_after_feedpage_snippet") or ""
-            lines.append(f"❌ **httpx feedpage GET does NOT re-warm** — browser required.")
-            if snip:
-                lines.append(f"\nAPI body snippet: `{snip[:100]}`\n")
-
-    if subprocess_result is not None:
-        lines.append("## Phase C-2 — Subprocess Cold Test\n")
-        lines.append(
-            "Fresh `python` subprocess loads `state.json` (URL + headers),"
-            " calls the API with NO prior coindesk connection in that process.\n"
-        )
-        sub_status = subprocess_result.get("status", "?")
-        lines.append(f"- Subprocess → **{sub_status}**")
-        if subprocess_result.get("stderr"):
-            lines.append(f"- stderr: `{subprocess_result['stderr'][:200]}`\n")
-        if sub_status == "200":
-            lines.append("\nSubprocess → 200: warmth is **IP-level** (not process-level).\n")
-        elif sub_status and sub_status.startswith(("4", "5")):
-            lines.append(
-                f"\nSubprocess → {sub_status}: consistent with IP warmth expired"
-                f" (both parent + subprocess cold — IP-level check).\n"
-            )
-        else:
-            lines.append(f"\nSubprocess result ambiguous: `{subprocess_result}`\n")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 if __name__ == "__main__":
