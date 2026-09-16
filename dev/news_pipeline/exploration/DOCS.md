@@ -93,12 +93,37 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `03_coindesk_backfill_traversal.py` only.
 **Calls out:** none.
 
-### 04_coindesk_timeline_replay_probe.py (652 LOC)
+### 04_coindesk_timeline_replay_probe.py (151 LOC)
 
-**Purpose:** Captures CoinDesk timeline API requests via background Chrome + pydoll HAR recorder (full wire headers incl. `sec-ch-ua*`), replays via `httpx` + `curl_cffi`, chains cursor-based calls. Establishes minimum header set for replay (Referer, User-Agent, `sec-ch-ua*` — no cookie/auth required). Finding: HTTP replay works — cursor loop of 7 calls returns 200 at ~0.27s each. Endpoint: `GET /api/v1/articles/timeline?size=16&lastId=<UUID>&lastDisplayDate=<ISO>&lang=en`; cursor = last article's `_id` (lastId) + `articleDates.displayDate` (lastDisplayDate).
+**Purpose:** Orchestrates the capture → replay → cursor-loop → report pipeline for the Timeline API probe. Finding: HTTP replay works — cursor loop of 7 calls returns 200 at ~0.27s each. Endpoint: `GET /api/v1/articles/timeline?size=16&lastId=<UUID>&lastDisplayDate=<ISO>&lang=en`; cursor = last article's `_id` (lastId) + `articleDates.displayDate` (lastDisplayDate).
 **Reads:** live CoinDesk site + timeline API.
 **Writes:** `04_output/report_<ts>.md`.
 **Called by:** CLI only. `--loop N` (default 3, cursor-loop calls after initial capture), `--delay S` (default 0.3), `--rate-test` (rerun loop with 2s delay).
+**Calls out:** `_04_capture.py`, `_04_replay.py`, `_04_report.py` (this directory).
+
+### _04_capture.py (127 LOC)
+
+**Purpose:** Captures CoinDesk timeline API requests via background Chrome + pydoll HAR recorder (full wire headers incl. `sec-ch-ua*`). Establishes minimum header set for replay (Referer, User-Agent, `sec-ch-ua*` — no cookie/auth required).
+**Reads:** live CoinDesk site.
+**Writes:** nothing directly — returns the captured HAR entry to the caller.
+**Called by:** `04_coindesk_timeline_replay_probe.py` only.
+**Calls out:** `pydoll`.
+
+### _04_replay.py (347 LOC)
+
+**Purpose:** Dual-client HTTP replay (`httpx` + `curl_cffi` Chrome impersonation) of the captured timeline URL, cursor-chained pagination, and 403 diagnostics (header signals, recoverability retest at +10s/+40s).
+**Reads:** live CoinDesk timeline API.
+**Writes:** nothing directly.
+**Called by:** `04_coindesk_timeline_replay_probe.py` only.
+**Calls out:** `httpx`, `curl_cffi`.
+
+### _04_report.py (174 LOC)
+
+**Purpose:** Markdown report assembly — captured headers, dual-client replay results, cursor-loop results with 403 diagnostics, and rate-test comparison.
+**Reads:** nothing — takes `04`'s result data as arguments.
+**Writes:** nothing directly — `write_report` performs the file write to the path given by `04_coindesk_timeline_replay_probe.py`.
+**Called by:** `04_coindesk_timeline_replay_probe.py` only.
+**Calls out:** none.
 
 ### 05_coindesk_cursor_probe.py (244 LOC)
 
