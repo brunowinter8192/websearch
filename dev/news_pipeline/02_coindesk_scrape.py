@@ -37,32 +37,7 @@ async def scrape_workflow(input_path: Path):
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         for i, entry in enumerate(entries, 1):
-            url = entry["url"]
-            url_hash = hashlib.sha256(url.encode()).hexdigest()[:12]
-            print(f"[{i}/{len(entries)}] {url}", file=sys.stderr)
-
-            result_entry = scrape_one(entry, url_hash)
-            try:
-                t0 = time.perf_counter()
-                result = await crawler.arun(url=url, config=run_config)
-                elapsed = time.perf_counter() - t0
-                content = result.markdown.raw_markdown if result.markdown else ""
-                if content:
-                    file_path = write_article(entry, url_hash, content)
-                    result_entry.update({
-                        "status": "ok",
-                        "char_count": len(content),
-                        "file": str(file_path.relative_to(Path.cwd()) if file_path.is_absolute() else file_path),
-                        "elapsed_s": round(elapsed, 2),
-                    })
-                    print(f"  ok — {len(content):,} chars in {elapsed:.1f}s", file=sys.stderr)
-                else:
-                    result_entry.update({"status": "empty", "char_count": 0, "elapsed_s": round(elapsed, 2)})
-                    print(f"  empty ({elapsed:.1f}s)", file=sys.stderr)
-            except Exception as exc:
-                result_entry.update({"status": "failed", "error": str(exc)})
-                print(f"  FAILED: {exc}", file=sys.stderr)
-
+            result_entry = await scrape_one_url(crawler, entry, run_config, i, len(entries))
             manifest.append(result_entry)
             await asyncio.sleep(1.0)
 
@@ -71,6 +46,35 @@ async def scrape_workflow(input_path: Path):
 
 
 # FUNCTIONS
+async def scrape_one_url(crawler: AsyncWebCrawler, entry: dict, run_config: CrawlerRunConfig,
+                          i: int, total: int) -> dict:
+    url = entry["url"]
+    url_hash = hashlib.sha256(url.encode()).hexdigest()[:12]
+    print(f"[{i}/{total}] {url}", file=sys.stderr)
+
+    result_entry = scrape_one(entry, url_hash)
+    try:
+        t0 = time.perf_counter()
+        result = await crawler.arun(url=url, config=run_config)
+        elapsed = time.perf_counter() - t0
+        content = result.markdown.raw_markdown if result.markdown else ""
+        if content:
+            file_path = write_article(entry, url_hash, content)
+            result_entry.update({
+                "status": "ok",
+                "char_count": len(content),
+                "file": str(file_path.relative_to(Path.cwd()) if file_path.is_absolute() else file_path),
+                "elapsed_s": round(elapsed, 2),
+            })
+            print(f"  ok — {len(content):,} chars in {elapsed:.1f}s", file=sys.stderr)
+        else:
+            result_entry.update({"status": "empty", "char_count": 0, "elapsed_s": round(elapsed, 2)})
+            print(f"  empty ({elapsed:.1f}s)", file=sys.stderr)
+    except Exception as exc:
+        result_entry.update({"status": "failed", "error": str(exc)})
+        print(f"  FAILED: {exc}", file=sys.stderr)
+
+    return result_entry
 
 # Load entries from discover JSON, newest file auto-picked if path not specified
 def load_entries(input_path: Path) -> list[dict]:
