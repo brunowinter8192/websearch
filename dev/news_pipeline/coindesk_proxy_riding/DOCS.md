@@ -54,13 +54,30 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Called by:** `run_coindesk_riding.py`.
 **Exports:** `sample_urls(n_total, seed)`.
 
-### p4_reporter.py (344 LOC)
+### p4_reporter.py (208 LOC)
 
-**Purpose:** Generates `job.md` + 3 plots from a completed `RiderState`. Metrics: counts/throughput/61k-backfill projection; HTML size percentiles (`char_count = len(result.html)`); markdown length percentiles (`markdown_len` — body-level truncation signal); proxy churn + 61k estimate; ride-length distribution; regwall-position curve; retry outcomes; wasted-fetch ratio. Counts table includes `Browsers` and `Contexts/browser` (`n_slots // n_browsers`) for self-documenting runs.
+**Purpose:** Orchestrates the report write (`write_riding_report`) and renders `job.md` — counts/throughput tables, HTML/markdown percentile sections, proxy/regwall sections, failed/regwall URL lists, plot links. Counts table includes `Browsers` and `Contexts/browser` (`n_slots // n_browsers`) for self-documenting runs.
 **Reads:** `RiderState`.
-**Writes:** `job.md`, `cumulative.png`, `ride_lengths.png`, `regwall_position.png`.
-**Called by:** `run_coindesk_riding.py`, `p2_browser_rider.py` (on abort).
+**Writes:** `job.md`.
+**Called by:** `run_coindesk_riding.py`, `p2_browser_rider.py` (on abort, via `_p2_watchdog.py`'s lazy import).
 **Exports:** `write_riding_report(state, job_dir, t_job_start)`.
+**Calls out:** `_p4_stats.py`, `_p4_plots.py` (this directory).
+
+### _p4_stats.py (169 LOC)
+
+**Purpose:** Derives all report metrics from a `RiderState` — counts, throughput/backfill projection, HTML/markdown size percentiles, completion-time series, ride-length distribution, regwall rate by ride position, retry outcomes. `n_connect_fail` reads `state.n_connect_fail` (the authoritative counter) rather than counting `job_records`, because `p2_browser_rider.py` never appends a `JobRecord` for a connect_fail attempt.
+**Reads:** `RiderState`.
+**Writes:** nothing.
+**Called by:** `p4_reporter.py` only.
+**Calls out:** `p2_browser_rider.py` (this directory, for `RiderState`/`FAIL_THRESHOLD`).
+
+### _p4_plots.py (62 LOC)
+
+**Purpose:** The three matplotlib plots — cumulative OK fetches over time, ride-length histogram, regwall-rate-by-position bar chart.
+**Reads:** nothing — takes the `stats` dict from `_p4_stats.py`.
+**Writes:** `cumulative.png`, `ride_lengths.png`, `regwall_position.png`.
+**Called by:** `p4_reporter.py` only.
+**Calls out:** `matplotlib`.
 
 ### run_coindesk_riding.py (115 LOC)
 
