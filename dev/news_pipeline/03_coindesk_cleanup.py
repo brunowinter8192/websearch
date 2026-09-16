@@ -151,12 +151,8 @@ def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     return len(body_lines), "NONE"
 
 
-# Apply in-body cleanup rules; return (cleaned_lines, ws_strip_count, para_insert_count, tag_strip_count).
-# Two passes: (1) line-level strip/substitution + trailing-ws; (2) paragraph normalization.
-# Pass 1 order: tag-footer strip → image strip → byline/date → google-badge → empty-links → inline-link sub.
-# Tag-footer strip MUST precede inline-link sub so [text](url) form is still matchable.
-def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
-    # Pass 1 — strip/substitute each line, count trailing-ws hits
+# Pass 1 — strip/substitute each line, count trailing-ws hits
+def _clean_body_pass1(lines: list[str]) -> tuple[list[str], int, int]:
     pass1: list[str] = []
     ws_strips = 0
     tag_strips = 0
@@ -178,8 +174,11 @@ def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
         if stripped != line:
             ws_strips += 1
         pass1.append(stripped)
+    return pass1, ws_strips, tag_strips
 
-    # Pass 2 — paragraph normalization + blank-run collapse-to-1
+
+# Pass 2 — paragraph normalization + blank-run collapse-to-1
+def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
     result: list[str] = []
     para_inserts = 0
     blank_run = 0
@@ -207,6 +206,16 @@ def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
     while result and result[-1] == "":
         result.pop()
 
+    return result, para_inserts
+
+
+# Apply in-body cleanup rules; return (cleaned_lines, ws_strip_count, para_insert_count, tag_strip_count).
+# Two passes: (1) line-level strip/substitution + trailing-ws; (2) paragraph normalization.
+# Pass 1 order: tag-footer strip → image strip → byline/date → google-badge → empty-links → inline-link sub.
+# Tag-footer strip MUST precede inline-link sub so [text](url) form is still matchable.
+def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
+    pass1, ws_strips, tag_strips = _clean_body_pass1(lines)
+    result, para_inserts = _clean_body_pass2(pass1)
     return result, ws_strips, para_inserts, tag_strips
 
 

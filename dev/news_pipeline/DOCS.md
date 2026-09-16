@@ -36,7 +36,7 @@ Per-domain news scraping pipeline for the trading-bot data layer. CoinDesk → R
 **Writes:** `02b_data/<sha256[:12]>.md` per article (YAML frontmatter incl. scraped_at + raw markdown body; regwalled pages NOT written), `02b_data/manifest.json` (status: `ok`/`empty`/`failed`/`regwall`).
 **Called by:** `run_pipeline.py`, CLI.
 
-### 03_coindesk_cleanup.py (252 LOC)
+### 03_coindesk_cleanup.py (261 LOC)
 
 **Purpose:** Extract clean article body from `02b_data/*.md`, strip nav/footer noise, normalize structure for RAG ingestion. Anchors: H1 start-anchor + earliest-occurrence end-anchor (`More For You` / `## More For You` / `## We Care About Your Privacy` / tag-footer `{2,}` pattern, TAG_FOOTER requires ≥2 concatenated `[text](url)` to avoid single-link false-fires). Strip rules: Google News badge, date/read-time byline, author byline, standalone image lines, inline links → text, empty links, trailing whitespace. Normalization: blank line between consecutive body paragraphs, blank-run collapse-to-1.
 **Reads:** `02b_data/*.md` + YAML frontmatter.
