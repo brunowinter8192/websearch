@@ -86,7 +86,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Writes:** `<output-dir>/raw/*.html`, `<output-dir>/job.md`, `<output-dir>/cumulative.png`, `<output-dir>/ride_lengths.png`, `<output-dir>/regwall_position.png`.
 **Called by:** CLI only. Entry point `__main__` via `asyncio.run(_run(_parse_args()))`. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/run_coindesk_riding.py --n-urls 500 --concurrency 20 --burn-threshold 2 --output-dir data/news/coindesk/riding_output`.
 
-### analyze_write_times.py (258 LOC)
+### analyze_write_times.py (288 LOC)
 
 **Purpose:** Reconstructs proxy-riding throughput from `raw/*.html` file mtimes. Used when `job.md`/`cumulative.png` are missing (manual abort before fix, or any crash that skips the report write). Reads mtime of every `.html` in `--raw-dir`, optionally filters to a `--since` cutoff (needed when `raw/` is a cumulative dedup corpus spanning multiple runs), plots cumulative OK fetches over time (top) and per-bin rate + rolling mean + 30-min pool-refresh markers (bottom).
 **Reads:** `--raw-dir` (default `data/news/coindesk/raw`, resolved from repo root via `git rev-parse --git-common-dir`).
