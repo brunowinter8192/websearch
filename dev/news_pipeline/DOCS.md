@@ -22,7 +22,7 @@ Per-domain news scraping pipeline for the trading-bot data layer. CoinDesk → R
 **Writes:** `01_json/discover_<UTC-timestamp>.json` — list of `{url, lastmod, publication_date, title, section}` sorted by lastmod desc.
 **Called by:** `run_pipeline.py`, CLI.
 
-### 02_coindesk_scrape.py (156 LOC)
+### 02_coindesk_scrape.py (160 LOC)
 
 **Purpose:** Scrape each URL from a discover JSON via crawl4ai raw markdown (no PruningContentFilter), shared `AsyncWebCrawler` session — hits CoinDesk regwall after ~3 URLs (iter 1 baseline, 21/25 regwall'd). Kept as reference for shared-session behaviour; superseded by `02b_coindesk_scrape_fresh_context.py` for production use.
 **Reads:** `--input <path>` or auto-picks newest `01_json/discover_*.json`.
