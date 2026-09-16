@@ -65,12 +65,37 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `05b_coindesk_warmth_probe.py` only.
 **Calls out:** none.
 
-### 06_coindesk_full_discovery.py (508 LOC)
+### 06_coindesk_full_discovery.py (366 LOC)
 
 **Purpose:** Combines the browser-capture (04-style timeline URL/header capture) and cursor-loop (05-style pagination) techniques into one full discovery run — captures initial timeline request via background Chrome, then chains cursor calls to exhaustion, writing articles per-year with checkpoint-based resume and rewarm fallback on 403.
 **Reads:** live CoinDesk site + timeline API.
-**Writes:** `06_output/urls/` (per-year article files), `06_output/checkpoint.json` (resume state), `06_output/progress_<ts>.log`, `06_output/discovery_<ts>.md`.
+**Writes:** `06_output/urls/` (per-year article files), `06_output/progress_<ts>.log`, `06_output/discovery_<ts>.md`.
 **Called by:** CLI only.
+**Calls out:** `_06_capture.py`, `_06_progress.py`, `_06_report.py` (this directory).
+
+### _06_capture.py (179 LOC)
+
+**Purpose:** pydoll/CDP browser launch + timeline-request capture layer for `06_coindesk_full_discovery.py` — same background-Chrome mechanism as `05b`, reused for this probe's warmup/rewarm cycles.
+**Reads:** nothing — takes an `n_clicks` count and an optional log handle.
+**Writes:** nothing directly — returns captured headers/URL/body to the caller.
+**Called by:** `06_coindesk_full_discovery.py` only.
+**Calls out:** `pydoll`, `httpx`.
+
+### _06_progress.py (44 LOC)
+
+**Purpose:** Progress logging and crash-safe checkpoint persistence for `06_coindesk_full_discovery.py`'s cursor loop.
+**Reads:** nothing.
+**Writes:** `06_output/checkpoint.json`, and (via the caller's open log handle) `06_output/progress_<ts>.log`.
+**Called by:** `06_coindesk_full_discovery.py` only.
+**Calls out:** none.
+
+### _06_report.py (36 LOC)
+
+**Purpose:** Markdown report assembly for `06_coindesk_full_discovery.py`'s final discovery summary.
+**Reads:** nothing — takes `06`'s result dict as an argument.
+**Writes:** nothing directly — `write_report` performs the file write to the path given by `06_coindesk_full_discovery.py`.
+**Called by:** `06_coindesk_full_discovery.py` only.
+**Calls out:** none.
 
 ## State
 `01_output/` through `06_output/` — all probe run outputs, gitignored. `06_output/checkpoint.json` — crash-safe resume state for `06_coindesk_full_discovery.py`.
