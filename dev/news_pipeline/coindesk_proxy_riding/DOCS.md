@@ -107,7 +107,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Writes:** live-run raw `.html` files to a temp dir.
 **Called by:** CLI only, run from main checkout: `./venv/bin/python .claude/worktrees/<worktree>/dev/news_pipeline/coindesk_proxy_riding/smoke_stage1.py`.
 
-### test_sigint_report.py (213 LOC)
+### test_sigint_report.py (227 LOC)
 
 **Purpose:** Deterministic SIGINT/SIGTERM report tests for `abort.py:_abort_interrupted` — asserts exit codes 130/143 and report writes, no browser or proxy infrastructure.
 **Reads:** none (constructed state).

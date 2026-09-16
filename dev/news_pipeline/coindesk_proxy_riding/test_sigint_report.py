@@ -63,9 +63,50 @@ def _run(name: str, fn) -> bool:
         return False
 
 
+def _build_job_records(t0, tmp_dir: Path) -> list:
+    from src.news.engine.proxy_riding.state import JobRecord
+
+    records = []
+    for i, url in enumerate(["https://www.coindesk.com/test/ok-1",
+                              "https://www.coindesk.com/test/ok-2"]):
+        records.append(JobRecord(
+            url=url,
+            url_hash=f"aabbcc{i:06d}",
+            status="ok",
+            char_count=5000,
+            markdown_len=2000,
+            elapsed_s=1.5,
+            error=None,
+            file=str(tmp_dir / "raw" / f"aabbcc{i:06d}.html"),
+            t_start=t0,
+            ride_position=i + 1,
+            proxy_str="http://proxy:8080",
+        ))
+    return records
+
+
+def _build_ride_record() -> object:
+    from src.news.engine.proxy_riding.state import RideRecord
+
+    return RideRecord(
+        proxy_str="http://proxy:8080",
+        proto="http",
+        host_port="proxy:8080",
+        n_ok=2,
+        n_regwall=1,
+        n_connect_fail=0,
+        n_failed=0,
+        n_urls_attempted=3,
+        burned_threshold=False,
+        burned_connect=False,
+        ride_s=4.5,
+        positions=[],
+    )
+
+
 # Build a minimal RiderState with two resolved job records so reporter has data.
 def _make_state(tmp_dir: Path) -> object:
-    from src.news.engine.proxy_riding.state import RiderState, JobRecord, RideRecord
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
     from datetime import datetime, timezone
 
@@ -100,40 +141,13 @@ def _make_state(tmp_dir: Path) -> object:
     t0 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
     state.t_job_start = t0
 
-    for i, url in enumerate(["https://www.coindesk.com/test/ok-1",
-                              "https://www.coindesk.com/test/ok-2"]):
-        state.job_records.append(JobRecord(
-            url=url,
-            url_hash=f"aabbcc{i:06d}",
-            status="ok",
-            char_count=5000,
-            markdown_len=2000,
-            elapsed_s=1.5,
-            error=None,
-            file=str(tmp_dir / "raw" / f"aabbcc{i:06d}.html"),
-            t_start=t0,
-            ride_position=i + 1,
-            proxy_str="http://proxy:8080",
-        ))
+    state.job_records.extend(_build_job_records(t0, tmp_dir))
     state.done_urls = {
         "https://www.coindesk.com/test/ok-1",
         "https://www.coindesk.com/test/ok-2",
     }
 
-    state.ride_records.append(RideRecord(
-        proxy_str="http://proxy:8080",
-        proto="http",
-        host_port="proxy:8080",
-        n_ok=2,
-        n_regwall=1,
-        n_connect_fail=0,
-        n_failed=0,
-        n_urls_attempted=3,
-        burned_threshold=False,
-        burned_connect=False,
-        ride_s=4.5,
-        positions=[],
-    ))
+    state.ride_records.append(_build_ride_record())
 
     state.pool_samples = [(30.0, 500, 10), (60.0, 480, 30)]
     return state
