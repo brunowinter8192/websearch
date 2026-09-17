@@ -191,7 +191,7 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 
 ### _altcha_trigger_probe_cdp.py (75 LOC)
 
-**Purpose:** Raw-CDP shadow-DOM helpers for `altcha_trigger_probe.py` — locates the `altcha-widget`'s node via `DOM.getDocument`/`DOM.querySelector`, reports its shadow-root mode via `DOM.describeNode(pierce=true)` (works for closed roots too, unlike JS `element.shadowRoot`), and dispatches a coordinate-based click via `DOM.getBoxModel` + `Input.dispatchMouseEvent`.
+**Purpose:** Raw-CDP shadow-DOM helpers for `altcha_trigger_probe.py` — locates the widget node, reports its shadow-root mode, dispatches a coordinate-based click.
 **Reads:** nothing (pure CDP session calls, `cdp` object passed in by the caller).
 **Writes:** nothing (returns dicts/node IDs; the click is the one side effect, on the live page).
 **Called by:** `altcha_trigger_probe.py`.
@@ -199,7 +199,7 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 
 ### _altcha_trigger_probe_js.py (96 LOC)
 
-**Purpose:** JS snippet constants/builders for `altcha_trigger_probe.py` — the `MutationObserver`-based init script (attaches ALTCHA + input-probe event listeners the instant `altcha-widget` appears, optionally sets `auto="onload"` in that same synchronous callback), the inspection/verify/outcome-detection JS strings.
+**Purpose:** JS snippet constants/builders for `altcha_trigger_probe.py` — the widget-event init script plus the inspection/verify/outcome-detection strings.
 **Reads:** nothing.
 **Writes:** nothing (pure string builders).
 **Called by:** `altcha_trigger_probe.py`.
@@ -207,7 +207,7 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 
 ### _altcha_trigger_probe_launch.py (95 LOC)
 
-**Purpose:** Backgrounded-Chrome launch helpers for `altcha_trigger_probe.py` — inline copy of `src/scraper/chromium_process.py`'s current shape (dynamic `.app` bundle resolution via patchright, `ManagedBrowser.build_browser_flags(enable_stealth=True)`, `open -g -n -a` self-launch, `DevToolsActivePort` polling, PID-keyed focus-steal watchdog, profile kill), not a shared import — this directory's dev-isolation convention, and the only way to reuse this shape at all since new dev/ files cannot import from `src/` (repo tooling enforces this).
+**Purpose:** Backgrounded-Chrome launch helpers for `altcha_trigger_probe.py` — an inline copy of `src/scraper/chromium_process.py`'s self-launch/watchdog shape, not a shared import.
 **Reads:** nothing (pure subprocess/CDP-adjacent calls).
 **Writes:** nothing directly — spawns/kills Chrome processes and an asyncio watchdog task as a side effect.
 **Called by:** `altcha_trigger_probe.py`.
@@ -215,7 +215,7 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 
 ### _altcha_trigger_probe_report.py (259 LOC)
 
-**Purpose:** Report assembly for `altcha_trigger_probe.py` — per-section Markdown builders (summary table, Step-1 inspection dump incl. `humanInteractionSignature` and ALTCHA-default diffs, per-trigger event sequence + verdict, methodology) plus `build_report_md`/`write_report`. Split out of the main probe module to keep it under the project's 400-LOC-per-file convention (same split pattern as `dev/news_pipeline/theblock/probe_discovery.py` + `_probe_discovery_report.py`).
+**Purpose:** Markdown report assembly for `altcha_trigger_probe.py`, split out of the main module to stay under the per-file LOC convention.
 **Reads:** nothing (pure string assembly from the dataclass instances passed in).
 **Writes:** `md/altcha_trigger_probe_<ts>.md` (via `write_report`).
 **Called by:** `altcha_trigger_probe.py`.
@@ -239,7 +239,7 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 
 ### altcha_trigger_probe.py (392 LOC)
 
-**Purpose:** M1 go/no-go probe — can Mojeek's ALTCHA proof-of-work challenge be started and completed by automation alone, no human interaction? One passive DOM inspection (attributes, `getConfiguration()`/`getState()`, shadow-root mode, `humanInteractionSignature`) plus 3 isolated live-Mojeek trigger attempts (`verify()` direct call, early `auto="onload"` attribute set via a `MutationObserver` racing the custom-element upgrade, a real CDP-dispatched trusted click), each in its own fresh backgrounded Chrome process/profile. Every session navigates a neutral control URL before Mojeek first — if that fails, the whole probe aborts loudly instead of producing verdicts that can't tell "Mojeek refused" apart from "this environment is blind". Page outcome is tracked as three states (RESULTS / IN_FLIGHT — Mojeek's own "Checking verification with server..." text / BLOCKED), not two — an earlier version of this probe collapsed IN_FLIGHT into BLOCKED the instant Mojeek's constant block-page boilerplate was present (true from the first poll of every run, mid-flight or not) and reported a false RAN_REJECTED on two live runs before this was caught in review; see process-docs for the exact bug. Result (2026-09-17, live, corrected settle logic): **all three triggers reach real results — `auto_onload`, `verify_call`, and `real_click` all SUCCESS.** No human interaction required by any of the three tested paths; the earlier RAN_REJECTED reading of `verify_call`/`real_click` was an artifact of the bug above, not a real server rejection — the round trip just needed to be waited out. Widget markup on this date is plain light DOM (no shadow root at all).
+**Purpose:** M1 go/no-go probe — can Mojeek's ALTCHA challenge be started and completed by automation alone, via three isolated live trigger attempts?
 **Reads:** none (live run against production mojeek.com + a neutral control URL).
 **Writes:** `md/altcha_trigger_probe_<ts>.md`.
 **Called by:** CLI only.
