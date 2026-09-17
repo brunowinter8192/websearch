@@ -64,6 +64,23 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 **Purpose:** `src/search/engines/brave.py` — `_build_results`. `_classify_diagnosis` (PoW/CAPTCHA)
 coverage removed with the function itself (the guessed-verdict-removal milestone).
 
+### test_mojeek_engine.py (293 LOC)
+**Purpose:** `src/search/engines/mojeek.py` — the one engine that solves its own challenge, so the
+plumbing is tested, not only the parse. Pure seams: `_is_ready_to_parse` (the
+sufficiency-or-stability parse rule, including the partial-render case observed live three times —
+1 link at the instant the poll first matches after a solved challenge), `_should_fire_verify`,
+`_parse_target`, `_build_results`. Driven seams: `_await_results` against a `_ScriptedTab` that
+dispatches on script identity and counts calls, covering the unchallenged fast path (parses on
+poll 1, `verify()` never fired), the challenged path (`verify()` fired exactly once, parse waits
+out the partial render), budget behaviour (gives up at the deadline still reporting
+`challenge_triggered`, and polls zero times on an already-spent budget), and `_diagnose`'s
+empty-record contract (an unsolved challenge is distinguishable from a page that never had one;
+`marker` stays `None`). `test_block_boilerplate_from_first_poll_does_not_short_circuit` is the
+regression guard for the terminal-verdict-on-a-start-true-condition defect that cost two live runs
+in the `engine_reduction` area — every poll in it carries a live challenge widget and its note text
+while results only arrive on poll 3.
+**Calls out:** none (fake tab, one `monkeypatch` on the module's `WAIT_INTERVAL`).
+
 ### test_openalex_engine.py (274 LOC)
 **Purpose:** `src/search/engines/openalex.py` (2026 API migration) — `_extract_pdf_url`/
 `_parse_results` populate `SearchResult.pdf_url` from `best_oa_location.pdf_url` (null when the

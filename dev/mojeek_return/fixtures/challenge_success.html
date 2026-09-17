@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Captcha</title></head>
+<body>
+<div id="page">
+  <h1>Verification required</h1>
+  <p>Please complete the check below to continue.</p>
+  <form id="altcha-form" method="post" action="/captcha/verify">
+    <altcha-widget id="altcha-widget" challenge="/captcha/challenge" name="altcha" theme="default"></altcha-widget>
+    <div id="captcha-note" class="captcha-note">Waiting for verification.</div>
+  </form>
+</div>
+<script>
+const RESULTS_HTML = '<p>Results 1 to 3 of 24,511 in 0.13s</p>' +
+  '<ul class="results-standard">' +
+  '<li><a class="ob" href="https://example.org/one">one</a><h2><a href="https://example.org/one">Result One</a></h2><p class="s">snippet one</p></li>' +
+  '<li><a class="ob" href="https://example.org/two">two</a><h2><a href="https://example.org/two">Result Two</a></h2><p class="s">snippet two</p></li>' +
+  '<li><a class="ob" href="https://example.org/three">three</a><h2><a href="https://example.org/three">Result Three</a></h2><p class="s">snippet three</p></li>' +
+  '</ul>';
+
+function buildPayload(timeMs) {
+  return btoa(JSON.stringify({
+    challenge: {parameters: {algorithm: 'PBKDF2/SHA-256', cost: 8000, nonce: 'fixturenonce', salt: 'fixturesalt'}},
+    solution: {counter: 223, derivedKey: 'fixturederivedkey', time: timeMs}
+  }));
+}
+
+class FixtureAltchaWidget extends HTMLElement {
+  constructor() {
+    super();
+    this._state = 'unverified';
+  }
+  connectedCallback() {
+    this.innerHTML = '<div class="altcha" data-state="unverified"><input type="checkbox" id="altcha-checkbox-altcha-widget"><label for="altcha-checkbox-altcha-widget">I am not a robot</label><input type="hidden" name="altcha"></div>';
+    setTimeout(() => { this.dispatchEvent(new CustomEvent('load')); }, 10);
+  }
+  getState() { return this._state; }
+  getConfiguration() {
+    return {auto: 'off', minDuration: 500, timeout: 90000, humanInteractionSignature: true, type: 'checkbox'};
+  }
+  _setState(state, payload) {
+    this._state = state;
+    this.dispatchEvent(new CustomEvent('statechange', {detail: {state: state, payload: payload || null}}));
+  }
+  verify() {
+    this._setState('verifying', null);
+    setTimeout(() => {
+      const payload = buildPayload(128.1);
+      this._setState('verified', payload);
+      this.dispatchEvent(new CustomEvent('verified', {detail: {payload: payload}}));
+      document.getElementById('captcha-note').textContent = 'Checking verification with server...';
+      setTimeout(() => {
+        document.title = 'fixture results - Mojeek Search';
+        document.getElementById('page').innerHTML = RESULTS_HTML;
+      }, 600);
+    }, 300);
+  }
+}
+customElements.define('altcha-widget', FixtureAltchaWidget);
+</script>
+</body>
+</html>

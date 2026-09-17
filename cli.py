@@ -128,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("query", help="Search query (must match a prior search_web call)")
     p.add_argument("--engine", required=True,
-                   help="Engine name: google, duckduckgo, startpage, brave, bing, yandex, "
+                   help="Engine name: google, duckduckgo, mojeek, startpage, brave, bing, yandex, "
                         "openalex")
 
     # ── scrape_url_chromium ───────────────────────────────────────────────────
