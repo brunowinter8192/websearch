@@ -61,7 +61,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
 **Calls out:** `_mojeek_pydoll_probe_core.py`.
 
-### test_mojeek_pydoll_core.py (286 LOC)
+### test_mojeek_pydoll_core.py (287 LOC)
 
 **Purpose:** Offline test module — serves local fixtures over a loopback HTTP server and drives the real query runner against them, then builds a report from the result.
 **Reads:** `fixtures/*.html`.
