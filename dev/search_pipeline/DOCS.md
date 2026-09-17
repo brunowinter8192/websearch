@@ -189,6 +189,38 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, TargetCommands, NetworkCommands) — inline copy of the `src/search/browser.py` session-setup shape, not a shared import.
 
+### _altcha_trigger_probe_cdp.py (75 LOC)
+
+**Purpose:** Raw-CDP shadow-DOM helpers for `altcha_trigger_probe.py` — locates the `altcha-widget`'s node via `DOM.getDocument`/`DOM.querySelector`, reports its shadow-root mode via `DOM.describeNode(pierce=true)` (works for closed roots too, unlike JS `element.shadowRoot`), and dispatches a coordinate-based click via `DOM.getBoxModel` + `Input.dispatchMouseEvent`.
+**Reads:** nothing (pure CDP session calls, `cdp` object passed in by the caller).
+**Writes:** nothing (returns dicts/node IDs; the click is the one side effect, on the live page).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond the CDP session object passed in (no imports beyond stdlib types).
+
+### _altcha_trigger_probe_js.py (94 LOC)
+
+**Purpose:** JS snippet constants/builders for `altcha_trigger_probe.py` — the `MutationObserver`-based init script (attaches ALTCHA + input-probe event listeners the instant `altcha-widget` appears, optionally sets `auto="onload"` in that same synchronous callback), the inspection/verify/outcome-detection JS strings.
+**Reads:** nothing.
+**Writes:** nothing (pure string builders).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond stdlib (`json`).
+
+### _altcha_trigger_probe_launch.py (95 LOC)
+
+**Purpose:** Backgrounded-Chrome launch helpers for `altcha_trigger_probe.py` — inline copy of `src/scraper/chromium_process.py`'s current shape (dynamic `.app` bundle resolution via patchright, `ManagedBrowser.build_browser_flags(enable_stealth=True)`, `open -g -n -a` self-launch, `DevToolsActivePort` polling, PID-keyed focus-steal watchdog, profile kill), not a shared import — this directory's dev-isolation convention, and the only way to reuse this shape at all since new dev/ files cannot import from `src/` (repo tooling enforces this).
+**Reads:** nothing (pure subprocess/CDP-adjacent calls).
+**Writes:** nothing directly — spawns/kills Chrome processes and an asyncio watchdog task as a side effect.
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** `patchright` (bundle resolution only), `crawl4ai.browser_manager.ManagedBrowser` (flag list), macOS `open`/`osascript`/`pkill`.
+
+### _altcha_trigger_probe_report.py (252 LOC)
+
+**Purpose:** Report assembly for `altcha_trigger_probe.py` — per-section Markdown builders (summary table, Step-1 inspection dump incl. `humanInteractionSignature` and ALTCHA-default diffs, per-trigger event sequence + verdict, methodology) plus `build_report_md`/`write_report`. Split out of the main probe module to keep it under the project's 400-LOC-per-file convention (same split pattern as `dev/news_pipeline/theblock/probe_discovery.py` + `_probe_discovery_report.py`).
+**Reads:** nothing (pure string assembly from the dataclass instances passed in).
+**Writes:** `md/altcha_trigger_probe_<ts>.md` (via `write_report`).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond stdlib.
+
 ### _capture_sorry.py (233 LOC)
 
 **Purpose:** Captures Google `/sorry/` block page — helper script, not a numbered experiment. Navigates to a search URL, checks if redirected to `/sorry/`, saves HTML + screenshot + MD summary.
@@ -204,6 +236,14 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Writes:** `md/acquire_probe_<ts>.md` (full run only; `--smoke` writes nothing).
 **Called by:** CLI only. Flags: `--max-queries N`, `--smoke` (4-query dry-run, no report).
 **Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`), full engine set via production search path.
+
+### altcha_trigger_probe.py (384 LOC)
+
+**Purpose:** M1 go/no-go probe — can Mojeek's ALTCHA proof-of-work challenge be started and completed by automation alone, no human interaction? One passive DOM inspection (attributes, `getConfiguration()`/`getState()`, shadow-root mode, `humanInteractionSignature`) plus 3 isolated live-Mojeek trigger attempts (`verify()` direct call, early `auto="onload"` attribute set via a `MutationObserver` racing the custom-element upgrade, a real CDP-dispatched trusted click), each in its own fresh backgrounded Chrome process/profile. Every session navigates a neutral control URL before Mojeek first — if that fails, the whole probe aborts loudly instead of producing verdicts that can't tell "Mojeek refused" apart from "this environment is blind". Result (2026-09-17, two live reruns, `SETTLE_TIMEOUT_S=15` then `35`, same verdicts both times): `auto_onload` → SUCCESS (real results, no human, no script-driven trigger at all — the widget's own native auto-start path). `verify_call` and `real_click` → RAN_REJECTED both times: client-side PoW genuinely completes (`verified` state reached, valid solution payload) but the server-verification page never clears within the wait budget — the named HIS risk from the milestone brief, reproduced live. Widget markup on this date is plain light DOM (no shadow root at all), so the `real_click` trigger's own click-delivery signal (`click_delivered`, via `mousedown`/`mouseup`/`click` observed on the widget host) read `True` — see process-docs for a broader, still-open finding from local fixture testing that shadow-DOM-scoped elements do NOT reliably receive synthetic clicks in this launch shape, which did not end up mattering here only because Mojeek's real widget isn't shadow-scoped.
+**Reads:** none (live run against production mojeek.com + a neutral control URL).
+**Writes:** `md/altcha_trigger_probe_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** `patchright` (browser launch/connect/control), `crawl4ai`/`crawl4ai.browser_manager` (flag-building only, no crawler use) — via `_altcha_trigger_probe_launch.py`; `_altcha_trigger_probe_cdp.py`, `_altcha_trigger_probe_js.py`, `_altcha_trigger_probe_report.py` (siblings, own entries above).
 
 ### bm25_capped_smoke.py (243 LOC)
 
