@@ -313,3 +313,47 @@ Mojeek spend. Milestone total across M1 and M2: 24 requests.
   DOM, and exposes `verify()`. Any of those can change. The drift shows up as
   `challenge_widget: true, challenge_triggered: false` in the diagnosis, which is why that pair of
   fields is separate rather than collapsed into one boolean.
+
+---
+
+# Recap of this session (2026-09-17)
+
+Two milestones, one branch (`wsmojeek2`), one area (`mojeek_return`). M1 measured whether Mojeek's
+ALTCHA wall is passable under the search lane's browser; M2 put the engine back in the pool on the
+strength of that measurement. Everything above is the record; this section is only what the recap
+itself turned up.
+
+## Where mojeek's name has to appear, learned the hard way
+
+Adding an engine is not four registry edits. The full set this session touched, after a review pass
+found several still describing a seven-engine world:
+
+- `src/search/search_web.py` — import, `_DEFAULT_ENGINES`, `_BROWSER_ENGINES`, `ENGINE_MAX_RESULTS`, `ENGINES`
+- `src/search/engines/mojeek.py` — the `_limiters["mojeek"]` registration at import time, without which `get_limiter` raises
+- `cli.py` — the `--engine` help string for `search_engine_drilldown`
+- `src/search/engines/DOCS.md` — module entry, the `kill_tab` Gotcha's engine list, the diagnosis-field contract's per-engine extras, and four separate engine counts (production 7->8, browser 6->7, total 8->9, "the 2 challenged engines" -> 3)
+- `src/search/DOCS.md` — the Role paragraph's fan-out count, `search_web.py`'s Purpose and its `_BROWSER_ENGINES` Reads note, `browser.py`'s Called-by engine list, `document_status.py`'s Called-by list and its "all 7 browser engines" parenthetical, the active-engines Gotcha, and the diagnosis Gotcha's "brave/yandex (the challenged engines)"
+- `dev/tests/DOCS.md` — the test module entry
+
+**A count in prose is the thing that rots.** Every one of these was a number or a list written out
+by hand, and a grep for `yandex` found them all in seconds — that is the cheap way to audit this,
+because any engine-shaped claim that names one sibling names them all. A successor adding or
+removing an engine should run `grep -rn <sibling-engine-name> --include=DOCS.md .` before calling
+the job done, not just grep for the engine being changed (which by definition appears nowhere yet).
+
+Also corrected in passing: `DOCS.md` (repo root) claimed `cli.py (193 LOC)` against an actual 200.
+That drift predates this session — the one-line help-string edit here did not change the count —
+but `cli.py` was in this session's inventory, so it was brought in line rather than left.
+
+## Shape of the session, for anyone repeating it
+
+The order that worked, and would be worth repeating: measure first in `dev/` with no `src/` changes
+at all (M1), get the measurement reviewed, and only then write the engine (M2) with the numbers
+already in hand. Every M2 design decision — the parse rule, the budget, the diagnosis fields —
+resolved to "what did M1 actually observe", and the two that were not backed by an observation
+(the `Verification required` literal, and an early assumption that the cookie question could be
+answered without a fresh-profile control arm) were both caught by review before they shipped.
+
+Two facts in this file were produced by being wrong first: the browser-wide cookie read (M1) and
+the unobserved literal (M2). Both cost a live run or a rewrite, both were cheap to fix at the time
+they were caught, and both would have been expensive as a silent property of a production engine.
