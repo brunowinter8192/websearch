@@ -170,3 +170,146 @@ orchestrator record in the same folder says "between 115ms and 524ms", a range t
 committed payload. This run measured 122-153ms across four challenged queries, which sits with the
 report's low end. Recorded here rather than corrected there, per the rule that each agent writes
 only its own process-docs file.
+
+---
+
+# M2 — Mojeek back in the engine pool (same session, 2026-09-17)
+
+`src/search/engines/mojeek.py` exists again, solves the ALTCHA challenge itself, and is wired into
+the production pool. Verified live through `cli.py search_web`.
+
+## The decision, so it is not reopened
+
+**Decided 2026-09-17 by the user: Mojeek returns to the engine pool, with automated solving of its
+ALTCHA challenge.** The open question — whether this project wants to solve a captcha on a service
+that sells API access to the same data — was put to the user explicitly before any code was
+written, and answered explicitly. It is the user's decision, not the agent's. A successor should
+treat it as settled and not relitigate it; if circumstances change, that is a new decision for the
+user, not an inference from this record.
+
+## The correction that changed the design: never key on a string you have not seen match
+
+The plan going in was to key the diagnosis `marker` on the literal `Verification required`. The
+user rejected the assumption and was right to: M1's own classifier ordered `widget_present` ahead
+of `block_marker_present`, so on every challenged query it returned CHALLENGE_PENDING and the block
+branch was never reached. **That literal had never once been observed matching a live Mojeek page
+in this project.** Building an engine's block signal on it would have been a guess wearing the
+clothes of a measurement.
+
+One live request settled it (`dev/mojeek_return/mojeek_challenge_capture.py`, report in that area's
+`md/`). What the challenge page actually serves:
+
+| fact | value |
+|---|---|
+| `title` | `Captcha` |
+| `html_lang` | `de` |
+| body copy | English: `Verification required` / `Please complete the challenge to continue.` |
+| footer | German: `Über`, `Unterstützung`, `Datenschutz` |
+| `#captcha-note` | `Waiting for verification.` -> `Checking verification with server...` -> `Verified successfully. Reloading...` |
+| solved URL | gains a `chv=<hex>` parameter on the reload |
+| `result_link_count` at first match | **1** |
+
+So the literal *does* match — but the page mixes an English challenge with German chrome, which
+means the copy is not reliably locale-stable, and the results page body would contain those same
+words for anyone who searched them. That is the `roboter`/`robot` false positive this project
+already has on record, one step removed.
+
+**Resolution: the engine matches no page literal anywhere.** It keys on structure
+(`document.querySelector('altcha-widget')`, `typeof el.verify === 'function'`) and records
+`#captcha-note`'s text verbatim in whatever language it arrives. `marker` stays `None`, which the
+field contract explicitly allows for engines whose signal is not text-based (google's is a URL
+path, duckduckgo's an element count). The generalisable rule, which cost nothing here only because
+it was caught in review: **before keying on a string, check whether any code path has ever seen it
+match.** A literal in a fixture you wrote yourself is not an observation.
+
+## The four design decisions
+
+**1. Parse on sufficiency-or-stability, not on first sight.** `_is_ready_to_parse(count, previous,
+target)`: zero links is never ready; `count >= target` (target = `min(max_results, 10)`, Mojeek
+serves 10 per page) parses at once; otherwise it parses only once the count stops growing. The
+partial render is real and reproduced three times — 1 link at the instant the poll first matched,
+in both M1 phase-A runs and again in the challenge capture. The cost lands where the problem is:
+unchallenged pages present 10 links on the first poll and parse immediately, exactly like the
+removed engine, so the common path pays nothing. Only a mid-render list pays one extra 200ms poll,
+on a query that already has ~2.6s of unused budget. A flat settle-sleep after the first match was
+rejected: it would tax every query forever for a case that occurs about once per profile lifetime.
+
+**2. `MOJEEK_BUDGET_S` stays 4.5.** Measured challenged span was 1784-1813ms plus ~50ms of
+`new_tab()`, so ~1.9s against a 4.5s deadline — 2.6s of headroom inside the budget, and the 1.5s
+the constant leaves under the 6.0s watchdog still covers `_diagnose` plus `kill_tab`. Nothing
+measured justifies moving it in either direction. Raising it would eat watchdog margin for a case
+never observed; lowering it to "fit" 1.9s would remove the slack that absorbs a slow verification
+round trip. Note that ALTCHA's own `timeout` is 90000ms, so a stalled verification will never
+self-resolve inside any budget we could set — the budget's job is to cut it off and report facts,
+not to wait it out. The single-deadline-anchored-at-the-first-line shape is kept verbatim from the
+removed engine, including `tab.go_to(..., timeout=3.0)`.
+
+**3. The empty record separates four cases.** `_diagnose` carries the common fields plus
+`challenge_widget` (element present now), `challenge_triggered` (Python-side run fact, so it
+survives the page moving on), `challenge_state` (the widget's own `getState()`), and `captcha_note`
+(verbatim). Readings:
+
+- `challenge_triggered: true, challenge_state: "verifying"` -> challenge appeared, PoW unfinished
+- `challenge_triggered: true, captcha_note: "Checking verification with server..."` -> PoW done, server round trip still open at the deadline
+- `challenge_widget: true, challenge_triggered: false` -> widget appeared but never became triggerable, the drift case (e.g. Mojeek moves `verify` behind a shadow root)
+- all false/null with `containers_found: false` -> no challenge at all, Mojeek simply returned nothing
+
+On success the network half alone already tells the story: `document_status_chain` of length 2 is
+the solved-challenge trace (challenge page, then the post-verification reload), length 1 means no
+challenge was served.
+
+**4. No block early-exit branch at all.** The engine's only decision is "are there result links
+yet" — false at the start, true later. There is deliberately no `if block_marker: return []`
+branch, because that condition is true from the first poll and stays true through the whole
+verification sequence: such a branch would return empty on iteration zero on every challenged query
+and the challenge would never be solved. That is the 2026-09-17 defect from the `engine_reduction`
+area, and in an engine it would not be a wrong report, it would be a permanently broken engine.
+`test_block_boilerplate_from_first_poll_does_not_short_circuit` guards it. **Do not add a
+"fast block detection" optimisation here.**
+
+## Live verification, in production's own profile
+
+Three `cli.py search_web` runs through the real production path, distinct queries. Precondition
+checked first, not assumed: the production profile's cookie DB held **zero** mojeek cookies, so
+run 1 had to pay the challenge.
+
+| run | query | status | results | search_ms | `document_status_chain` |
+|---|---|---|---|---|---|
+| 1 | python asyncio tutorial | OK | 10 | 2461 | `[200, 200]` |
+| 2 | rust borrow checker explained | OK | 10 | 880 | `[200]` |
+| 3 | postgres index bloat | OK | 10 | 985 | `[200]` |
+
+Run 1's two-document chain is the challenge being solved and the page reloading; runs 2 and 3 are
+single-document, i.e. never challenged. After run 1 the production profile held
+`chllg` (`has_expires=1`, expiry ~30 days out). So **M1's carry-over finding holds in production's
+own profile, across the `kill_own_chrome()` teardown that ends every run** — not just in a
+temporary probe profile. Worst observed cost, 2461ms, is 41% of the 6.0s watchdog.
+
+One reading trap worth recording: run 3's breakdown table showed `1` for every engine including
+mojeek. That is the pool cap (`K = google_count`, and google returned 1 that run), not an engine
+result. The per-engine truth is in `query_log.jsonl`'s `engine_run` record, which showed
+`result_count: 10`. **Read the log record, not the breakdown table, when verifying an engine.**
+
+## Live budget for M2
+
+4 live requests against mojeek.com: 1 for the challenge capture, 3 for the verification runs. Each
+verification run also queried the other seven engines, which is ordinary production traffic and not
+Mojeek spend. Milestone total across M1 and M2: 24 requests.
+
+## What is still unmeasured after M2
+
+- **Concurrency.** The verification runs exercised mojeek inside the real seven-engine fanout, so
+  the concurrent case is no longer entirely untested — but only at n=3, all of them healthy. The
+  interaction between a challenged mojeek query and six sibling tabs under load is still not
+  characterised.
+- **A challenge that does not resolve.** Every live challenge so far has been solved. The
+  `INCONCLUSIVE`-shaped branches (`challenge_triggered` true, no results by the deadline) are
+  covered by offline tests against scripted tabs, never by a live occurrence.
+- **Cookie expiry in practice.** ~30 days by the cookie's own `expires`. Whether Mojeek invalidates
+  it server-side sooner, or re-challenges at some volume threshold, is untested. At a 4/minute
+  limiter this project will not approach the ~8M/day automated traffic the vendor cited as its
+  motivation, but "will not approach" is a reasoning step, not a measurement.
+- **Drift.** The engine works because Mojeek leaves `auto` unset, keeps the widget in the light
+  DOM, and exposes `verify()`. Any of those can change. The drift shows up as
+  `challenge_widget: true, challenge_triggered: false` in the diagnosis, which is why that pair of
+  fields is separate rather than collapsed into one boolean.

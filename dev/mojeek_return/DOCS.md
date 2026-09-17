@@ -4,14 +4,23 @@
 Measurement tooling for the question of whether mojeek.com can return to the engine pool, asked against the SEARCH lane's browser (pydoll, `src/search/browser.py` shape) rather than the scrape lane's. Touch this to re-measure Mojeek's ALTCHA behaviour or to check for drift. Do not touch it to change production: nothing here is wired into `src/`, and `mojeek` is still absent from the engine pool.
 
 ## Public Interface
-No `__init__.py`. Two entry points, both run directly and both relying on Python putting the script's own directory on `sys.path` for the sibling `_*` imports:
+No `__init__.py`. Three entry points, all run directly and both relying on Python putting the script's own directory on `sys.path` for the sibling `_*` imports:
 `./venv/bin/python3 dev/mojeek_return/test_mojeek_pydoll_core.py` — offline, deterministic, no network.
 `./venv/bin/python3 dev/mojeek_return/mojeek_pydoll_probe.py` — live, spends requests against mojeek.com.
+`./venv/bin/python3 dev/mojeek_return/mojeek_challenge_capture.py` — live, one request, dumps the challenge page verbatim.
 
 ## Flow
 Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navigate, poll the DOM into one of five states, fire `verify()` if a widget appears, snapshot cookies before/after -> three phases (cold, same profile after a process kill, second fresh profile) -> markdown report into `md/`.
 
 ## Modules
+
+### mojeek_challenge_capture.py (165 LOC)
+
+**Purpose:** Single-navigation capture of Mojeek's challenge page as actually served — title, body text, widget state, `#captcha-note` at every transition — to settle which strings are real before an engine keys on one.
+**Reads:** none (one live navigation against mojeek.com on a cold profile).
+**Writes:** `md/mojeek_challenge_capture_<ts>.md`; creates and deletes a temporary Chrome profile.
+**Called by:** CLI only.
+**Calls out:** `_mojeek_pydoll_probe_launch.py`, `_mojeek_pydoll_probe_query.py` (tripwire).
 
 ### mojeek_pydoll_probe.py (182 LOC)
 

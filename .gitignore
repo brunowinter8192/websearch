@@ -8,6 +8,7 @@ dev/scrape_pipeline/browser_eval/*_reports/
 dev/scrape_pipeline/garbage_eval/*_reports/
 dev/scrape_pipeline/filter_eval/*_reports/
 venv/
+venv
 .venv/
 __pycache__/
 *.pyc
