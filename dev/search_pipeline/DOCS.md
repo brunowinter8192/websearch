@@ -189,6 +189,38 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, TargetCommands, NetworkCommands) — inline copy of the `src/search/browser.py` session-setup shape, not a shared import.
 
+### _altcha_trigger_probe_cdp.py (75 LOC)
+
+**Purpose:** Raw-CDP shadow-DOM helpers for `altcha_trigger_probe.py` — locates the widget node, reports its shadow-root mode, dispatches a coordinate-based click.
+**Reads:** nothing (pure CDP session calls, `cdp` object passed in by the caller).
+**Writes:** nothing (returns dicts/node IDs; the click is the one side effect, on the live page).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond the CDP session object passed in (no imports beyond stdlib types).
+
+### _altcha_trigger_probe_js.py (96 LOC)
+
+**Purpose:** JS snippet constants/builders for `altcha_trigger_probe.py` — the widget-event init script plus the inspection/verify/outcome-detection strings.
+**Reads:** nothing.
+**Writes:** nothing (pure string builders).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond stdlib (`json`).
+
+### _altcha_trigger_probe_launch.py (95 LOC)
+
+**Purpose:** Backgrounded-Chrome launch helpers for `altcha_trigger_probe.py` — an inline copy of `src/scraper/chromium_process.py`'s self-launch/watchdog shape, not a shared import.
+**Reads:** nothing (pure subprocess/CDP-adjacent calls).
+**Writes:** nothing directly — spawns/kills Chrome processes and an asyncio watchdog task as a side effect.
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** `patchright` (bundle resolution only), `crawl4ai.browser_manager.ManagedBrowser` (flag list), macOS `open`/`osascript`/`pkill`.
+
+### _altcha_trigger_probe_report.py (259 LOC)
+
+**Purpose:** Markdown report assembly for `altcha_trigger_probe.py`, split out of the main module to stay under the per-file LOC convention.
+**Reads:** nothing (pure string assembly from the dataclass instances passed in).
+**Writes:** `md/altcha_trigger_probe_<ts>.md` (via `write_report`).
+**Called by:** `altcha_trigger_probe.py`.
+**Calls out:** none beyond stdlib.
+
 ### _capture_sorry.py (233 LOC)
 
 **Purpose:** Captures Google `/sorry/` block page — helper script, not a numbered experiment. Navigates to a search URL, checks if redirected to `/sorry/`, saves HTML + screenshot + MD summary.
@@ -204,6 +236,14 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Writes:** `md/acquire_probe_<ts>.md` (full run only; `--smoke` writes nothing).
 **Called by:** CLI only. Flags: `--max-queries N`, `--smoke` (4-query dry-run, no report).
 **Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`), full engine set via production search path.
+
+### altcha_trigger_probe.py (392 LOC)
+
+**Purpose:** M1 go/no-go probe — can Mojeek's ALTCHA challenge be started and completed by automation alone, via three isolated live trigger attempts?
+**Reads:** none (live run against production mojeek.com + a neutral control URL).
+**Writes:** `md/altcha_trigger_probe_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** `patchright` (browser launch/connect/control), `crawl4ai`/`crawl4ai.browser_manager` (flag-building only, no crawler use) — via `_altcha_trigger_probe_launch.py`; `_altcha_trigger_probe_cdp.py`, `_altcha_trigger_probe_js.py`, `_altcha_trigger_probe_report.py` (siblings, own entries above).
 
 ### bm25_capped_smoke.py (243 LOC)
 
@@ -452,3 +492,5 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 `27_brave_headed_lane_probe.py` launches Chrome headed-but-backgrounded via its own inline `open -g -n -a "Google Chrome"` process_creator, with no focus-steal reclaim — `open -g` only suppresses activation at the launch moment (playwright#42343), so this window can still steal focus later in the run. Left as-is (out of scope for the milestone that added the alternative below). Any NEW headed-backgrounded Chrome launch in this area should use `dev/_lib/browser_launch.py` (own DOCS.md) instead of copying `27`'s mechanism — it adds the PID-keyed reclaim watchdog `27` is missing.
 
 Several scripts (`bm25_capped_smoke.py`, `bm25_idf_engine_smoke.py`, `bm25_compare_smoke.py`, `pooling_probe.py`, `single_query_pool_dump.py`, `stage1_pool_fetch.py`, `stage3_method_run*.py`, `value_eval_probe.py`) import helpers directly from sibling script files (`bm25_sweep_smoke.py`, `rerank_probe_smoke.py`) via `sys.path.insert(0, str(SCRIPT_DIR))` — these are not `_lib/` modules; treat them as informal shared-code sources when editing either base file. GPU-dependent scripts (reranker/embedding/SPLADE/generator-4b at fixed localhost ports) fail hard if the corresponding RAG server isn't running — check `_verify_services()` / `ensure_ready()` calls before assuming a script is broken. `stage4_aggregate*.py` write eval MD directly into `runs/<ts_dir>/`, co-located with the pool/methods/oracle JSON they score — by design (no separate output dir; ts embedded in the dir name).
+
+New files in this directory cannot `from src....` import at all — a repo-tooling hook blocks any `Write`/`Edit` that introduces a NEW such import line, even into a file that already has other `src/` imports (the 26 files in this directory that already import from `src/` are grandfathered, not a precedent for new files). `altcha_trigger_probe.py`'s sibling modules (`_altcha_trigger_probe_launch.py` etc.) inline-copy `src/scraper/chromium_process.py`'s launch shape instead of importing it for exactly this reason. Separately, local fixture testing during that same probe's build found that raw CDP `Input.dispatchMouseEvent` (and Playwright's own `.click()`/`page.mouse`, both tried) do not reliably reach shadow-DOM-scoped elements at all in the self-launch-plus-`connect_over_cdp` launch shape this project's chromium lane uses, even though the identical click works fine on light-DOM elements and on ANY element when Playwright owns the browser process directly instead of attaching externally — unresolved, did not block that milestone only because its real target turned out to be light DOM; see process-docs (`engine_reduction` area) before assuming a click-based trigger against a shadow-DOM target will work here.
