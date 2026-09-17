@@ -145,7 +145,9 @@ def _build_trigger_section(result) -> list[str]:
     return lines
 
 
-def _build_methodology_section(result_link_selector: str, block_marker_text: str, settle_timeout_s: float) -> list[str]:
+def _build_methodology_section(
+    result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
+) -> list[str]:
     return [
         "## Methodology",
         "",
@@ -210,28 +212,33 @@ def _build_methodology_section(result_link_selector: str, block_marker_text: str
         "",
         "Readiness (element present, `load` event observed, `typeof verify === 'function'`) and "
         "trigger completion (`verified`/`error`/`expired` observed) are both awaited event- or "
-        "poll-driven with a bounded timeout, never a single fixed sleep before one check. After the "
-        "widget signals completion (or times out), the page outcome is re-checked at 1s intervals "
-        f"for up to a further {settle_timeout_s:.0f}s, stopping as soon as the outcome resolves to "
-        "something other than UNKNOWN, to allow for either a full page reload or an in-place content "
-        "swap.",
+        "poll-driven with a bounded timeout, never a single fixed sleep before one check.",
         "",
-        "Page outcome is read from the live DOM using the selector "
-        f"`{result_link_selector}` (verified live on 2026-05-03, recorded in "
-        "`process-docs/engine_expansion/mojeek.md`) for real results and the literal, "
-        f"locale-independent string `\"{block_marker_text}\"` for the block page. If neither is "
-        "present the outcome is reported as UNKNOWN with the raw supporting facts (title, body "
-        "text sample, `<li>` count) attached — never silently reclassified as one of the other two.",
-        "",
-        "A NEVER_STARTED or RAN_REJECTED verdict on every trigger is a complete and valid result "
-        "for this milestone; nothing here was tuned toward a positive outcome.",
+        "Page outcome is read from the live DOM as one of three states, checked in this order: "
+        f"RESULTS (real result links matching `{result_link_selector}`, verified live on "
+        "2026-05-03 — see `process-docs/engine_expansion/`); IN_FLIGHT (the literal, "
+        f"locale-independent string `\"{in_flight_marker_text}\"` is present — the widget reached "
+        "`verified` client-side and the server round trip is still open); BLOCKED (the literal "
+        f"string `\"{block_marker_text}\"` is present and the IN_FLIGHT marker is gone). A first "
+        "version of this probe treated BLOCKED as the default the instant the block-page's "
+        "boilerplate text was present — which is true from the very first poll after any "
+        "navigation, including while the widget is still mid-flight, since Mojeek's challenge page "
+        "carries the same 'Verification required' boilerplate throughout the whole verification "
+        "sequence, disappearing only once real results replace the page. That version silently "
+        "misread 'still waiting on the server' as 'server rejected it' on its first live run — "
+        "caught in review, not by this probe itself. The settle loop now keeps polling at 1s "
+        f"intervals for up to {settle_timeout_s:.0f}s while the outcome is IN_FLIGHT, and only "
+        "reports BLOCKED once that marker is gone and no results ever appeared. If IN_FLIGHT is "
+        "still the outcome when the budget runs out, the verdict is INCONCLUSIVE_STILL_PENDING, "
+        "never RAN_REJECTED — a stalled round trip is not evidence of a refusal, and this probe "
+        "does not conflate the two.",
         "",
     ]
 
 
 def build_report_md(
     inspection, trigger_results: list, search_url: str, pause_s: float,
-    result_link_selector: str, block_marker_text: str, settle_timeout_s: float,
+    result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
 ) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = _build_header(ts, search_url, len(trigger_results), pause_s)
@@ -239,7 +246,7 @@ def build_report_md(
     lines += _build_inspection_section(inspection)
     for result in trigger_results:
         lines += _build_trigger_section(result)
-    lines += _build_methodology_section(result_link_selector, block_marker_text, settle_timeout_s)
+    lines += _build_methodology_section(result_link_selector, block_marker_text, in_flight_marker_text, settle_timeout_s)
     return "\n".join(lines)
 
 

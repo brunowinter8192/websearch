@@ -4,24 +4,22 @@
 
 Can the ALTCHA proof-of-work challenge on mojeek.com be started and completed by automation alone,
 no human interaction? `dev/search_pipeline/altcha_trigger_probe.py` (+ 4 sibling modules) answers
-this with a live, three-way-classified result, not a guess. Two live reruns on 2026-09-17
-(`SETTLE_TIMEOUT_S=15` then `35`, otherwise identical) landed on the same verdicts both times:
+this with a live, three-way-classified result, not a guess. The final, correct live run on
+2026-09-17 (see timeline below — two earlier live runs share a settle-loop bug and are not the
+answer) landed on:
 
 - `auto_onload` (setting `auto="onload"` early via a `MutationObserver`, then touching nothing else)
-  → **SUCCESS**. Real results, zero script-driven trigger of any kind — the widget's own native
-  auto-start path is the only one of the three that worked.
-- `verify_call` (direct `el.verify()` JS call) → **RAN_REJECTED**. Client-side PoW genuinely
-  completes (`statechange` reaches `verified`, valid solution payload with `algorithm`, `nonce`,
-  `derivedKey`, timing ~400-450ms), but the page still shows "Verification required" / "Checking
-  verification with server..." after the full wait budget.
-- `real_click` (a real CDP-dispatched, trusted `Input.dispatchMouseEvent` click) → **RAN_REJECTED**,
-  same shape as `verify_call` — PoW completes, server verification never clears.
+  → **SUCCESS**. Real results, zero script-driven trigger of any kind.
+- `verify_call` (direct `el.verify()` JS call) → **SUCCESS**. Client-side PoW completes
+  (`statechange` reaches `verified`, valid solution payload with `algorithm`, `nonce`,
+  `derivedKey`), the server verification round trip completes shortly after, real results follow.
+- `real_click` (a real CDP-dispatched, trusted `Input.dispatchMouseEvent` click) → **SUCCESS**, same
+  shape as `verify_call`.
 
-The milestone's named risk (`humanInteractionSignature`, on by default) is the most likely
-explanation for the RAN_REJECTED pair: the only trigger that succeeded is the one that never
-claims any interaction happened at all (`auto`), while a real trusted click was rejected exactly
-like a bare JS method call. This is evidence, not proof — nothing here inspects what the server
-actually validates.
+**All three tested triggers start and complete the challenge without any human interaction.** The
+milestone's named HIS risk was NOT reproduced — see the correction below for why an earlier version
+of this same probe reported the opposite for two of the three triggers, and why that reading was
+wrong, not just unlucky.
 
 ## Timeline of this session, in order
 
@@ -61,9 +59,9 @@ actually validates.
    aborts the whole probe loudly on failure, called at the start of every session before the Mojeek
    navigation, deliberately NOT wrapped in a soft per-attempt try/except (a launch failure now also
    propagates and crashes the run, on purpose — no quiet swallowing); (4) split the file, 400 LOC
-   ceiling — split into `_altcha_trigger_probe_launch.py` (95), `_altcha_trigger_probe_cdp.py` (75),
-   `_altcha_trigger_probe_js.py` (94), `_altcha_trigger_probe_report.py` (252), leaving the main
-   module at 384.
+   ceiling — split into `_altcha_trigger_probe_launch.py`, `_altcha_trigger_probe_cdp.py`,
+   `_altcha_trigger_probe_js.py`, `_altcha_trigger_probe_report.py` (LOC counts in "Files touched"
+   below), leaving the main module under 400.
 6. Rewriting with patchright (not pydoll) surfaced two real bugs, found via local HTTP-server
    fixture pages (`/tmp/fake_altcha*.html`, throwaway, never committed) before spending any more
    live Mojeek budget:
@@ -85,7 +83,7 @@ actually validates.
      writing new patchright-based automation in this project that calls a page-defined method via
      `page.evaluate` needs to know this; it fails silently enough to look like the method just isn't
      there.
-7. **Open, unresolved finding from local fixture testing** (does not block this milestone's
+7. **Open, unresolved finding from local fixture testing** (did not affect this milestone's final
    conclusion, but is a real gap worth flagging for whoever needs a reliable synthetic click next):
    raw CDP `Input.dispatchMouseEvent` — and Playwright's own `.click()`/`page.mouse` wrappers around
    it, all three tried — reliably fires on light-DOM elements (a plain `<button>` outside any shadow
@@ -109,27 +107,47 @@ actually validates.
    shadow-DOM-based widget, using this exact launch shape, needs to solve this first or its
    click-based trigger's NEVER_STARTED result will be indistinguishable from a real refusal.
 8. Live run (patchright build, `SETTLE_TIMEOUT_S=15`): reached Mojeek cleanly, tripwire never fired
-   (network had recovered). Produced the RAN_REJECTED/RAN_REJECTED/SUCCESS pattern above. Report
-   backed up to `/tmp` (not committed) once a timing concern surfaced (next item).
-9. **Timing concern and how it was closed:** neither `verify_call` nor `real_click`'s event log ever
-   showed a `serververification` event (an ALTCHA-documented event, listened for, never observed in
-   ANY of the 3×2 = 6 counted sessions, including the successful `auto_onload` one — Mojeek's
-   integration apparently never dispatches it) — meaning "still waiting on the server" could not be
-   ruled out from the event stream alone; only the DOM settle-poll (15s) said BLOCKED. Since the
-   milestone brief's own 8-run table (handed directly in the task prompt, not a process-docs file)
-   recorded two human-click successes at up to 30s `delay_before_return_html`,
-   15s of post-`verified` settle time was judged too tight to rule out simple latency. Bumped
-   `SETTLE_TIMEOUT_S` from 15 to 35 (no other change) and reran completely — **identical verdicts**,
-   same BLOCKED body text (`"Checking verification with server..."` never clears), same event
-   shape. This is what makes RAN_REJECTED a confident read rather than a premature one: given twice
-   the wait budget, the outcome didn't move.
+   (network had recovered). Produced `auto_onload` → SUCCESS, `verify_call`/`real_click` →
+   RAN_REJECTED. **This reading was wrong — see item 10.** Not committed.
+9. Suspected the 15s settle window was just too short for the server round trip (neither
+   `verify_call` nor `real_click`'s event log ever showed a `serververification` event — an
+   ALTCHA-documented event, listened for, never observed in ANY session including the successful
+   `auto_onload` one, so "still waiting" could not be ruled out from the event stream alone).
+   Bumped `SETTLE_TIMEOUT_S` from 15 to 35 and reran completely: **identical RAN_REJECTED
+   verdicts.** Read at the time as confirmation that the rejection was real (unwaited timeout gave
+   the same answer as more-than-double the wait). Not committed.
+10. **That reading was wrong, caught in code review.** `_wait_for_page_settle`'s loop condition was
+    `while _classify_page_outcome(facts) == "UNKNOWN"`, and `_classify_page_outcome` returned
+    `"BLOCKED"` the instant Mojeek's block-page boilerplate text ("Verification required...") was
+    present in the body — which is true from the very first poll of every run, including the whole
+    time the widget is mid-verification, because Mojeek's challenge page keeps that same boilerplate
+    on screen for the ENTIRE verification sequence (the captured body text at the moment of
+    classification literally read `"...Verified\n\nProtected by ALTCHA\n\nChecking verification
+    with server...\n..."` — an in-flight state, not a terminal one), clearing only once real results
+    replace the page. The loop therefore exited on iteration zero on every single run, for BOTH
+    the 15s and the 35s settle window — `SETTLE_TIMEOUT_S` never had any effect at all, which is
+    exactly why raising it changed nothing; item 9's "confirmation" was actually two identical,
+    equally-premature reads of the same instant. **Fix:** `_classify_page_outcome` now returns a
+    third state, `IN_FLIGHT`, keyed on the literal string `"Checking verification with server..."`
+    (taken directly from the captured body text above, not invented); `_wait_for_page_settle`'s
+    loop condition changed to `in ("UNKNOWN", "IN_FLIGHT")`; `_classify_verdict` gained a fourth
+    verdict, `INCONCLUSIVE_STILL_PENDING`, returned when the settle budget runs out while still
+    IN_FLIGHT — kept structurally distinct from `RAN_REJECTED`, never collapsed into it, since a
+    stalled round trip is not evidence of a refusal. `SETTLE_TIMEOUT_S` also raised to 60 (session
+    duration only, not extra live requests). Verified against three local fixture pages
+    (`/tmp/fake_altcha_settle_{success,reject,stuck}.html`, throwaway) reproducing each of RESULTS /
+    genuine-BLOCKED-after-in-flight-clears / still-IN_FLIGHT-at-deadline before spending more live
+    budget — all three classified correctly.
+11. Reran live with the fix: **`auto_onload`, `verify_call`, and `real_click` all SUCCESS** — see
+    "Question and answer" above. This is the committed, final result.
 
 ## Live request budget, precisely
 
-8 real requests reached mojeek.com across the two counted runs (4 sessions × 2 navigations each,
-but the control-URL navigation goes to `example.org`, not Mojeek — so 4 Mojeek requests per run,
-8 total). The pydoll-build run that hit the network outage made zero real Mojeek requests (nothing
-left the machine); not counted. `PAUSE_BETWEEN_RUNS_S=30` between every session within both runs.
+12 real requests reached mojeek.com across the three counted live runs (item 8, item 9, item 11 —
+4 sessions × 1 Mojeek navigation each per run; the control-URL navigation goes to `example.org`,
+not Mojeek). The pydoll-build run that hit the network outage (item 4) made zero real Mojeek
+requests (nothing left the machine); not counted. `PAUSE_BETWEEN_RUNS_S=30` between every session
+within every run.
 
 ## Facts captured about Mojeek's live ALTCHA integration, as of 2026-09-17
 
@@ -143,17 +161,24 @@ left the machine); not counted. `PAUSE_BETWEEN_RUNS_S=30` between every session 
   (`minDuration: 500`, `timeout: 90000`, `humanInteractionSignature: true`) — Mojeek has not
   weakened HIS collection, and the widget markup itself carries no `auto` attribute (confirming this
   area's own earlier removal finding still holds: it defaults to off, sits inert until triggered).
+  Whatever the server validates, it accepted all three trigger shapes tested here (see item 11) —
+  this run does not show HIS blocking anything, only that an earlier bug briefly made it look like
+  it did.
 - `workers: 14` — not a documented default, environment-derived (CPU core count of the launching
   machine), unremarkable.
 - The production selector `ul.results-standard > li > a.ob` (verified live 2026-05-03, see
-  `process-docs/engine_expansion/`) still matched — 10/10 result links on the one successful run, so
+  `process-docs/engine_expansion/`) still matched — 10/10 result links on every successful run, so
   no selector drift to report as a side effect of this probe.
+- The server verification round trip, once the client reaches `verified`, is fast in practice on
+  the runs that were actually measured correctly (item 11): results appeared well inside the first
+  few seconds of the 60s settle budget, not close to the limit. The two premature RAN_REJECTED reads
+  (items 8-9) were a code bug, not evidence that the round trip is slow.
 
 ## Files touched
 
-`dev/search_pipeline/altcha_trigger_probe.py` (new, 384 LOC), `_altcha_trigger_probe_launch.py` (new,
-95), `_altcha_trigger_probe_cdp.py` (new, 75), `_altcha_trigger_probe_js.py` (new, 94),
-`_altcha_trigger_probe_report.py` (new, 252), `dev/search_pipeline/DOCS.md` (5 new entries),
-`dev/search_pipeline/md/altcha_trigger_probe_20260917_181255.md` (the kept report — the
-`SETTLE_TIMEOUT_S=35` rerun; the `=15` run's report was not committed, see timeline item 9). Nothing
-under `src/` touched, per the milestone's scope.
+`dev/search_pipeline/altcha_trigger_probe.py` (new, 392 LOC final), `_altcha_trigger_probe_launch.py`
+(new, 95), `_altcha_trigger_probe_cdp.py` (new, 75), `_altcha_trigger_probe_js.py` (new, 96),
+`_altcha_trigger_probe_report.py` (new, 259), `dev/search_pipeline/DOCS.md` (5 new entries + 1
+Gotchas addition), `dev/search_pipeline/md/altcha_trigger_probe_20260917_182426.md` (the kept
+report — item 11's corrected run; items 8 and 9's reports were never committed). Nothing under
+`src/` touched, per the milestone's scope.

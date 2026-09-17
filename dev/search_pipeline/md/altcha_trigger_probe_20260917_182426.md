@@ -1,27 +1,33 @@
 # ALTCHA Trigger Probe
 
-Run: 2026-09-17T18:12:55Z
+Run: 2026-09-17T18:24:26Z
 Target: https://www.mojeek.com/search?q=python+asyncio+tutorial
 Live requests made this run: 4 sessions (1 inspection + 3 triggers), 2 navigations each
 (control URL + target), 30s pause between sessions — 4 real requests against mojeek.com.
 
-This is the second of two runs that actually reached Mojeek this session. The first (same 4
-sessions, `SETTLE_TIMEOUT_S=15`, not committed) reached the identical verdicts; this run reruns
-with `SETTLE_TIMEOUT_S=35` specifically to rule out "still waiting on the server" before calling
-`verify_call`/`real_click` RAN_REJECTED, and reproduces the same outcome — 8 real requests against
-mojeek.com total across both counted runs. A third attempt, immediately before the first of these
-two, never reached Mojeek at all (`net::ERR_CONNECTION_REFUSED` on every session, concurrent with
-an unrelated general network outage confirmed via `curl` failing against multiple unrelated domains
-at the same time) — that attempt is not counted here since no request actually left the machine;
-see this session's process-docs entry for the full timeline.
+This is the third run of the session that reached Mojeek, and the first with a correct settle
+loop. The first two (same 4 sessions each, not committed) shared a bug: the page-outcome poll
+stopped as soon as Mojeek's block-page boilerplate text was present, which is true from the very
+first poll of every run, including while the widget was still mid-flight — Mojeek's challenge page
+keeps that same boilerplate on screen for the whole verification sequence, clearing only once real
+results replace it. Both of those runs misread "server round trip still open" as "server rejected
+it" for `verify_call`/`real_click`, independent of the settle timeout (15s then 35s, same wrong
+verdict both times) — because the loop was never actually waiting past the block marker's first
+appearance at all. Caught in code review, not by this probe. The loop now tracks a distinct
+IN_FLIGHT state (the literal string "Checking verification with server..."), keeps polling through
+it, and only calls BLOCKED once that marker is gone. With that fixed, all three triggers resolve to
+RESULTS. 12 real requests against mojeek.com total across the three counted runs (4 per run); a
+fourth attempt earlier in the session never reached Mojeek at all (`net::ERR_CONNECTION_REFUSED`
+concurrent with an unrelated general network outage) and made zero real requests — see this
+session's process-docs entry for the full timeline.
 
 ## Summary
 
 | Trigger | Widget found | Computation started | Final widget state | verified event | Page outcome | Verdict |
 |---|---|---|---|---|---|---|
-| verify_call | True | True | verified | True | BLOCKED | RAN_REJECTED |
+| verify_call | True | True | verified | True | RESULTS | SUCCESS |
 | auto_onload | True | False | verified | True | RESULTS | SUCCESS |
-| real_click | True | True | verified | True | BLOCKED | RAN_REJECTED |
+| real_click | True | True | verified | True | RESULTS | SUCCESS |
 
 ## Step 1 — Passive Inspection
 
@@ -114,20 +120,25 @@ typeof verify === 'function' at readiness check: True
 Computation started (VERIFYING observed): True
 verified event fired: True
 Final widget state: verified
-Page outcome: BLOCKED
-Verdict: RAN_REJECTED
+Page outcome: RESULTS
+Verdict: SUCCESS
 
 ### Page outcome detail
 
 ```json
 {
-  "result_link_count": 0,
-  "sample_hrefs": [],
-  "title": "Captcha",
-  "block_marker_present": true,
-  "body_text_length": 215,
-  "body_text_sample": " \nVerification required\n\nPlease complete the challenge to continue.\n\nVerified\n\nProtected by ALTCHA\n\nChecking verification with server...\n\u00dcber\nAPI\nUnterst\u00fctzung\nBlog\nFeedback\nDatenschutz\nBedingungen\nSucheinstellungen",
-  "li_count": 33
+  "result_link_count": 10,
+  "sample_hrefs": [
+    "https://realpython.com/async-io-python/",
+    "https://codesamplez.com/programming/python-asyncio-tutorial",
+    "https://github.com/econchick/mayhem"
+  ],
+  "title": "python asyncio tutorial - Mojeek Search",
+  "block_marker_present": false,
+  "in_flight_marker_present": false,
+  "body_text_length": 3395,
+  "body_text_sample": " \n\u2715Mojeek User Survey\n \nWebSummaryImagesNews\n\nErgebnisse 1 bis 10 von 24,511 in 0.13s\n\nhttps://realpython.com \u203a async-io-python\n\nPython's asyncio: A Hands-On Walkthrough \u2013 Real Python\n\nIn this tutorial, you \u2019 ll learn how Python asyncio works, how to define and run coroutines, and when to use asynch",
+  "li_count": 74
 }
 ```
 
@@ -136,8 +147,8 @@ Verdict: RAN_REJECTED
 | t_ms | event | detail |
 |---|---|---|
 | 0 | statechange | {"payload":null,"state":"verifying"} |
-| 537 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjBlNmNhMDAwYmM4ODQ2OTI4NDgxMzI4YzdhNzZhM2U1Iiwibm9uY2UiOiI1MmJkN2E1NTJiN2ZiZGFjNWE2ODU5ZTc5M2Y3YWFmMyIsInNhbHQiOiI1M2EzMjdmOWZkNmNhNDljMWFhZmQwZjljMTIxZjEzNCIsImtleVNpZ25hdHVyZSI6IjczYWQyYmM5MGI0N2ZhYjRjZmZkODE1OTAwYTgyNGIwMDcwMDhkYTJhNDljODY1YjNmYmJmNzlkZGY2ZjBlOGIiLCJleHBpcmVzQXQiOjE3ODk2NjkyNTJ9LCJzaWduYXR1cmUiOiJjNzdlODA3ZTI2NDMwNDk1ZDk0NWJjYzc0YjBlMmU3ZGFmMjhlZmQ3YTc2YThjN2RlMzM1OTZhMDZkZWY2YWRhIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIwNSwiZGVyaXZlZEtleSI6IjBlNmNhMDAwYmM4ODQ2OTI4NDgxMzI4YzdhNzZhM2U1M2I5MjY5YmExODdhZDFiYTY3YjY4ZTgyODY1ZDA0ODkiLCJ0aW1lIjo0MTEuOX19","state":"verified"} |
-| 538 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjBlNmNhMDAwYmM4ODQ2OTI4NDgxMzI4YzdhNzZhM2U1Iiwibm9uY2UiOiI1MmJkN2E1NTJiN2ZiZGFjNWE2ODU5ZTc5M2Y3YWFmMyIsInNhbHQiOiI1M2EzMjdmOWZkNmNhNDljMWFhZmQwZjljMTIxZjEzNCIsImtleVNpZ25hdHVyZSI6IjczYWQyYmM5MGI0N2ZhYjRjZmZkODE1OTAwYTgyNGIwMDcwMDhkYTJhNDljODY1YjNmYmJmNzlkZGY2ZjBlOGIiLCJleHBpcmVzQXQiOjE3ODk2NjkyNTJ9LCJzaWduYXR1cmUiOiJjNzdlODA3ZTI2NDMwNDk1ZDk0NWJjYzc0YjBlMmU3ZGFmMjhlZmQ3YTc2YThjN2RlMzM1OTZhMDZkZWY2YWRhIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIwNSwiZGVyaXZlZEtleSI6IjBlNmNhMDAwYmM4ODQ2OTI4NDgxMzI4YzdhNzZhM2U1M2I5MjY5YmExODdhZDFiYTY3YjY4ZTgyODY1ZDA0ODkiLCJ0aW1lIjo0MTEuOX19"} |
+| 578 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjllY2FhM2YzNDRiZWU0OTRjNTNlNmI0MjgyNzBlYzk0Iiwibm9uY2UiOiJiZjgzYjZiZDZiNGJkYTNlZmVmYTYwNjkxNzM3NjUxOCIsInNhbHQiOiI1N2EwMWQ3ODNkMDY1NzEzM2Q5NjZkYmQ3MzkxMGJmNyIsImtleVNpZ25hdHVyZSI6IjdjYWNhNzdlNDUzMGIyMTA0NmM4ZTA1MmQ4NjkzMWZlNzg1MjZiN2Q4MGM1MDBiODZiYzdjZWZkNGUzZjFjZjAiLCJleHBpcmVzQXQiOjE3ODk2Njk5Mzl9LCJzaWduYXR1cmUiOiI0ZGYwZjUyOTQ0ZTRjNWI2NTlkYTRlOWM5NzJiNTBhMjg0NThjZTc0MWViNDk3OTJlNGY4ZTE3ZTZjYzkzMzc4In0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjI5NywiZGVyaXZlZEtleSI6IjllY2FhM2YzNDRiZWU0OTRjNTNlNmI0MjgyNzBlYzk0OTM3MjgwNGNjNjk1OGMwOGRiMjgyOTBjNzlmMjAwMWIiLCJ0aW1lIjo0NTkuN319","state":"verified"} |
+| 578 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjllY2FhM2YzNDRiZWU0OTRjNTNlNmI0MjgyNzBlYzk0Iiwibm9uY2UiOiJiZjgzYjZiZDZiNGJkYTNlZmVmYTYwNjkxNzM3NjUxOCIsInNhbHQiOiI1N2EwMWQ3ODNkMDY1NzEzM2Q5NjZkYmQ3MzkxMGJmNyIsImtleVNpZ25hdHVyZSI6IjdjYWNhNzdlNDUzMGIyMTA0NmM4ZTA1MmQ4NjkzMWZlNzg1MjZiN2Q4MGM1MDBiODZiYzdjZWZkNGUzZjFjZjAiLCJleHBpcmVzQXQiOjE3ODk2Njk5Mzl9LCJzaWduYXR1cmUiOiI0ZGYwZjUyOTQ0ZTRjNWI2NTlkYTRlOWM5NzJiNTBhMjg0NThjZTc0MWViNDk3OTJlNGY4ZTE3ZTZjYzkzMzc4In0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjI5NywiZGVyaXZlZEtleSI6IjllY2FhM2YzNDRiZWU0OTRjNTNlNmI0MjgyNzBlYzk0OTM3MjgwNGNjNjk1OGMwOGRiMjgyOTBjNzlmMjAwMWIiLCJ0aW1lIjo0NTkuN319"} |
 
 ## Trigger: auto_onload
 
@@ -162,8 +173,9 @@ Verdict: SUCCESS
   ],
   "title": "python asyncio tutorial - Mojeek Search",
   "block_marker_present": false,
+  "in_flight_marker_present": false,
   "body_text_length": 3395,
-  "body_text_sample": " \n\u2715Mojeek User Survey\n \nWebSummaryImagesNews\n\nErgebnisse 1 bis 10 von 24,511 in 0.08s\n\nhttps://realpython.com \u203a async-io-python\n\nPython's asyncio: A Hands-On Walkthrough \u2013 Real Python\n\nIn this tutorial, you \u2019 ll learn how Python asyncio works, how to define and run coroutines, and when to use asynch",
+  "body_text_sample": " \n\u2715Mojeek User Survey\n \nWebSummaryImagesNews\n\nErgebnisse 1 bis 10 von 24,511 in 0.11s\n\nhttps://realpython.com \u203a async-io-python\n\nPython's asyncio: A Hands-On Walkthrough \u2013 Real Python\n\nIn this tutorial, you \u2019 ll learn how Python asyncio works, how to define and run coroutines, and when to use asynch",
   "li_count": 74
 }
 ```
@@ -172,8 +184,8 @@ Verdict: SUCCESS
 
 | t_ms | event | detail |
 |---|---|---|
-| 0 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjYwZGRlZGRhZGFiNGNjNWJlNGI3N2IyODk3ZTIwZGY2Iiwibm9uY2UiOiJjNmNmYzAzYTc3NmNjMzAzNjkwNWZlNDY3ZGI3YTkzNCIsInNhbHQiOiJjY2FkMmZhMDQ5YjM1NDNmMjIwOWFhZmFkYzVhNDYzNCIsImtleVNpZ25hdHVyZSI6ImIxMDhhNjMxYWU0ZDVlMjNiMzMxOWI1NzE3MmUzZGQzMzQ2NDg1OTk5NzU4MmM5Mjc2ZjM1MGRjMmU4NDY3NTciLCJleHBpcmVzQXQiOjE3ODk2NjkyODN9LCJzaWduYXR1cmUiOiI5ZTIzYTFkNmQwNjRhYjIyYjNjN2NkODMxODliOGI1YWE2OTFhZmE0NGViYTYzNmNhZWQ5NjljOWQ0MmU3ODVjIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIwMSwiZGVyaXZlZEtleSI6IjYwZGRlZGRhZGFiNGNjNWJlNGI3N2IyODk3ZTIwZGY2ZDk0ZTRhZDkwNWIyMTZkMmM2YzVlYzk1ZDNhNjM3MDIiLCJ0aW1lIjoxMTV9fQ==","state":"verified"} |
-| 1 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjYwZGRlZGRhZGFiNGNjNWJlNGI3N2IyODk3ZTIwZGY2Iiwibm9uY2UiOiJjNmNmYzAzYTc3NmNjMzAzNjkwNWZlNDY3ZGI3YTkzNCIsInNhbHQiOiJjY2FkMmZhMDQ5YjM1NDNmMjIwOWFhZmFkYzVhNDYzNCIsImtleVNpZ25hdHVyZSI6ImIxMDhhNjMxYWU0ZDVlMjNiMzMxOWI1NzE3MmUzZGQzMzQ2NDg1OTk5NzU4MmM5Mjc2ZjM1MGRjMmU4NDY3NTciLCJleHBpcmVzQXQiOjE3ODk2NjkyODN9LCJzaWduYXR1cmUiOiI5ZTIzYTFkNmQwNjRhYjIyYjNjN2NkODMxODliOGI1YWE2OTFhZmE0NGViYTYzNmNhZWQ5NjljOWQ0MmU3ODVjIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIwMSwiZGVyaXZlZEtleSI6IjYwZGRlZGRhZGFiNGNjNWJlNGI3N2IyODk3ZTIwZGY2ZDk0ZTRhZDkwNWIyMTZkMmM2YzVlYzk1ZDNhNjM3MDIiLCJ0aW1lIjoxMTV9fQ=="} |
+| 0 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6ImJmOTljMDM2ZjUyOThmODZkZjlhM2JiYjNkOGY0MGVmIiwibm9uY2UiOiI3OThiNzMwZGNiYzE4N2NmNjc2MGNkZDM4YmQxMDg2OCIsInNhbHQiOiI2MzFlZWI4ZDYxNWM5MzFmYzdhNTQ5NGM3NmJmYzRiNCIsImtleVNpZ25hdHVyZSI6IjExOTk3NDVmYmMyY2RjYzIxZDBlN2U1NGMyZDVhMjNlOTZmMzQyZmU4Y2M2NjExN2VhMjIyNDY3OTQwZmViODgiLCJleHBpcmVzQXQiOjE3ODk2Njk5NzJ9LCJzaWduYXR1cmUiOiJmNmFiZDkwYWQyZTgyNTYyYzY5ZDU3MTNjZTY2OWZjNzBkMzZjNGIwMzdhYzg2MjdhOGUxYmVkNGMyNzhlYjkxIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIyMywiZGVyaXZlZEtleSI6ImJmOTljMDM2ZjUyOThmODZkZjlhM2JiYjNkOGY0MGVmOGZjM2FiZWIwN2ZjNDRkZWQ5MDU0MWNkYmY4YzdmNDkiLCJ0aW1lIjoxMjguMX19","state":"verified"} |
+| 0 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6ImJmOTljMDM2ZjUyOThmODZkZjlhM2JiYjNkOGY0MGVmIiwibm9uY2UiOiI3OThiNzMwZGNiYzE4N2NmNjc2MGNkZDM4YmQxMDg2OCIsInNhbHQiOiI2MzFlZWI4ZDYxNWM5MzFmYzdhNTQ5NGM3NmJmYzRiNCIsImtleVNpZ25hdHVyZSI6IjExOTk3NDVmYmMyY2RjYzIxZDBlN2U1NGMyZDVhMjNlOTZmMzQyZmU4Y2M2NjExN2VhMjIyNDY3OTQwZmViODgiLCJleHBpcmVzQXQiOjE3ODk2Njk5NzJ9LCJzaWduYXR1cmUiOiJmNmFiZDkwYWQyZTgyNTYyYzY5ZDU3MTNjZTY2OWZjNzBkMzZjNGIwMzdhYzg2MjdhOGUxYmVkNGMyNzhlYjkxIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIyMywiZGVyaXZlZEtleSI6ImJmOTljMDM2ZjUyOThmODZkZjlhM2JiYjNkOGY0MGVmOGZjM2FiZWIwN2ZjNDRkZWQ5MDU0MWNkYmY4YzdmNDkiLCJ0aW1lIjoxMjguMX19"} |
 
 ## Trigger: real_click
 
@@ -183,8 +195,8 @@ typeof verify === 'function' at readiness check: True
 Computation started (VERIFYING observed): True
 verified event fired: True
 Final widget state: verified
-Page outcome: BLOCKED
-Verdict: RAN_REJECTED
+Page outcome: RESULTS
+Verdict: SUCCESS
 
 ### Click target (real_click trigger only)
 
@@ -202,13 +214,18 @@ Click actually delivered to the DOM (mousedown/mouseup/click observed on the wid
 
 ```json
 {
-  "result_link_count": 0,
-  "sample_hrefs": [],
-  "title": "Captcha",
-  "block_marker_present": true,
-  "body_text_length": 215,
-  "body_text_sample": " \nVerification required\n\nPlease complete the challenge to continue.\n\nVerified\n\nProtected by ALTCHA\n\nChecking verification with server...\n\u00dcber\nAPI\nUnterst\u00fctzung\nBlog\nFeedback\nDatenschutz\nBedingungen\nSucheinstellungen",
-  "li_count": 33
+  "result_link_count": 10,
+  "sample_hrefs": [
+    "https://realpython.com/async-io-python/",
+    "https://codesamplez.com/programming/python-asyncio-tutorial",
+    "https://github.com/econchick/mayhem"
+  ],
+  "title": "python asyncio tutorial - Mojeek Search",
+  "block_marker_present": false,
+  "in_flight_marker_present": false,
+  "body_text_length": 3358,
+  "body_text_sample": " \n\u2715Mojeek User Survey\n \nWebSummaryImagesNews\n\nErgebnisse 1 bis 10 von 24,511 in 0.13s\n\nhttps://realpython.com \u203a async-io-python\n\nPython's asyncio: A Hands-On Walkthrough \u2013 Real Python\n\nIn this tutorial, you \u2019 ll learn how Python asyncio works, how to define and run coroutines, and when to use asynch",
+  "li_count": 74
 }
 ```
 
@@ -220,9 +237,9 @@ Click actually delivered to the DOM (mousedown/mouseup/click observed on the wid
 | 4 | mouseup | 1 |
 | 4 | click | 1 |
 | 4 | click |  |
-| 6 | statechange | {"payload":null,"state":"verifying"} |
-| 651 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjA5YWRkNjA5NmFlZDkxNWYzMjUxNzAzMWYxNDM5ZWI4Iiwibm9uY2UiOiI2OGFkNGZjZGYzM2Q3MDVhNGRlNjk0OWM4OWExMzI0ZSIsInNhbHQiOiI1OWU0NjU5MTk1ZDcyNDY3OWYwNTBiM2M2Zjg2MDIzNiIsImtleVNpZ25hdHVyZSI6ImQwZGFmODIzNWE2NDMzODE2ZjMwYjAwYTE5ZDU1Y2FkYjJlMzMzNzY1ZDdjN2M1ODJjOTIyOGE4YzljY2ZmY2EiLCJleHBpcmVzQXQiOjE3ODk2NjkzNDV9LCJzaWduYXR1cmUiOiI5ZmE2NWUyZmQzYzU3OTJjNjUxNmE2YTQ0ZjQwMmFhMmIyYjNmOThhYmIyODc2OGNmMTJmMDMxOGE5YTNkMGUwIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjI4NSwiZGVyaXZlZEtleSI6IjA5YWRkNjA5NmFlZDkxNWYzMjUxNzAzMWYxNDM5ZWI4NDk1YzhiMGM3NGViNmZiYjQ1MTBlMGU5ZTljOGUxMmEiLCJ0aW1lIjo1MjMuNn19","state":"verified"} |
-| 651 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjA5YWRkNjA5NmFlZDkxNWYzMjUxNzAzMWYxNDM5ZWI4Iiwibm9uY2UiOiI2OGFkNGZjZGYzM2Q3MDVhNGRlNjk0OWM4OWExMzI0ZSIsInNhbHQiOiI1OWU0NjU5MTk1ZDcyNDY3OWYwNTBiM2M2Zjg2MDIzNiIsImtleVNpZ25hdHVyZSI6ImQwZGFmODIzNWE2NDMzODE2ZjMwYjAwYTE5ZDU1Y2FkYjJlMzMzNzY1ZDdjN2M1ODJjOTIyOGE4YzljY2ZmY2EiLCJleHBpcmVzQXQiOjE3ODk2NjkzNDV9LCJzaWduYXR1cmUiOiI5ZmE2NWUyZmQzYzU3OTJjNjUxNmE2YTQ0ZjQwMmFhMmIyYjNmOThhYmIyODc2OGNmMTJmMDMxOGE5YTNkMGUwIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjI4NSwiZGVyaXZlZEtleSI6IjA5YWRkNjA5NmFlZDkxNWYzMjUxNzAzMWYxNDM5ZWI4NDk1YzhiMGM3NGViNmZiYjQ1MTBlMGU5ZTljOGUxMmEiLCJ0aW1lIjo1MjMuNn19"} |
+| 7 | statechange | {"payload":null,"state":"verifying"} |
+| 565 | statechange | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjNiYjhjZDNhOWY3MGM3MTNmNzBmMjE2NWUyODExOTM4Iiwibm9uY2UiOiI1MjgzY2E3NjBkYmQ5Y2VjN2QyM2QxYWJkZGJlOTk4ZCIsInNhbHQiOiI5MzljMTM5YzU3M2Q1OTNiZjBlMmE2YTlmZTI0ZWJmMCIsImtleVNpZ25hdHVyZSI6IjgwODAyMGM5Y2UyMTUyNTZhNGQ2ZGZjNjgxY2UyMjlhMmM0MWYyZTY0MjkxMDg4OTVhNGY5NjYyZGY4MzI5NzgiLCJleHBpcmVzQXQiOjE3ODk2NzAwMzR9LCJzaWduYXR1cmUiOiI3NmI0YTc5MDFjZGU2OGRlYjhlNmViOGU5MzA4ODU2MGM3OTY4NmJjMGIxM2I3NDdiZjBiOGM2YTI5ZTJjZjZjIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIzNiwiZGVyaXZlZEtleSI6IjNiYjhjZDNhOWY3MGM3MTNmNzBmMjE2NWUyODExOTM4YzM2MjRlMjYxZDc4NTcyYjQ1MTA1ZmY0YTI0M2IxMzAiLCJ0aW1lIjo0MjR9fQ==","state":"verified"} |
+| 565 | verified | {"payload":"eyJjaGFsbGVuZ2UiOnsicGFyYW1ldGVycyI6eyJhbGdvcml0aG0iOiJQQktERjIvU0hBLTI1NiIsImNvc3QiOjgwMDAsImtleUxlbmd0aCI6MzIsImtleVByZWZpeCI6IjNiYjhjZDNhOWY3MGM3MTNmNzBmMjE2NWUyODExOTM4Iiwibm9uY2UiOiI1MjgzY2E3NjBkYmQ5Y2VjN2QyM2QxYWJkZGJlOTk4ZCIsInNhbHQiOiI5MzljMTM5YzU3M2Q1OTNiZjBlMmE2YTlmZTI0ZWJmMCIsImtleVNpZ25hdHVyZSI6IjgwODAyMGM5Y2UyMTUyNTZhNGQ2ZGZjNjgxY2UyMjlhMmM0MWYyZTY0MjkxMDg4OTVhNGY5NjYyZGY4MzI5NzgiLCJleHBpcmVzQXQiOjE3ODk2NzAwMzR9LCJzaWduYXR1cmUiOiI3NmI0YTc5MDFjZGU2OGRlYjhlNmViOGU5MzA4ODU2MGM3OTY4NmJjMGIxM2I3NDdiZjBiOGM2YTI5ZTJjZjZjIn0sInNvbHV0aW9uIjp7ImNvdW50ZXIiOjIzNiwiZGVyaXZlZEtleSI6IjNiYjhjZDNhOWY3MGM3MTNmNzBmMjE2NWUyODExOTM4YzM2MjRlMjYxZDc4NTcyYjQ1MTA1ZmY0YTI0M2IxMzAiLCJ0aW1lIjo0MjR9fQ=="} |
 
 ## Methodology
 
@@ -236,8 +253,6 @@ The interactive element used for the `real_click` trigger is located via a raw C
 
 The init script also attaches `mousedown`/`mouseup`/`click` listeners directly on the widget HOST element (not just the ALTCHA-specific events) — these are standard, composed UI events, so they bubble out to the host regardless of whether the actual target sits inside an open or closed shadow root, giving an independent, structural signal for whether the dispatched click was delivered to the page at all. This distinction matters: extensive ad-hoc testing during this milestone's build (documented in this session's process-docs entry, not repeated here — coordinates verified correct via `DOM.getNodeForLocation` hit-testing, `Target.activateTarget`/`Page.bringToFront`/`Emulation.setFocusEmulationEnabled` all tried, `document.hasFocus()`/`document.visibilityState` both already true/visible) found that `Input.dispatchMouseEvent` clicks (raw CDP, `page.mouse`, and `locator.click()` all three tried) land and fire correctly on light-DOM elements outside any shadow root in this self-launch-plus-`connect_over_cdp` session shape, but never reach ANY element located inside a shadow root (open or closed, button or checkbox alike) — zero `mousedown`/`mouseup`/`click` observed even at the dispatch target itself — while the exact same click on the exact same shadow-DOM control succeeds when Playwright launches and owns the browser process directly instead of attaching to a self-launched one. Since ALTCHA's `<altcha-widget>` is a Web Component and its own docs describe it as using the browser's native custom-element machinery, its interactive content is very likely shadow-DOM-scoped — the inspection pass below checks this directly rather than assuming it. If `click_delivered` is `False` below, the `real_click` trigger's NEVER_STARTED verdict reflects this gap in the click-delivery mechanism itself, not a refusal by Mojeek's widget, and must be read accordingly — a genuine limitation of the self-launch-plus-`connect_over_cdp` session shape production's own scrape lane also uses, not something specific to this probe.
 
-Readiness (element present, `load` event observed, `typeof verify === 'function'`) and trigger completion (`verified`/`error`/`expired` observed) are both awaited event- or poll-driven with a bounded timeout, never a single fixed sleep before one check. After the widget signals completion (or times out), the page outcome is re-checked at 1s intervals for up to a further 35s, stopping as soon as the outcome resolves to something other than UNKNOWN, to allow for either a full page reload or an in-place content swap.
+Readiness (element present, `load` event observed, `typeof verify === 'function'`) and trigger completion (`verified`/`error`/`expired` observed) are both awaited event- or poll-driven with a bounded timeout, never a single fixed sleep before one check.
 
-Page outcome is read from the live DOM using the selector `ul.results-standard > li > a.ob` (verified live on 2026-05-03, recorded in `process-docs/engine_expansion/mojeek.md`) for real results and the literal, locale-independent string `"Verification required"` for the block page. If neither is present the outcome is reported as UNKNOWN with the raw supporting facts (title, body text sample, `<li>` count) attached — never silently reclassified as one of the other two.
-
-A NEVER_STARTED or RAN_REJECTED verdict on every trigger is a complete and valid result for this milestone; nothing here was tuned toward a positive outcome.
+Page outcome is read from the live DOM as one of three states, checked in this order: RESULTS (real result links matching `ul.results-standard > li > a.ob`, verified live on 2026-05-03 — see `process-docs/engine_expansion/`); IN_FLIGHT (the literal, locale-independent string `"Checking verification with server..."` is present — the widget reached `verified` client-side and the server round trip is still open); BLOCKED (the literal string `"Verification required"` is present and the IN_FLIGHT marker is gone). A first version of this probe treated BLOCKED as the default the instant the block-page's boilerplate text was present — which is true from the very first poll after any navigation, including while the widget is still mid-flight, since Mojeek's challenge page carries the same 'Verification required' boilerplate throughout the whole verification sequence, disappearing only once real results replace the page. That version silently misread 'still waiting on the server' as 'server rejected it' on its first live run — caught in review, not by this probe itself. The settle loop now keeps polling at 1s intervals for up to 60s while the outcome is IN_FLIGHT, and only reports BLOCKED once that marker is gone and no results ever appeared. If IN_FLIGHT is still the outcome when the budget runs out, the verdict is INCONCLUSIVE_STILL_PENDING, never RAN_REJECTED — a stalled round trip is not evidence of a refusal, and this probe does not conflate the two.

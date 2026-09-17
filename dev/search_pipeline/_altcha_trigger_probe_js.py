@@ -39,6 +39,7 @@ _OUTCOME_JS_TEMPLATE = """() => {{
     sample_hrefs: Array.from(links).slice(0, 3).map((a) => a.href),
     title: document.title,
     block_marker_present: bodyText.includes('{block_marker_text}'),
+    in_flight_marker_present: bodyText.includes('{in_flight_marker_text}'),
     body_text_length: bodyText.length,
     body_text_sample: bodyText.slice(0, 300),
     li_count: document.querySelectorAll('li').length,
@@ -88,7 +89,8 @@ def build_init_script(set_auto_onload: bool) -> str:
 """
 
 
-def build_outcome_js(result_link_selector: str, block_marker_text: str) -> str:
+def build_outcome_js(result_link_selector: str, block_marker_text: str, in_flight_marker_text: str) -> str:
     return _OUTCOME_JS_TEMPLATE.format(
         result_link_selector=result_link_selector, block_marker_text=block_marker_text,
+        in_flight_marker_text=in_flight_marker_text,
     )

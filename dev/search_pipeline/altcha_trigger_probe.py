@@ -29,13 +29,14 @@ SEARCH_URL = "https://www.mojeek.com/search?q=python+asyncio+tutorial"
 NAV_TIMEOUT_S = 30.0
 READY_TIMEOUT_S = 15.0
 EVENT_WAIT_TIMEOUT_S = 30.0
-SETTLE_TIMEOUT_S = 35.0
+SETTLE_TIMEOUT_S = 60.0
 SETTLE_POLL_INTERVAL_S = 1.0
 PAUSE_BETWEEN_RUNS_S = 30.0
 CDP_PORT_WAIT_TIMEOUT_S = 10.0
 
 RESULT_LINK_SELECTOR = "ul.results-standard > li > a.ob"
 BLOCK_MARKER_TEXT = "Verification required"
+IN_FLIGHT_MARKER_TEXT = "Checking verification with server..."
 
 ALTCHA_DOCUMENTED_DEFAULTS = {
     "minDuration": 500,
@@ -108,7 +109,7 @@ async def probe_workflow() -> None:
         await asyncio.sleep(PAUSE_BETWEEN_RUNS_S)
     report = build_report_md(
         inspection, trigger_results, SEARCH_URL, PAUSE_BETWEEN_RUNS_S,
-        RESULT_LINK_SELECTOR, BLOCK_MARKER_TEXT, SETTLE_TIMEOUT_S,
+        RESULT_LINK_SELECTOR, BLOCK_MARKER_TEXT, IN_FLIGHT_MARKER_TEXT, SETTLE_TIMEOUT_S,
     )
     write_report(report, REPORT_DIR)
 
@@ -295,12 +296,17 @@ async def _fire_real_click(session: ProbeSession) -> dict:
 
 
 async def _detect_page_outcome(page) -> dict:
-    return await page.evaluate(build_outcome_js(RESULT_LINK_SELECTOR, BLOCK_MARKER_TEXT), isolated_context=False)
+    return await page.evaluate(
+        build_outcome_js(RESULT_LINK_SELECTOR, BLOCK_MARKER_TEXT, IN_FLIGHT_MARKER_TEXT),
+        isolated_context=False,
+    )
 
 
 def _classify_page_outcome(facts: dict) -> str:
     if facts.get("result_link_count", 0) > 0 and not facts.get("block_marker_present"):
         return "RESULTS"
+    if facts.get("in_flight_marker_present"):
+        return "IN_FLIGHT"
     if facts.get("block_marker_present"):
         return "BLOCKED"
     return "UNKNOWN"
@@ -309,7 +315,7 @@ def _classify_page_outcome(facts: dict) -> str:
 async def _wait_for_page_settle(page) -> dict:
     deadline = time.monotonic() + SETTLE_TIMEOUT_S
     facts = await _detect_page_outcome(page)
-    while _classify_page_outcome(facts) == "UNKNOWN" and time.monotonic() < deadline:
+    while _classify_page_outcome(facts) in ("UNKNOWN", "IN_FLIGHT") and time.monotonic() < deadline:
         await asyncio.sleep(SETTLE_POLL_INTERVAL_S)
         facts = await _detect_page_outcome(page)
     return facts
@@ -320,6 +326,8 @@ def _classify_verdict(computation_started: bool, verified_fired: bool, page_outc
         return "NEVER_STARTED"
     if page_outcome == "RESULTS":
         return "SUCCESS"
+    if page_outcome == "IN_FLIGHT":
+        return "INCONCLUSIVE_STILL_PENDING"
     return "RAN_REJECTED"
 
 
