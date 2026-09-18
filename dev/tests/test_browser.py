@@ -22,6 +22,32 @@ class FakeCompletedProcess:
         self.stdout = stdout
 
 
+# _find_app_bundle / _open_background_process_creator: bundle-path resolution + the self-launch
+# command actually built from it — the crux of the no-Spaces-drag fix (M2, 2026-09-17): a dedicated
+# resolved bundle, not the user's own bare-name "Google Chrome", per process-docs/browser_posture/.
+
+def test_find_app_bundle_walks_up_to_app_suffix():
+    bundle = browser._find_app_bundle(
+        "/Users/x/Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/"
+        "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")
+    assert str(bundle).endswith("Google Chrome for Testing.app")
+
+
+def test_find_app_bundle_returns_none_when_no_app_ancestor():
+    assert browser._find_app_bundle("/usr/local/bin/chrome") is None
+
+
+def test_open_background_process_creator_targets_resolved_bundle_path_not_bare_name(monkeypatch):
+    _reset_state(monkeypatch, browser)
+    captured = []
+    monkeypatch.setattr(browser.subprocess, "Popen", lambda cmd, **kw: captured.append(cmd))
+    bundle_path = browser.Path("/fake/chromium-1228/Google Chrome for Testing.app")
+    browser._open_background_process_creator(bundle_path, ["/ignored-binary", "--user-data-dir=/x"])
+    cmd = captured[0]
+    assert cmd == ["open", "-g", "-n", "-a", str(bundle_path), "--args", "--user-data-dir=/x"]
+    assert cmd[cmd.index("-a") + 1] != "Google Chrome"
+
+
 # _reap_session_profile / _record_own_pids: pgrep output parsing + kill dispatch
 
 def test_reap_session_profile_kills_parsed_pids(monkeypatch):
