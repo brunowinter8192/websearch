@@ -229,6 +229,14 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, PageCommands, NetworkCommands, CookieSameSite), `yaml`. Imports `load_config`/`start_browser` pattern mirrored from `01_google_smoke.py` (not imported directly).
 
+### _google_fixture.py (243 LOC)
+
+**Purpose:** Local HTTP fixture for `src/search/engines/google.py`'s goto-redirect fix — a generated Google-shaped results page plus a `/goto?url=<token>` route table, parameterized per test.
+**Reads:** nothing (in-memory specs passed to `start_fixture_server`).
+**Writes:** nothing (serves HTTP responses; no disk output).
+**Called by:** `dev/tests/test_google_engine.py`.
+**Calls out:** none (stdlib `http.server`, `threading`, `dataclasses`, `urllib.parse` only — no `src.` import, per this directory's own import-hook restriction below).
+
 ### acquire_probe.py (588 LOC)
 
 **Purpose:** Phase 2 bee investigation — `RateLimiter.acquire()` instrumentation probe. Monkey-patches `RateLimiter.__init__` (installs `_WatchedLock`) + `acquire()` (enter/exit events). Discriminates hypotheses B (task never scheduled) / A-lock (stale lock) / A-sleep (sleeping on backoff) / C (acquire innocent). Historical verdict (as of the investigation date, see process-docs): A-sleep confirmed. Query category renamed `"captcha"` → `"empty"` (the guessed-verdict-removal milestone collapsed `EMPTY_BLOCK` into bare `EMPTY`; `engine_details`, the only status source this probe reads, carries no diagnosis to reconstruct which kind of empty a query was — an honest narrower label over a familiar wrong one).

@@ -24,13 +24,13 @@ Query string in → engine-specific fetch (pydoll tab navigation + JS extraction
 
 ---
 
-### google.py (200 LOC)
+### google.py (260 LOC)
 
-**Purpose:** Google web search via pydoll Chrome tab — navigates to the search URL, sets the `SOCS` consent cookie, waits for `div.MjjYud` result containers, detects the `/sorry/` CAPTCHA path and consent-domain redirects, and extracts results via an injected JS parse script. Every non-success branch (the `/sorry/` short-circuit, the post-wait-failure branch, the zero-parsed-results branch) returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker` always `None` here — Google's signal is the URL path, not a text marker — plus `title`/`url`/`ready_state`/`containers_found`), merged with `document_status.attach_document_status` for the `document_status_chain`/`http_status` facts. The success branch (non-empty results) attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read — see `engines/DOCS.md`'s Gotchas for why. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONSENT/CONCURRENT_RACE/NO_CONTAINER outputs are all fully re-derivable from `url`/`ready_state`, already in the snapshot.
+**Purpose:** Google web search via pydoll Chrome tab — navigates to the search URL, sets the `SOCS` consent cookie, waits for `div.MjjYud` result containers, detects the `/sorry/` CAPTCHA path and consent-domain redirects, and extracts results via an injected JS parse script. Every non-success branch (the `/sorry/` short-circuit, the post-wait-failure branch, the zero-parsed-results branch) returns `reason=None` and attaches a `_diagnose(tab)` snapshot (`marker` always `None` here — Google's signal is the URL path, not a text marker — plus `title`/`url`/`ready_state`/`containers_found`), merged with `document_status.attach_document_status` for the `document_status_chain`/`http_status` facts. The success branch (non-empty results) attaches those same network facts too — `attach_document_status({}, status_chain)`, no DOM read — see `engines/DOCS.md`'s Gotchas for why. `_classify_diagnosis` was removed (the guessed-verdict-removal milestone) — its BLOCK/CONSENT/CONCURRENT_RACE/NO_CONTAINER outputs are all fully re-derivable from `url`/`ready_state`, already in the snapshot. As of the 2026-09-19 goto-redirect milestone: Google's organic-result href is a same-origin `/goto?url=<opaque blob>` redirector, not the destination — `_parse_results`/`_build_results` extract title/snippet/date/that href, then `_resolve_urls` resolves all of a page's hrefs concurrently via a single non-followed `curl_cffi` request each, dropping any result that doesn't resolve to a 302 with an absolute `http(s)` `Location` and collapsing duplicate destinations; see `process-docs/search_pipeline/` for the investigation, the measurements and a second, independently found snippet-selector bug fixed in the same pass.
 **Reads:** none (network only).
 **Writes:** none (network only).
 **Called by:** `src/search/search_web.py`.
-**Calls out:** `pydoll` (NetworkCommands, CookieSameSite), `src.search.browser` (`new_tab`, `kill_tab`).
+**Calls out:** `pydoll` (NetworkCommands, CookieSameSite), `curl_cffi` (`AsyncSession`), `src.search.browser` (`new_tab`, `kill_tab`).
 
 ---
 
