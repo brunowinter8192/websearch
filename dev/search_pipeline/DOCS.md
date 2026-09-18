@@ -93,13 +93,13 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}` (monkeypatched via module import), `src.search.browser.close_browser`, `src.search.rate_limiter`.
 
-### 14_download_classify_probe.py (605 LOC)
+### 14_download_classify_probe.py (56 LOC)
 
-**Purpose:** Download-classify probe — sniff-classifies academic URLs from search pool without saving content. Tier-1 domain transforms (arxiv/aclanthology/openreview/pmc), per-Tier timeout, classifies outcome (PDF_OK/HTML_OK/HTML_HAS_PDF_LINK/HTML_PAYWALL/HTTP_4xx etc.). `doi.org` sampled to 300 (seed=42).
-**Reads:** newest `pipeline_smoke_*.md` + `free_word_injection_probe_*.md` from `md/` (glob-discovered).
-**Writes:** `md/download_classify_<ts>.md`, `txt/pool_<ts>.txt`, `txt/pool_doi_sample_<ts>.txt`.
+**Purpose:** Download-classify probe entry point — orchestrates pool build, classification, and report assembly, split into `_download_classify_probe_*.py` siblings (own entries below).
+**Reads:** newest `pipeline_smoke_*.md` + `free_word_injection_probe_*.md` from `md/` (glob-discovered, via the pool sibling).
+**Writes:** `md/download_classify_<ts>.md`, `txt/pool_<ts>.txt`, `txt/pool_doi_sample_<ts>.txt` (via the report/pool siblings).
 **Called by:** CLI only.
-**Calls out:** `httpx`.
+**Calls out:** `_download_classify_probe_pool.py`, `_download_classify_probe_classify.py`, `_download_classify_probe_report.py` (siblings).
 
 ### 15_citation_pdf_followup.py (446 LOC)
 
@@ -268,6 +268,30 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Writes:** `md/sorry_<ts>.md`, `html/sorry_<ts>.html`, `png/sorry_<ts>.png`.
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, PageCommands, NetworkCommands, CookieSameSite), `yaml`. Imports `load_config`/`start_browser` pattern mirrored from `01_google_smoke.py` (not imported directly).
+
+### _download_classify_probe_classify.py (235 LOC)
+
+**Purpose:** HTTP fetch/sniff concern for `14_download_classify_probe.py` — per-domain-capped async classification, Tier-1 URL transform, content-type/PDF-magic/citation_pdf_url/paywall-marker sniffing.
+**Reads:** nothing — fetches each URL live via the `httpx.AsyncClient` it builds.
+**Writes:** nothing (returns result dicts); progress to stderr.
+**Called by:** `14_download_classify_probe.py`, `_download_classify_probe_report.py` (constants only).
+**Calls out:** `httpx`.
+
+### _download_classify_probe_pool.py (115 LOC)
+
+**Purpose:** Pool-building concern for `14_download_classify_probe.py` — extracts, domain-tiers, and doi.org-samples the URL pool from the two source reports.
+**Reads:** the smoke/free-word report paths passed in by the caller.
+**Writes:** `txt/pool_<ts>.txt`, `txt/pool_doi_sample_<ts>.txt` (path built from the `data_dir` argument).
+**Called by:** `14_download_classify_probe.py`, `_download_classify_probe_report.py` (`_base_domain`, `RANDOM_SEED`).
+**Calls out:** none beyond stdlib.
+
+### _download_classify_probe_report.py (243 LOC)
+
+**Purpose:** Markdown report assembly for `14_download_classify_probe.py` — one section-builder helper per report section.
+**Reads:** nothing — takes the run's results and paths as arguments.
+**Writes:** `md/download_classify_<ts>.md` (path built from the `report_dir` argument).
+**Called by:** `14_download_classify_probe.py`.
+**Calls out:** `_download_classify_probe_pool.py` (sibling, `_base_domain`/`RANDOM_SEED`), `_download_classify_probe_classify.py` (sibling, concurrency/timeout constants).
 
 ### _google_fixture.py (243 LOC)
 
