@@ -309,6 +309,38 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, PageCommands, NetworkCommands, CookieSameSite), `yaml`. Imports `load_config`/`start_browser` pattern mirrored from `01_google_smoke.py` (not imported directly).
 
+### _cdp_starvation_probe_canary.py (97 LOC)
+
+**Purpose:** Pattern B scheduling-latency canary for `cdp_starvation_probe.py` — background sampling task (also tracks live task count) plus five-bucket per-category percentile stats.
+**Reads:** nothing (owns its own `_canary_samples` state).
+**Writes:** nothing (returns stats dicts).
+**Called by:** `cdp_starvation_probe.py`, `_cdp_starvation_probe_report.py`, `_cdp_starvation_probe_findings.py`.
+**Calls out:** none beyond stdlib.
+
+### _cdp_starvation_probe_findings.py (173 LOC)
+
+**Purpose:** Narrative findings-doc assembly for `cdp_starvation_probe.py` — fixed-path investigation writeup (hypothesis, instrumentation, key numbers, per-query CDP-rate table, verdict, next steps) at a stable filename overwritten each run.
+**Reads:** nothing — takes the run's records and the sibling report's path as arguments.
+**Writes:** `md/01_probe.md` (path built from the `findings_dir` argument).
+**Called by:** `cdp_starvation_probe.py`.
+**Calls out:** `_cdp_starvation_probe_instrument.py`, `_cdp_starvation_probe_canary.py`, `_cdp_starvation_probe_report.py` (siblings, `_cdp_ts`/`_slow_cb_events`/`_compute_stats`/`_derive_verdict`).
+
+### _cdp_starvation_probe_instrument.py (45 LOC)
+
+**Purpose:** Passive instrumentation for `cdp_starvation_probe.py` — a pydoll `ConnectionHandler._process_single_message` monkeypatch (CDP message timestamps) plus an asyncio-logger handler capturing slow-callback warnings, both installed once and read later by the report.
+**Reads:** nothing (patches `pydoll.connection.connection_handler.ConnectionHandler` at module import; the log-capture handler is installed by a function the orchestrator calls once the event loop is running).
+**Writes:** nothing directly — appends to its own `_cdp_ts`/`_slow_cb_events` lists as a side effect.
+**Called by:** `cdp_starvation_probe.py`, `_cdp_starvation_probe_report.py`, `_cdp_starvation_probe_findings.py`.
+**Calls out:** `pydoll.connection.connection_handler` (monkeypatched via direct import, before any `src.search` import).
+
+### _cdp_starvation_probe_report.py (211 LOC)
+
+**Purpose:** Timestamped markdown report assembly for `cdp_starvation_probe.py` — one section-builder helper per report section (pre-existing shape, unchanged by this split) plus the threshold-based verdict classifier.
+**Reads:** nothing — takes the run's records and paths as arguments.
+**Writes:** `md/cdp_probe_<ts>.md` (path built from the `report_dir` argument).
+**Called by:** `cdp_starvation_probe.py`, `_cdp_starvation_probe_findings.py` (`_derive_verdict`).
+**Calls out:** `_cdp_starvation_probe_instrument.py` (sibling, `_cdp_ts`/`_slow_cb_events`), `_cdp_starvation_probe_canary.py` (sibling, `_canary_samples`/`_compute_stats`/`_sample_category`).
+
 ### _download_classify_probe_classify.py (235 LOC)
 
 **Purpose:** HTTP fetch/sniff concern for `14_download_classify_probe.py` — per-domain-capped async classification, Tier-1 URL transform, content-type/PDF-magic/citation_pdf_url/paywall-marker sniffing.
@@ -397,13 +429,13 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only. Flags: `--max-queries N`, `--smoke` (4-query dry-run, no report).
 **Calls out:** `src.search.browser`, `src.search.search_web` (both monkeypatch-order-sensitive, imported via `importlib` after `_branch_probe_instrument.py`), `_branch_probe_instrument.py`, `_branch_probe_canary.py`, `_branch_probe_analysis.py`, `_branch_probe_report.py`, `_branch_probe_findings.py` (siblings).
 
-### cdp_starvation_probe.py (581 LOC)
+### cdp_starvation_probe.py (153 LOC)
 
-**Purpose:** Phase 1 bee investigation — asyncio event-loop starvation probe. Pattern A (slow-callback logger), Pattern B (scheduling-latency canary), CDP event counter (monkey-patch on `ConnectionHandler._process_single_message`). Categorizes queries as normal/empty/zero_cascade (`empty` was `captcha`, keyed on `EMPTY_BLOCK` — renamed when that verdict was removed; `engine_details` carries no diagnosis to reconstruct which kind of empty a query was). Historical verdict (as of the investigation date, see process-docs): REFUTED (event loop p99=1.4ms, 0 CDP events during cascade).
+**Purpose:** Phase 1 bee investigation — asyncio event-loop starvation probe entry point. Categorizes queries as normal/empty/zero_cascade (`empty` was `captcha`, keyed on `EMPTY_BLOCK` — renamed when that verdict was removed; `engine_details` carries no diagnosis to reconstruct which kind of empty a query was). Historical verdict (as of the investigation date, see process-docs): REFUTED (event loop p99=1.4ms, 0 CDP events during cascade). Unlike its two siblings (`branch_probe.py`, `acquire_probe.py`), always writes both outputs unconditionally — no `--smoke` flag, no cascade-reproduction check. Instrumentation, canary, and report/findings assembly are split into `_cdp_starvation_probe_*.py` siblings (own entries above).
 **Reads:** `queries.txt` (20-30 queries).
-**Writes:** `md/cdp_probe_<ts>.md`.
+**Writes:** `md/cdp_probe_<ts>.md` and `md/01_probe.md` (via the sibling report/findings modules).
 **Called by:** CLI only. Flags: `--max-queries N`.
-**Calls out:** `pydoll.connection.connection_handler.ConnectionHandler` (monkeypatched).
+**Calls out:** `pydoll.connection.connection_handler.ConnectionHandler` (monkeypatched, via `_cdp_starvation_probe_instrument.py`), `src.search.browser`, `src.search.search_web`, `_cdp_starvation_probe_instrument.py`, `_cdp_starvation_probe_canary.py`, `_cdp_starvation_probe_report.py`, `_cdp_starvation_probe_findings.py` (siblings).
 
 ### clean_pool.py (236 LOC)
 

@@ -340,3 +340,104 @@ dev probe. Every function across all six files is ≤41 LOC (`_run_single_query`
 See `dev/search_pipeline/` (this DOCS.md) for the resulting module list. See the `branch_probe.py`
 section above in this same file for the sibling split this one was compared against — the
 comparison is the point of this section, not incidental.
+
+# Splitting dev/search_pipeline/cdp_starvation_probe.py by concern (2026-09-18)
+
+Fourth and last unit in this sweep, and the third sibling in the bee investigation (Phase 1, the
+earliest of the three — `acquire_probe.py` is Phase 2, `branch_probe.py` is Phase 3). 581 LOC. The
+scan named `_write_findings` (124 LOC); an AST pass over every function in the file (same technique
+as the previous two units) found a second: `run_cdp_probe` at 84 LOC. Everything else — including
+`_compute_stats` (34), `_derive_verdict` (22), `_r_timeseries` (30), and every other `_r_*` report
+renderer — was already under 50.
+
+By this point in the sweep the pull toward making all three siblings' file lists identical is real
+and was resisted deliberately, point by point, rather than argued about in the abstract:
+
+## Where this split genuinely matches its siblings
+
+- **Canary (Pattern B).** `_canary_monitor`, `_sample_category`, `_pct` line up closely with both
+  `_branch_probe_canary.py` and `_acquire_probe_canary.py`. `_start_probe_clock`/
+  `_start_canary_monitor`/`_stop_canary_monitor` — the same orchestrator-shrinking extraction
+  technique used on both prior units — applies unchanged here too.
+- **Verdict-function placement.** Same as both siblings: the verdict-deriving function lives in the
+  report module, findings imports it from there. `_derive_verdict` moved into
+  `_cdp_starvation_probe_report.py`, exactly where `_overall_verdict`/`_overall_disc` live in their
+  respective modules.
+- **Report/findings split into a two-file, section-builder shape.** Same overall shape as both
+  siblings: a timestamped report module and a fixed-path findings module, each with report split
+  into small single-purpose section builders.
+
+## Where it does not, and was not forced to
+
+- **`_compute_stats` is richer than its cousins, and stayed richer.** `_canary_samples` here is a
+  3-tuple (`ts, latency_ms, num_tasks`) where both siblings use a 2-tuple (no task-count tracking).
+  `_compute_stats` returns five category buckets (`overall`, `normal`, `empty`, `zero_cascade`,
+  `cold_start`) where the siblings' equivalents (`_canary_stats`/`_agg_ratios`-adjacent territory)
+  return three. Nothing was trimmed to make the shapes match.
+- **No analysis-layer module exists, and none was invented.** Both `branch_probe.py` and
+  `acquire_probe.py` have a module reducing per-engine event lists into a per-query summary
+  (`_build_engine_detail`/`_query_discriminator`, `_build_engine_summary`/`_discriminator`). This
+  file has nothing like it — CDP events are a single global message count in a time window, computed
+  inline with one `sum()` expression in the query loop, not per-engine at all. There is no
+  `_cdp_starvation_probe_analysis.py`. `_load_queries` (4 LOC), which lived in the analysis sibling
+  on both prior units, has no analysis sibling to go into here and was left in the entry file
+  instead — forcing an analysis module into existence purely to give this file the same five-sibling
+  shape as the other two would have been exactly the harmonization this sweep is supposed to avoid.
+- **`_write_report` was already split before this task touched it, and was left alone internally.**
+  A prior author had already broken `_write_report` into one-function-per-section renderers
+  (`_r_header`, `_r_query_table`, `_r_latency_stats`, `_r_timeseries`, `_r_cdp_table`,
+  `_r_slow_callbacks`, `_r_verdict_section`) under an explicit `# Report section renderers` marker —
+  18 LOC calling seven helpers, already compliant. All seven renderers moved into
+  `_cdp_starvation_probe_report.py` byte-for-byte; none were rewritten, resequenced, or touched
+  beyond the file they now live in.
+- **Two instrumentation mechanisms bundled into one module, not two.** Neither sibling patches
+  pydoll — this file's "Pattern C" is a monkeypatch on
+  `ConnectionHandler._process_single_message` (CDP message timestamps), a different target
+  entirely from the siblings' `RateLimiter` patches. It also has "Pattern A" (an asyncio-logger
+  handler capturing slow-callback warnings) which neither sibling has at all. Both are passive,
+  install-once hooks populating shared state nobody polls until report time, so they share one
+  module, `_cdp_starvation_probe_instrument.py` — one module holding two distinct instrumentation
+  mechanisms, a shape neither prior split needed.
+- **No smoke mode, no cascade-reproduction branch — verified, not just read.** `branch_probe.py`
+  stops and writes a STOP note on cascade failure; `acquire_probe.py` warns and writes anyway; this
+  file has neither behavior and never did — no `--smoke` flag in its `argparse`, no
+  cascade-reproduction check anywhere in `run_cdp_probe`. It always runs the full query set and
+  always writes both outputs. Per the standing instruction to use a call-recording stub on any
+  control-flow claim rather than assert it from reading alone, the extracted orchestrator was run
+  twice with every callee replaced by a call-recording stub — once with `max_queries=None`, once
+  with `max_queries=5` — and both recorded the identical sequence `clock → pattern_a →
+  load_queries → execute → write_outputs`, with `write_outputs` reached exactly once in both runs
+  and no conditional anywhere in between. A negative result (no branching exists) checked the same
+  way a positive one would be, per the standing instruction from the `acquire_probe.py` round: an
+  assumption that "this one has no branches" is worth less than a call trace that shows it.
+
+## Dead code
+
+None found. Every import, constant, and module-level list in the original file is used somewhere —
+unlike `14_download_classify_probe.py` (`PDF_SNIFF_BYTES`, `parse_qs`, `urlencode`, all dead) and
+consistent with `acquire_probe.py` (also nothing dead). Checked the same way both times: read every
+import and every top-level name against its usages across the whole file before moving anything.
+
+## Verification
+
+All five modules import cleanly standalone (`python3 -c "import <module>"` from inside
+`dev/search_pipeline/`), no live browser/network involved — `_cdp_starvation_probe_instrument.py`
+applies the real monkeypatch against `pydoll.connection.connection_handler.ConnectionHandler` but
+never drives a connection through it. `--help` output confirmed unchanged (same single
+`--max-queries` flag, same description string). `git diff` against the original reviewed concern by
+concern: every relocated block is line-for-line identical apart from indentation and the new
+`import`/directory-parameter lines (`report_dir` added to `_write_report`, `findings_dir` added to
+`_write_findings`, `total` replacing an inline `len(queries)` in the per-query print — same
+treatment as both prior splits). The call-recording stub check on `run_cdp_probe` is documented
+above under its own heading rather than folded into this paragraph, since it was the specific
+instrument requested for this round. A synthetic end-to-end run (one fake canary sample, one fake
+query record, `REPORT_DIR`/`FINDINGS_DIR` pointed at a scratch `dev/search_pipeline/debug/` dir,
+deleted afterward) drove `_write_outputs` through the real cross-module call chain and produced both
+`md/cdp_probe_<ts>.md` and `md/01_probe.md` with the expected header content.
+`./venv/bin/python3 -m pytest dev/tests/`: 431 passed before the split (via `git stash`) and 431
+passed after — unchanged, nothing in that suite exercises this dev probe. Every function across all
+five files is ≤49 LOC (`_run_single_query`, the largest — one line under the threshold).
+
+See `dev/search_pipeline/` (this DOCS.md) for the resulting module list. See the `branch_probe.py`
+and `acquire_probe.py` sections above in this same file for the two sibling splits this one was
+compared against throughout.
