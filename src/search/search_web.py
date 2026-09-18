@@ -43,6 +43,7 @@ _BROWSER_ENGINES: frozenset[str] = frozenset({
 
 ENGINE_WATCHDOG_TIMEOUT: float = 6.0
 RATE_WAIT_TIMEOUT: float = 60.0
+POOL_CAP: int = 10
 
 ENGINE_MAX_RESULTS: dict[str, int] = {
     "google": 100,
@@ -144,10 +145,8 @@ async def _prewarm_browser() -> None:
 
 
 def _cap_pools(pools: dict) -> dict:
-    google_count = len(pools.get("google", []))
-    K = google_count if google_count > 0 else 10
-    logger.info("Pool cap K=%d (google_count=%d)", K, google_count)
-    return {eng: pool[:K] for eng, pool in pools.items()}
+    logger.info("Pool cap applied: %d", POOL_CAP)
+    return {eng: pool[:POOL_CAP] for eng, pool in pools.items()}
 
 
 def _build_search_result(
