@@ -172,14 +172,13 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    if "/url?" in href:
-        parsed = urlparse(href)
-        qs = parse_qs(parsed.query)
-        return qs.get("q", [href])[0]
-    return href
+async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = _extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return _build_results(items, max_results)
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
@@ -199,13 +198,14 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     return results
 
 
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return _build_results(items, max_results)
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    if "/url?" in href:
+        parsed = urlparse(href)
+        qs = parse_qs(parsed.query)
+        return qs.get("q", [href])[0]
+    return href
 
 
 async def _resolve_urls(results: list[SearchResult]) -> list[SearchResult]:
