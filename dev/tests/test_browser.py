@@ -22,10 +22,6 @@ class FakeCompletedProcess:
         self.stdout = stdout
 
 
-# _find_app_bundle / _open_background_process_creator: bundle-path resolution + the self-launch
-# command actually built from it — the crux of the no-Spaces-drag fix (M2, 2026-09-17): a dedicated
-# resolved bundle, not the user's own bare-name "Google Chrome", per process-docs/browser_posture/.
-
 def test_find_app_bundle_walks_up_to_app_suffix():
     bundle = browser._find_app_bundle(
         "/Users/x/Library/Caches/ms-playwright/chromium-1228/chrome-mac-arm64/"

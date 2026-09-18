@@ -185,6 +185,34 @@ precedent (`chromium_scrape.py`'s identically-shaped function is likewise absent
 list, relying instead on every call site mocking it directly) was followed rather than expanding
 the tripwire's scope beyond what was asked in this milestone.
 
+## Recap — 2026-09-17, same day, review round
+
+Code review passed the `src/` change as-is (launch mechanics, `functools.partial` wiring, the
+separate profile, the derived lock path, the three new tests, all correctly scoped). Two standards
+violations were found and fixed, both cosmetic, no behavior change:
+
+1. **A three-line comment block above the new tests in `dev/tests/test_browser.py`.** This
+   project's own comment rule (the three section markers are the only permitted comment lines)
+   applies to test files too, not only production code — removed outright, the tests themselves are
+   unaffected. Pre-existing comments elsewhere in that same file were explicitly left alone (not
+   this milestone's to clean up).
+2. **`src/search/DOCS.md`'s `browser.py` entry was far outside the DOCS.md format** — a 428-word
+   Purpose where the standard caps it at one sentence of 25 words, and a 381-word Gotcha bullet.
+   Most of that prose predated this session (the self-launch-milestone mechanics folded into the
+   Purpose paragraph, in particular, were already fully recorded in
+   `2026-09-15_dev_wide_browser_launch_helper.md`, this same area — confirmed by reading that file
+   before cutting anything, not assumed) — nothing unique was lost by cutting it, only the DOCS.md
+   copy of already-documented history. Purpose trimmed to one 19-word sentence. Both Gotcha bullets
+   added/edited by this milestone (PID-vs-name keying, the M2 bundle/profile change itself) were cut
+   to one short pointer each — the fact stated, no directory/file/parameter names, a pointer to this
+   file for the reasoning. The `patchright.async_api` `Calls out` entry lost its added explanatory
+   clause, keeping only the plain imported-symbol naming every other entry on that line already
+   uses. `dev/tests/DOCS.md`'s own `test_browser.py` LOC heading was re-measured and corrected
+   (342 -> 338) after the comment removal changed the file's line count.
+
+Full suite re-verified after both fixes: **405 passed, 0 failed** — unchanged from the
+pre-review-fix count, confirming both fixes were cosmetic as intended.
+
 ## What was deliberately left alone
 
 `background=True` on `Target.createTarget` (upstream playwright#41282's own mechanism, and pydoll's

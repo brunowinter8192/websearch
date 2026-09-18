@@ -151,7 +151,7 @@ and cannot import `src/` itself (dev-script import boundary), so `_reset_state` 
 imported `browser` module as a parameter instead of importing it directly.
 **Called by:** `test_browser.py`, `test_browser_get_tab.py`.
 
-### test_browser.py (342 LOC)
+### test_browser.py (338 LOC)
 **Purpose:** `src/search/browser.py` — `_find_app_bundle` (real function, no mocking, same
 walk-up-to-`.app` behavior as `chromium_process.py`'s own copy) and
 `_open_background_process_creator` (as of the M2 no-Spaces-drag milestone, 2026-09-17, asserts the
