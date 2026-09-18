@@ -214,3 +214,129 @@ expected Section 1 table. Every function across all four files is ≤41 LOC
 (`_section_tier1_transforms`, unchanged from the original, was already the largest report section).
 
 See `dev/search_pipeline/` (this DOCS.md) for the resulting module list.
+
+# Splitting dev/search_pipeline/acquire_probe.py by concern (2026-09-18)
+
+Third unit in the same sweep. `acquire_probe.py` is the Phase-2 sibling of `branch_probe.py`
+(Phase 3) — same investigation, one phase earlier, 588 LOC. The scan named the two dominant
+functions (`_write_findings` 123 LOC, `_write_report` 100 LOC); an AST pass over every function in
+the file (same technique used on the prior two units) found a third: `run_acquire_probe` itself at
+83 LOC, not named in the scan line but over the 50-LOC threshold and therefore in scope — the scan
+gives the dominant functions, the threshold is the rule, and reading the file is what catches the
+rest. Everything else in the file (`_build_engine_summary` 26, `_discriminator` 19, `_canary_stats`
+17, `_agg_ratios` 15, `_WatchedLock`'s methods 2–6 each) was already under 50.
+
+## Module boundary, and where this split matches branch_probe.py's — and where it does not
+
+Four new siblings, `_acquire_probe_*.py`, same naming rule as `_branch_probe_*.py`:
+
+- `_acquire_probe_instrument.py` (80 LOC) — `_get_name`, `_WatchedLock`, `_orig_init`/
+  `_patched_init`, `_orig_acquire`/`_patched_acquire`, the two patch assignments (this file patches
+  **both** `RateLimiter.__init__` and `RateLimiter.acquire`; `branch_probe.py`'s instrument module
+  patches only `acquire`, as a full byte-identical replacement rather than a wrapper — the two
+  probes' instrumentation is a different shape, not just a renamed copy of each other). Owns
+  `_acq_events`.
+- `_acquire_probe_canary.py` (72 LOC) — matches `_branch_probe_canary.py` almost line-for-line:
+  same constants, same `_canary_monitor`/`_sample_category`/`_pct`/`_canary_stats`, same
+  `_start_probe_clock`/`_start_canary_monitor`/`_stop_canary_monitor` extraction.
+- `_acquire_probe_analysis.py` (92 LOC) — `_load_queries`, `_build_engine_summary`,
+  `_discriminator`, `_dump_smoke`, `_agg_ratios`. Matches `branch_probe.py`'s analysis concern in
+  kind, not in content: this file has no `_snapshot_limiters` equivalent (no Layer-1 pre-call
+  limiter introspection — `acquire_probe.py` is purely event-based) and, unlike anything in
+  `branch_probe.py`, `_agg_ratios` (cross-record ratio aggregation) is called from *both* the report
+  and the findings module. Keeping it centralized rather than inlining the ratio math into each
+  report/findings section (which is what `branch_probe.py`'s equivalent sections do) preserves that
+  asymmetry — see the dedicated note below.
+- `_acquire_probe_report.py` (155 LOC) — `_overall_disc` + `_write_report`, split into one
+  section-builder helper per report section, same shape as `_branch_probe_report.py`.
+- `_acquire_probe_findings.py` (184 LOC) — `_write_findings`, split the same way (`_disc_text`
+  lookup, header/narrative/key-numbers/verdict/next-steps builders), `_overall_disc` imported from
+  the report sibling.
+
+`acquire_probe.py` itself dropped to 170 LOC. `run_acquire_probe`'s 83 LOC came down to an 11-line
+orchestrator plus six glue functions (`_execute_queries`, `_run_single_query`, `_cascade_result`,
+`_report_smoke_ok`, `_report_cascade_warning`, `_write_outputs`) — same extraction shape as
+`run_branch_probe` got.
+
+## The one control-flow difference that must NOT be flattened toward the sibling
+
+`branch_probe.py`, on cascade-reproduction failure, writes a STOP note and returns early —
+report and findings are never written. `acquire_probe.py` does something different on the same
+condition: it prints a WARNING to stderr and **falls through anyway**, writing both the report and
+the findings exactly as it would on success. This is not an oversight in either file, it is each
+probe's own deliberate call about whether a failed-to-reproduce run still has data worth a report,
+and the split preserves it exactly:
+
+```python
+async def run_acquire_probe(max_queries, smoke):
+    _start_probe_clock()
+    queries = _load_queries(QUERIES_FILE, max_queries)
+    query_records = await _execute_queries(queries, smoke)
+    zero_n, cascade_ok = _cascade_result(query_records, smoke)
+    if smoke:
+        _report_smoke_ok()
+        return
+    if not cascade_ok:
+        _report_cascade_warning()
+    _write_outputs(query_records, cascade_ok, zero_n)
+```
+
+Note there is no `return` after `_report_cascade_warning()` — `_write_outputs` runs unconditionally
+whenever `smoke` is false, regardless of `cascade_ok`. This was verified two ways, not just read: (1)
+a synthetic run with four fake `normal`-category records (`zero_n=0`, `min_expected=3`,
+`cascade_ok=False`) went through the real `_cascade_result` → `_write_outputs` call chain and both
+`md/acquire_probe_<ts>.md` and `md/02_acquire_probe.md` were confirmed present on disk afterward;
+(2) `run_acquire_probe` was run with every callee monkeypatched to a call-recording stub, once with
+`smoke=True` (recorded calls: `execute → cascade → smoke_ok`, no `write_outputs`) and once with
+`smoke=False` and a stubbed `cascade_ok=False` (recorded calls: `execute → cascade → warning →
+write_outputs`) — confirming both branches of the orchestrator's own control flow, not just the
+section contents. A later reader comparing this file's orchestrator to `run_branch_probe`'s should
+not "fix" this into matching the STOP-note early-return shape; that would silently change which
+artifacts a failed run produces, which is a behaviour change a diff reviewing seams-not-control-flow
+would not catch.
+
+## The other real asymmetry: _agg_ratios is centralized here, duplicated there
+
+`branch_probe.py` has no single reusable "aggregate ratios across a set of query records" function
+— each report/findings section that needs per-category averages (`_report_branch_fire_aggregate`,
+`_findings_averages`) recomputes the same shape of ratio math inline, independently. `acquire_probe.py`
+has always had one function, `_agg_ratios`, that both `_write_report`'s aggregate-by-category section
+and `_write_findings`'s zero-cascade key numbers call. The split kept this centralization — `_agg_ratios`
+lives in `_acquire_probe_analysis.py` and both `_acquire_probe_report.py` and
+`_acquire_probe_findings.py` import it — rather than either (a) duplicating it into each report
+section to "match" `branch_probe.py`'s shape, or (b) flattening `branch_probe.py`'s duplicated inline
+math into a shared function it never had, which would have been an unasked-for behavior-preserving
+refactor of a file this task wasn't touching. Recording this explicitly so a later reader comparing
+the two sibling splits sees two different pre-existing shapes, correctly preserved, rather than
+assuming one split "forgot" to centralize or duplicate to match the other.
+
+One consequence of centralizing `_agg_ratios`: it depends on `_pct` (percentile calculation), which
+is owned by the canary module in both files (used there for canary latency percentiles). In
+`branch_probe.py`'s split, `_pct` only had one internal caller (`_canary_stats`, same module) so no
+cross-module import was needed for it. Here, `_acquire_probe_analysis.py` imports `_pct` from
+`_acquire_probe_canary.py` — a cross-module dependency the `branch_probe.py` split never needed,
+directly because of this centralization difference.
+
+## Dead code
+
+No new dead constants or imports were found on this file during the split (unlike
+`14_download_classify_probe.py`'s `PDF_SNIFF_BYTES`/`parse_qs`/`urlencode`). Every import and
+constant in `acquire_probe.py` is used somewhere in the file.
+
+## Verification
+
+All six modules import cleanly standalone (`python3 -c "import <module>"` from inside
+`dev/search_pipeline/`), no live browser/network involved — `_acquire_probe_instrument.py` applies
+the real monkeypatch against `src.search.rate_limiter.RateLimiter` (both `__init__` and `acquire`)
+but never calls either. `--help` output confirmed byte-identical to the pre-split CLI (no flags
+changed). `git diff` against the original reviewed concern by concern: every relocated block is
+line-for-line identical apart from indentation and the new `import`/directory-parameter lines
+(`report_dir` added to `_write_report`, `findings_dir` added to `_write_findings` — same treatment
+as the previous two splits, since the constant's owning module moved out from under the functions
+that used to read it as a bare global). `./venv/bin/python3 -m pytest dev/tests/`: 431 passed before
+the split (via `git stash`) and 431 passed after — unchanged, nothing in that suite exercises this
+dev probe. Every function across all six files is ≤41 LOC (`_run_single_query`, the largest).
+
+See `dev/search_pipeline/` (this DOCS.md) for the resulting module list. See the `branch_probe.py`
+section above in this same file for the sibling split this one was compared against — the
+comparison is the point of this section, not incidental.

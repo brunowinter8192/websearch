@@ -189,6 +189,46 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI only.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, TargetCommands, NetworkCommands) — inline copy of the `src/search/browser.py` session-setup shape, not a shared import.
 
+### _acquire_probe_analysis.py (92 LOC)
+
+**Purpose:** Per-query and cross-query analysis for `acquire_probe.py` — query loading, event-to-summary reduction, hypothesis discriminator, smoke-mode dump, aggregate ratio math.
+**Reads:** `queries.txt` path passed in.
+**Writes:** stderr only (`_dump_smoke`, smoke mode).
+**Called by:** `acquire_probe.py`, `_acquire_probe_report.py`, `_acquire_probe_findings.py` (`_agg_ratios`).
+**Calls out:** `_acquire_probe_canary.py` (sibling, `_pct` — shared by `_agg_ratios` and the canary's own percentile stats).
+
+### _acquire_probe_canary.py (72 LOC)
+
+**Purpose:** Pattern B scheduling-latency canary for `acquire_probe.py` — background sampling task, per-category percentile stats.
+**Reads:** nothing (owns its own `_canary_samples` state).
+**Writes:** nothing (returns stats dicts).
+**Called by:** `acquire_probe.py`, `_acquire_probe_analysis.py` (`_pct`), `_acquire_probe_report.py`, `_acquire_probe_findings.py`.
+**Calls out:** none beyond stdlib.
+
+### _acquire_probe_findings.py (184 LOC)
+
+**Purpose:** Narrative findings-doc assembly for `acquire_probe.py` — fixed-path investigation writeup (hypothesis, instrumentation, verdict, next steps) at a stable filename overwritten each run.
+**Reads:** nothing — takes the run's records and the sibling report's path as arguments.
+**Writes:** `md/02_acquire_probe.md` (path built from the `findings_dir` argument).
+**Called by:** `acquire_probe.py`.
+**Calls out:** `_acquire_probe_canary.py`, `_acquire_probe_analysis.py`, `_acquire_probe_report.py` (siblings, `_canary_stats`/`_agg_ratios`/`_overall_disc`).
+
+### _acquire_probe_instrument.py (80 LOC)
+
+**Purpose:** `RateLimiter.__init__`/`acquire()` monkeypatch for `acquire_probe.py` — installs a lock-watching wrapper (`_WatchedLock`) plus enter/exit event emission, applied at import time.
+**Reads:** nothing (patches `src.search.rate_limiter.RateLimiter` at module import).
+**Writes:** nothing directly — appends to its own `_acq_events` list as a side effect of the patched methods.
+**Called by:** `acquire_probe.py`, `_acquire_probe_report.py`.
+**Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`, before any other `src.search` import).
+
+### _acquire_probe_report.py (155 LOC)
+
+**Purpose:** Timestamped markdown report assembly for `acquire_probe.py` — one section-builder helper per report section, plus the shared overall-discriminator classifier.
+**Reads:** nothing — takes the run's records and paths as arguments.
+**Writes:** `md/acquire_probe_<ts>.md` (path built from the `report_dir` argument).
+**Called by:** `acquire_probe.py`, `_acquire_probe_findings.py` (`_overall_disc`).
+**Calls out:** `_acquire_probe_instrument.py` (sibling, `_acq_events`), `_acquire_probe_canary.py` (sibling, `_canary_stats`), `_acquire_probe_analysis.py` (sibling, `_agg_ratios`).
+
 ### _altcha_trigger_probe_cdp.py (75 LOC)
 
 **Purpose:** Raw-CDP shadow-DOM helpers for `altcha_trigger_probe.py` — locates the widget node, reports its shadow-root mode, dispatches a coordinate-based click.
@@ -301,13 +341,13 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** `dev/tests/test_google_engine.py`.
 **Calls out:** none (stdlib `http.server`, `threading`, `dataclasses`, `urllib.parse` only — no `src.` import, per this directory's own import-hook restriction below).
 
-### acquire_probe.py (588 LOC)
+### acquire_probe.py (170 LOC)
 
-**Purpose:** Phase 2 bee investigation — `RateLimiter.acquire()` instrumentation probe. Monkey-patches `RateLimiter.__init__` (installs `_WatchedLock`) + `acquire()` (enter/exit events). Discriminates hypotheses B (task never scheduled) / A-lock (stale lock) / A-sleep (sleeping on backoff) / C (acquire innocent). Historical verdict (as of the investigation date, see process-docs): A-sleep confirmed. Query category renamed `"captcha"` → `"empty"` (the guessed-verdict-removal milestone collapsed `EMPTY_BLOCK` into bare `EMPTY`; `engine_details`, the only status source this probe reads, carries no diagnosis to reconstruct which kind of empty a query was — an honest narrower label over a familiar wrong one).
+**Purpose:** Phase 2 bee investigation — `RateLimiter.acquire()` instrumentation probe entry point. Discriminates hypotheses B (task never scheduled) / A-lock (stale lock) / A-sleep (sleeping on backoff) / C (acquire innocent). Historical verdict (as of the investigation date, see process-docs): A-sleep confirmed. Query category renamed `"captcha"` → `"empty"` (the guessed-verdict-removal milestone collapsed `EMPTY_BLOCK` into bare `EMPTY`; `engine_details`, the only status source this probe reads, carries no diagnosis to reconstruct which kind of empty a query was — an honest narrower label over a familiar wrong one). On cascade-reproduction failure this probe warns and still writes both report and findings (unlike `branch_probe.py`, which stops and writes a note instead — a real behavioural difference between the two siblings, not something this split changed). Monkeypatch, canary, analysis, and report/findings assembly are split into `_acquire_probe_*.py` siblings (own entries above).
 **Reads:** none (live instrumented run against production engines).
-**Writes:** `md/acquire_probe_<ts>.md` (full run only; `--smoke` writes nothing).
+**Writes:** `md/acquire_probe_<ts>.md` and `md/02_acquire_probe.md` (full run only, via the sibling report/findings modules; `--smoke` writes nothing).
 **Called by:** CLI only. Flags: `--max-queries N`, `--smoke` (4-query dry-run, no report).
-**Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`), full engine set via production search path.
+**Calls out:** `src.search.browser`, `src.search.search_web` (both monkeypatch-order-sensitive, imported via `importlib` after `_acquire_probe_instrument.py`), `_acquire_probe_instrument.py`, `_acquire_probe_canary.py`, `_acquire_probe_analysis.py`, `_acquire_probe_report.py`, `_acquire_probe_findings.py` (siblings).
 
 ### altcha_trigger_probe.py (392 LOC)
 
