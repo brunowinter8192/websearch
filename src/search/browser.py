@@ -1,11 +1,13 @@
 # INFRASTRUCTURE
 import asyncio
+import functools
 import logging
 import subprocess
 import time
 from pathlib import Path
 
 import psutil
+from patchright.async_api import async_playwright
 from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
 from pydoll.browser.managers import BrowserProcessManager
@@ -17,8 +19,8 @@ from src import death_pipe
 
 logger = logging.getLogger(__name__)
 
-SESSION_DIR = str(Path.home() / ".websearch" / "browser-session")
-LOCK_PATH = Path(SESSION_DIR).parent / "browser-session.lock"
+SESSION_DIR = str(Path.home() / ".websearch" / "browser-session-selflaunch")
+LOCK_PATH = Path(SESSION_DIR).parent / f"{Path(SESSION_DIR).name}.lock"
 
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
 
@@ -40,9 +42,28 @@ _focus_watchdog_task: asyncio.Task | None = None
 
 # FUNCTIONS
 
-def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
+def _find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
+async def _resolve_chromium_bundle_path() -> Path:
+    pw = await async_playwright().start()
+    try:
+        executable_path = pw.chromium.executable_path
+    finally:
+        await pw.stop()
+    bundle = _find_app_bundle(executable_path)
+    if bundle is None:
+        raise RuntimeError(f"No .app bundle found above patchright's resolved executable: {executable_path}")
+    return bundle
+
+
+def _open_background_process_creator(bundle_path: Path, command: list[str]) -> subprocess.Popen:
     args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    open_cmd = ["open", "-g", "-n", "-a", str(bundle_path), "--args", *args]
     return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -132,6 +153,7 @@ async def get_tab():
     global _browser, _lock_handle
     async with _init_lock:
         if _browser is None:
+            bundle_path = await _resolve_chromium_bundle_path()
             logger.info("Acquiring cross-process browser-session lock")
             _lock_handle = await asyncio.to_thread(
                 browser_lock.acquire, LOCK_PATH, LOCK_HARD_BUDGET_S, _reap_session_profile
@@ -144,7 +166,7 @@ async def get_tab():
                 options = build_options()
                 _browser = Chrome(options)
                 _browser._browser_process_manager = BrowserProcessManager(
-                    process_creator=_open_background_process_creator
+                    process_creator=functools.partial(_open_background_process_creator, bundle_path)
                 )
                 _browser._setup_user_dir()
                 binary_location = _browser.options.binary_location or _browser._get_default_binary_location()

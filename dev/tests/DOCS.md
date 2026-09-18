@@ -151,8 +151,12 @@ and cannot import `src/` itself (dev-script import boundary), so `_reset_state` 
 imported `browser` module as a parameter instead of importing it directly.
 **Called by:** `test_browser.py`, `test_browser_get_tab.py`.
 
-### test_browser.py (316 LOC)
-**Purpose:** `src/search/browser.py` — `_reap_session_profile`/`_record_own_pids`/
+### test_browser.py (338 LOC)
+**Purpose:** `src/search/browser.py` — `_find_app_bundle` (real function, no mocking, same
+walk-up-to-`.app` behavior as `chromium_process.py`'s own copy) and
+`_open_background_process_creator` (as of the M2 no-Spaces-drag milestone, 2026-09-17, asserts the
+built `open -g -n -a <bundle_path> --args ...` command targets the resolved bundle path passed in,
+not the literal `"Google Chrome"` string it used before); `_reap_session_profile`/`_record_own_pids`/
 `_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil mocked);
 `kill_own_chrome()`'s full teardown sequence, its no-op path when the browser was never touched, and the
 PID-safety-net-and-lock-release-still-run path when `close_browser()` itself raises (Chrome already
@@ -162,14 +166,21 @@ subprocess wrapping; `_focus_steal_watchdog_by_pid`'s three PID-membership branc
 reclaiming immediately when an owned pid is already frontmost on the very first loop iteration
 given a valid externally-supplied anchor (the regression guard for the anchor-race bug `test_browser_get_tab.py` covers).
 
-### test_browser_get_tab.py (111 LOC)
-**Purpose:** `src/search/browser.py`'s `get_tab()` — the critical-section ordering (lock -> reap ->
-anchor-capture -> launch -> record-own-pids -> spawn death_pipe watchdog -> spawn the PID-keyed
-focus-steal watchdog with that anchor, the exact sequence both the browser-lifecycle milestone's
-live parallel-run bug and the M1 focus-steal milestone's anchor-race bug depended on getting right)
-and that the watchdog receives `_owned_pids` with no `cleanup_dir` (the session profile is
-persistent, never deleted). As of the self-launch milestone (2026-09-15), also covers `get_tab()`'s
-self-launch sequence with `FakeChrome`/`FakeProcessManager` (no more `.start()`): `_setup_user_dir()`
+### test_browser_get_tab.py (126 LOC)
+**Purpose:** `src/search/browser.py`'s `get_tab()` — the critical-section ordering (as of the M2
+no-Spaces-drag milestone, 2026-09-17: resolve-bundle -> lock -> reap -> anchor-capture -> launch ->
+record-own-pids -> spawn death_pipe watchdog -> spawn the PID-keyed focus-steal watchdog with that
+anchor — bundle resolution added as the new FIRST step, deliberately outside/before the
+cross-process lock since it touches nothing under `SESSION_DIR`) and that the watchdog receives
+`_owned_pids` with no `cleanup_dir` (the session profile is persistent, never deleted).
+`_resolve_chromium_bundle_path` is mocked in every test that reaches it (`_fake_resolve_bundle`,
+module-level, returns a fixed fake `.app` path) — never called for real, same precedent as
+`chromium_scrape.py`'s own tests never calling its identical-shaped function for real either.
+`test_get_tab_self_launches_with_port_zero_and_forwards_arguments` also asserts the
+`functools.partial`-wrapped process creator actually carries the resolved bundle path through to
+`BrowserProcessManager` — the one line that makes the fix real rather than just resolving a path
+nothing downstream uses. Also covers `get_tab()`'s self-launch sequence with
+`FakeChrome`/`FakeProcessManager` (no more `.start()`): `_setup_user_dir()`
 called directly, `--remote-debugging-port=0` and the full `options.arguments` (including
 `--no-startup-window`) reaching `start_browser_process`, and the post-launch `_connection_port`/
 `_connection_handler` fixup once `_wait_for_devtools_port` resolves a port — `_wait_for_devtools_port`/
