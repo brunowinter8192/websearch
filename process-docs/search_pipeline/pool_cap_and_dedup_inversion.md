@@ -59,6 +59,15 @@ to one entry (min position wins) — "dedup within a single engine" was never in
 cross-engine reassignment was. `random.choice`/`import random` are gone; there is no more
 cross-engine tie to break, only a same-engine `min()`, which is deterministic.
 
+**Implementation trap in `merge.py`, worth keeping in mind for the next field added to
+`SearchResult`:** the fresh `SearchResult` built per pool entry names every field explicitly
+(`url, title, snippet, engine, position, engine_positions, date, pdf_url`) rather than copying the
+source object. A new `SearchResult` field added later (the way `date` and `pdf_url` were before
+this milestone) must be added to that explicit constructor call in `merge.py` too, or it silently
+drops on every entry that passes through `build_engine_pools` — this was already true before M2 and
+remains true after, unchanged by the dedup-inversion itself. This is DOCS.md's `merge.py` Purpose
+line detail that got cut down to one sentence per the 25-word rule; recorded here so it isn't lost.
+
 ### The gap found while implementing: `cache_write` was silently dropping `engine_positions`
 
 Before this milestone, `cache_write` (`cache.py`) serialized only
