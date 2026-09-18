@@ -108,3 +108,109 @@ area for the exact per-function counts rather than trusting this number to stay 
 
 See `dev/search_pipeline/` (this DOCS.md) for the resulting module list and
 `dev/access_recovery/` for the split precedent this one followed for shape (not content).
+
+# Splitting dev/search_pipeline/14_download_classify_probe.py by concern (2026-09-18)
+
+Same sweep, same rules, next unit in `dev/search_pipeline/`. This file was 605 LOC and mixed three
+concerns: building the URL pool from two source reports (glob-discover, extract, domain-tier,
+doi.org-sample, write `.txt` pool files), classifying each pooled URL over HTTP (Tier-1 transform,
+GET, content-type/PDF-magic/citation_pdf_url/paywall sniffing), and assembling the markdown report
+(one function per section already — that part was already well-shaped). An AST pass over every
+function in the file (same technique as the `branch_probe.py` split) confirmed only one function was
+at or over the 50-LOC threshold: `_classify_url` at 98 LOC. Every other function, including all six
+report `_section_*` builders, was already under 50.
+
+## Module boundary
+
+Three new siblings, named off the entry script's own base name with its numeric prefix dropped
+(`14_download_classify_probe.py` → `_download_classify_probe_*.py`), same naming rule as the
+`_altcha_trigger_probe_*.py` / `_branch_probe_*.py` precedents:
+
+- `_download_classify_probe_pool.py` (115 LOC) — `_latest_report`, `_extract_pool`,
+  `_has_real_path`, `_url_tier`, `_base_domain`, `_filter_and_tier`, `_apply_doi_sampling`,
+  `_write_pool_files`. Owns `TIER1_DOMAINS`…`TIER4_DOMAINS`, `RANDOM_SEED`, `DOI_SAMPLE_SIZE`.
+- `_download_classify_probe_classify.py` (235 LOC) — `_classify_all`, `_classify_with_cap`,
+  `_classify_url` (now 22 LOC) plus its four new extracted helpers (below), `_apply_transform`,
+  `_extract_title`. Owns `GLOBAL_MAX_CONNECTIONS`, `GLOBAL_MAX_KEEPALIVE`,
+  `DOMAIN_CONCURRENCY_CAP`, `DOMAIN_COURTESY_SLEEP`, `TIER1_TIMEOUT`, `DEFAULT_TIMEOUT`,
+  `HTML_READ_BYTES`, `PDF_SNIFF_BYTES`, `PAYWALL_MARKERS`.
+- `_download_classify_probe_report.py` (243 LOC) — `_write_report`, `_build_report`, and the six
+  `_section_*` builders, unchanged in shape (they were already one-function-per-section).
+
+`14_download_classify_probe.py` dropped to 56 LOC: docstring, imports, `SCRIPT_DIR`/`REPORT_DIR`/
+`DATA_DIR`/`SMOKE_REPORTS_GLOB`/`FREE_WORD_REPORTS_GLOB`, and `run_probe` itself — already
+orchestrator-shaped at 26 LOC before this split (it was already just a flat sequence of calls into
+what are now the three siblings) and untouched beyond the directory-argument additions described
+below. No orchestrator restructuring was needed here, unlike the `run_branch_probe` split, because
+`run_probe` never had an oversized-function problem to begin with.
+
+## Cutting `_classify_url` along its own stages
+
+The four seams inside `_classify_url` are behavioural stages, in strict sequence, each gating
+whether the next one runs: init record → dispatch on status code → read body → dispatch on
+content-type → (if HTML) parse title/citation_pdf_url/paywall and pick an outcome. That sequence
+survived the extraction unchanged:
+
+1. `_init_classify_record(original_url, transformed_url, tier)` — the dict literal, unchanged.
+2. `_classify_response(rec, resp)` — status/content-type capture, the `>= 400` early return, calls
+   `_read_response_body`, the PDF-magic check, dispatches to `_classify_html_body` for
+   `text/html`, falls through to `HTML_OK` for anything else. Same four branches, same order,
+   same early-return points as the original inline code — verified by running all six original
+   outcome branches (`HTTP_404`, `PDF_OK`, `HTML_HAS_PDF_LINK`, `HTML_PAYWALL`, `HTML_OK`,
+   non-PDF/non-HTML `HTML_OK`) through the split functions against a fake `httpx.Response`-shaped
+   object (no network), one `asyncio.run` per case — every case landed on the exact original
+   outcome string.
+3. `_read_response_body(resp)` — the single-pass accumulate-up-to-`HTML_READ_BYTES` loop, moved
+   verbatim including its original comment (`# Single-pass read: accumulate up to HTML_READ_BYTES;
+   check PDF magic on first bytes` — the PDF-magic check it refers to now lives one function up in
+   `_classify_response`, not literally beside it anymore, but the comment is still accurate context
+   for why the read is capped, so it was left as-is rather than treated as the one-exception case).
+4. `_classify_html_body(rec, body)` — decode, `_extract_title`, the two-variant citation_pdf_url
+   regex, the paywall-marker loop, the outcome trichotomy (`HTML_HAS_PDF_LINK` /
+   `HTML_PAYWALL` / `HTML_OK`). Same order as original.
+
+`_classify_url` itself is now just: compute `transformed_url`/`fetch_url`/`timeout`, call
+`_init_classify_record`, `try`/`await _classify_response(rec, resp)`/`except` (the four `except`
+clauses — `TimeoutException`, `ConnectError`, `RequestError`, bare `Exception` — untouched, same
+order) — 22 LOC.
+
+## Two pieces of pre-existing dead code, moved as-is (per the standing discipline from the
+`branch_probe.py` split)
+
+- `PDF_SNIFF_BYTES = 1024` was already declared and never referenced anywhere in the 605-LOC
+  original. It moved into `_download_classify_probe_classify.py` (the thematically nearest module —
+  it sits beside `HTML_READ_BYTES`, the constant that actually does the sniff-size job) unchanged
+  and unused. Not this split's job to decide whether it should exist.
+- `parse_qs` and `urlencode` were imported from `urllib.parse` in the original and never used
+  anywhere in the file either — also pre-existing, also dead. They moved into
+  `_download_classify_probe_classify.py`'s import line (alongside `urlparse`/`urlunparse`, which
+  *are* used there) for the same reason: nearest thematic home, untouched, unused. Flagging this
+  explicitly so a later reader doesn't mistake either the constant or these two imports for
+  something this split introduced or overlooked — both predate it.
+
+There is also a pre-existing dead local, `total_doi_in_pool` in `_section_metadata` (computed,
+never read before the `return`) — moved unchanged into `_download_classify_probe_report.py` for the
+same reason.
+
+## Verification
+
+All four modules import cleanly standalone (`python3 -c "import <module>"` from inside
+`dev/search_pipeline/`). No CLI flags exist on this entry script (no `argparse`), so there is no
+`--help` surface to diff — the `if __name__ == "__main__": asyncio.run(run_probe())` block is
+untouched, confirmed by diff. `git diff` against the original reviewed concern by concern: every
+relocated block is line-for-line identical apart from indentation and the new directory-argument
+parameters (`report_dir` added to `_latest_report`/`_write_report`, `data_dir` added to
+`_write_pool_files` — same "pass the directory in" treatment as `REPORT_DIR`/`FINDINGS_DIR` got in
+the `branch_probe.py` split, for the same reason: the constant's owning module moved out from under
+the functions that used to read it as a bare global). `./venv/bin/python3 -m pytest dev/tests/`:
+431 passed before (via `git stash`) and 431 passed after — unchanged, no test exercises this dev
+probe. A synthetic end-to-end run (fixture `pipeline_smoke_*.md` / `free_word_injection_probe_*.md`
+files under a scratch `dev/search_pipeline/debug/` dir, deleted afterward) drove
+`_latest_report` → `_extract_pool` → `_filter_and_tier` → `_apply_doi_sampling` →
+`_write_pool_files` → (faked classify results, no network) → `_write_report` through the real
+cross-module call chain and produced a correctly tiered pool (arxiv.org `/abs/` URL → T1,
+dl.acm.org → T4, root-domain-only URL correctly dropped by `_has_real_path`) and a report with the
+expected Section 1 table. Every function across all four files is ≤41 LOC
+(`_section_tier1_transforms`, unchanged from the original, was already the largest report section).
+
+See `dev/search_pipeline/` (this DOCS.md) for the resulting module list.
