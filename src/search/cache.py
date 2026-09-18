@@ -45,12 +45,13 @@ def cache_write(
     for engine_name, pool in pools.items():
         serialized_pools[engine_name] = [
             {
-                "url":      r.url,
-                "title":    r.title,
-                "snippet":  r.snippet,
-                "position": r.position,
-                "date":     r.date,
-                "pdf_url":  r.pdf_url,
+                "url":              r.url,
+                "title":            r.title,
+                "snippet":          r.snippet,
+                "position":         r.position,
+                "date":             r.date,
+                "pdf_url":          r.pdf_url,
+                "engine_positions": r.engine_positions,
             }
             for r in pool
         ]
