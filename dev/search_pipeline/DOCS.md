@@ -221,6 +221,46 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** `altcha_trigger_probe.py`.
 **Calls out:** none beyond stdlib.
 
+### _branch_probe_analysis.py (107 LOC)
+
+**Purpose:** Per-query analysis for `branch_probe.py` — query loading, per-engine limiter snapshots, event-to-detail reduction, branch discriminator classification, smoke-mode diagnostic dump.
+**Reads:** `queries.txt` path passed in; `_limiters` dict via `_branch_probe_instrument._rl_mod`.
+**Writes:** stderr only (`_dump_smoke`, smoke mode).
+**Called by:** `branch_probe.py`.
+**Calls out:** `_branch_probe_instrument.py` (sibling, `_rl_mod`).
+
+### _branch_probe_canary.py (76 LOC)
+
+**Purpose:** Pattern B scheduling-latency canary for `branch_probe.py` — background sampling task, per-category percentile stats.
+**Reads:** nothing (owns its own `_canary_samples` state).
+**Writes:** nothing (returns stats dicts).
+**Called by:** `branch_probe.py`, `_branch_probe_report.py`, `_branch_probe_findings.py`.
+**Calls out:** none beyond stdlib.
+
+### _branch_probe_findings.py (221 LOC)
+
+**Purpose:** Narrative findings-doc assembly for `branch_probe.py` — fixed-path investigation writeup (hypothesis, instrumentation, verdict, next steps) at a stable filename overwritten each run.
+**Reads:** nothing — takes the run's records and the sibling report's path as arguments.
+**Writes:** `md/03_branch_probe.md` (path built from the `findings_dir` argument).
+**Called by:** `branch_probe.py`.
+**Calls out:** `_branch_probe_canary.py`, `_branch_probe_report.py` (siblings, `_canary_stats`/`_overall_verdict`).
+
+### _branch_probe_instrument.py (68 LOC)
+
+**Purpose:** `RateLimiter.acquire()` monkeypatch for `branch_probe.py` — full byte-identical replacement plus branch-discriminator event emission, installed at import time.
+**Reads:** nothing (patches `src.search.rate_limiter.RateLimiter` at module import).
+**Writes:** nothing directly — appends to its own `_acq_events`/`_pre_snapshots` lists as a side effect of the patched `acquire()`.
+**Called by:** `branch_probe.py`, `_branch_probe_analysis.py`, `_branch_probe_report.py` (siblings).
+**Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`, before any other `src.search` import).
+
+### _branch_probe_report.py (207 LOC)
+
+**Purpose:** Timestamped markdown report assembly for `branch_probe.py` — one section-builder helper per report section, plus the shared overall-verdict classifier.
+**Reads:** nothing — takes the run's records and paths as arguments.
+**Writes:** `md/branch_probe_<ts>.md` (path built from the `report_dir` argument).
+**Called by:** `branch_probe.py`, `_branch_probe_findings.py` (`_overall_verdict`).
+**Calls out:** `_branch_probe_canary.py` (sibling, `_canary_stats`), `_branch_probe_instrument.py` (sibling, `_acq_events`).
+
 ### _capture_sorry.py (233 LOC)
 
 **Purpose:** Captures Google `/sorry/` block page — helper script, not a numbered experiment. Navigates to a search URL, checks if redirected to `/sorry/`, saves HTML + screenshot + MD summary.
@@ -285,13 +325,13 @@ Smoke tests, selector-drift probes, ranking-method eval harness, and bee-investi
 **Called by:** CLI + imported by `bm25_compare_smoke.py`, `bm25_idf_engine_smoke.py`, `bm25_capped_smoke.py`, `pooling_probe.py`, `rerank_probe_smoke.py`, `single_query_pool_dump.py`, `stage1_pool_fetch.py`, `stage3_method_run.py`, `stage3_method_run_v3.py`, `value_eval_probe.py`.
 **Calls out:** `rank_bm25` (BM25Okapi).
 
-### branch_probe.py (704 LOC)
+### branch_probe.py (196 LOC)
 
-**Purpose:** Phase 3 bee investigation — sleep-branch discriminator. Distinguishes which of the two `asyncio.sleep` branches inside `RateLimiter.acquire()` fires during zero-cascade queries: `backoff_sleep_attempt` vs `tokencap_sleep_attempt`. Full replacement of `RateLimiter.acquire()` (byte-identical body + branch-discriminator event-emits) installed via monkeypatch before any `src.search` import. Structural discriminator: 6 engines have `.backoff()` calls (google, google_scholar, lobsters, mojeek, duckduckgo, semantic_scholar), 4 do not (crossref, openalex, stack_exchange, open_library). Query category renamed `"captcha"` → `"empty"` (same reason as `acquire_probe.py` above).
+**Purpose:** Phase 3 bee investigation — sleep-branch discriminator entry point. Distinguishes which of the two `asyncio.sleep` branches inside `RateLimiter.acquire()` fires during zero-cascade queries: `backoff_sleep_attempt` vs `tokencap_sleep_attempt`. Structural discriminator: 6 engines have `.backoff()` calls (google, google_scholar, lobsters, mojeek, duckduckgo, semantic_scholar), 4 do not (crossref, openalex, stack_exchange, open_library). Query category renamed `"captcha"` → `"empty"` (same reason as `acquire_probe.py` above). Monkeypatch, canary, analysis, and report/findings assembly are split into `_branch_probe_*.py` siblings (own entries above).
 **Reads:** none (live instrumented run).
-**Writes:** `md/branch_probe_<ts>.md` (full run only).
+**Writes:** `md/branch_probe_<ts>.md` and `md/03_branch_probe.md` (full run only, via the sibling report/findings modules).
 **Called by:** CLI only. Flags: `--max-queries N`, `--smoke` (4-query dry-run, no report).
-**Calls out:** `src.search.rate_limiter` (monkeypatched via `importlib`), full engine set via production search path.
+**Calls out:** `src.search.browser`, `src.search.search_web` (both monkeypatch-order-sensitive, imported via `importlib` after `_branch_probe_instrument.py`), `_branch_probe_instrument.py`, `_branch_probe_canary.py`, `_branch_probe_analysis.py`, `_branch_probe_report.py`, `_branch_probe_findings.py` (siblings).
 
 ### cdp_starvation_probe.py (581 LOC)
 
