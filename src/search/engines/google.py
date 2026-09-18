@@ -4,6 +4,8 @@ import json
 import logging
 from urllib.parse import quote_plus, urlparse, parse_qs
 
+from curl_cffi.requests import AsyncSession
+from curl_cffi.requests.exceptions import RequestException
 from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
 
@@ -23,6 +25,7 @@ WAIT_INTERVAL = 0.2
 SOCS_NAME = "SOCS"
 SOCS_VALUE = "CAISHAgCEhJnd3NfMjAyNjA0MDctMCAgIBgEIAEaBgiA_fC8Bg"
 SOCS_DOMAIN = ".google.com"
+GOTO_RESOLVE_TIMEOUT_S = 1.5
 
 _JS_WAIT = "return document.querySelectorAll('div.MjjYud').length"
 
@@ -37,17 +40,28 @@ for (var _i = 0; _i < _cs.length; _i++) {
     var _lc = _c.querySelector('.LC20lb');
     if (_h3) {
         _title = _h3.textContent.trim();
-        _a = _h3.closest('a[href^="http"]') || _h3.parentElement.querySelector('a[href^="http"]');
+        _a = _h3.closest('a[href^="/goto?url="]') || _h3.parentElement.querySelector('a[href^="/goto?url="]');
     }
     if (!_a && _lc) {
         if (!_title) { _title = _lc.textContent.trim(); }
-        _a = _lc.closest('a[href^="http"]') || _lc.parentElement.querySelector('a[href^="http"]');
+        _a = _lc.closest('a[href^="/goto?url="]') || _lc.parentElement.querySelector('a[href^="/goto?url="]');
     }
-    if (!_a) { _a = _c.querySelector('a[href^="http"]'); }
+    if (!_a) { _a = _c.querySelector('a[href^="/goto?url="]'); }
     if (!_title && _a) { _title = _a.textContent.trim(); }
     if (!_a || !_title) continue;
-    var _snip = _c.querySelector('.wHYlTd') || _c.querySelector('.VwiC3b') || _c.querySelector('[data-sncf]') || _c.querySelector('.lEBKkf');
-    _out.push({url: _a.href, title: _title, snippet: _snip ? _snip.textContent.trim() : ''});
+    var _snip = _c.querySelector('.VwiC3b') || _c.querySelector('[data-sncf]') || _c.querySelector('.lEBKkf');
+    var _date = null;
+    var _snipText = '';
+    if (_snip) {
+        var _dateEl = _snip.querySelector('.YrbPuc');
+        if (_dateEl) {
+            _date = _dateEl.textContent.replace(/[\\s\\u2014-]+$/, '').trim();
+            _snipText = _snip.textContent.replace(_dateEl.textContent, '').trim();
+        } else {
+            _snipText = _snip.textContent.trim();
+        }
+    }
+    _out.push({url: _a.href, title: _title, snippet: _snipText, date: _date});
 }
 return JSON.stringify(_out);
 """
@@ -101,6 +115,8 @@ class GoogleEngine(BaseEngine):
                 logger.debug("Google empty for: %s", query)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
+            if results:
+                results = await _resolve_urls(results)
             if results:
                 return results, None, attach_document_status({}, status_chain)
             diag = await _diagnose(tab)
@@ -156,22 +172,16 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    if "/url?" in href:
-        parsed = urlparse(href)
-        qs = parse_qs(parsed.query)
-        return qs.get("q", [href])[0]
-    return href
-
-
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
     if not value:
         return []
     items = json.loads(value)
+    return _build_results(items, max_results)
+
+
+def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     results = []
     for i, item in enumerate(items[:max_results]):
         url = _clean_url(item.get("url", ""))
@@ -183,8 +193,58 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
             snippet=item.get("snippet", ""),
             engine="google",
             position=i + 1,
+            date=item.get("date"),
         ))
     return results
+
+
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    if "/url?" in href:
+        parsed = urlparse(href)
+        qs = parse_qs(parsed.query)
+        return qs.get("q", [href])[0]
+    return href
+
+
+async def _resolve_urls(results: list[SearchResult]) -> list[SearchResult]:
+    async with AsyncSession(impersonate="chrome") as session:
+        resolved = await asyncio.gather(*[_resolve_one(session, r) for r in results])
+    seen: set[str] = set()
+    deduped = []
+    for r in resolved:
+        if r is None or r.url in seen:
+            continue
+        seen.add(r.url)
+        deduped.append(r)
+    for i, r in enumerate(deduped):
+        r.position = i + 1
+    return deduped
+
+
+async def _resolve_one(session: AsyncSession, result: SearchResult) -> SearchResult | None:
+    try:
+        resp = await session.get(
+            result.url, allow_redirects=False, timeout=GOTO_RESOLVE_TIMEOUT_S,
+        )
+    except RequestException as e:
+        logger.debug("Google goto resolution failed for %s: %s", result.url, e)
+        return None
+    if resp.status_code != 302:
+        return None
+    location = resp.headers.get("location")
+    if not location or not _is_absolute_http_url(location):
+        return None
+    return SearchResult(
+        url=location, title=result.title, snippet=result.snippet,
+        engine="google", position=result.position, date=result.date,
+    )
+
+
+def _is_absolute_http_url(location: str) -> bool:
+    parsed = urlparse(location)
+    return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
 async def _diagnose(tab) -> dict:

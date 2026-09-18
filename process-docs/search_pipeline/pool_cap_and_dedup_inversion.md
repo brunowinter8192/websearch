@@ -176,3 +176,225 @@ for "guided by the hit counts" — the exact instruction the skill currently giv
 choosing which engine to drill. This is a direct, foreseeable consequence of M1+M2 as specified, not
 a bug in either; flagging by name so the next person who notices "drilldown selection feels
 arbitrary now" doesn't have to re-derive why.
+
+---
+
+# Google goto-redirect fix + snippet-selector fix (2026-09-19, same session)
+
+Same area, same session, unrelated milestone from the two above — Google was returning zero
+results in 127 of 132 logged searches, and the M1/M2 pool-cap and dedup-inversion work above did
+not touch it (explicitly out of scope for that milestone). This entry covers why, and the fix.
+Google engine internals were the ONLY thing in scope here; the pool cap and `merge.py` were
+explicitly not touched, per instruction, and were not touched.
+
+## Why Google returns zero — measured, not guessed
+
+A live probe (`dev/access_recovery/01_google_dom_probe.py`, 20 real navigations, 15s-paced to
+match the production rate limiter) found 2 OK, 18 EMPTY_PARSED, 0 blocked, 0 errors. The page
+loads fine, `div.MjjYud` containers are found, but the JS parse's anchor selector
+(`a[href^="http"]`) matches nothing — Google no longer puts the destination in the href. A real
+organic result anchor, verbatim from saved HTML:
+
+```html
+<a jsname="UWckNb" class="zReHs" href="/goto?url=CAES3QEB6zswFaZLUN_Z...">
+  <h3 class="LC20lb MBeuO DKV0Md">The Best ANC Headphones to Buy in 2025</h3>
+```
+
+The href is now a same-origin `/goto?url=<opaque blob>` redirector. The blob decodes as base64url
+to 226 bytes of protobuf-shaped data; the bytes `http` do not occur in it — the destination is not
+recoverable from the page at all, by design or accident, doesn't matter, it just isn't there.
+
+## What makes the fix possible — also measured, not guessed
+
+Three real `/goto?url=` links, fetched with `curl_cffi impersonate="chrome"`,
+`allow_redirects=False`, roughly an hour after the page that contained them was saved, from a
+session that no longer existed: all three came back `302`, `Location` header carrying the real
+destination, no body. Two of the three were different blobs resolving to the identical page —
+confirming duplicates are possible and must collapse, which is why `_resolve_urls` dedups by
+resolved URL, not by blob.
+
+**A second, follow-up measurement, done live during this milestone (not by me — supplied
+directly), replaces what would otherwise have been a guessed timeout value:** all 8 organic
+`/goto` links from the SAME saved page, resolved concurrently, exactly the shape `_resolve_urls`
+now uses: 8 of 8 returned 302 with an absolute `https` `Location`. Individually 110–125 ms,
+median 116 ms. All eight together, wall clock: **128 ms**. `GOTO_RESOLVE_TIMEOUT_S = 1.5` in
+`google.py` is therefore roughly **10x** the measured concurrent-resolution wall time, not a
+guess — this is the number the design conversation's earlier arithmetic (below) was missing before
+this measurement existed.
+
+## Watchdog budget — the arithmetic, now grounded
+
+`search_web.py`'s `ENGINE_WATCHDOG_TIMEOUT = 6.0`, uniform across all 8 engines, no per-engine
+override (the `ENGINE_WATCHDOG_OVERRIDE` table an older snapshot of `search_pipeline.md` describes
+is gone from the actual code — confirmed by grep before relying on it). Google's redirect
+resolution shares this same 6.0s with navigation, consent-handling, wait-for-results and parsing;
+it does not get its own separate budget.
+
+From the DOM probe's real per-navigation elapsed times: most runs 552 ms–1362 ms, two outliers at
+4423 ms and 6147 ms (the latter already exceeds the 6.0s watchdog on navigation alone, before any
+resolution work is added — that case was already going to time out before this milestone, and
+still will; this fix does not make it worse). Typical-case slack after nav+parse: roughly
+4.5–5.4s. Against that, and against the 128ms-wall/1.5s-cutoff ratio above, `GOTO_RESOLVE_TIMEOUT_S
+= 1.5` has comfortable headroom in the common case and still fits (barely) in the 4423ms-outlier
+case (4423 + 1500 = 5923ms, under 6000ms).
+
+**Hard requirement carried into the tests: no test may depend on this value in any way.** All
+`_resolve_urls` tests run against the real loopback fixture and must pass identically whether the
+cutoff is 1.5s or 15s — none of them simulate a hanging endpoint or assert on timing. The number
+lives in exactly one place (`GOTO_RESOLVE_TIMEOUT_S`, `google.py` INFRASTRUCTURE) and nothing in
+`dev/tests/test_google_engine.py` reads or reproduces it.
+
+## The "no timeouts" rule — what it means here, confirmed before implementing
+
+The owner's rule ("no timeouts, no waiting, no backoff, no retry loops") was confirmed to target
+the wait-and-retry-until-the-block-clears machinery a prior Google backoff implementation used
+(466 seconds of wall time burned for zero benefit, deliberately removed) — NOT a single bounded
+network-call attempt with a hard cutoff and no retry. `GOTO_RESOLVE_TIMEOUT_S` on each of the 8
+concurrent `_resolve_one` calls is exactly that shape, the same one `tab.go_to(timeout=3.0)`
+already uses everywhere in this codebase, including elsewhere in this same file. No second rate
+limiter was added for the 8 concurrent sub-requests either — confirmed out of scope; the existing
+per-engine `4/60s` limiter already governs how often `search_with_reason` itself runs, not what it
+does internally once running.
+
+## curl_cffi over httpx
+
+`httpx` has no TLS/JA3 impersonation. The only thing actually proven against this real,
+bot-defended `/goto` endpoint was `curl_cffi impersonate="chrome"` — `httpx` was never tested
+against it at all. `curl_cffi` is an existing project dependency with one production precedent
+(`src/news/engine/proxy_pool/fetch.py`, sync `Session(impersonate="chrome")`, `timeout=` kwarg —
+confirms a single bounded attempt is already this project's house style for this exact client) and
+several dev precedents (`AsyncSession`, used concurrently in
+`dev/news_pipeline/theblock/probe_liveness.py`). Match what was proven against a bot-defended
+surface, don't gamble on an untested client — the same reasoning the owner confirmed.
+
+## Two bugs, not one — kept separate deliberately
+
+**Bug 1 (the one the brief described): the href selector.** `a[href^="http"]` matches nothing
+against `/goto?url=...` (relative, not absolute-looking as a literal attribute string, regardless
+of what the resolved `.href` DOM property would later show). Fixed: `a[href^="/goto?url="]`,
+still matched by href SHAPE rather than by Google's own volatile per-request class/jsname hashes,
+same philosophy the original selector already used. Cross-validated independently: on the saved
+page, `a[jsname="UWckNb"][class="zReHs"]` matches exactly the same 8 anchors, no ads or widgets
+among them — supplied as a second, independent confirmation, not used as the actual selector
+(jsname/class values are Google's own internal identifiers, more likely to churn across
+deployments than the `/goto?url=` href shape).
+
+**Bug 2 (found independently, during this milestone, by reading the real saved HTML rather than
+trusting the existing selector list): the snippet selector.** The pre-existing fallback chain
+tried `.wHYlTd` FIRST. Measured against all 8 organic containers on the real saved page,
+`.wHYlTd` is present in every one of them — and it is not a snippet element at all, it is the
+outer wrapper for the ENTIRE result block (title + cite + snippet, and on the page's first result
+also a "Web results" section heading), an ANCESTOR of the real snippet element `.VwiC3b`. This
+means the CURRENT (pre-fix) code has been returning a garbled composite as "snippet" for every
+single Google result, independent of and unrelated to the href bug — the href bug meant no results
+came back at all, so this second bug's damage has been fully masked until the href bug is fixed.
+Fixed by dropping `.wHYlTd` from the selector priority list entirely and promoting `.VwiC3b`
+(confirmed present and correct in all 8 organic containers); `[data-sncf]`/`.lEBKkf` kept as
+defensive fallbacks, no counter-evidence found against either. Regression-guarded by
+`test_js_parse_no_longer_prioritizes_wHYlTd_as_snippet_selector` in
+`dev/tests/test_google_engine.py` — a source-string check, not a runtime check, since the JS
+itself cannot run in this suite (see below); asserts `.wHYlTd` is absent and `.VwiC3b` is present
+in the `_JS_PARSE` constant.
+
+Recorded as two separate bugs, not folded into one narrative, so a future reader can tell which
+measurement supports which fix.
+
+## Date extraction — new, evidence-derived
+
+The brief asked for title/snippet/date/href. The date lives in `span.YrbPuc` inside the snippet
+block (`<span class="YrbPuc"><span>21 Nov 2025</span> — </span>`), present in 6 of 8 organic
+containers on the saved page, absent in 2 (no fallback needed, `null` is a legitimate value,
+`SearchResult.date` already treats it that way for API engines). The new JS extracts it
+separately AND excludes its text from the computed `snippet` string (string-replace of the
+date element's own textContent out of the snippet container's full textContent) — this was a
+deliberate design choice, not required by the brief in so many words, but a direct and cheap
+consequence of adding a structured date field: it also happens to fix a pre-existing gap where
+`snippet.py`'s `_strip_bloat` only ever stripped ABSOLUTE-format date prefixes
+(`r'\d{1,2} \w{3,9} \d{4} — '`) and never touched relative ones ("7 days ago — ", present in 2 of
+the 8 containers) — those would have kept leaking into the rendered snippet forever if the date
+had stayed embedded in the snippet string instead of being extracted and removed at the source.
+
+## Position renumbering after drop/dedup — 1..N, sequential, no gaps
+
+`merge.py`'s cross-engine dedup deliberately leaves position gaps (a URL another engine owns is
+just absent, not renumbered around) — documented, deliberate, and left untouched by this
+milestone. `_resolve_urls`'s within-engine drop-and-dedup is different in kind: it is entirely
+internal to one engine's own pool, there is no "another engine owns position 3" concept here, a
+gap would just look like an unexplained skip in that one engine's own drilldown numbering. Survivors
+are renumbered 1..N in resolution order after dropping failures and collapsing duplicates.
+Confirmed with the owner as the right call before implementing, given the actual reason (engine-
+internal sequence vs. merge.py's deliberate cross-engine gaps are different problems with different
+right answers) rather than either copying or contradicting `merge.py`'s own choice by reflex.
+
+## Fresh SearchResult, no mutation
+
+`_resolve_one` builds a new `SearchResult` with the resolved URL rather than mutating the parsed
+one in place — matches `merge.py`'s own explicit-field-construction style (see the dedup-inversion
+section above), confirmed as the preferred style before implementing.
+
+## `_clean_url` — now a dead no-op, left in place
+
+`_clean_url`'s `"/url?" in href` branch targeted the OLD Google redirect format (`/url?q=...`).
+Zero occurrences of that format found anywhere in the real saved HTML — today's markup is
+entirely `/goto?url=...`, and that string does not contain the substring `/url?` (the `?` in
+`goto?url=` is not preceded by a `/`), so the branch never fires against current real results; it
+silently passes the goto URL through unchanged, which is exactly the input `_resolve_urls` needs.
+Left in place, unmodified — removing it isn't required for the fix and wasn't asked for. Noted
+here explicitly so a future reader doesn't mistake it for live, exercised behavior; it is not.
+
+## Fixture design — deviation from `_fixture_site.py`, and why
+
+`dev/search_pipeline/_google_fixture.py` follows `_fixture_site.py`'s primitives
+(`http.server.ThreadingHTTPServer`, OS-assigned port via `port=0`, daemon thread, `start_/stop_
+fixture_server` naming) but NOT its one-module-scoped-server-plus-`/_control/*`-mutation shape.
+`_fixture_site.py`'s tests all probe different FEEDERS against the SAME fixed site; this
+milestone's four required test scenarios (8 happy results, 3 unhappy `/goto` cases mixed with
+happy ones, a duplicate-destination pair, zero results) each need genuinely different served
+content, so `start_fixture_server(specs, ...)` takes the result specs as a parameter and each test
+starts and stops its own short-lived server — confirmed as the right adaptation before
+implementing (test-local content, not shared fixed content, is the actual shape of this
+milestone's tests).
+
+The results page is GENERATED, not a trimmed copy of the real 816 KB saved page (same choice
+`_fixture_site.py` itself makes, same reason: the statement drives the page). Kept, verbatim from
+the real page's structure: the full element chain and class names from `div.MjjYud` down to
+`a.zReHs[jsname=UWckNb][href^="/goto?url="] > h3.LC20lb`, and the sibling snippet block
+`div.VwiC3b` with its `span.YrbPuc` date span and trailing `a.vzmbzf` "Read more" link. Dropped:
+base64 inline `<img>` data URIs, the multi-KB inline `<script>`/`<style>` blocks, and Google's own
+chrome (login/policy/footer links, People Also Ask, ads, related searches, sitelinks) — none of it
+is read by `google.py`'s parse JS before or after this fix.
+
+`/goto?url=<token>` values are short semantic tokens (`"ok1"`, `"dup_a"`/`"dup_b"`,
+`"bad_status"`, `"no_location"`, `"bad_location"`), not realistic-looking base64 blobs — the real
+blob's bytes carry no recoverable meaning (see above), so an opaque readable token is equally
+faithful to what actually matters (a per-result opaque identifier) while being far easier to read
+in a test failure. Confirmed as the right call before implementing.
+
+## No browser in tests — confirmed reading, matches project precedent
+
+`conftest.py`'s autouse `_no_real_browser_launch` fixture traps any real `browser.Chrome` launch
+project-wide, not scoped to real Google specifically — its own docstring states this is
+deliberate. No engine in this codebase tests its own DOM-parsing JS (`test_yandex_engine.py`,
+`test_startpage_engine.py`, etc. all test only the Python-side `_build_results`, fed literal item
+dicts). This milestone follows the same split: `_build_results` tested with item dicts derived
+directly from the real saved HTML (no browser, no network), `_resolve_urls` tested against the
+real, running local fixture server (real local HTTP, real network I/O, but loopback-only and
+instant). The `.wHYlTd` fix, living entirely inside the JS string, gets a source-level regression
+guard instead of a runtime test, for the same reason. Confirmed correct before implementing — do
+not try to work around conftest's trap.
+
+## Suite count
+
+405 before the two search-pipeline milestones above touched anything, 421 after M1+M2 in this
+same file's first section, then unchanged going into this milestone. This milestone: 421 before,
+**431 after** (+10: 4 on `_build_results`, 1 source-level `.wHYlTd` regression guard, 5 on
+`_resolve_urls` against the real fixture server — 8-happy, 3-unhappy-mixed, duplicate-collapse,
+all-fail-clean-empty, empty-input-clean-noop).
+
+## Verification — the orchestrator's own step, not run here
+
+Not run as part of this milestone, deliberately — no live browser, no request to real Google, per
+instruction. The orchestrator's own verification: run a real `search_web` for a query, then
+`search_engine_drilldown --engine google`, and confirm URLs come back where the breakdown
+previously showed 0 for `google` in 127 of 132 logged searches out of the `src/logs/query_log.jsonl`
+sample this whole investigation was measured against.
