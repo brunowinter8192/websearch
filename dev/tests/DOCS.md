@@ -61,18 +61,13 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
 ### test_brave_engine.py (235 LOC)
-**Purpose:** `src/search/engines/brave.py` — `_build_results` (pure, no network/browser).
-`_classify_diagnosis` (PoW/CAPTCHA) coverage removed with the function itself (the
-guessed-verdict-removal milestone). Also carries three fixture-driven regression tests for the
-marker-reflection fix (`process-docs/marker_reflection/`) — a real headless pydoll Chrome against
-a local `http.server.ThreadingHTTPServer` loopback fixture, since the bug and its fix both live
-inside `_JS_POLL`/`_JS_PARSE`/`_JS_DIAGNOSE`'s real DOM behaviour, which a pure-Python fixture
-cannot exercise: a results page whose title/body contains a block-marker word because the user's
-own query put it there, one where an unrelated organic snippet does, and a genuine `pow_link`
-block — the last one asserted against the real `MAX_WAIT_CYCLES=20`/`WAIT_INTERVAL=0.3` module
-constants (not monkeypatched) with an `elapsed < 1.0` bound through the same
-`asyncio.wait_for(6.0)` shape `_engine_with_timing` uses, regression-guarding the early-exit fix
-that keeps a genuine block inside the 6.0s engine watchdog.
+**Purpose:** `src/search/engines/brave.py` — `_build_results`, plus three fixture-driven regression
+tests for the marker-reflection fix. `_classify_diagnosis` coverage removed with the function
+itself (the guessed-verdict-removal milestone). The regression tests run a real headless pydoll
+Chrome against a loopback fixture server, because the defect and its fix both live in the engine's
+injected JS reading real DOM state. One of them bounds how long a genuine block may take against
+the engine watchdog; the values are in the test and in `src/search/engines/DOCS.md`. See
+`process-docs/marker_reflection/` for why.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
 `src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires.
@@ -124,16 +119,12 @@ challenge) coverage removed with the function itself (the guessed-verdict-remova
 ### test_yandex_engine.py (244 LOC)
 **Purpose:** `src/search/engines/yandex.py` — `_is_self_referential`, `_is_block_url` (kept: also
 the early short-circuit optimization inside `search_with_reason`, independent of the removed
-verdict; as of the marker-reflection fix scoped to `urlparse(url).path` only, covered here by
-`test_is_block_url_false_when_marker_word_only_in_query_string`/
-`test_is_block_url_true_for_real_captcha_path_regardless_of_query_string`), `_build_results`
-(self-link filtering). `_classify_diagnosis` coverage removed with the function itself (the
-guessed-verdict-removal milestone). Also carries two fixture-driven regression tests for the same
-marker-reflection fix (`process-docs/marker_reflection/`), same real-headless-pydoll-Chrome +
-local loopback fixture server shape as `test_brave_engine.py`: a results page reached via a URL
-whose `?text=` query string contains a block marker (the engine's own un-redirected search URL,
-proving the fix no longer trips on it) and a genuine `/showcaptcha` redirect (proving the path
-scope still catches a real one).
+verdict; scoped to the URL path only as of the marker-reflection fix, covered here by two pure
+cases), `_build_results` (self-link filtering). `_classify_diagnosis` coverage removed with the
+function itself (the guessed-verdict-removal milestone). Also carries two fixture-driven
+regression tests for the same fix, in the same real-browser shape as `test_brave_engine.py`: an
+ordinary results URL whose query string carries a block marker, and a genuine captcha redirect.
+See `process-docs/marker_reflection/`.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 same trap-dodge mechanism as `test_brave_engine.py` (monkeypatches `yandex.py`'s own `new_tab`/
 `kill_tab` names, never `src.search.browser.Chrome`).
