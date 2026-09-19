@@ -172,6 +172,16 @@ query too (no second burst was fired), so this is not a clean "never challenged"
 instead, a second independent confirmation that the click-and-recover path works reliably across
 different query text while the window is open, not a one-off.
 
+**Observation, not a conclusion:** the live solve above took `search_ms: 4718` end to end against
+the 6.0s watchdog. The earlier probe measured 3012ms for its one challenged query, cumulative from
+navigation start. Both numbers are real, measured on different pages, different network conditions,
+and different moments — the live run's page also carried a real 429 first (`document_status_chain:
+[429, 200]`, two documents, not one), while the probe's challenge page loaded directly. The 1706ms
+spread between them is most of the remaining headroom against the watchdog (6000 - 4718 = 1282ms
+left). Nothing here explains WHY the two differ, and nothing should be inferred about a typical or
+worst-case solve time from n=2. Flagging the spread rather than picking one of the two numbers as
+"the" solve time, or averaging them into a false precision.
+
 No second curl burst was fired to also capture a clean "ordinary, never-challenged" live record —
 the offline fixture (`test_real_no_challenge_fixture_never_attempts_a_click`) and the untouched
 code path (an ordinary success never sees `pow_link` true, so this fix's new branch is structurally
