@@ -91,7 +91,7 @@ Resolve the Chromium bundle production launches -> launch Chrome on a dedicated 
 `fixtures/` holds six static pages driving the offline checks: a results page with no challenge, a button challenge that succeeds in the light DOM, the same one hosted in a shadow root, one that stalls, one that ends in a refusal, and a 429 pow-link page with no clickable element. Reports go to `md/`, named after the script that wrote them. Chrome profiles are temporary directories created and deleted per run — production's profile at `~/.websearch/browser-session` is never touched.
 
 ## Gotchas
-The live run of 2026-09-18 met zero challenges across fourteen navigations and four separate fresh profiles, so every live question in its report is unanswered. Read that report as a record of the method, not of Brave's behaviour. The area's own process-docs carry why the run was blind.
+The live run of 2026-09-18 met zero challenges across fourteen navigations and four separate fresh profiles, so every live question in its report is unanswered. Read that report as a record of the method, not of Brave's behaviour. The production query log later showed why: Brave challenges on the content of the search term, and this probe's hardcoded query lists are all ordinary technical questions. Changing the query lists is the lever; the pacing, the profile handling and the phase structure are not. The area's own process-docs carry the evidence.
 
 Cookies must be read browser-wide via `Storage.getCookies`. `Tab.get_cookies()` is scoped to whatever the tab currently shows and reads empty on a blank tab, which voids any before/after comparison — the same trap the `mojeek_return` area paid a full live run for.
 

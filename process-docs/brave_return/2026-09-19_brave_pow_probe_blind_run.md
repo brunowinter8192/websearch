@@ -41,6 +41,57 @@ challenge anything.
 This was not known while the probe was being designed, which is why the probe spends its whole
 budget on phases that only produce signal when a challenge actually appears.
 
+## Correction, same day: the trigger is the search term
+
+Everything in the two sections below about an IP-bound unlock was written before the production
+query log was read. The log contradicts it. Keep reading; the sections are left in place because
+the cookie evidence in them still stands on its own.
+
+`src/logs/query_log.jsonl` holds 130 runs that included Brave, from 2026-09-05 to 2026-09-19.
+Brave came back EMPTY with `marker: "captcha"` in 61 of them. Two distinct shapes:
+
+- 53 on 2026-09-15 with `document_status_chain: [429]`. Rate limiting, a burst.
+- 8 from 2026-09-16 onward with `document_status_chain: [200]`. This is the button challenge.
+
+Every single one of the eight `[200]` cases was a query about captchas:
+
+```
+altcha widget auto onload verify programmatically
+altcha widget server verification cookie
+mojeek captcha verification blocked automation
+mojeek community altcha captcha challenge
+altcha proof of work widget
+yandex captcha why am i seeing this support
+yandex showcaptcha spravka cookie after
+```
+
+Every ordinary query in the same window went through unchallenged:
+
+```
+espressomaschine siebtraeger test 2025
+dachrinne reinigen intervall
+laminat verlegen dehnungsfuge
+wasserhahn tropft reparieren
+sqlite wal mode checkpoint
+```
+
+Seven challenged queries, seven about captchas, no counterexample either way.
+
+The sharpest pair is on 2026-09-18. At 19:08:08 `yandex showcaptcha spravka cookie after` was
+challenged. At 19:09:20, seventy-two seconds later, on the same profile, same process, same
+address, `dachrinne reinigen intervall` returned ten results. Nothing happened in between.
+
+So Brave challenges on the content of the search term. It is not a rate limiter, not a profile
+state, not an address reputation.
+
+This also explains the blind run directly. The probe's queries were `sqlite wal mode checkpoint`,
+`rust borrow checker explained`, `nginx reverse proxy config` and the like — all harmless. It
+could not have been challenged no matter how many profiles it burned.
+
+It also dissolves the manual-click story. The user clicked once by hand and observed two quiet
+days. In those two days the user simply stopped searching for captcha terms. The click is not
+known to have done anything.
+
 ## Where the unlock lives: not in the profile
 
 This is the one real finding the blind run produced, and it was free.
@@ -88,25 +139,33 @@ click-mechanism problem disappear.
 
 ## For whoever picks this up
 
-Do not re-run the probe until a challenge is reachable. A second blind run costs live requests
-and produces another empty report.
+Do not re-run the probe with harmless queries. That is what produced the empty report.
 
-Establish that a challenge is reachable first, cheaply: one navigation, and look at the page.
-Only then spend the phased budget.
-
-Two ways to reach a challenge were discussed on 2026-09-19 and neither was tried:
-
-Route a request through a different IP. The `news_pipeline` area maintains a proxy pool. This
-reproduces an ordinary first contact from an unknown address, which is the case production
-actually hits.
-
-Burst past the pacing to provoke the 429. Note that the report describes the 429 shape as a
-`pow-captcha` link page with no clickable candidate — a different page from the button
-challenge, and not the one that needs solving.
+If the challenge needs to be reached, the query list is the lever, not the pacing, not the
+profile and not the address. The seven terms listed in the correction section above each
+produced a challenge in production.
 
 The first time a live challenge page is reached, capture it verbatim before trying to solve
 it. The `mojeek_return` area has a dedicated single-navigation capture script for exactly this
 purpose; `brave_return` does not, and that gap showed.
+
+Two routes discussed on 2026-09-19 and deliberately not taken, recorded so they are not
+re-proposed: routing through the `news_pipeline` proxy pool to get a different address, and
+bursting past the pacing to provoke the 429. Both were argued from the IP hypothesis, which the
+query log then contradicted. The 429 shape is in any case a `pow-captcha` link page with no
+clickable candidate, a different page from the button challenge.
+
+## Decision of 2026-09-19
+
+No further probing for now. The production query log already records Brave's verdict on every
+run, including the marker and the status chain, so the behaviour is observable without spending
+dedicated live requests. Watch the log instead.
+
+Open question, not answered here: whether the search terms that trigger the challenge are ones
+production would ever issue on its own. The seven observed cases were all typed by hand during
+investigation work on other engines' captchas. If ordinary user queries never trigger it, the
+engine defect in `src/search/engines/brave.py` costs far less than the 61 EMPTY runs in the log
+suggest.
 
 ## Known gap left open
 
