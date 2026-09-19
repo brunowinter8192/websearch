@@ -15,7 +15,12 @@ SEARCH_URL = "https://search.brave.com/search?q={}"
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
 
-_JS_WAIT = "return document.querySelectorAll('div[data-type=\"web\"]').length"
+_JS_POLL = """
+return JSON.stringify({
+    count: document.querySelectorAll('div[data-type="web"]').length,
+    pow_link: !!document.querySelector('a[href*="pow-captcha"]')
+});
+"""
 
 _JS_PARSE = """
 var _cs = document.querySelectorAll('div[data-type="web"]');
@@ -67,15 +72,10 @@ class BraveEngine(BaseEngine):
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            await asyncio.sleep(1.5)
-            diag = await _diagnose(tab)
-            if diag["marker"] or diag["pow_link"]:
-                logger.warning("Brave PoW/CAPTCHA detected for: %s", query)
-                diag["containers_found"] = None
-                return [], None, attach_document_status(diag, status_chain)
             if not await _wait_for_results(tab):
+                diag = await _diagnose(tab)
                 diag["containers_found"] = False
-                logger.debug("Brave empty for: %s", query)
+                _log_empty_result(query, diag)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
             if results:
@@ -98,12 +98,53 @@ def _extract_value(result):
 
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
-        raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
-        if count and int(count) > 0:
+        state = await _poll_state(tab)
+        if state["count"] > 0:
             return True
+        if state["pow_link"]:
+            return False
         await asyncio.sleep(WAIT_INTERVAL)
     return False
+
+
+async def _poll_state(tab) -> dict:
+    raw = await tab.execute_script(_JS_POLL)
+    val = _extract_value(raw)
+    state = {"count": 0, "pow_link": False}
+    if val:
+        try:
+            state.update(json.loads(val))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return state
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = _extract_value(raw)
+    diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
+    if val:
+        try:
+            diag.update(json.loads(val))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return diag
+
+
+def _log_empty_result(query: str, diag: dict) -> None:
+    if diag["marker"] or diag["pow_link"]:
+        logger.warning("Brave PoW/CAPTCHA detected for: %s", query)
+    else:
+        logger.debug("Brave empty for: %s", query)
+
+
+async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = _extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return _build_results(items, max_results)
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
@@ -117,24 +158,3 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
             engine="brave", position=i + 1,
         ))
     return results
-
-
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return _build_results(items, max_results)
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
-    if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return diag

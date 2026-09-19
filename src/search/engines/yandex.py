@@ -65,14 +65,14 @@ class YandexEngine(BaseEngine):
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
             current_url = await tab.current_url
             if _is_block_url(current_url):
-                logger.warning("Yandex CAPTCHA redirect detected for: %s", query)
                 diag = await _diagnose(tab)
                 diag["containers_found"] = None
+                _log_empty_result(query, current_url)
                 return [], None, attach_document_status(diag, status_chain)
             if not await _wait_for_results(tab):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
-                logger.debug("Yandex empty for: %s", query)
+                _log_empty_result(query, current_url)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
             if results:
@@ -94,8 +94,15 @@ def _extract_value(result):
 
 
 def _is_block_url(url: str) -> bool:
-    lowered = (url or "").lower()
-    return any(marker in lowered for marker in BLOCK_URL_MARKERS)
+    path = urlparse(url or "").path.lower()
+    return any(marker in path for marker in BLOCK_URL_MARKERS)
+
+
+def _log_empty_result(query: str, current_url: str) -> None:
+    if _is_block_url(current_url):
+        logger.warning("Yandex CAPTCHA redirect detected for: %s", query)
+    else:
+        logger.debug("Yandex empty for: %s", query)
 
 
 def _is_self_referential(url: str) -> bool:
