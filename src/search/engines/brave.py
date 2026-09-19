@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 SEARCH_URL = "https://search.brave.com/search?q={}"
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
+POW_LINK_GRACE_CYCLES = 2
 
 _JS_DEEP_BUTTONS = """
 function _deepButtons(root) {
@@ -149,6 +150,7 @@ def _extract_value(result):
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> tuple[bool, bool, bool]:
     challenge_triggered = False
     button_present = False
+    pow_link_idle_cycles = 0
     for _ in range(MAX_WAIT_CYCLES):
         state = await _poll_state(tab)
         if state["button_present"]:
@@ -161,10 +163,12 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
         })
         if state["count"] > 0:
             return True, challenge_triggered, button_present
-        if state["pow_link"]:
-            return False, challenge_triggered, button_present
         if state["button_matched"] and not challenge_triggered:
             challenge_triggered = await _click_challenge_button(tab)
+        elif state["pow_link"] and not challenge_triggered and not button_present:
+            pow_link_idle_cycles += 1
+            if pow_link_idle_cycles >= POW_LINK_GRACE_CYCLES:
+                return False, challenge_triggered, button_present
         await asyncio.sleep(WAIT_INTERVAL)
     return False, challenge_triggered, button_present
 
