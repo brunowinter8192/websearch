@@ -60,7 +60,7 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 `pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
-### test_brave_engine.py (338 LOC)
+### test_brave_engine.py (376 LOC)
 **Purpose:** `src/search/engines/brave.py` — `_build_results` (pure, no network/browser).
 `_classify_diagnosis` (PoW/CAPTCHA) coverage removed with the function itself (the
 guessed-verdict-removal milestone). Also carries fixture-driven regression tests for two milestones
@@ -83,6 +83,21 @@ button is shadow-hosted (`button_challenge_success_shadow.html`), a stuck challe
 signal, so scaling down is a test-speed choice, not a risk of masking a real regression) that gives
 up within budget with `challenge_triggered=True` recorded, and the real (not synthetic)
 `results_no_challenge.html` fixture proving an ordinary page never attempts a click at all.
+`test_unrelated_button_before_containers_never_leaks_into_success_diagnosis` (own
+`_STAGGERED_LOAD_HTML` fixture, an unrelated `<button>Menu</button>` present from t=0, result
+containers appended 500ms later via `setTimeout`) is the regression guard for a real defect caught
+in code review AFTER the first pass shipped: `button_present` was originally attached on every
+diagnosis branch including success; this fixture proves a button that renders before containers
+do — exactly what a live check found real Brave chrome (header/search-form/footer buttons) can do
+— never leaks `button_present` into a genuine success record, regardless of the timing race that
+produced it. **What this fixture does NOT prove:** it is one synthetic, hand-timed race (500ms),
+not a measurement of how often or how severely staggered loading actually happens against live
+Brave — a live multi-cycle measurement attempted for this same question was inconclusive (the
+session's own address was, by that point, under an actual `pow_link` rate-limit from the day's
+cumulative live testing, confirmed via a full `_diagnose` read: `pow_link: true`, title `"Captcha -
+Brave Search"` — not the ordinary-traffic case at all). The fix this test guards is architectural
+(never surface `button_present` on success, regardless of timing) specifically so it does not
+depend on ever pinning down that live number.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
 `src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires.

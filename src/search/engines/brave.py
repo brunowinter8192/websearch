@@ -124,7 +124,7 @@ class BraveEngine(BaseEngine):
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
             if results:
-                diag = {"challenge_triggered": challenge_triggered, "button_present": button_present}
+                diag = {"challenge_triggered": challenge_triggered}
                 return results, None, attach_document_status(diag, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True

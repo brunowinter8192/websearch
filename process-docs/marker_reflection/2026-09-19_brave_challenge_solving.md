@@ -168,3 +168,85 @@ should capture the raw page (title, `documentElement.outerHTML` or similar) befo
 nothing in this codebase does that today, and it would settle, with real evidence instead of a
 single one-word screenshot description, exactly what language(s) and DOM shape production actually
 meets in the wild.
+
+## Review round: button_present was leaking into success, fixed architecturally (2026-09-19)
+
+Code review caught a real defect in `button_present` as first shipped. The field was tracked
+STICKY across `_wait_for_results`'s whole poll loop — set `True` the moment ANY cycle saw a
+button-shaped element while `count` was still 0 — and attached on every diagnosis branch including
+success, on the reasoning that both new fields were already known for free from the loop (no
+extra DOM read). That reasoning covered the COST correctly but missed the CORRECTNESS problem:
+this session's own earlier live check already knew real Brave results pages carry dozens of
+ordinary chrome buttons (header, search-form, "Ask", carousel, footer). If any of that chrome
+renders even one poll cycle before the result containers do — plausible on a slower load, this
+session's evidence for it was thin — an entirely ordinary, never-challenged query would latch
+`button_present=True` and carry it straight into a genuine success record. The field exists
+specifically so a reader can tell a challenge we could not act on apart from an ordinary page;
+a field that is ALSO sometimes true on ordinary successes cannot be read for that purpose, which
+is the same silent-failure shape this whole area exists to close, one level further down.
+
+### What was actually measured, honestly
+
+Told to check first rather than guess: an 8-query live multi-cycle measurement was attempted
+(polling each query at the real `MAX_WAIT_CYCLES`/`WAIT_INTERVAL` cadence, watching for a
+`count==0 and button_present==True` moment before results). It came back 8/8 "positive" — but
+every single one showed `count` staying at 0 for the FULL 20-cycle budget, never resolving to
+real results at all. A follow-up single-query check with a full `_diagnose(tab)` read at the end
+explained why: `pow_link: true`, title `"Captcha - Brave Search"` — this session's own testing
+address was, by that point, under an actual Brave rate-limit from the day's cumulative live
+requests (the curl burst earlier, plus this session's several `cli.py search_web` live-verification
+runs, plus the measurement attempts themselves). The 8-query result measures a genuinely
+rate-limited state, not ordinary traffic, and is not usable as the answer to the question asked.
+
+One useful thing did come out of the contaminated run: in that trace, `pow_link` was true on the
+SAME poll cycle `button_present` was. `_wait_for_results` checks `pow_link` strictly before
+updating the sticky `button_present` on each cycle (`if state["pow_link"]: return ...` comes
+before `if state["button_present"]: button_present = True`), so in production this exact trace
+would have returned at cycle 1 via the `pow_link` fast-exit with `button_present` still `False` —
+confirming the EXISTING check ordering already protects the hard-block case. It says nothing
+about the soft, no-`pow_link` staggered-render case the review was actually asking about.
+
+The only CLEAN (pre-contamination) live data available was the earlier 3-query single-poll check
+from earlier in this same milestone (`postgres index bloat diagnosis` and 2 others): all 3 showed
+containers and the full button chrome present TOGETHER on the very first poll, no staggering
+observed. That is 3 single-poll data points, not a multi-cycle measurement, and not enough to
+assert a low false-positive rate with any confidence — particularly since the one thing this
+session now knows for certain is that its own address is presently in a degraded state from
+today's volume of live requests, which is exactly the kind of condition (server load, throttled
+responses) most likely to produce the staggered rendering this whole question is about, and
+exactly the condition this session can no longer cleanly test now that it has induced one.
+No further live queries were fired to chase a clean number — the user has since said they will
+run live verification themselves; hammering the same already-strained address further to settle
+a number that has a zero-live-request-cost alternative fix available was not a reasonable trade.
+
+### The fix, and why it does not need that number
+
+Rather than pick a persistence threshold (require the sticky fact to hold for N consecutive
+cycles before latching) — which WOULD need a real measurement of the staggering distribution to
+size correctly, exactly the number not cleanly available — the fix is architectural: `button_present`
+is now attached ONLY on the two branches that return empty results (`if not found:` and the
+zero-parsed-after-`found`-branch), never on the one true success branch (`if results:`). This
+closes the leak unconditionally, independent of how long any staggering window actually is,
+because a genuine success means the query already got what it needed — whatever else was or
+wasn't on the page during the load race stops being interesting the moment real results exist.
+`challenge_triggered` is untouched, still attached on every branch including success, per explicit
+instruction — it answers a different question ("did we act on something") that stays meaningful
+on a success (a solved challenge IS a success, and that is exactly the case worth being able to
+see).
+
+### Fixture coverage, and what it does and does not prove
+
+`test_unrelated_button_before_containers_never_leaks_into_success_diagnosis`
+(`dev/tests/test_brave_engine.py`) is a new, offline, fully deterministic fixture: a page with an
+unrelated `<button>Menu</button>` present from the first byte, result containers appended via
+`setTimeout(..., 500)`. Confirmed to fail against the pre-fix code (via `git stash`) and pass
+against the fix. This proves the SPECIFIC mechanism (a button rendering strictly before containers,
+by a comfortable 500ms margin) cannot leak into a success diagnosis, regardless of how long the
+real-world staggering window turns out to be — since the fix does not depend on the window's
+length at all. **It does NOT prove, and is not offered as proof of, how often real Brave traffic
+actually experiences this staggering, nor how long that window typically is** — that number was
+sought honestly (see above) and not obtained cleanly this session. The fixture is a correctness
+proof for the chosen fix's mechanism, not a frequency measurement; the two should not be
+conflated by a future reader.
+
+Full suite after this round: `443 passed` (`dev/tests/`, ~28s; +1 net new test).
