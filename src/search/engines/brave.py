@@ -67,15 +67,10 @@ class BraveEngine(BaseEngine):
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            await asyncio.sleep(1.5)
-            diag = await _diagnose(tab)
-            if diag["marker"] or diag["pow_link"]:
-                logger.warning("Brave PoW/CAPTCHA detected for: %s", query)
-                diag["containers_found"] = None
-                return [], None, attach_document_status(diag, status_chain)
             if not await _wait_for_results(tab):
+                diag = await _diagnose(tab)
                 diag["containers_found"] = False
-                logger.debug("Brave empty for: %s", query)
+                _log_empty_result(query, diag)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
             if results:
@@ -106,6 +101,25 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = _extract_value(raw)
+    diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
+    if val:
+        try:
+            diag.update(json.loads(val))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return diag
+
+
+def _log_empty_result(query: str, diag: dict) -> None:
+    if diag["marker"] or diag["pow_link"]:
+        logger.warning("Brave PoW/CAPTCHA detected for: %s", query)
+    else:
+        logger.debug("Brave empty for: %s", query)
+
+
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     results = []
     for i, item in enumerate(items[:max_results]):
@@ -126,15 +140,3 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
         return []
     items = json.loads(value)
     return _build_results(items, max_results)
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
-    if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return diag
