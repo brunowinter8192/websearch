@@ -2,7 +2,9 @@
 import asyncio
 import functools
 import logging
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -19,8 +21,8 @@ from src import death_pipe
 
 logger = logging.getLogger(__name__)
 
-SESSION_DIR = str(Path.home() / ".websearch" / "browser-session-selflaunch")
-LOCK_PATH = Path(SESSION_DIR).parent / f"{Path(SESSION_DIR).name}.lock"
+SESSION_DIR_PREFIX = "websearch-browser-session-"
+LOCK_PATH = Path.home() / ".websearch" / "browser-session.lock"
 
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
 
@@ -37,6 +39,7 @@ _browser = None
 _init_lock = asyncio.Lock()
 _lock_handle: browser_lock.LockHandle | None = None
 _owned_pids: list[int] = []
+_session_dir: str | None = None
 _focus_watchdog_task: asyncio.Task | None = None
 
 
@@ -67,9 +70,9 @@ def _open_background_process_creator(bundle_path: Path, command: list[str]) -> s
     return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def build_options() -> ChromiumOptions:
+def build_options(session_dir: str) -> ChromiumOptions:
     options = ChromiumOptions()
-    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.add_argument(f"--user-data-dir={session_dir}")
     options.add_argument("--no-startup-window")
     options.block_popups = True
     options.block_notifications = True
@@ -96,28 +99,33 @@ def build_options() -> ChromiumOptions:
     return options
 
 
-def _reap_session_profile() -> None:
+def _pids_matching_session_profiles() -> list[int]:
     result = subprocess.run(
-        ["pgrep", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True, text=True
+        ["pgrep", "-f", f"user-data-dir=.*{SESSION_DIR_PREFIX}"], capture_output=True, text=True
     )
-    pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
-    if not pids:
-        return
-    logger.info("Reaping orphaned Chrome on session profile: pids=%s", pids)
-    _terminate_then_kill(pids)
+    return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
 
 
-def _record_own_pids() -> None:
+def _remove_orphaned_session_dirs() -> None:
+    for entry in Path(tempfile.gettempdir()).glob(f"{SESSION_DIR_PREFIX}*"):
+        shutil.rmtree(entry, ignore_errors=True)
+
+
+def _reap_session_profile() -> None:
+    pids = _pids_matching_session_profiles()
+    if pids:
+        logger.info("Reaping orphaned Chrome on session profiles: pids=%s", pids)
+        _terminate_then_kill(pids)
+    _remove_orphaned_session_dirs()
+
+
+def _record_own_pids(session_dir: str) -> None:
     global _owned_pids
     result = subprocess.run(
-        ["pgrep", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True, text=True
+        ["pgrep", "-f", f"user-data-dir={session_dir}"], capture_output=True, text=True
     )
     _owned_pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
     logger.info("Own Chrome pids: %s", _owned_pids)
-
-
-def _clear_stale_devtools_port() -> None:
-    Path(SESSION_DIR, "DevToolsActivePort").unlink(missing_ok=True)
 
 
 def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
@@ -150,7 +158,7 @@ def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
 
 
 async def get_tab():
-    global _browser, _lock_handle
+    global _browser, _lock_handle, _session_dir
     async with _init_lock:
         if _browser is None:
             bundle_path = await _resolve_chromium_bundle_path()
@@ -161,9 +169,9 @@ async def get_tab():
             try:
                 logger.info("Starting Chrome session")
                 _reap_session_profile()
-                _clear_stale_devtools_port()
+                _session_dir = tempfile.mkdtemp(prefix=SESSION_DIR_PREFIX)
                 anchor_pid = _get_frontmost_pid()
-                options = build_options()
+                options = build_options(_session_dir)
                 _browser = Chrome(options)
                 _browser._browser_process_manager = BrowserProcessManager(
                     process_creator=functools.partial(_open_background_process_creator, bundle_path)
@@ -173,14 +181,17 @@ async def get_tab():
                 _browser._browser_process_manager.start_browser_process(
                     binary_location, 0, _browser.options.arguments
                 )
-                port = await asyncio.to_thread(_wait_for_devtools_port, SESSION_DIR, CDP_PORT_WAIT_TIMEOUT_S)
+                port = await asyncio.to_thread(_wait_for_devtools_port, _session_dir, CDP_PORT_WAIT_TIMEOUT_S)
                 _browser._connection_port = port
                 _browser._connection_handler = ConnectionHandler(port)
-                _record_own_pids()
-                death_pipe.spawn_watchdog(_owned_pids)
+                _record_own_pids(_session_dir)
+                death_pipe.spawn_watchdog(_owned_pids, cleanup_dir=_session_dir)
                 _spawn_focus_watchdog(_owned_pids, anchor_pid)
             except Exception:
                 _browser = None
+                if _session_dir is not None:
+                    shutil.rmtree(_session_dir, ignore_errors=True)
+                    _session_dir = None
                 _lock_handle.release()
                 _lock_handle = None
                 raise
@@ -267,7 +278,7 @@ async def close_browser():
 
 
 async def kill_own_chrome() -> None:
-    global _browser, _owned_pids, _lock_handle
+    global _browser, _owned_pids, _lock_handle, _session_dir
     if _browser is not None:
         try:
             await close_browser()
@@ -278,6 +289,9 @@ async def kill_own_chrome() -> None:
         logger.info("Killing own Chrome (safety net): pids=%s", _owned_pids)
         _terminate_then_kill(_owned_pids, timeout_s=10.0)
         _owned_pids = []
+    if _session_dir is not None:
+        shutil.rmtree(_session_dir, ignore_errors=True)
+        _session_dir = None
     if _lock_handle is not None:
         _lock_handle.release()
         _lock_handle = None

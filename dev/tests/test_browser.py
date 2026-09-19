@@ -3,13 +3,20 @@
 I/O boundary, get_tab()'s critical-section ordering (cross-process lock -> reap -> launch ->
 record-own-pids -> death_pipe watchdog -> PID-keyed focus watchdog), close_browser()'s watchdog
 cancellation, and kill_own_chrome()'s teardown (graceful close_browser -> PID-scoped safety-net
-kill -> lock release), including the no-op path for a run that never touched the browser.
+kill -> session-dir removal -> lock release), including the no-op path for a run that never
+touched the browser.
 
 No real Chrome/flock involved here (browser_lock's own real-flock behavior is covered by
 test_browser_lock.py) — pydoll's Chrome and psutil/subprocess are faked per test, module globals
-reset via monkeypatch so tests don't leak state into each other.
+reset via monkeypatch so tests don't leak state into each other. `_reap_session_profile`'s own
+directory-cleanup half (`_remove_orphaned_session_dirs`) uses real `tempfile.mkdtemp`/`shutil.rmtree`
+against the real filesystem, not mocked — the same precedent `test_chromium_scrape_facts.py`
+already established for the sibling scrape lane's identically-shaped per-run directory.
 """
 import asyncio
+import shutil
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -44,30 +51,63 @@ def test_open_background_process_creator_targets_resolved_bundle_path_not_bare_n
     assert cmd[cmd.index("-a") + 1] != "Google Chrome"
 
 
-# _reap_session_profile / _record_own_pids: pgrep output parsing + kill dispatch
+# _pids_matching_session_profiles / _remove_orphaned_session_dirs / _reap_session_profile /
+# _record_own_pids: pgrep output parsing, prefix-scoped directory cleanup, kill dispatch
 
-def test_reap_session_profile_kills_parsed_pids(monkeypatch):
+def test_pids_matching_session_profiles_parses_pgrep_output(monkeypatch):
+    _reset_state(monkeypatch, browser)
+    monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("111\n222\n"))
+    assert browser._pids_matching_session_profiles() == [111, 222]
+
+
+def test_pids_matching_session_profiles_empty_stdout_is_empty_list(monkeypatch):
+    _reset_state(monkeypatch, browser)
+    monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess(""))
+    assert browser._pids_matching_session_profiles() == []
+
+
+def test_remove_orphaned_session_dirs_removes_matching_leftover_directories():
+    leftover = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
+    assert Path(leftover).exists()
+    browser._remove_orphaned_session_dirs()
+    assert not Path(leftover).exists()
+
+
+def test_remove_orphaned_session_dirs_leaves_unrelated_directories_alone():
+    unrelated = tempfile.mkdtemp(prefix="some-other-tool-")
+    try:
+        browser._remove_orphaned_session_dirs()
+        assert Path(unrelated).exists()
+    finally:
+        shutil.rmtree(unrelated, ignore_errors=True)
+
+
+def test_reap_session_profile_kills_parsed_pids_and_cleans_leftover_directories(monkeypatch):
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("111\n222\n"))
     killed = []
     monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
+    leftover = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
     browser._reap_session_profile()
     assert killed == [[111, 222]]
+    assert not Path(leftover).exists()
 
 
-def test_reap_session_profile_no_survivors_is_noop(monkeypatch):
+def test_reap_session_profile_no_survivors_still_cleans_leftover_directories(monkeypatch):
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess(""))
     killed = []
     monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
+    leftover = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
     browser._reap_session_profile()
     assert killed == []
+    assert not Path(leftover).exists()
 
 
 def test_record_own_pids_sets_module_state(monkeypatch):
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("333\n444\n"))
-    browser._record_own_pids()
+    browser._record_own_pids("/fake/session/dir")
     assert browser._owned_pids == [333, 444]
 
 
@@ -268,6 +308,8 @@ async def test_kill_own_chrome_full_teardown_sequence(monkeypatch):
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
     monkeypatch.setattr(browser, "_owned_pids", [1, 2])
+    session_dir = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
+    monkeypatch.setattr(browser, "_session_dir", session_dir)
 
     close_called = []
     monkeypatch.setattr(browser, "close_browser", _make_async_recorder(close_called))
@@ -286,6 +328,8 @@ async def test_kill_own_chrome_full_teardown_sequence(monkeypatch):
 
     assert close_called == [1]
     assert kill_called == [([1, 2], 10.0)]
+    assert not Path(session_dir).exists()
+    assert browser._session_dir is None
     assert released == [1]
     assert browser._owned_pids == []
     assert browser._lock_handle is None
@@ -296,6 +340,8 @@ async def test_kill_own_chrome_runs_safety_net_and_release_when_close_browser_ra
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser, "_browser", FakeChrome(None))
     monkeypatch.setattr(browser, "_owned_pids", [7])
+    session_dir = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
+    monkeypatch.setattr(browser, "_session_dir", session_dir)
 
     async def raising_close_browser():
         raise ConnectionError("dead websocket")
@@ -315,6 +361,8 @@ async def test_kill_own_chrome_runs_safety_net_and_release_when_close_browser_ra
     await browser.kill_own_chrome()
 
     assert kill_called == [([7], 10.0)]
+    assert not Path(session_dir).exists()
+    assert browser._session_dir is None
     assert released == [1]
     assert browser._browser is None
     assert browser._owned_pids == []

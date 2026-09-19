@@ -200,28 +200,38 @@ and cannot import `src/` itself (dev-script import boundary), so `_reset_state` 
 imported `browser` module as a parameter instead of importing it directly.
 **Called by:** `test_browser.py`, `test_browser_get_tab.py`.
 
-### test_browser.py (338 LOC)
+### test_browser.py (386 LOC)
 **Purpose:** `src/search/browser.py` — `_find_app_bundle` (real function, no mocking, same
 walk-up-to-`.app` behavior as `chromium_process.py`'s own copy) and
 `_open_background_process_creator` (as of the M2 no-Spaces-drag milestone, 2026-09-17, asserts the
 built `open -g -n -a <bundle_path> --args ...` command targets the resolved bundle path passed in,
-not the literal `"Google Chrome"` string it used before); `_reap_session_profile`/`_record_own_pids`/
-`_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil mocked);
-`kill_own_chrome()`'s full teardown sequence, its no-op path when the browser was never touched, and the
+not the literal `"Google Chrome"` string it used before); `_pids_matching_session_profiles`/
+`_record_own_pids`/`_terminate_then_kill` pgrep-output parsing and psutil dispatch (subprocess+psutil
+mocked). As of the fresh-profile-per-run milestone (`process-docs/browser_posture/`):
+`_remove_orphaned_session_dirs` and `_reap_session_profile` (which now calls it) run against the
+REAL filesystem — `tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)` creates a genuine leftover
+directory, the function call is real, `Path(...).exists()` is checked after — same precedent
+`test_chromium_scrape_facts.py` already established for the sibling scrape lane's identically-shaped
+per-run directory; a directory with an unrelated prefix is confirmed left alone, not just assumed
+safe. `kill_own_chrome()`'s full teardown sequence (now including real removal of a `_session_dir`
+it owns), its no-op path when the browser was never touched, and the
 PID-safety-net-and-lock-release-still-run path when `close_browser()` itself raises (Chrome already
-dead mid-sweep); `close_browser()`'s own unconditional cancellation of a live focus-steal watchdog
-task, and its no-op path when none was ever spawned; `_get_frontmost_pid`/`_activate_pid`'s
-subprocess wrapping; `_focus_steal_watchdog_by_pid`'s three PID-membership branches, including
-reclaiming immediately when an owned pid is already frontmost on the very first loop iteration
-given a valid externally-supplied anchor (the regression guard for the anchor-race bug `test_browser_get_tab.py` covers).
+dead mid-sweep) — both of those two tests now also assert the session directory is gone from disk
+and the module global reset to `None`. `close_browser()`'s own unconditional cancellation of a live
+focus-steal watchdog task, and its no-op path when none was ever spawned; `_get_frontmost_pid`/
+`_activate_pid`'s subprocess wrapping; `_focus_steal_watchdog_by_pid`'s three PID-membership
+branches, including reclaiming immediately when an owned pid is already frontmost on the very first
+loop iteration given a valid externally-supplied anchor (the regression guard for the anchor-race
+bug `test_browser_get_tab.py` covers).
 
-### test_browser_get_tab.py (126 LOC)
-**Purpose:** `src/search/browser.py`'s `get_tab()` — the critical-section ordering (as of the M2
-no-Spaces-drag milestone, 2026-09-17: resolve-bundle -> lock -> reap -> anchor-capture -> launch ->
-record-own-pids -> spawn death_pipe watchdog -> spawn the PID-keyed focus-steal watchdog with that
-anchor — bundle resolution added as the new FIRST step, deliberately outside/before the
-cross-process lock since it touches nothing under `SESSION_DIR`) and that the watchdog receives
-`_owned_pids` with no `cleanup_dir` (the session profile is persistent, never deleted).
+### test_browser_get_tab.py (225 LOC)
+**Purpose:** `src/search/browser.py`'s `get_tab()` — the critical-section ordering (resolve-bundle
+-> lock -> reap -> [fresh `tempfile.mkdtemp`, as of the fresh-profile-per-run milestone] ->
+anchor-capture -> launch -> record-own-pids -> spawn death_pipe watchdog -> spawn the PID-keyed
+focus-steal watchdog with that anchor) and that the watchdog receives `_owned_pids` WITH
+`cleanup_dir=` this run's own fresh directory (a behavior change from the persistent-profile era,
+when `cleanup_dir` was always `None` — the session profile now IS deletable, and death_pipe already
+supported the parameter, just unused from this call site until now).
 `_resolve_chromium_bundle_path` is mocked in every test that reaches it (`_fake_resolve_bundle`,
 module-level, returns a fixed fake `.app` path) — never called for real, same precedent as
 `chromium_scrape.py`'s own tests never calling its identical-shaped function for real either.
@@ -233,8 +243,15 @@ nothing downstream uses. Also covers `get_tab()`'s self-launch sequence with
 called directly, `--remote-debugging-port=0` and the full `options.arguments` (including
 `--no-startup-window`) reaching `start_browser_process`, and the post-launch `_connection_port`/
 `_connection_handler` fixup once `_wait_for_devtools_port` resolves a port — `_wait_for_devtools_port`/
-`_clear_stale_devtools_port`/`ConnectionHandler` are all mocked at the module boundary, no real
-filesystem/network I/O.
+`ConnectionHandler` are mocked at the module boundary; `tempfile.mkdtemp` itself is NOT mocked
+anywhere in this file (real, tiny, throwaway directories, cleaned up by each test's own `finally`).
+Fresh-profile-per-run milestone additions: two real `get_tab()` calls back to back (browser/session
+reset by hand between them, simulating two runs) prove the resulting directories differ and both
+carry `SESSION_DIR_PREFIX`, and that `browser_lock.acquire` saw the identical `LOCK_PATH` both
+times; a standalone pure-constant assertion pins `LOCK_PATH` to its fixed, non-derived value; a
+launch-failure test proves `get_tab()` removes its own partially-created directory (captured via a
+raising fake `Chrome` that reads `browser._session_dir` at the moment of failure) rather than
+leaking it.
 
 ### test_scrape_logger.py (44 LOC)
 **Purpose:** `src/scraper/scrape_logger.py` — `write_sidecar`'s real header content (no prior

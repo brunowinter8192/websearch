@@ -19,4 +19,5 @@ def _reset_state(monkeypatch, browser):
     monkeypatch.setattr(browser, "_browser", None)
     monkeypatch.setattr(browser, "_lock_handle", None)
     monkeypatch.setattr(browser, "_owned_pids", [])
+    monkeypatch.setattr(browser, "_session_dir", None)
     monkeypatch.setattr(browser, "_focus_watchdog_task", None)
