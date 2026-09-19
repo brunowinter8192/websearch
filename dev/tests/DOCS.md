@@ -128,9 +128,6 @@ function itself (the guessed-verdict-removal milestone). Also carries two fixtur
 regression tests for the same fix, in the same real-browser shape as `test_brave_engine.py`: an
 ordinary results URL whose query string carries a block marker, and a genuine captcha redirect.
 See `process-docs/marker_reflection/`.
-**Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
-same trap-dodge mechanism as `test_brave_engine.py` (monkeypatches `yandex.py`'s own `new_tab`/
-`kill_tab` names, never `src.search.browser.Chrome`).
 
 ### test_document_status.py (92 LOC)
 **Purpose:** `src/search/document_status.py` — `start_document_status_capture` (a fake tab exposing
