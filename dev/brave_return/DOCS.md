@@ -1,7 +1,7 @@
 # dev/brave_return/
 
 ## Role
-Measurement tooling for the question of whether Brave's proof-of-work button challenge can be solved unattended from code, the way Mojeek's ALTCHA widget already is. Touch this to re-measure Brave's challenge behaviour. Do not touch it to change production: nothing here is wired into `src/`, and `src/search/engines/brave.py` is unchanged.
+Measurement tooling for the question of whether Brave's proof-of-work button challenge can be solved unattended from code, the way Mojeek's ALTCHA widget already is. Touch this to re-measure Brave's challenge behaviour. Nothing here is wired into `src/` directly — this package is never imported by production code — but its `brave_pydoll_probe_20260919_133706.md` report (the live run that finally reached a real challenge) is what `src/search/engines/brave.py`'s own challenge-solving mechanism was built and evidenced from; see that module's own entry in `src/search/engines/DOCS.md` and `process-docs/marker_reflection/` for the production side. `brave.py` is no longer unchanged by this area — it is no longer true to say a change here can't affect production reasoning, only that no import does.
 
 ## Public Interface
 No `__init__.py`. Two entry points, both run directly and both relying on Python putting the script's own directory on `sys.path` for the sibling `_*` imports:

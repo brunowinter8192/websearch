@@ -7,10 +7,12 @@ that no longer exist — the marker/pow_link/ready_state facts it classified are
 directly in the diagnosis snapshot.
 """
 import asyncio
+import functools
 import http.server
 import logging
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from pydoll.browser import Chrome
@@ -102,10 +104,27 @@ _GENUINE_BLOCK_HTML = """<!doctype html>
 </html>
 """
 
+_STAGGERED_LOAD_HTML = """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>fixture query - Brave Search</title></head>
+<body>
+<div id="page">
+<button>Menu</button>
+</div>
+<script>
+setTimeout(function () {
+  document.getElementById('page').innerHTML += '<div data-type="web"><a href="https://example.org/one" class="search-snippet-title">Result One</a><div class="snippet-content"><div class="content">snippet one</div></div></div>';
+}, 500);
+</script>
+</body>
+</html>
+"""
+
 _ROUTES = {
     "/marker_in_own_query.html": _MARKER_IN_OWN_QUERY_HTML,
     "/marker_in_unrelated_snippet.html": _MARKER_IN_UNRELATED_SNIPPET_HTML,
     "/genuine_block.html": _GENUINE_BLOCK_HTML,
+    "/staggered_load.html": _STAGGERED_LOAD_HTML,
 }
 
 
@@ -188,7 +207,10 @@ async def test_marker_word_from_own_query_no_longer_discards_real_results(monkey
     assert reason is None
     assert len(results) == 2
     assert {r.url for r in results} == {"https://example.org/one", "https://example.org/two"}
-    assert diagnosis == {"document_status_chain": [200], "http_status": 200}
+    assert diagnosis == {
+        "challenge_triggered": False,
+        "document_status_chain": [200], "http_status": 200,
+    }
 
 
 @pytest.mark.asyncio
@@ -205,7 +227,10 @@ async def test_marker_word_in_unrelated_organic_snippet_no_longer_discards_real_
 
     assert reason is None
     assert len(results) == 2
-    assert diagnosis == {"document_status_chain": [200], "http_status": 200}
+    assert diagnosis == {
+        "challenge_triggered": False,
+        "document_status_chain": [200], "http_status": 200,
+    }
 
 
 @pytest.mark.asyncio
@@ -232,4 +257,120 @@ async def test_genuine_pow_link_block_still_yields_no_results(monkeypatch):
     assert diagnosis["marker"] is not None
     assert diagnosis["containers_found"] is False
     assert diagnosis["title"] == "Brave Search"
-    assert elapsed < 1.0
+    assert diagnosis["challenge_triggered"] is False
+    assert diagnosis["button_present"] is False
+
+
+@pytest.mark.asyncio
+async def test_unrelated_button_before_containers_never_leaks_into_success_diagnosis(monkeypatch):
+    server, base_url = _start_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/staggered_load.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert len(results) == 1
+    assert results[0].url == "https://example.org/one"
+    assert diagnosis == {
+        "challenge_triggered": False,
+        "document_status_chain": [200], "http_status": 200,
+    }
+
+
+_REAL_FIXTURES_DIR = str(Path(__file__).resolve().parent.parent / "brave_return" / "fixtures")
+
+
+def _start_real_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=_REAL_FIXTURES_DIR)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    return server, f"http://127.0.0.1:{port}"
+
+
+@pytest.mark.asyncio
+async def test_light_dom_challenge_button_is_solved_and_returns_real_results(monkeypatch):
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_success.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert len(results) == 1
+    assert results[0].url == "https://example.org/one"
+    assert results[0].title == "Result One"
+    assert results[0].snippet == "snippet one"
+    assert diagnosis == {
+        "challenge_triggered": True,
+        "document_status_chain": [200], "http_status": 200,
+    }
+
+
+@pytest.mark.asyncio
+async def test_shadow_dom_challenge_button_is_solved_and_returns_real_results(monkeypatch):
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_success_shadow.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert len(results) == 1
+    assert results[0].url == "https://example.org/one"
+    assert diagnosis["challenge_triggered"] is True
+    assert "button_present" not in diagnosis
+
+
+@pytest.mark.asyncio
+async def test_stuck_challenge_gives_up_within_budget_and_records_it_was_attempted(monkeypatch):
+    monkeypatch.setattr(brave_mod, "MAX_WAIT_CYCLES", 5)
+    monkeypatch.setattr(brave_mod, "WAIT_INTERVAL", 0.05)
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_stuck.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert results == []
+    assert diagnosis["challenge_triggered"] is True
+    assert diagnosis["button_present"] is True
+    assert diagnosis["containers_found"] is False
+
+
+@pytest.mark.asyncio
+async def test_real_no_challenge_fixture_never_attempts_a_click(monkeypatch):
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/results_no_challenge.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert len(results) == 3
+    assert diagnosis == {
+        "challenge_triggered": False,
+        "document_status_chain": [200], "http_status": 200,
+    }

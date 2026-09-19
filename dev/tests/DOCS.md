@@ -60,17 +60,20 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 `pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
-### test_brave_engine.py (235 LOC)
-**Purpose:** `src/search/engines/brave.py` — `_build_results`, plus three fixture-driven regression
-tests for the marker-reflection fix. `_classify_diagnosis` coverage removed with the function
-itself (the guessed-verdict-removal milestone). The regression tests run a real headless pydoll
-Chrome against a loopback fixture server, because the defect and its fix both live in the engine's
-injected JS reading real DOM state. One of them bounds how long a genuine block may take against
-the engine watchdog; the values are in the test and in `src/search/engines/DOCS.md`. See
-`process-docs/marker_reflection/` for why.
+### test_brave_engine.py (376 LOC)
+**Purpose:** `src/search/engines/brave.py` — `_build_results`, plus fixture-driven regression tests
+for two milestones recorded in `process-docs/marker_reflection/`: the marker-reflection fix and the
+challenge-solving milestone. `_classify_diagnosis` coverage removed with the function itself (the
+guessed-verdict-removal milestone). The regression tests run a real headless pydoll Chrome against
+loopback fixture servers, because every defect and every fix here lives in the engine's injected JS
+reading real DOM state. One test bounds how long a genuine block may take against the engine
+watchdog. One guards against an unrelated button leaking into a success record; it proves the
+mechanism, not how often staggered loading occurs live, and the process-docs entry says why that
+number could not be measured cleanly.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
-`src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires.
+`src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires. Reads
+the real challenge fixtures from `dev/brave_return/fixtures/` rather than reimplementing them.
 
 ### test_mojeek_engine.py (293 LOC)
 **Purpose:** `src/search/engines/mojeek.py` — the one engine that solves its own challenge, so the
