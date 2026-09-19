@@ -6,36 +6,98 @@ description:
 # Web Research — Skill
 
 **Der Standard ist der Permanent Capture Workflow.**
-Gehe immer von einem permanenten Capture nach RAG aus. Ein Ad-hoc-Scrape direkt im Chat passiert nur, wenn der Nutzer AUSDRÜCKLICH danach fragt. Die Umwandlung von PDF nach MD ist ein eigener Ablauf und steht im Skill `websearch-pdf`.
+- Gehe immer von einem permanenten Capture nach RAG aus.
+- Ein Ad-hoc-Scrape direkt im Chat passiert nur, wenn der Nutzer AUSDRÜCKLICH danach fragt.
+- Die Umwandlung von PDF nach MD ist ein eigener Ablauf und steht im Skill `websearch-pdf`.
 
-Alles läuft über `websearch <command>`, das im PATH liegt, und zwar im Vordergrund, also ohne `&` und ohne Redirect.
+**Alles läuft über `websearch <command>`, das im PATH liegt, und zwar im Vordergrund.**
+- Also ohne `&` und ohne Redirect.
+
+**Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
+- Die Sprache des Chats gilt hier nicht.
+- Eine Unterhaltung auf Deutsch bekommt trotzdem englische Queries, wenn englische Ergebnisse gewünscht sind.
 
 ## Commands
 
-| Command | Argumente | Tut |
-|---|---|---|
-| search_web | query (2 bis 5 Keywords) | Sucht und liefert die Trefferzahlen pro Engine |
-| search_engine_drilldown | query --engine <name> | Liefert die URLs einer Engine aus dem vorangegangenen search_web |
-| scrape_url_chromium | url | Wandelt eine Seite in vollständiges Markdown |
+| Vorgang | Command |
+|---|---|
+| Über alle Engines suchen und die Trefferzahlen sehen | `websearch search_web "<query>"` |
+| Die URLs einer einzelnen Engine ausklappen | `websearch search_engine_drilldown "<query>" --engine <name>` |
+| Eine Seite in vollständiges Markdown wandeln | `websearch scrape_url_chromium <url>` |
+
+### search_web
+
+**Der Einstieg in jede Recherche, danach entscheidest du selbst, welche Engine du ausklappst.**
+- Für einen Deep-Dive feuerst du 2 bis 4 parallele Aufrufe mit Varianten der Query ab.
+
+#### Input args
+
+- `query` — 2 bis 5 Keywords, in Anführungszeichen.
+
+#### Output
+
+```
+Engine breakdown for "dachziegel frostschaden erkennen":
+  google               8
+  duckduckgo           0
+  mojeek               10
+  openalex             0
+  startpage            10
+  brave                10
+  bing                 10
+  yandex               0
+```
+
+- Die Zahl ist die Menge der Treffer, die diese Engine beigesteuert hat.
+- Eine 0 heißt, die Engine hat nichts geliefert, und nicht, dass es zu dieser Query nichts gibt.
+- Das Ergebnis liegt im Cache, der Drilldown kostet also keinen zweiten Suchlauf.
+
+### search_engine_drilldown
+
+**Welche Engine du ausklappst, ist deine freie Wahl, geleitet von den Trefferzahlen.**
+- Bei Papers und Büchern lohnt `openalex` zuerst, dessen Einträge tragen eine `PDF:`-Zeile mit der direkten URL zum Volltext.
+
+#### Input args
+
+- `query` — muss wörtlich der Query eines vorangegangenen `search_web` entsprechen.
+- `--engine <name>` — `google`, `duckduckgo`, `mojeek`, `startpage`, `brave`, `bing`, `yandex` oder `openalex`.
+
+#### Output
+
+```
+Results from brave for "dachziegel frostschaden erkennen"
+
+1. Wie erkenne und verhindere ich Frostschäden am Dach?
+   URL: https://www.dachdecker-spengler.com/wissenswertes/dachdeckerei/frostschaeden-am-dach/
+   Snippet: Des Weiteren sind Ziegel aufgrund ihrer physischen Beschaffenheit nicht so massiv wie Dachsteine.
+```
+
+- `PDF:` erscheint nur, wo die Engine eine direkte Volltext-URL kennt, in der Praxis bei `openalex`.
+- `Date:` erscheint nur, wo die Engine ein Datum liefert.
+- Nennst du eine Engine, die für diese Query nichts im Cache hat, bekommst du die Liste der verfügbaren.
+
+### scrape_url_chromium
 
 **Es gibt genau eine Scrape-Lane, du wählst also nicht pro Aufruf.**
 
-## Suchstrategie
+#### Input args
 
-1. Rufe `search_web` auf, um die Aufteilung nach Engines zu sehen. Für einen Deep-Dive feuerst du 2 bis 4 parallele Aufrufe mit Varianten der Query ab.
-2. Rufe `search_engine_drilldown` auf, um die URLs einer Engine zu bekommen. Welche Engines du nimmst, ist deine freie Wahl, geleitet von den Trefferzahlen.
-   - Bei Papers und Büchern bevorzugst du `openalex`, denn dessen Einträge tragen eine `PDF:`-Zeile mit der direkten URL zum Volltext.
-3. Rufe `scrape_url_chromium` auf den relevanten URLs auf. Bei PDFs und Büchern gibst du dem Nutzer die exakten URLs aus den Suchergebnissen, und der Nutzer lädt sie selbst herunter. Scrape niemals eine `.pdf`-URL, denn das liefert einen Fehler, das PDF muss vom Nutzer heruntergeladen werden.
+- `url` — eine einzelne URL.
 
-**Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
-Die Sprache des Chats gilt hier nicht. Eine Unterhaltung auf Deutsch bekommt trotzdem englische Queries, wenn englische Ergebnisse gewünscht sind.
+#### Output
+
+- Der vollständige Seiteninhalt als Markdown, ohne Längenbegrenzung.
+
+**Scrape niemals eine `.pdf`-URL, das liefert einen Fehler.**
+- Bei PDFs und Büchern gibst du dem Nutzer die exakten URLs aus den Suchergebnissen.
+- Der Nutzer lädt sie selbst herunter.
 
 ---
 
 ## Permanent Capture Workflow
 
 **Fehler, die der Worker meldet, stoppen den Ablauf nicht.**
-- Trage den Ablauf bis zum Ende durch, es sei denn ein Fehler ist so schwer, dass ein Weitermachen unmöglich wird.
+- Führe den Ablauf bis zum Ende durch, es sei denn ein Fehler ist so schwer, dass ein Weitermachen unmöglich wird.
 
 ### Schritt 1 — Quelle
 
