@@ -60,7 +60,7 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 `pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
-### test_brave_engine.py (376 LOC)
+### test_brave_engine.py (403 LOC)
 **Purpose:** `src/search/engines/brave.py` — `_build_results` (pure, no network/browser).
 `_classify_diagnosis` (PoW/CAPTCHA) coverage removed with the function itself (the
 guessed-verdict-removal milestone). Also carries fixture-driven regression tests for two milestones
@@ -98,25 +98,38 @@ cumulative live testing, confirmed via a full `_diagnose` read: `pow_link: true`
 Brave Search"` — not the ordinary-traffic case at all). The fix this test guards is architectural
 (never surface `button_present` on success, regardless of timing) specifically so it does not
 depend on ever pinning down that live number.
+`test_stuck_challenge_cancelled_mid_loop_leaves_partial_facts_behind` (partial-diagnosis-on-timeout
+milestone) is the one test in this suite that genuinely cancels real, running brave.py code — not a
+mock: the real `button_challenge_stuck.html` fixture (button present from t=0, never resolves),
+`asyncio.wait_for(BraveEngine().search_with_reason("fixture query", partial=partial), timeout=0.3)`
+from OUTSIDE, mirroring exactly what `search_web._engine_with_timing` does in production. Asserts
+the externally-held `partial` dict — the only channel that survives `asyncio.wait_for` cancelling
+the wrapped coroutine's own Task — holds `containers_found`/`pow_link`/`button_present`/
+`challenge_triggered` plus `elapsed_ms` after the `TimeoutError`, proving the mechanism against a
+real cancellation rather than a simulated one.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
 `src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires.
 
-### test_mojeek_engine.py (293 LOC)
+### test_mojeek_engine.py (297 LOC)
 **Purpose:** `src/search/engines/mojeek.py` — the one engine that solves its own challenge, so the
 plumbing is tested, not only the parse. Pure seams: `_is_ready_to_parse` (the
 sufficiency-or-stability parse rule, including the partial-render case observed live three times —
 1 link at the instant the poll first matches after a solved challenge), `_should_fire_verify`,
-`_parse_target`, `_build_results`. Driven seams: `_await_results` against a `_ScriptedTab` that
-dispatches on script identity and counts calls, covering the unchallenged fast path (parses on
-poll 1, `verify()` never fired), the challenged path (`verify()` fired exactly once, parse waits
-out the partial render), budget behaviour (gives up at the deadline still reporting
-`challenge_triggered`, and polls zero times on an already-spent budget), and `_diagnose`'s
-empty-record contract (an unsolved challenge is distinguishable from a page that never had one;
-`marker` stays `None`). `test_block_boilerplate_from_first_poll_does_not_short_circuit` is the
-regression guard for the terminal-verdict-on-a-start-true-condition defect that cost two live runs
-in the `engine_reduction` area — every poll in it carries a live challenge widget and its note text
-while results only arrive on poll 3.
+`_parse_target`, `_build_results`. Driven seams: `_await_results` (via the local
+`_run_await_results` wrapper, added for the partial-diagnosis-on-timeout milestone — every existing
+call site already used `deadline=`/`target=` keywords, so the wrapper supplies the 3 new positional
+parameters `_await_results` gained, `status_chain=[]`/`t0=time.perf_counter()`/`partial=None`,
+without rewriting 6 call sites individually) against a `_ScriptedTab` that dispatches on script
+identity and counts calls, covering the unchallenged fast path (parses on poll 1, `verify()` never
+fired), the challenged path (`verify()` fired exactly once, parse waits out the partial render),
+budget behaviour (gives up at the deadline still reporting `challenge_triggered`, and polls zero
+times on an already-spent budget), and `_diagnose`'s empty-record contract (an unsolved challenge
+is distinguishable from a page that never had one; `marker` stays `None`).
+`test_block_boilerplate_from_first_poll_does_not_short_circuit` is the regression guard for the
+terminal-verdict-on-a-start-true-condition defect that cost two live runs in the
+`engine_reduction` area — every poll in it carries a live challenge widget and its note text while
+results only arrive on poll 3.
 **Calls out:** none (fake tab, one `monkeypatch` on the module's `WAIT_INTERVAL`).
 
 ### test_openalex_engine.py (274 LOC)
@@ -258,7 +271,7 @@ leaking it.
 direct coverage; the scrape-lane tests only mock it as a no-op). Engine field present and correct
 per lane (chromium/camoufox), existing fields unaffected, empty-content still returns `None`.
 
-### test_query_logger.py (372 LOC)
+### test_query_logger.py (404 LOC)
 **Purpose:** `src/search/query_logger.py` (`log_query` fail-soft JSONL write) + per-engine timing
 capture in `src/search/search_web.py` (`_engine_with_timing`, `search_web_workflow` log shape,
 `search_key` matches real `cache.cache_key`) + `cli.py:_log_drilldown` via an isolated subprocess.
@@ -274,7 +287,15 @@ deliberately NOT the patch target.
 **Gotchas:** the subprocess test resolves repo root as `Path(__file__).parent.parent.parent`
 (three levels — `dev/tests/<file>` → `dev/tests` → `dev` → repo root); this depth was silently
 wrong (`.parent.parent`) for one relocation cycle when the file lived at `tests/` before the
-milestone-2 move to `dev/tests/` and must be re-checked on any future relocation.
+milestone-2 move to `dev/tests/` and must be re-checked on any future relocation. As of the
+partial-diagnosis-on-timeout milestone, `_make_mock_engine_with_reason` gained a `partial_facts`
+parameter — if given, the mock writes those facts into the caller-supplied `partial` dict before
+its own `asyncio.sleep(delay)`, simulating a poll-loop checkpoint reached before a cancellation.
+`test_engine_with_timing_timeout_preserves_facts_written_before_cancellation` uses it to prove
+`_engine_with_timing`'s exception branch merges whatever the engine wrote into `partial` with
+`diagnosis_partial: True`; the pre-existing `test_engine_with_timing_timeout` (unchanged mock, no
+`partial_facts`) proves the sibling case — nothing captured still means `diagnosis is None`, not an
+invented fact.
 
 ### test_dedup_exclude.py (155 LOC)
 **Purpose:** `src/news/engine/dedup.py:filter_new_entries` — `exclude_urls` param precedence over

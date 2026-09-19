@@ -3,10 +3,11 @@ import asyncio
 import json
 import logging
 import re
+import time
 from urllib.parse import quote_plus, urlparse, parse_qs
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -57,7 +58,8 @@ _limiters["duckduckgo"] = RateLimiter(max_requests=4, window_seconds=60)
 class DuckDuckGoEngine(BaseEngine):
     name = "duckduckgo"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         logger.info("DuckDuckGo search: %s", query)
         tab = await new_tab()
         search_url = _build_url(query)
@@ -69,7 +71,7 @@ class DuckDuckGoEngine(BaseEngine):
                 logger.warning("DuckDuckGo CAPTCHA detected for: %s", query)
                 diag["containers_found"] = None
                 return [], None, attach_document_status(diag, status_chain)
-            if not await _wait_for_results(tab):
+            if not await _wait_for_results(tab, status_chain, t0, partial):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
                 logger.debug("DuckDuckGo empty for: %s", query)
@@ -97,10 +99,11 @@ def _build_url(query: str) -> str:
     return SEARCH_URL.format(quote_plus(query))
 
 
-async def _wait_for_results(tab) -> bool:
+async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
         count = _extract_value(raw)
+        update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
         await asyncio.sleep(WAIT_INTERVAL)

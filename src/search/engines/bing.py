@@ -4,10 +4,11 @@ import base64
 import json
 import logging
 import re
+import time
 from urllib.parse import urlparse, parse_qs
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -60,13 +61,14 @@ _limiters["bing"] = RateLimiter(max_requests=4, window_seconds=60)
 class BingEngine(BaseEngine):
     name = "bing"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         logger.info("Bing search: %s", query)
         tab = await new_tab()
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            if not await _wait_for_results(tab):
+            if not await _wait_for_results(tab, status_chain, t0, partial):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
                 logger.debug("Bing empty for: %s", query)
@@ -103,10 +105,11 @@ def _clean_url(href: str) -> str:
     return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
-async def _wait_for_results(tab) -> bool:
+async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
         count = _extract_value(raw)
+        update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
         await asyncio.sleep(WAIT_INTERVAL)

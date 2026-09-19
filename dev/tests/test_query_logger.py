@@ -18,13 +18,18 @@ import pytest
 
 def _make_mock_engine_with_reason(
     name: str, results: list, delay: float = 0.0, empty_reason: str | None = None, diagnosis: dict | None = None,
+    partial_facts: dict | None = None,
 ):
     """Mock engine matching the current _engine_with_timing interface:
-    engine.search_with_reason(query, language, max_results) -> (results, empty_reason, diagnosis)."""
+    engine.search_with_reason(query, language, max_results, partial) -> (results, empty_reason, diagnosis).
+    partial_facts, if given, is written into the caller-supplied partial dict before the delay —
+    simulating a poll-loop checkpoint reached before a cancellation."""
     eng = MagicMock()
     eng.name = name
 
-    async def _search_with_reason(query, language, max_results):
+    async def _search_with_reason(query, language, max_results, partial=None):
+        if partial_facts is not None and partial is not None:
+            partial.update(partial_facts)
         if delay:
             await asyncio.sleep(delay)
         return results, empty_reason, diagnosis
@@ -123,7 +128,9 @@ async def test_engine_with_timing_ok():
 
 @pytest.mark.asyncio
 async def test_engine_with_timing_timeout():
-    """_engine_with_timing returns TIMEOUT_WATCHDOG + drop_reason when engine exceeds watchdog."""
+    """_engine_with_timing returns TIMEOUT_WATCHDOG + drop_reason when engine exceeds watchdog.
+    diagnosis stays None when the engine never wrote anything into partial before cancellation —
+    the same "don't invent a fact" rule the guessed-verdict-removal milestone settled."""
     from src.search.search_web import _engine_with_timing
 
     slow = _make_mock_engine_with_reason("slow_eng", [], delay=5.0)
@@ -138,6 +145,31 @@ async def test_engine_with_timing_timeout():
     assert diagnosis is None
     assert isinstance(rate_wait_ms, int)
     assert isinstance(search_ms, int)
+
+
+@pytest.mark.asyncio
+async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation():
+    """A poll-loop checkpoint reached before the watchdog fires survives the cancellation, merged
+    with diagnosis_partial=True — the mechanism this milestone adds. asyncio.wait_for cancels the
+    engine's own Task, not _engine_with_timing itself, so a mutable dict handed to the engine by
+    reference and written into before that cancellation is the only thing that can still be read
+    afterward; this proves exactly that channel."""
+    from src.search.search_web import _engine_with_timing
+
+    slow = _make_mock_engine_with_reason(
+        "slow_eng", [], delay=5.0,
+        partial_facts={"containers_found": False, "pow_link": True, "http_status": 429},
+    )
+
+    results, rate_wait_ms, search_ms, status, drop_reason, diagnosis = await _engine_with_timing(
+        slow, "query", "en", 10, timeout=0.05
+    )
+
+    assert results == []
+    assert status == "TIMEOUT_WATCHDOG"
+    assert diagnosis == {
+        "containers_found": False, "pow_link": True, "http_status": 429, "diagnosis_partial": True,
+    }
 
 
 @pytest.mark.asyncio

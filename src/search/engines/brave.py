@@ -2,9 +2,10 @@
 import asyncio
 import json
 import logging
+import time
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -108,13 +109,14 @@ _limiters["brave"] = RateLimiter(max_requests=4, window_seconds=60)
 class BraveEngine(BaseEngine):
     name = "brave"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         logger.info("Brave search: %s", query)
         tab = await new_tab()
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            found, challenge_triggered, button_present = await _wait_for_results(tab)
+            found, challenge_triggered, button_present = await _wait_for_results(tab, status_chain, t0, partial)
             if not found:
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
@@ -144,17 +146,23 @@ def _extract_value(result):
         return None
 
 
-async def _wait_for_results(tab) -> tuple[bool, bool, bool]:
+async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> tuple[bool, bool, bool]:
     challenge_triggered = False
     button_present = False
     for _ in range(MAX_WAIT_CYCLES):
         state = await _poll_state(tab)
+        if state["button_present"]:
+            button_present = True
+        update_partial(partial, status_chain, t0, {
+            "containers_found": False,
+            "pow_link": state["pow_link"],
+            "button_present": button_present,
+            "challenge_triggered": challenge_triggered,
+        })
         if state["count"] > 0:
             return True, challenge_triggered, button_present
         if state["pow_link"]:
             return False, challenge_triggered, button_present
-        if state["button_present"]:
-            button_present = True
         if state["button_matched"] and not challenge_triggered:
             challenge_triggered = await _click_challenge_button(tab)
         await asyncio.sleep(WAIT_INTERVAL)

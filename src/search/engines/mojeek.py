@@ -6,7 +6,7 @@ import time
 from urllib.parse import quote_plus
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -78,14 +78,15 @@ _limiters["mojeek"] = RateLimiter(max_requests=4, window_seconds=60)
 class MojeekEngine(BaseEngine):
     name = "mojeek"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         deadline = _budget_deadline()
         logger.info("Mojeek search: %s", query)
         tab = await new_tab()
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(_build_url(query), timeout=NAV_TIMEOUT_S)
-            trace = await _await_results(tab, deadline, _parse_target(max_results))
+            trace = await _await_results(tab, deadline, _parse_target(max_results), status_chain, t0, partial)
             if not trace["ready"]:
                 diag = await _diagnose(tab, trace)
                 diag["containers_found"] = False
@@ -122,7 +123,7 @@ def _parse_target(max_results: int) -> int:
     return min(max_results, PAGE_RESULT_COUNT)
 
 
-async def _await_results(tab, deadline: float, target: int) -> dict:
+async def _await_results(tab, deadline: float, target: int, status_chain: list[int], t0: float, partial: dict | None) -> dict:
     trace = {"ready": False, "link_count": 0, "challenge_triggered": False, "poll_count": 0}
     previous = -1
     while time.monotonic() < deadline:
@@ -130,6 +131,9 @@ async def _await_results(tab, deadline: float, target: int) -> dict:
         trace["poll_count"] += 1
         count = facts.get("links", 0)
         trace["link_count"] = count
+        update_partial(partial, status_chain, t0, {
+            "containers_found": trace["ready"], "challenge_triggered": trace["challenge_triggered"],
+        })
         if _is_ready_to_parse(count, previous, target):
             trace["ready"] = True
             return trace

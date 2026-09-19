@@ -22,7 +22,7 @@ _limiters["openalex"] = RateLimiter(max_requests=4, window_seconds=60)
 class OpenAlexEngine(BaseEngine):
     name = "openalex"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("OpenAlex search: %s", query)
         status_code, works = await _fetch_results(query, max_results)
         if status_code == 429:
