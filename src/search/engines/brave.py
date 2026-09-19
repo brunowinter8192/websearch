@@ -15,11 +15,53 @@ SEARCH_URL = "https://search.brave.com/search?q={}"
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
 
-_JS_POLL = """
+_JS_DEEP_BUTTONS = """
+function _deepButtons(root) {
+    var _direct = root.querySelectorAll('button, [role="button"]');
+    var _out = [];
+    for (var _i = 0; _i < _direct.length; _i++) { _out.push(_direct[_i]); }
+    var _all = root.querySelectorAll('*');
+    for (var _j = 0; _j < _all.length; _j++) {
+        if (_all[_j].shadowRoot) { _out = _out.concat(_deepButtons(_all[_j].shadowRoot)); }
+    }
+    return _out;
+}
+var _CHALLENGE_BUTTON_TEXTS = ['verifizieren', 'verify', "i'm not a robot", 'i am not a robot'];
+"""
+
+_JS_POLL = _JS_DEEP_BUTTONS + """
+var _btns = _deepButtons(document);
+var _matched = false;
+for (var _k = 0; _k < _btns.length && !_matched; _k++) {
+    var _text = (_btns[_k].textContent || '').trim().toLowerCase();
+    for (var _m = 0; _m < _CHALLENGE_BUTTON_TEXTS.length; _m++) {
+        if (_text.indexOf(_CHALLENGE_BUTTON_TEXTS[_m]) !== -1) { _matched = true; break; }
+    }
+}
 return JSON.stringify({
     count: document.querySelectorAll('div[data-type="web"]').length,
-    pow_link: !!document.querySelector('a[href*="pow-captcha"]')
+    pow_link: !!document.querySelector('a[href*="pow-captcha"]'),
+    button_present: _btns.length > 0,
+    button_matched: _matched
 });
+"""
+
+_JS_CLICK_CHALLENGE = _JS_DEEP_BUTTONS + """
+var _btns = _deepButtons(document);
+for (var _k = 0; _k < _btns.length; _k++) {
+    var _text = (_btns[_k].textContent || '').trim().toLowerCase();
+    for (var _m = 0; _m < _CHALLENGE_BUTTON_TEXTS.length; _m++) {
+        if (_text.indexOf(_CHALLENGE_BUTTON_TEXTS[_m]) !== -1) {
+            try {
+                _btns[_k].click();
+                return JSON.stringify({clicked: true});
+            } catch (e) {
+                return JSON.stringify({clicked: false});
+            }
+        }
+    }
+}
+return JSON.stringify({clicked: false});
 """
 
 _JS_PARSE = """
@@ -72,16 +114,22 @@ class BraveEngine(BaseEngine):
         try:
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            if not await _wait_for_results(tab):
+            found, challenge_triggered, button_present = await _wait_for_results(tab)
+            if not found:
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
+                diag["challenge_triggered"] = challenge_triggered
+                diag["button_present"] = button_present
                 _log_empty_result(query, diag)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
             if results:
-                return results, None, attach_document_status({}, status_chain)
+                diag = {"challenge_triggered": challenge_triggered, "button_present": button_present}
+                return results, None, attach_document_status(diag, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
+            diag["challenge_triggered"] = challenge_triggered
+            diag["button_present"] = button_present
             return results, None, attach_document_status(diag, status_chain)
         finally:
             await kill_tab(tab)
@@ -96,27 +144,44 @@ def _extract_value(result):
         return None
 
 
-async def _wait_for_results(tab) -> bool:
+async def _wait_for_results(tab) -> tuple[bool, bool, bool]:
+    challenge_triggered = False
+    button_present = False
     for _ in range(MAX_WAIT_CYCLES):
         state = await _poll_state(tab)
         if state["count"] > 0:
-            return True
+            return True, challenge_triggered, button_present
         if state["pow_link"]:
-            return False
+            return False, challenge_triggered, button_present
+        if state["button_present"]:
+            button_present = True
+        if state["button_matched"] and not challenge_triggered:
+            challenge_triggered = await _click_challenge_button(tab)
         await asyncio.sleep(WAIT_INTERVAL)
-    return False
+    return False, challenge_triggered, button_present
 
 
 async def _poll_state(tab) -> dict:
     raw = await tab.execute_script(_JS_POLL)
     val = _extract_value(raw)
-    state = {"count": 0, "pow_link": False}
+    state = {"count": 0, "pow_link": False, "button_present": False, "button_matched": False}
     if val:
         try:
             state.update(json.loads(val))
         except (json.JSONDecodeError, TypeError):
             pass
     return state
+
+
+async def _click_challenge_button(tab) -> bool:
+    raw = await tab.execute_script(_JS_CLICK_CHALLENGE)
+    val = _extract_value(raw)
+    if not val:
+        return False
+    try:
+        return bool(json.loads(val).get("clicked"))
+    except (json.JSONDecodeError, TypeError):
+        return False
 
 
 async def _diagnose(tab) -> dict:
@@ -132,7 +197,11 @@ async def _diagnose(tab) -> dict:
 
 
 def _log_empty_result(query: str, diag: dict) -> None:
-    if diag["marker"] or diag["pow_link"]:
+    if diag["button_present"] and not diag["challenge_triggered"]:
+        logger.warning("Brave challenge candidate seen but not clicked for: %s", query)
+    elif diag["challenge_triggered"]:
+        logger.warning("Brave challenge attempted but unresolved for: %s", query)
+    elif diag["marker"] or diag["pow_link"]:
         logger.warning("Brave PoW/CAPTCHA detected for: %s", query)
     else:
         logger.debug("Brave empty for: %s", query)

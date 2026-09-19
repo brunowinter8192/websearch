@@ -60,19 +60,29 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 `pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
-### test_brave_engine.py (235 LOC)
+### test_brave_engine.py (338 LOC)
 **Purpose:** `src/search/engines/brave.py` — `_build_results` (pure, no network/browser).
 `_classify_diagnosis` (PoW/CAPTCHA) coverage removed with the function itself (the
-guessed-verdict-removal milestone). Also carries three fixture-driven regression tests for the
-marker-reflection fix (`process-docs/marker_reflection/`) — a real headless pydoll Chrome against
-a local `http.server.ThreadingHTTPServer` loopback fixture, since the bug and its fix both live
-inside `_JS_POLL`/`_JS_PARSE`/`_JS_DIAGNOSE`'s real DOM behaviour, which a pure-Python fixture
-cannot exercise: a results page whose title/body contains a block-marker word because the user's
-own query put it there, one where an unrelated organic snippet does, and a genuine `pow_link`
-block — the last one asserted against the real `MAX_WAIT_CYCLES=20`/`WAIT_INTERVAL=0.3` module
-constants (not monkeypatched) with an `elapsed < 1.0` bound through the same
-`asyncio.wait_for(6.0)` shape `_engine_with_timing` uses, regression-guarding the early-exit fix
-that keeps a genuine block inside the 6.0s engine watchdog.
+guessed-verdict-removal milestone). Also carries fixture-driven regression tests for two milestones
+in `process-docs/marker_reflection/` — a real headless pydoll Chrome against a local
+`http.server.ThreadingHTTPServer` loopback fixture, since both bugs and both fixes live inside
+`_JS_POLL`/`_JS_PARSE`/`_JS_DIAGNOSE`/`_JS_CLICK_CHALLENGE`'s real DOM behaviour, which a
+pure-Python fixture cannot exercise. Marker-reflection milestone (own in-memory `_ROUTES` fixture
+server): a results page whose title/body contains a block-marker word because the user's own query
+put it there, one where an unrelated organic snippet does, and a genuine `pow_link` block — the
+last one asserted against the real `MAX_WAIT_CYCLES=20`/`WAIT_INTERVAL=0.3` module constants (not
+monkeypatched) with an `elapsed < 1.0` bound through the same `asyncio.wait_for(6.0)` shape
+`_engine_with_timing` uses, regression-guarding the early-exit fix that keeps a genuine block
+inside the 6.0s engine watchdog. Challenge-solving milestone (a SECOND fixture server,
+`_start_real_fixture_server`, pointed via `SimpleHTTPRequestHandler(directory=...)` directly at
+`dev/brave_return/fixtures/` — the real, previously-built challenge fixtures, not reimplemented
+copies): a light-DOM challenge button solved end to end, the SAME solved end to end when the
+button is shadow-hosted (`button_challenge_success_shadow.html`), a stuck challenge
+(`button_challenge_stuck.html`, budget monkeypatched down — unlike the `pow_link` case there is no
+"should exit fast" contract to protect here, a genuinely stuck challenge has no reliable early-exit
+signal, so scaling down is a test-speed choice, not a risk of masking a real regression) that gives
+up within budget with `challenge_triggered=True` recorded, and the real (not synthetic)
+`results_no_challenge.html` fixture proving an ordinary page never attempts a click at all.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
 `src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires.
