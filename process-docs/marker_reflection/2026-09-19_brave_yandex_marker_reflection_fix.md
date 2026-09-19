@@ -181,3 +181,89 @@ style "unrelated organic content" false-positive source needs to be pinned down 
 than hypothesized, that capture would need to be built first (a `_diagnose(tab)` call is cheap
 enough to add a `document.body.innerHTML` dump behind, guarded to only fire when `marker` is
 truthy — but that is a new capability, not touched here).
+
+## Review round: the block path regressed to timing out (2026-09-19)
+
+Code review caught a real bug in the first pass at the Brave fix above. Before that fix, a genuine
+Brave block (the 429/pow-link cluster) took the immediate-bail branch: `sleep(1.5)` + one
+`_diagnose` call, roughly 1.6s, landing in the log as `EMPTY` with the full diagnosis (`marker`,
+`pow_link`, `title`) intact. After removing that immediate-bail branch, a genuine block had no
+early exit left at all — it fell all the way through `_wait_for_results`'s loop, `MAX_WAIT_CYCLES
+× WAIT_INTERVAL = 20 × 0.3 = 6.0s`, exactly equal to `ENGINE_WATCHDOG_TIMEOUT` in
+`search_web.py`. `_engine_with_timing` wraps the whole `search_with_reason` call in
+`asyncio.wait_for(..., timeout=6.0)`, so the wait loop alone was enough to trip the watchdog before
+`search_with_reason` ever returned — `asyncio.TimeoutError`, caught by `_classify_engine_exception`,
+status becomes `TIMEOUT_WATCHDOG`, and the whole diagnosis dict (`marker`, `pow_link`, `title`,
+everything) is lost, not just delayed. This would have silently turned all 53 of the 2026-09-15
+genuine-block records into unexplained timeouts.
+
+Measured directly before touching anything (`dev/tests/test_brave_engine.py`'s own genuine-block
+fixture, run through `asyncio.wait_for(..., timeout=6.0)` at the real `MAX_WAIT_CYCLES=20`,
+`WAIT_INTERVAL=0.3`, no monkeypatching): `TimeoutError after 6.00s`. Confirmed exactly as
+predicted before writing a line of fix code.
+
+The test committed in the first pass had quietly conceded this by monkeypatching
+`MAX_WAIT_CYCLES=3, WAIT_INTERVAL=0.05` for the genuine-block case only — a tell that the code
+under test could not survive the real production constants, which is exactly what happened when
+the same fixture was re-run without that monkeypatch.
+
+Fix: `pow_link` was already established (Part 1 of this investigation, and again in this review)
+as a signal that never produced a false positive across all 62 marker/pow_link hits in the
+production log — unlike free-text `marker`, it is a real DOM element
+(`a[href*="pow-captcha"]`), not scanned text. `_JS_WAIT` (container count only) became `_JS_POLL`,
+one script returning both `count` and `pow_link` in a single round trip. `_wait_for_results`'s loop
+now returns `True` on `count > 0` (found, unchanged) but ALSO returns `False` immediately — without
+exhausting the remaining poll budget — the moment `pow_link` is seen, instead of only after
+`MAX_WAIT_CYCLES` iterations. This is not a reintroduction of "decide before results are
+established": the check runs INSIDE the same polling loop that is still actively waiting for
+containers, on a signal that has never once been wrong, and only short-circuits a wait that would
+otherwise run to completion anyway with the identical outcome (no results). The orchestrator itself
+did not change from the first pass — `_diagnose(tab)` still only runs once `_wait_for_results`
+returns `False`, so `containers_found` is still always `False`/`True` for this engine, never the
+old `None` sentinel.
+
+Re-measured after the fix, same fixture, same production constants, wrapped in the same 6.0s
+`asyncio.wait_for`: `COMPLETED in 0.06s`, `diag = {'marker': 'proof of work', 'pow_link': True,
+'title': 'Brave Search', 'containers_found': False, ...}` — full diagnosis intact, two orders of
+magnitude under the watchdog. `dev/tests/test_brave_engine.py`'s genuine-block test was rewritten
+to assert against the real `MAX_WAIT_CYCLES`/`WAIT_INTERVAL` module constants directly (not
+monkeypatched) and to assert `elapsed < 1.0` end to end through `search_with_reason`, wrapped in
+the same `asyncio.wait_for(6.0)` `_engine_with_timing` uses — so a future regression back to the
+"no early exit" shape fails this test the same way it fails production, not a smaller synthetic
+version of the problem.
+
+Re-verified against `git stash` of the previous commit's `brave.py`: the rewritten test now fails
+exactly there too (the timing case this time, not just the containers_found-shape case caught by
+the two other fixture tests) — confirmed the test would have caught this had it existed before
+the first pass shipped.
+
+The equivalent question for `yandex.py` does not arise: its early `_is_block_url` check was never
+moved behind `_wait_for_results` in the first pass (kept as the documented "fast short-circuit"),
+so it never had this failure mode — `tab.current_url` is a cheap property read, not a JS round
+trip inside a polling loop, and it still runs exactly once, immediately after navigation.
+
+## Review round: comments and docstrings pruned, stepdown order fixed
+
+The first pass added a module-docstring expansion and a new banner-comment block to both
+`dev/tests/test_brave_engine.py` and `dev/tests/test_yandex_engine.py`, restating context that
+already lives in this file. Reverted both files' docstrings back to their original text and
+removed the added banners — the two files' PRE-EXISTING docstrings and `_build_results`/
+`_is_block_url` banners (from before this session) were left alone, not this session's business.
+
+`brave.py`'s `_build_results`/`_parse_results` order was also fixed while already touching that
+section: `_parse_results` is the caller, `_build_results` the callee — stepdown puts the caller
+first. `_build_results` now follows `_parse_results`, matching the read-order the rest of the file
+already follows (`_wait_for_results` → `_poll_state` → `_diagnose` → `_log_empty_result` →
+`_parse_results` → `_build_results`).
+
+## Final numbers after the review round
+
+Full suite: `438 passed` (`dev/tests/`, ~19s), unchanged count from before the review round — the
+fixes changed what the existing tests exercise, not how many pass.
+
+Live re-verification, same two queries as before, same worktree-local `src/logs/query_log.jsonl`:
+`cloudflare turnstile captcha widget verify programmatically` → Brave 10/10 (search_ms 2326 and
+1200 across two runs), Yandex 10/10; `sourdough starter feeding schedule ratio` → Brave 10/10
+(search_ms 1214 and 897), Yandex 10/10. Diagnosis on every success record:
+`{"document_status_chain": [200], "http_status": 200}` — unchanged shape, confirming the
+DOM-facts-empty-on-success contract still holds after the timing fix.

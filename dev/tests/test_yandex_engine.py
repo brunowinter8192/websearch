@@ -1,22 +1,14 @@
-"""Tests for src/search/engines/yandex.py pure result-parsing / self-link-filter logic, plus a
-fixture-driven regression test for the marker-reflection bug (process-docs/marker_reflection/).
+"""Tests for src/search/engines/yandex.py pure result-parsing / self-link-filter logic.
 
-The pure-function section needs no network, no browser — covers the seams factored out of the
-DOM-driven engine:
+No network, no browser — covers the seams factored out of the DOM-driven engine:
 - _is_self_referential: yandex.com/*.yandex.* domain detection (self-links, video-carousel cards)
-- _is_block_url: showcaptcha/checkcaptcha/captcha redirect detection, scoped to the URL PATH only
-  as of the marker-reflection fix — kept as a function: it is also the early short-circuit
-  optimization inside search_with_reason, independent of the removed verdict
+- _is_block_url: showcaptcha/checkcaptcha/captcha redirect detection — kept: it is also the early
+  short-circuit optimization inside search_with_reason, independent of the removed verdict
 - _build_results: JSON items -> SearchResult list, dropping self-referential URLs
 
 _classify_diagnosis was removed (the guessed-verdict-removal milestone): its output was one of the
 EMPTY_* sub-statuses that no longer exist — the marker/url/ready_state facts it classified are
 still available directly in the diagnosis snapshot.
-
-The fixture-driven section at the bottom DOES run a real pydoll Chrome (headless, local loopback
-fixture server only, no real network) — see dev/tests/test_brave_engine.py's module docstring for
-the full rationale (same pattern, same conftest.py trap dodge via monkeypatching yandex.py's own
-`new_tab`/`kill_tab` names, never src.search.browser.Chrome).
 """
 import asyncio
 import http.server
@@ -119,12 +111,6 @@ def test_build_results_respects_max_results_cap():
     assert len(results) == 5
     assert [r.position for r in results] == [1, 2, 3, 4, 5]
 
-
-# ---------------------------------------------------------------------------
-# Fixture-driven regression test for the marker-reflection bug
-# (process-docs/marker_reflection/) — real pydoll Chrome, local loopback fixture
-# server only, no real network.
-# ---------------------------------------------------------------------------
 
 _OWN_QUERY = "yandex showcaptcha spravka cookie after solving captcha"
 _RESULTS_HTML = """<!doctype html>
