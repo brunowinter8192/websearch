@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><title>fixture query - Brave Search</title></head>
+<body>
+<div id="page">
+  <h1>Es wird überprüft, dass du kein Bot bist</h1>
+  <p>Kurze Überprüfung, bevor Sie mit der Suche fortfahren.</p>
+  <button id="pow-verify-btn" type="button">Verifizieren</button>
+  <a href="/search/classic-captcha">Zum klassischen CAPTCHA wechseln</a>
+</div>
+<script>
+document.getElementById('pow-verify-btn').addEventListener('click', function () {
+  document.getElementById('page').innerHTML = '<p>Letting you in...</p>';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><title>fixture query - Brave Search</title></head>
+<body>
+<div id="page">
+  <h1>Es wird überprüft, dass du kein Bot bist</h1>
+  <p>Kurze Überprüfung, bevor Sie mit der Suche fortfahren.</p>
+  <button id="pow-verify-btn" type="button">Verifizieren</button>
+  <a href="/search/classic-captcha">Zum klassischen CAPTCHA wechseln</a>
+</div>
+<script>
+const RESULTS_HTML = '<div data-type="web"><a href="https://example.org/one" class="search-snippet-title">Result One</a>' +
+  '<div class="snippet-content"><div class="content">snippet one</div></div></div>';
+
+document.getElementById('pow-verify-btn').addEventListener('click', function () {
+  document.getElementById('page').innerHTML = '<p>Letting you in...</p>';
+  setTimeout(function () {
+    document.title = 'fixture query - Brave Search Results';
+    document.getElementById('page').innerHTML = RESULTS_HTML;
+  }, 500);
+});
+</script>
+</body>
+</html>
