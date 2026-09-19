@@ -259,6 +259,7 @@ async def test_genuine_pow_link_block_still_yields_no_results(monkeypatch):
     assert diagnosis["title"] == "Brave Search"
     assert diagnosis["challenge_triggered"] is False
     assert diagnosis["button_present"] is False
+    assert elapsed < 2.0
 
 
 @pytest.mark.asyncio
@@ -354,6 +355,27 @@ async def test_stuck_challenge_gives_up_within_budget_and_records_it_was_attempt
     assert diagnosis["challenge_triggered"] is True
     assert diagnosis["button_present"] is True
     assert diagnosis["containers_found"] is False
+
+
+@pytest.mark.asyncio
+async def test_pow_link_with_clickable_button_solves_challenge_instead_of_giving_up(monkeypatch):
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/pow_link_with_button.html?q={{}}")
+        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert reason is None
+    assert len(results) == 1
+    assert results[0].url == "https://example.org/one"
+    assert diagnosis == {
+        "challenge_triggered": True,
+        "document_status_chain": [200], "http_status": 200,
+    }
 
 
 @pytest.mark.asyncio

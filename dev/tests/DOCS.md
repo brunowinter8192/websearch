@@ -60,18 +60,21 @@ decode-failure passthrough: the same `base64.urlsafe_b64decode` monkeypatch now 
 `pytest.raises(ValueError)` instead of a fallback return value.
 **Calls out:** none (pure function tests, one `monkeypatch` on `base64.urlsafe_b64decode`).
 
-### test_brave_engine.py (403 LOC)
+### test_brave_engine.py (425 LOC)
 **Purpose:** `src/search/engines/brave.py` — `_build_results`, plus fixture-driven regression tests
-for three milestones: the marker-reflection fix and the challenge-solving milestone, both recorded
-in `process-docs/marker_reflection/`, and the partial-diagnosis-on-timeout milestone in
-`process-docs/search_pipeline/`. `_classify_diagnosis` coverage removed with the function itself
-(the guessed-verdict-removal milestone). The regression tests run a real headless pydoll Chrome
-against loopback fixture servers, because every defect and every fix here lives in the engine's
-injected JS reading real DOM state. One test bounds how long a genuine block may take against the
-engine watchdog. One guards against an unrelated button leaking into a success record; it proves
-the mechanism, not how often staggered loading occurs live, and the process-docs entry says why
-that number could not be measured cleanly. One cancels the real engine mid-poll from outside and
-asserts the facts it had already written survive the cancellation.
+for four milestones: the marker-reflection fix, the challenge-solving milestone and the
+button-click-unreachable-under-`pow_link` fix, all recorded in `process-docs/marker_reflection/`,
+and the partial-diagnosis-on-timeout milestone in `process-docs/search_pipeline/`.
+`_classify_diagnosis` coverage removed with the function itself (the guessed-verdict-removal
+milestone). The regression tests run a real headless pydoll Chrome against loopback fixture
+servers, because every defect and every fix here lives in the engine's injected JS reading real
+DOM state. One test bounds how long a genuine block may take against the engine watchdog and now
+also bounds it well under the full budget, proving the `pow_link`-with-no-button grace exit fires.
+One test drives the `pow_link`-plus-clickable-button fixture and asserts the click still happens
+and real results come back. One guards against an unrelated button leaking into a success record;
+it proves the mechanism, not how often staggered loading occurs live, and the process-docs entry
+says why that number could not be measured cleanly. One cancels the real engine mid-poll from
+outside and asserts the facts it had already written survive the cancellation.
 **Calls out:** `pydoll.browser` (`Chrome`, `ChromiumOptions`), `pydoll.commands.TargetCommands` —
 monkeypatches `brave.py`'s own already-imported `new_tab`/`kill_tab` names directly, never touches
 `src.search.browser.Chrome`, so `conftest.py`'s `_no_real_browser_launch` trap never fires. Reads
