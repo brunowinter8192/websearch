@@ -155,17 +155,66 @@ bursting past the pacing to provoke the 429. Both were argued from the IP hypoth
 query log then contradicted. The 429 shape is in any case a `pow-captcha` link page with no
 clickable candidate, a different page from the button challenge.
 
-## Decision of 2026-09-19
+## Later the same day: the probe stopped being blind
 
-No further probing for now. The production query log already records Brave's verdict on every
-run, including the marker and the status chain, so the behaviour is observable without spending
-dedicated live requests. Watch the log instead.
+Everything above was written before the reproduction method was known. It is now known, and the
+probe has run against a real challenge.
 
-Open question, not answered here: whether the search terms that trigger the challenge are ones
-production would ever issue on its own. The seven observed cases were all typed by hand during
-investigation work on other engines' captchas. If ordinary user queries never trigger it, the
-engine defect in `src/search/engines/brave.py` costs far less than the 61 EMPTY runs in the log
-suggest.
+A challenge can be produced on demand. Fire roughly 25 plain curl requests at
+`https://search.brave.com/search?q=...` with an ordinary browser User-Agent. Every one of them
+returns 429. Immediately afterwards, any navigation from a real browser on a brand new profile is
+served the button challenge page. The window is short, single-digit minutes, so whatever is meant
+to meet the challenge has to run right after the burst with no pause.
+
+This worked on every attempt it was tried, four times across the afternoon. It is the single most
+useful thing in this file.
+
+With that, the probe ran again and its report is
+`dev/brave_return/md/brave_pydoll_probe_20260919_133706.md`. One of ten queries was challenged and
+the probe solved it: navigation 329ms, button in the DOM 535ms, click fired 538ms, real results at
+3012ms, 19 links parsed. The trigger that worked was the plain deep-queried `.click()`. The CDP
+mouse-event path was never needed, so Brave does not gate this on a trusted input event.
+
+## The page: there is only one, not two
+
+This file, and the engine, and a good deal of the reasoning on 2026-09-19 all assumed two distinct
+pages — a soft, clickable button challenge, and a hard 429 block carrying a `pow-captcha` link that
+could only be waited out.
+
+That is wrong. It is one page. It carries HTTP 429, a `pow-captcha` link, and a working
+"Verifizieren" button, all at once. The link is the route to the classic captcha offered underneath
+the button, not evidence that nothing is clickable.
+
+The cost of that assumption: `src/search/engines/brave.py` exited on `pow_link` before it ever
+reached its own click branch, so the click was unreachable in production for the whole day it
+existed. It was caught only when the owner looked at the page on screen while the log record for
+that same minute sat next to it, reading `button_present: true` and `challenge_triggered: false`.
+
+The fix and its evidence are in `process-docs/marker_reflection/`.
+
+Lesson for whoever reads this next: the log fields were correct the whole time. What was wrong was
+the meaning attached to them, and no amount of further log reading would have corrected it. Open
+the page.
+
+## Where this area stands at the end of 2026-09-19
+
+Production solves the challenge on its own. Verified live at 20:04 with a burst-provoked
+challenge and an ordinary query straight after: `challenge_triggered: true`,
+`document_status_chain: [429, 200]`, ten results, 5631ms.
+
+No further probing is needed to establish that it works. The production query log now carries
+`challenge_triggered` on every branch including success, so every future solve is visible without
+spending dedicated live requests.
+
+One number is worth watching and was deliberately not acted on. Three measured solves came in at
+3012ms, 4718ms and 5631ms against a 6.0s engine watchdog. Three points is not a distribution, and
+the owner's decision was to gather ordinary production runs before touching the budget rather than
+raise it on a hunch. If a solve ever overruns, the record will say `challenge_triggered: true` with
+a `TIMEOUT_WATCHDOG` status, which is unambiguous.
+
+An open question this area cannot answer: how often ordinary user queries meet a challenge at all.
+Every challenge observed on 2026-09-19 was provoked, either by a curl burst or by the marked profile
+that has since been retired. Nobody has yet seen one arrive unprovoked.
 
 ## Known gap left open
 
