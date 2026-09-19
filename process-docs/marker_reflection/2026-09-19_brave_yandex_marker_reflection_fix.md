@@ -267,3 +267,17 @@ Live re-verification, same two queries as before, same worktree-local `src/logs/
 (search_ms 1214 and 897), Yandex 10/10. Diagnosis on every success record:
 `{"document_status_chain": [200], "http_status": 200}` — unchanged shape, confirming the
 DOM-facts-empty-on-success contract still holds after the timing fix.
+
+## Recap pass
+
+Two `DOCS.md` files describe the six files this task touched: `src/search/engines/DOCS.md`
+(`brave.py`/`yandex.py`, kept current throughout the session, not just at the end — LOC and
+behaviour description both re-checked against the final code in this pass) and `dev/tests/DOCS.md`
+(`test_brave_engine.py`/`test_yandex_engine.py`, whose entries had gone stale — they still
+described the pre-session pure-function-only shape). Both `dev/tests/DOCS.md` entries were
+rewritten to cover the new fixture-driven sections, and a new Gotchas bullet was added there
+documenting the two files as a second deliberate exception to `conftest.py`'s real-browser trap
+(same shape as the existing `test_discovery.py`/`test_seed_feeders.py` exception already described
+in that file's Role section) — the trap patches `src.search.browser.Chrome` specifically, and
+these two files never import that module, so it structurally cannot fire; explained rather than
+left for a future reader to rediscover by tracing imports.
