@@ -2,9 +2,10 @@
 import asyncio
 import json
 import logging
+import time
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -64,13 +65,14 @@ _limiters["startpage"] = RateLimiter(max_requests=4, window_seconds=60)
 class StartpageEngine(BaseEngine):
     name = "startpage"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         logger.info("Startpage search: %s", query)
         tab = await new_tab()
         try:
             status_chain = await start_document_status_capture(tab)
             await _submit_search(tab, query)
-            if not await _wait_for_results(tab):
+            if not await _wait_for_results(tab, status_chain, t0, partial):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
                 logger.debug("Startpage empty for: %s", query)
@@ -111,10 +113,11 @@ async def _submit_search(tab, query: str) -> None:
     await tab.execute_script("document.querySelector('button.search-btn').click();")
 
 
-async def _wait_for_results(tab) -> bool:
+async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
         count = _extract_value(raw)
+        update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
         await asyncio.sleep(WAIT_INTERVAL)

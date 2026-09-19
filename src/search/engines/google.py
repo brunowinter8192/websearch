@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import time
 from urllib.parse import quote_plus, urlparse, parse_qs
 
 from curl_cffi.requests import AsyncSession
@@ -10,7 +11,7 @@ from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
 
 from src.search.browser import new_tab, kill_tab
-from src.search.document_status import attach_document_status, start_document_status_capture
+from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
@@ -91,7 +92,8 @@ _limiters["google"] = RateLimiter(max_requests=4, window_seconds=60)
 class GoogleEngine(BaseEngine):
     name = "google"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+        t0 = time.perf_counter()
         logger.info("Google search: %s", query)
         tab = await new_tab()
         await _inject_socs_cookie(tab)
@@ -109,7 +111,7 @@ class GoogleEngine(BaseEngine):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = None
                 return [], None, attach_document_status(diag, status_chain)
-            if not await _wait_for_results(tab):
+            if not await _wait_for_results(tab, status_chain, t0, partial):
                 diag = await _diagnose(tab)
                 diag["containers_found"] = False
                 logger.debug("Google empty for: %s", query)
@@ -162,10 +164,11 @@ async def _handle_consent(tab) -> None:
     await tab.execute_script(_JS_CONSENT)
 
 
-async def _wait_for_results(tab) -> bool:
+async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
         count = _extract_value(raw)
+        update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
         await asyncio.sleep(WAIT_INTERVAL)

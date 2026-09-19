@@ -300,12 +300,13 @@ async def _engine_with_timing(
         effective_query = query_modifier_map[engine.name](query)
     logger.debug("Engine %s effective_query: %s", engine.name, effective_query)
     effective_max = ENGINE_MAX_RESULTS.get(engine.name, max_results)
+    partial: dict = {}
     t0 = time.perf_counter()
     try:
         if timeout is not None:
-            results, empty_reason, diagnosis = await asyncio.wait_for(engine.search_with_reason(effective_query, language, effective_max), timeout=timeout)
+            results, empty_reason, diagnosis = await asyncio.wait_for(engine.search_with_reason(effective_query, language, effective_max, partial), timeout=timeout)
         else:
-            results, empty_reason, diagnosis = await engine.search_with_reason(effective_query, language, effective_max)
+            results, empty_reason, diagnosis = await engine.search_with_reason(effective_query, language, effective_max, partial)
         search_ms = round((time.perf_counter() - t0) * 1000)
         if results:
             return results, rate_wait_ms, search_ms, S.OK, None, diagnosis
@@ -313,7 +314,8 @@ async def _engine_with_timing(
     except Exception as e:
         search_ms = round((time.perf_counter() - t0) * 1000)
         status, drop_reason = _classify_engine_exception(e, timeout, search_ms)
-        return [], rate_wait_ms, search_ms, status, drop_reason, None
+        diagnosis = {**partial, "diagnosis_partial": True} if partial else None
+        return [], rate_wait_ms, search_ms, status, drop_reason, diagnosis
 
 
 def _format_breakdown(query: str, pools: dict[str, list[SearchResult]], all_engine_names: list[str]) -> str:

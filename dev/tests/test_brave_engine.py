@@ -374,3 +374,30 @@ async def test_real_no_challenge_fixture_never_attempts_a_click(monkeypatch):
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }
+
+
+@pytest.mark.asyncio
+async def test_stuck_challenge_cancelled_mid_loop_leaves_partial_facts_behind(monkeypatch):
+    monkeypatch.setattr(brave_mod, "WAIT_INTERVAL", 0.05)
+    server, base_url = _start_real_fixture_server()
+    browser = await _start_headless_browser()
+    partial: dict = {}
+    try:
+        _patch_brave_tab_lifecycle(monkeypatch, browser)
+        monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_stuck.html?q={{}}")
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(
+                BraveEngine().search_with_reason("fixture query", partial=partial), timeout=0.3
+            )
+    finally:
+        await _stop_headless_browser(browser)
+        _stop_fixture_server(server)
+
+    assert partial["containers_found"] is False
+    assert partial["pow_link"] is False
+    assert partial["button_present"] is True
+    assert partial["challenge_triggered"] is True
+    assert "document_status_chain" in partial
+    assert "http_status" in partial
+    assert isinstance(partial["elapsed_ms"], int)
+    assert 0 <= partial["elapsed_ms"] < 300

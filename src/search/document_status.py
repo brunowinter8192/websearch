@@ -1,5 +1,6 @@
 # INFRASTRUCTURE
 import logging
+import time
 
 from pydoll.protocol.network.events import NetworkEvent
 from pydoll.protocol.network.types import ResourceType
@@ -37,3 +38,12 @@ def attach_document_status(diag: dict, status_chain: list[int]) -> dict:
         "document_status_chain": list(status_chain),
         "http_status": status_chain[-1] if status_chain else None,
     }
+
+
+def update_partial(partial: dict | None, status_chain: list[int], t0: float, facts: dict) -> None:
+    if partial is None:
+        return
+    snapshot = attach_document_status(facts, status_chain)
+    snapshot["elapsed_ms"] = round((time.perf_counter() - t0) * 1000)
+    partial.clear()
+    partial.update(snapshot)

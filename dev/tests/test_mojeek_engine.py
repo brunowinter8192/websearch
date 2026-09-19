@@ -59,6 +59,10 @@ def _page(links=0, widget=False, verify_ready=False, state=None, note=None):
     }
 
 
+async def _run_await_results(tab, deadline, target, partial=None):
+    return await _await_results(tab, deadline, target, [], time.perf_counter(), partial)
+
+
 @pytest.fixture(autouse=True)
 def _fast_polls(monkeypatch):
     monkeypatch.setattr(mojeek_mod, "WAIT_INTERVAL", 0.001)
@@ -122,7 +126,7 @@ def test_does_not_fire_when_there_is_no_challenge():
 @pytest.mark.asyncio
 async def test_unchallenged_page_parses_on_the_first_poll_without_firing_verify():
     tab = _ScriptedTab([_page(links=10)])
-    trace = await _await_results(tab, deadline=time.monotonic() + 5, target=10)
+    trace = await _run_await_results(tab, time.monotonic() + 5, 10)
     assert trace["ready"] is True
     assert trace["poll_count"] == 1
     assert tab.verify_calls == 0
@@ -142,7 +146,7 @@ async def test_challenged_page_fires_verify_once_and_waits_out_the_partial_rende
         _page(links=1),
         _page(links=10),
     ])
-    trace = await _await_results(tab, deadline=time.monotonic() + 5, target=10)
+    trace = await _run_await_results(tab, time.monotonic() + 5, 10)
     assert trace["ready"] is True
     assert trace["challenge_triggered"] is True
     assert tab.verify_calls == 1
@@ -160,7 +164,7 @@ async def test_block_boilerplate_from_first_poll_does_not_short_circuit():
         _page(widget=True, verify_ready=True, state="verified", note="Verified successfully. Reloading..."),
         _page(links=10),
     ])
-    trace = await _await_results(tab, deadline=time.monotonic() + 5, target=10)
+    trace = await _run_await_results(tab, time.monotonic() + 5, 10)
     assert trace["ready"] is True
     assert trace["link_count"] == 10
 
@@ -172,7 +176,7 @@ async def test_block_boilerplate_from_first_poll_does_not_short_circuit():
 @pytest.mark.asyncio
 async def test_unsolved_challenge_gives_up_at_the_deadline_and_reports_it_was_triggered():
     tab = _ScriptedTab([_page(widget=True, verify_ready=True, state="verifying", note="Waiting for verification.")])
-    trace = await _await_results(tab, deadline=time.monotonic() + 0.05, target=10)
+    trace = await _run_await_results(tab, time.monotonic() + 0.05, 10)
     assert trace["ready"] is False
     assert trace["challenge_triggered"] is True
     assert tab.verify_calls == 1
@@ -181,7 +185,7 @@ async def test_unsolved_challenge_gives_up_at_the_deadline_and_reports_it_was_tr
 @pytest.mark.asyncio
 async def test_spent_budget_polls_nothing_at_all():
     tab = _ScriptedTab([_page(links=10)])
-    trace = await _await_results(tab, deadline=time.monotonic() - 1, target=10)
+    trace = await _run_await_results(tab, time.monotonic() - 1, 10)
     assert trace["ready"] is False
     assert trace["poll_count"] == 0
     assert tab.poll_calls == 0
@@ -191,7 +195,7 @@ async def test_spent_budget_polls_nothing_at_all():
 async def test_empty_poll_read_is_treated_as_no_facts_yet_not_as_results():
     tab = _ScriptedTab([])
     tab.poll_replies = [{}]
-    trace = await _await_results(tab, deadline=time.monotonic() + 0.05, target=10)
+    trace = await _run_await_results(tab, time.monotonic() + 0.05, 10)
     assert trace["ready"] is False
     assert trace["link_count"] == 0
 

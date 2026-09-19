@@ -33,7 +33,7 @@ _TIMEOUT = 6.0
 class ScholarEngine(BaseEngine):
     name = "google_scholar"
 
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None, dict | None]:
+    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
         logger.info("Scholar search: %s", query)
         url = _build_url(query, language, max_results)
         r = await _fetch(url)
