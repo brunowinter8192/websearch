@@ -193,7 +193,7 @@ it is set to a non-integer string (the removed silent-fallback-to-14 behavior's 
 `src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
 `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
-### _browser_fakes.py (22 LOC)
+### _browser_fakes.py (23 LOC)
 **Purpose:** Shared `FakeChrome` and `_reset_state(monkeypatch, browser)` used by both
 `test_browser.py` and `test_browser_get_tab.py` — not collected by pytest (no `test_*.py` name),
 and cannot import `src/` itself (dev-script import boundary), so `_reset_state` takes the already-

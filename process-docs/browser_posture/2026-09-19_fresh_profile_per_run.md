@@ -197,3 +197,15 @@ standing precedent `2026-09-17_search_lane_no_spaces_drag.md` already recorded f
 class of script. `~/.websearch/browser-session-selflaunch` and its `.marked-*` sibling: never read
 from, never written to, by any code path this milestone touches — confirmed by construction, not
 just by not looking.
+
+## Recap pass
+
+`git diff integration --name-only` inventoried exactly the files this milestone touched — `src/
+search/browser.py`, `dev/tests/test_browser.py`/`test_browser_get_tab.py`/`_browser_fakes.py`,
+`src/search/DOCS.md`, `dev/tests/DOCS.md`, and this entry. Both `DOCS.md` files were already
+updated during implementation, not left for the recap pass; re-checked every touched module's
+`wc -l` against its own DOCS.md heading rather than trusting the earlier count still held. One
+drift found: `dev/tests/_browser_fakes.py` grew from 22 to 23 lines (the `_session_dir` reset line
+added to `_reset_state`) and its DOCS.md heading had not been re-measured after that edit —
+corrected. `src/search/browser.py` (301), `dev/tests/test_browser.py` (386), and `dev/tests/
+test_browser_get_tab.py` (225) all already matched their DOCS.md headings exactly.
