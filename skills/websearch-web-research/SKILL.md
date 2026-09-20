@@ -5,13 +5,15 @@ description:
 
 # Web Research — Skill
 
-**Der Standard ist der Permanent Capture Workflow.**
-- Gehe immer von einem permanenten Capture nach RAG aus.
-- Ein Ad-hoc-Scrape direkt im Chat passiert nur, wenn der Nutzer AUSDRÜCKLICH danach fragt.
-- Die Umwandlung von PDF nach MD ist ein eigener Ablauf und steht im Skill `websearch-pdf`.
-
-**Alles läuft über `websearch <command>`, das im PATH liegt, und zwar im Vordergrund.**
-- Also ohne `&` und ohne Redirect.
+**Ein Deep Dive hängt am Typ der Domain, nie an deinem Bedarf.**
+- Der Deep-Dive-Workflow wird genutzt, basierend auf den Ergebnissen, die du mit den Commands erzielt hast.
+- Diese Domaintypen kommen für einen Deep Dive meist infrage:
+   - Dokumentation einer Bibliothek, eines Frameworks oder einer API.
+   - Handbuch oder Referenz eines Herstellers.
+- Diese Typen kommen oft nicht infrage:
+   - Blog, News, Forum, Produktseite, Changelog, Release Feed.
+- Schlage dem User proaktiv einen Deep Dive vor.
+    - Solltest du den kleinsten Verdacht haben, dass auch andere Websites der Domain konsultierenswert sind, schlage einen Deep Dive vor.
 
 **Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
 - Die Sprache des Chats gilt hier nicht.
@@ -24,11 +26,9 @@ description:
 | Über alle Engines suchen und die Trefferzahlen sehen | `websearch search_web "<query>"` |
 | Die URLs einer einzelnen Engine ausklappen | `websearch search_engine_drilldown "<query>" --engine <name>` |
 | Eine Seite in vollständiges Markdown wandeln | `websearch scrape_url_chromium <url>` |
+| Bereits gescrapete Seiten in eine Collection legen | `websearch index_scrapes <collection> <url> [<url> ...]` |
 
 ### search_web
-
-**Der Einstieg in jede Recherche, danach entscheidest du selbst, welche Engine du ausklappst.**
-- Für einen Deep-Dive feuerst du 2 bis 4 parallele Aufrufe mit Varianten der Query ab.
 
 #### Input args
 
@@ -37,7 +37,7 @@ description:
 #### Output
 
 ```
-Engine breakdown for "dachziegel frostschaden erkennen":
+Engine breakdown for "<query>":
   google               8
   duckduckgo           0
   mojeek               10
@@ -48,14 +48,17 @@ Engine breakdown for "dachziegel frostschaden erkennen":
   yandex               0
 ```
 
-- Die Zahl ist die Menge der Treffer, die diese Engine beigesteuert hat.
-- Eine 0 heißt, die Engine hat nichts geliefert, und nicht, dass es zu dieser Query nichts gibt.
-- Das Ergebnis liegt im Cache, der Drilldown kostet also keinen zweiten Suchlauf.
+- Die Zahl ist die Menge der URLs, die diese Engine zurückgegeben hat.
 
 ### search_engine_drilldown
 
-**Welche Engine du ausklappst, ist deine freie Wahl, geleitet von den Trefferzahlen.**
-- Bei Papers und Büchern lohnt `openalex` zuerst, dessen Einträge tragen eine `PDF:`-Zeile mit der direkten URL zum Volltext.
+**Schau dir die URLs eines oder mehrerer Engines an**
+- Solltest du feststellen, dass eine Engine auf deine Query keine brauchbaren Ergebnisse liefert, versuche IMMER eine kürzere Query in anderen Worten.
+
+**PDF-URLs werden IMMER an den User zum Download gegeben**
+- Bevorzuge PDFs vor anderen Webinhalten.
+- Die `PDF:`-Zeile ist der einzige Weg zum Volltext, denn eine `.pdf`-URL lässt sich nicht scrapen.
+- Der Nutzer lädt selbst, die Umwandlung nach Markdown steht im Skill `websearch-pdf`.
 
 #### Input args
 
@@ -65,20 +68,18 @@ Engine breakdown for "dachziegel frostschaden erkennen":
 #### Output
 
 ```
-Results from brave for "dachziegel frostschaden erkennen"
+Results from <engine> for "<query>"
 
-1. Wie erkenne und verhindere ich Frostschäden am Dach?
-   URL: https://www.dachdecker-spengler.com/wissenswertes/dachdeckerei/frostschaeden-am-dach/
-   Snippet: Des Weiteren sind Ziegel aufgrund ihrer physischen Beschaffenheit nicht so massiv wie Dachsteine.
+1. <Titel der Seite>
+   URL: https://example.com/a
+   Snippet: <Textauszug der Seite>
+
+2. <Titel des Papers>
+   URL: https://example.com/b
+   PDF: https://example.com/b.pdf
 ```
 
-- `PDF:` erscheint nur, wo die Engine eine direkte Volltext-URL kennt, in der Praxis bei `openalex`.
-- `Date:` erscheint nur, wo die Engine ein Datum liefert.
-- Nennst du eine Engine, die für diese Query nichts im Cache hat, bekommst du die Liste der verfügbaren.
-
 ### scrape_url_chromium
-
-**Es gibt genau eine Scrape-Lane, du wählst also nicht pro Aufruf.**
 
 #### Input args
 
@@ -88,13 +89,36 @@ Results from brave for "dachziegel frostschaden erkennen"
 
 - Der vollständige Seiteninhalt als Markdown, ohne Längenbegrenzung.
 
-**Scrape niemals eine `.pdf`-URL, das liefert einen Fehler.**
-- Bei PDFs und Büchern gibst du dem Nutzer die exakten URLs aus den Suchergebnissen.
-- Der Nutzer lädt sie selbst herunter.
+### index_scrapes
+
+**Jede Seite, die du mit `scrape_url_chromium` gescrapet hast, liegt auf der Platte und ist direkt indexierbar**
+- Sofern du den Inhalt der URL gelesen hast, stelle dir folgende Fragen:
+    - Kann eine spätere Session vom Inhalt der Website profitieren?
+    - Besteht bei der Website die Gefahr, dass sie in den nächsten 1 bis 2 Monaten überholt ist?
+- NUR wenn die erste mit ja und die zweite mit nein zu beantworten ist, schlage dem User ein Indexieren der Website vor
+    - Frage den Nutzer nach der Zielcollection, bevor du das Kommando aufrufst.
+
+#### Input args
+
+- `collection` — der Name der Ziel-Collection, die bereits existieren muss.
+- `url` — eine oder mehrere URLs, die zuvor in dieser Session gescrapet wurden.
+
+#### Output
+
+```
+indexed: https://example.com/a -> example_com_a.md (18365 bytes)
+no sidecar found: https://example.com/b
+failed: https://example.com/c (<Grund>)
+```
+
+- Die Bytezahl ist die Größe der abgelegten Datei.
+- Eine auffällig kleine Datei ist meist eine Block- oder Fehlerseite und gehört nicht in die Collection.
+   - Melde das dem Nutzer, statt es stillschweigend stehen zu lassen.
+- Nennst du eine Collection, die es nicht gibt, bricht das Kommando ab und legt nichts an.
 
 ---
 
-## Permanent Capture Workflow
+## Deep Dive Workflow
 
 **Fehler, die der Worker meldet, stoppen den Ablauf nicht.**
 - Führe den Ablauf bis zum Ende durch, es sei denn ein Fehler ist so schwer, dass ein Weitermachen unmöglich wird.
