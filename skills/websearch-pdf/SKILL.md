@@ -13,6 +13,9 @@ EIN Command wandelt ALLE PDFs des Batches nacheinander um, jedes als ganzes Doku
 - MINERU = `~/Documents/ai/Mineru/venv/bin/python ~/Documents/ai/Mineru/workflow.py`
 - COLLECTION = `trading-reference`, der Standard, den du nur bestätigst wenn der Nutzer eine andere nennt
 - OUTPUT_DIR = `~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<COLLECTION>/`
+- PDF_DIR = `~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/pdf/<Thema>/`, der etablierte PDF-Ablageort.
+  `<Thema>` ist ein bestehender Unterordner (z.B. `RAG`, `Trading`, `wise2627`), der zur Collection passt;
+  existiert keiner, lege einen passenden an.
 
 ## Regel
 Das CONVERT-Command führt der NUTZER aus. Claude führt die Benennung, die Cleanup-Skripte und `rag-cli index` aus.
@@ -21,9 +24,11 @@ Das CONVERT-Command führt der NUTZER aus. Claude führt die Benennung, die Clea
 1. Vergib pro PDF einen STEM in PascalCase, ausschließlich alphanumerisch plus Unterstrich, also keine eckigen
    Klammern, keine runden Klammern, keine Punkte, keine Kommas und keine Leerzeichen. Benenne das Quell-PDF
    direkt an Ort und Stelle um nach `<STEM>.pdf`.
-2. Skip-Check: Wirf jedes PDF raus, zu dem es bereits `<OUTPUT_DIR>/<STEM>.md` gibt. Nur noch nicht umgewandelte
+2. Kopiere jedes umbenannte PDF nach `<PDF_DIR>/<STEM>.pdf`. Das Convert-Command referenziert IMMER die
+   Archiv-Pfade unter PDF_DIR, nie die Downloads.
+3. Skip-Check: Wirf jedes PDF raus, zu dem es bereits `<OUTPUT_DIR>/<STEM>.md` gibt. Nur noch nicht umgewandelte
    PDFs gehen in das Command.
-3. Das Backend ist immer `vlm-auto-engine` (mlx).
+4. Das Backend ist immer `vlm-auto-engine` (mlx).
 
 ## Phase 1 — MinerU convert (der NUTZER führt aus, EIN Command für den ganzen Batch)
 POSTE DAS COMMAND IM CHAT und schreibe es niemals in eine Datei. Es ist EIN Codeblock, der ALLE nicht
