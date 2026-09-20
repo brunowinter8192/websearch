@@ -38,6 +38,7 @@ from src.search.query_logger import log_query
 from urllib.parse import urlparse
 
 from src.scraper.chromium_scrape import scrape_url_chromium_workflow
+from src.scraper.index_scrapes import index_scrapes_workflow
 from src.crawler.discovery import discover_urls_workflow
 
 atexit.register(kill_own_chrome_atexit)
@@ -110,7 +111,7 @@ def _write_discovery_output(result, url_file: str) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = NoHelpParser(
         prog="cli.py",
-        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls."
+        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls, index_scrapes."
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -145,6 +146,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--url-file", required=True,
                    help="Path to write the discovered URL list (one per line, for pipe_scraper --url-file)")
 
+    # ── index_scrapes ─────────────────────────────────────────────────────────
+    p = sub.add_parser(
+        "index_scrapes",
+        help="Index previously-scraped URLs into a RAG collection (reads each URL's own sidecar)."
+    )
+    p.add_argument("collection", help="Target RAG collection name")
+    p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
+
     return parser
 
 
@@ -171,6 +180,23 @@ def _dispatch_search_engine_drilldown(args) -> None:
     print(format_engine_pool(pools[args.engine], args.engine, args.query))
 
 
+def _format_index_outcome(outcome) -> str:
+    if outcome.status == "indexed":
+        return f"indexed: {outcome.url} -> {outcome.detail} ({outcome.byte_count} bytes)"
+    if outcome.status == "no_sidecar":
+        return f"no sidecar found: {outcome.url}"
+    return f"failed: {outcome.url} ({outcome.detail})"
+
+
+def _dispatch_index_scrapes(args) -> None:
+    result = index_scrapes_workflow(args.collection, args.urls)
+    if not result.ok:
+        print(f"index_scrapes FAILED: {result.error}", file=sys.stderr)
+        sys.exit(1)
+    for outcome in result.outcomes:
+        print(_format_index_outcome(outcome))
+
+
 def main():
     args = build_parser().parse_args()
 
@@ -191,6 +217,10 @@ def main():
     elif args.cmd == "discover_urls":
         result = asyncio.run(discover_urls_workflow(args.seed_url))
         _write_discovery_output(result, args.url_file)
+        return
+
+    elif args.cmd == "index_scrapes":
+        _dispatch_index_scrapes(args)
         return
 
     print(result[0].text)
