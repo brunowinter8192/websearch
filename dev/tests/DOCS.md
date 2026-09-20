@@ -236,8 +236,8 @@ leaking it.
 direct coverage; the scrape-lane tests only mock it as a no-op). Engine field present and correct
 per lane (chromium/camoufox), existing fields unaffected, empty-content still returns `None`.
 
-### test_index_scrapes.py (M2, 2026-09-20)
-**Purpose:** `src/scraper/index_scrapes.py` — first test coverage for this module. Sidecar
+### test_index_scrapes.py (159 LOC)
+**Purpose:** `src/scraper/index_scrapes.py` — first test coverage for this module (M2, 2026-09-20). Sidecar
 resolution with multiple scrapes of the same URL (latest-by-filename wins, proven against a
 synthetic three-sidecar fixture modeled on the real multi-scrape mojeek case documented in
 `src/scraper/DOCS.md`'s own Gotchas); `_url_to_filename`/`_write_collection_file` convention match

@@ -113,3 +113,183 @@ is itself the sharpest single data point against the old default still being in 
   touched/rewritten after creation, its retention clock resets. Not currently a problem (each
   sidecar is written once, never rewritten), but worth knowing before building anything that
   might re-save a sidecar in place.
+
+## Milestone: `index_scrapes` CLI subcommand (M2, 2026-09-20)
+
+### Why
+
+This is the mechanism the previous milestone's handoff note said was "not built yet": a user
+reads an ad-hoc `scrape_url_chromium` result in chat, then decides — after reading, never before —
+that it should be persisted into a RAG collection. `websearch index_scrapes <collection> <url>
+[<url> ...]` is the CLI surface for that decision. The agent naming URLs must not need to know
+where a sidecar lives or where the collection directory lives — the tool resolves both, keeping
+the agent's context small.
+
+### What got built
+
+New module `src/scraper/index_scrapes.py` (92 LOC), `index_scrapes_workflow(collection, urls) ->
+IndexScrapesResult`, one new `cli.py` subcommand. Per URL, in order: resolve its sidecar, strip
+the sidecar's own header, rewrite in the `rag-cli` collection convention, write into the
+collection directory, shell out to `rag-cli index --collection <collection> --document
+<filename>`. Indexing happens per file, not batched at the end — `rag-cli index` only ever takes
+one `--document` per call, so batching would just move the same loop later with strictly worse
+failure isolation.
+
+Tripwire: if `RAG_CLI_COLLECTIONS_ROOT / collection` is not a directory, the WHOLE run aborts
+before any URL is touched (`IndexScrapesResult.ok=False`), and the directory is never created.
+`RAG_CLI_COLLECTIONS_ROOT` is a hardcoded absolute path (a separate project's data directory,
+given directly by the project owner as an external fact) — no env override was added; none was
+requested and there is no observed need for one, unlike `WEBSEARCH_SCRAPE_LOG_PATH`, which already
+had a real, pre-existing override mechanism this module reuses as-is for locating the sidecar dir.
+
+### URL -> sidecar resolution: recompute the slug, latest filename wins
+
+`scrape_logger.write_sidecar` names each sidecar `<sanitized-ts>_<url-slug-with-dashes>.md`. To
+resolve a URL back to its sidecar, `_find_sidecar` recomputes `scrape_logger._url_slug(url)` (the
+exact function `write_sidecar` itself uses — imported, not reimplemented) and globs
+`sidecar_dir.glob(f"*_{slug}.md")`. Filenames sort lexically = chronologically, because the
+timestamp prefix (`YYYY-MM-DDTHH-MM-SS.mmmZ`, colons already sanitized to dashes) has fixed field
+widths and one separator throughout. **The lexically-last (= most recent) match wins, unconditionally.**
+
+This was checked against real production data, not assumed. `WEBSEARCH_SCRAPE_LOG_PATH` pointed at
+the main checkout's real `src/logs/scrape_content/` (80 real sidecars at the time) turned up this
+exact case for `https://www.mojeek.com/search?q=python+asyncio+tutorial`:
+
+```
+2026-09-17T16-41-00.707Z_..._python-asyncio-tutorial.md   364 bytes  (block page: "Verification required")
+2026-09-17T16-43-11.214Z_..._python-asyncio-tutorial.md  7845 bytes  (real content)
+2026-09-17T16-44-09.595Z_..._python-asyncio-tutorial.md   364 bytes  (block)
+2026-09-17T16-44-48.629Z_..._python-asyncio-tutorial.md   364 bytes  (block)
+2026-09-17T16-45-48.430Z_..._python-asyncio-tutorial.md   364 bytes  (block)
+2026-09-17T16-53-41.001Z_..._python-asyncio-tutorial.md  8912 bytes  (real content, second-to-last)
+2026-09-17T16-54-15.360Z_..._python-asyncio-tutorial.md   364 bytes  (block — THIS is the latest one)
+```
+
+Seven sidecars for that one exact URL (not five — I recounted from the real files; the number
+given in the task framing this milestone started from was off, doesn't matter, the real count is
+what's recorded here). The literal latest-by-timestamp sidecar for this URL **is** a 364-byte
+block page, with a real 8912-byte content sidecar sitting one scrape earlier. "Latest wins" picks
+the block page here. This was a deliberate choice, not an oversight: recency is the only
+non-content-inspecting tie-break available, and this project has repeatedly removed content
+judgment from the scrape path on user decision (`process-docs/scrape_pipeline/`) — searching
+backwards past the latest match for a "better" one would be exactly that judgment, reintroduced
+one layer up. If a successor is ever asked to change this tie-break, re-read this real example
+first; it is the concrete case any change has to justify itself against, not a hypothetical.
+
+### The byte-count requirement this milestone added, and why it exists
+
+The project owner's own reaction to the block-page finding above: print the written byte count on
+every `indexed:` line (`indexed: <url> -> <filename> (<n> bytes)`), acted on by nothing. This
+makes a 364-byte result visible in the CLI output at a glance without anyone opening the file — a
+reported fact sitting next to the URL, not a threshold, not a skip, not a warning. `byte_count` is
+computed from the actual bytes written to the collection file (source-comment line + blank line +
+content, UTF-8-encoded length), not copied from the sidecar's own `bytes:` header line (that
+header is dropped entirely — see below — and in any case would measure different bytes, since it
+covers only the sidecar's raw scraped content, not the collection file's own header-replaced
+shape).
+
+### The sidecar header: dropped, not carried over
+
+`write_sidecar`'s own header (`url`/`ts`/`bytes`/`mode`/`engine`, five HTML-comment lines) is
+stripped entirely and replaced with the fixed `rag-cli` collection convention: one line,
+`<!-- source: <url> -->`, blank line, then content. This is not a new decision — it matches what
+`src/crawler/pipe_scraper_acquisition.py`'s own batch-pipeline `_scrape_one` already writes for
+every collection file that pipeline produces, confirmed by reading a real file in the
+`websearch-reference` collection directory. Nothing is lost: the sidecar itself is read-only to
+this module and stays on disk untouched (retention now 90 days, see the milestone above), so
+`ts`/`bytes`/`mode`/`engine` remain recoverable there if ever needed. `_sidecar_content` isolates
+the content by splitting the sidecar's raw text on the first `"\n\n"` — always exactly the
+header/content boundary, because `write_sidecar` always writes `header + "\n" + content` and the
+header string itself already ends in one `\n`, giving exactly one blank line before content
+starts, every time, for every one of the 80 real sidecars inspected.
+
+### Real discrepancy found: `_url_to_filename` does not match one pre-existing file, and that's fine
+
+The task's own worked example named `src/crawler/pipe_scraper_acquisition.py`'s `_url_to_filename`
+as already producing the collection convention, pointing at the real file
+`api_semanticscholar_org_graph_v1_swagger.md` (source
+`https://api.semanticscholar.org/graph/v1/swagger.json`) as the model to match. Calling the real,
+installed function on that exact URL does NOT reproduce that filename:
+
+```
+>>> _url_to_filename("https://api.semanticscholar.org/graph/v1/swagger.json")
+'api_semanticscholar_org_graph_v1_swagger_json.md'
+```
+
+The real file on disk has no `_json` suffix; the function's regex (`re.sub(r'[^a-zA-Z0-9]', '_',
+...)`) slugs the `.` in `.json` like any other non-alphanumeric character, it does not treat a
+trailing extension specially. I sampled ~40 other real files in `websearch-reference` (all
+`api.stackexchange.com/docs/...` URLs, none with a path extension) and every one of those matches
+`_url_to_filename`'s real output exactly. Conclusion recorded, not just assumed: the one
+`swagger.md` file predates this function or this milestone and was produced some other way — it is
+the outlier, not evidence of a different current convention. `index_scrapes.py` follows
+`_url_to_filename` exactly as written, reused via import (not reimplemented, not patched to strip
+extensions) — the function is shared with the batch pipeline, so a local special-case here would
+silently NOT apply to that pipeline's own files, producing a new, second inconsistency instead of
+fixing the old one. If a successor wants to close this gap, it has to be done in
+`pipe_scraper_acquisition.py` itself, deliberately, with its own reason — not chased from here.
+
+### Test count
+
+`./venv/bin/python -m pytest dev/tests/` — 454 passed before this milestone (unchanged from the
+retention milestone's own "after" count), 463 passed after (9 new, `dev/tests/test_index_scrapes.py`,
+none removed or changed elsewhere).
+
+### Verification (real command, real data, real collection, then undone)
+
+`WEBSEARCH_SCRAPE_LOG_PATH` pointed at the main checkout's real `src/logs/scrape_log.jsonl` (the
+worktree's own `src/logs/` is empty — sidecars are gitignored, per-worktree). Picked the real
+Claude Opus 4.5 Anthropic sidecar (18300 bytes of real content, confirmed non-block beforehand,
+confirmed as the only sidecar for that exact URL, confirmed not already present in the collection):
+
+```
+$ WEBSEARCH_SCRAPE_LOG_PATH=.../src/logs/scrape_log.jsonl ./venv/bin/python cli.py index_scrapes websearch-reference "https://www.anthropic.com/news/claude-opus-4-5"
+indexed: https://www.anthropic.com/news/claude-opus-4-5 -> www_anthropic_com_news_claude_opus_4_5.md (18365 bytes)
+```
+
+Resulting file in the real collection directory, name + first 3 lines:
+
+```
+www_anthropic_com_news_claude_opus_4_5.md
+<!-- source: https://www.anthropic.com/news/claude-opus-4-5 -->
+
+Announcements
+```
+
+`rag-cli`'s own `.json` sidecar (its business, not this module's) confirmed the real index call
+ran: `"collection": "websearch-reference"`, `"document":
+"www_anthropic_com_news_claude_opus_4_5.md"`, 12 real content chunks.
+
+Undone, run alone (this environment enforces that `rag-cli index`/`rag-cli delete` run with
+nothing else chained in the same Bash call):
+
+```
+$ rag-cli delete --collection websearch-reference --document www_anthropic_com_news_claude_opus_4_5.md
+Deleted 12 chunks
+```
+
+Both the `.md` and rag-cli's own `.json` confirmed gone from the collection directory afterward.
+The original sidecar in `websearch`'s own `src/logs/scrape_content/` was confirmed untouched
+(`head -1` still showed its original `url:` header line) — this module never writes to a sidecar,
+only reads it.
+
+### For whoever picks up the next `adhoc_persistence` milestone
+
+- The previous milestone's handoff note ("the read-back mechanism is not built yet") is resolved
+  by this one. What's still open: `index_scrapes` is a manual CLI call an agent has to remember to
+  make after reading a scrape — nothing in the skill layer (`skills/websearch-web-research/` etc.)
+  yet tells an agent when or why to reach for it. That's a skill-doc question, out of scope for
+  this module itself.
+- The block-page-can-win-by-recency fact is real and load-bearing for how this tool is meant to be
+  used: it reports what happened, it does not protect anyone from naming a bad URL. Do not "fix"
+  this by adding a size/content check later without a fresh, explicit user decision to do so — see
+  the tie-break section above for the full reasoning and the real mojeek numbers to re-check
+  against if that decision ever gets made.
+- The `_url_to_filename`/`swagger.md` mismatch is unresolved and deliberately left that way. If it
+  ever needs closing, it belongs in `src/crawler/pipe_scraper_acquisition.py` (the function's real
+  home, shared with the batch pipeline), not patched locally in `index_scrapes.py`.
+- `RAG_CLI_COLLECTIONS_ROOT` (`src/scraper/index_scrapes.py`) is this machine's real, hardcoded
+  path into a sibling project's data directory. It has no test/env override by design. Any test
+  touching it monkeypatches the module attribute directly (`monkeypatch.setattr(index_scrapes,
+  "RAG_CLI_COLLECTIONS_ROOT", tmp_path)`), the same pattern already used elsewhere in this test
+  suite for module-level constants (e.g. `test_mojeek_engine.py`'s `WAIT_INTERVAL`).
