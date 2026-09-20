@@ -163,10 +163,12 @@ Chrome/Firefox) so it zombies until reaped — tests check `Popen.poll()`, not `
 
 ### test_log_janitor.py (17 LOC)
 **Purpose:** `src/log_janitor.py::get_retention_days` — first test coverage for this module. As of
-2026-09-09: defaults to 14 when `WEBSEARCH_LOG_RETENTION_DAYS` is unset; raises `ValueError` when
-it is set to a non-integer string (the removed silent-fallback-to-14 behavior's replacement — see
-`src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
-`dev/logging/` for their own dev-script exploration, out of scope for this file.
+2026-09-09: raises `ValueError` when `WEBSEARCH_LOG_RETENTION_DAYS` is set to a non-integer string
+(the removed silent-fallback-to-14 behavior's replacement — see `src/DOCS.md`'s Gotchas). As of
+2026-09-20: defaults to 90 (raised from 14) when the env var is unset — the sidecar retention
+window a user needs to still find a scrape's sidecar on disk when deciding, after reading it in
+chat, whether to index it into a RAG collection. `maybe_prune_jsonl`/`maybe_prune_sidecars` are not
+covered here — see `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
 ### _browser_fakes.py (23 LOC)
 **Purpose:** Shared `FakeChrome` and `_reset_state(monkeypatch, browser)` used by both

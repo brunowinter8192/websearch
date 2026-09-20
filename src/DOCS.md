@@ -8,7 +8,7 @@ Root of the source tree. `log_janitor.py` and `death_pipe.py` are the two `.py` 
 
 ### log_janitor.py (79 LOC)
 
-**Purpose:** 14-day log retention janitor. On-write trigger with 1h marker-throttled slow path. Three public functions: `get_retention_days()` (env override — as of 2026-09-09 raises on an unparsable value instead of swallowing it, see Gotchas), `maybe_prune_jsonl(log_path)` (timestamp-based JSONL filter + atomic rewrite), `maybe_prune_sidecars(sidecar_dir)` (mtime-based `.md` unlink). `maybe_prune_jsonl`/`maybe_prune_sidecars` still log every failure as WARNING and swallow it, including one raised by `get_retention_days()` reached through them — only `cli.py`'s own direct call site is a real, uncaught tripwire.
+**Purpose:** 90-day log retention janitor. On-write trigger with 1h marker-throttled slow path. Three public functions: `get_retention_days()` (env override — as of 2026-09-09 raises on an unparsable value instead of swallowing it, see Gotchas), `maybe_prune_jsonl(log_path)` (timestamp-based JSONL filter + atomic rewrite), `maybe_prune_sidecars(sidecar_dir)` (mtime-based `.md` unlink). `maybe_prune_jsonl`/`maybe_prune_sidecars` still log every failure as WARNING and swallow it, including one raised by `get_retention_days()` reached through them — only `cli.py`'s own direct call site is a real, uncaught tripwire.
 **Reads:** JSONL log files, sidecar `.md` directories, `WEBSEARCH_LOG_RETENTION_DAYS` env var.
 **Writes:** rewrites pruned JSONL atomically, unlinks stale sidecar files.
 **Called by:** `src/search/query_logger.py`, `src/scraper/scrape_logger.py`, `cli.py` (imports `get_retention_days` for `TimedRotatingFileHandler` backupCount).

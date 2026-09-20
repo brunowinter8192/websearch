@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 
-# log_janitor prunes any record whose "ts" falls outside the 14-day retention window (or is
+# log_janitor prunes any record whose "ts" falls outside the 90-day retention window (or is
 # unparseable) on every write — records here must carry a real, current, ISO-parseable ts.
 def _now_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"

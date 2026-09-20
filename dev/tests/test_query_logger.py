@@ -42,7 +42,7 @@ async def _fake_prewarm_browser() -> None:
     return None
 
 
-# Current-time ts — log_janitor prunes lines with a "ts" older than the 14-day retention window on every write.
+# Current-time ts — log_janitor prunes lines with a "ts" older than the 90-day retention window on every write.
 def _now_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 

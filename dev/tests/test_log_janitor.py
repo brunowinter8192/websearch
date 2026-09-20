@@ -3,9 +3,9 @@ import pytest
 from src.log_janitor import get_retention_days
 
 
-def test_get_retention_days_defaults_to_14_when_unset(monkeypatch):
+def test_get_retention_days_defaults_to_90_when_unset(monkeypatch):
     monkeypatch.delenv("WEBSEARCH_LOG_RETENTION_DAYS", raising=False)
-    assert get_retention_days() == 14
+    assert get_retention_days() == 90
 
 
 def test_get_retention_days_raises_on_non_integer_value(monkeypatch):
