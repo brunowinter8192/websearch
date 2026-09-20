@@ -4,7 +4,8 @@
 The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`,
 `src/news/engine/proxy_pool/`, `src/news/engine/proxy_riding/` (abort.py only, as of 2026-09-09),
 `src/news/platforms/theblock/`, `src/news/platforms/coindesk/` (timeline.py only, as of 2026-09-09),
-and `src/log_janitor.py` (as of 2026-09-09) — pure-logic branch coverage,
+`src/log_janitor.py` (as of 2026-09-09), and `src/scraper/index_scrapes.py` (as of 2026-09-20) —
+pure-logic branch coverage,
 library-upgrade guards (live calls into installed `crawl4ai`), and production-failure regression
 repros. Almost entirely no network/browser dependency: I/O boundaries (HTTP clients, browser
 automation, subprocess) are mocked per-test; production logic itself is exercised for real — as of the M4 milestone (2026-09-15) this is enforced, not just described: `conftest.py`'s autouse tripwire fails any test outright the moment it reaches a real browser-launch primitive unmocked (see its own entry below). The one
@@ -163,10 +164,12 @@ Chrome/Firefox) so it zombies until reaped — tests check `Popen.poll()`, not `
 
 ### test_log_janitor.py (17 LOC)
 **Purpose:** `src/log_janitor.py::get_retention_days` — first test coverage for this module. As of
-2026-09-09: defaults to 14 when `WEBSEARCH_LOG_RETENTION_DAYS` is unset; raises `ValueError` when
-it is set to a non-integer string (the removed silent-fallback-to-14 behavior's replacement — see
-`src/DOCS.md`'s Gotchas). `maybe_prune_jsonl`/`maybe_prune_sidecars` are not covered here — see
-`dev/logging/` for their own dev-script exploration, out of scope for this file.
+2026-09-09: raises `ValueError` when `WEBSEARCH_LOG_RETENTION_DAYS` is set to a non-integer string
+(the removed silent-fallback-to-14 behavior's replacement — see `src/DOCS.md`'s Gotchas). As of
+2026-09-20: defaults to 90 (raised from 14) when the env var is unset — the sidecar retention
+window a user needs to still find a scrape's sidecar on disk when deciding, after reading it in
+chat, whether to index it into a RAG collection. `maybe_prune_jsonl`/`maybe_prune_sidecars` are not
+covered here — see `dev/logging/` for their own dev-script exploration, out of scope for this file.
 
 ### _browser_fakes.py (23 LOC)
 **Purpose:** Shared `FakeChrome` and `_reset_state(monkeypatch, browser)` used by both
@@ -232,6 +235,21 @@ leaking it.
 **Purpose:** `src/scraper/scrape_logger.py` — `write_sidecar`'s real header content (no prior
 direct coverage; the scrape-lane tests only mock it as a no-op). Engine field present and correct
 per lane (chromium/camoufox), existing fields unaffected, empty-content still returns `None`.
+
+### test_index_scrapes.py (159 LOC)
+**Purpose:** `src/scraper/index_scrapes.py` — first test coverage for this module (M2, 2026-09-20). Sidecar
+resolution with multiple scrapes of the same URL (latest-by-filename wins, proven against a
+synthetic three-sidecar fixture modeled on the real multi-scrape mojeek case documented in
+`src/scraper/DOCS.md`'s own Gotchas); `_url_to_filename`/`_write_collection_file` convention match
+(filename, `<!-- source: url -->` header, header-stripped content, real byte count returned);
+`_sidecar_content`'s header-stripping in isolation; the missing-collection-directory tripwire
+(`RAG_CLI_COLLECTIONS_ROOT` monkeypatched to a tmp_path with no subdirectory — `ok is False`, no
+directory created, `subprocess.run` proven never called); a no-sidecar URL (`subprocess.run`
+likewise proven never called for it); `rag-cli index` success and non-zero-exit paths
+(`subprocess.run` monkeypatched to a fake `CompletedProcess`); one end-to-end
+`index_scrapes_workflow` run mixing a found and a missing URL. No test touches a real sidecar, a
+real collection directory, or a real `rag-cli` process — see `process-docs/adhoc_persistence/` for
+the real, by-hand verification run against production data.
 
 ### test_query_logger.py (404 LOC)
 **Purpose:** `src/search/query_logger.py` (`log_query` fail-soft JSONL write) + per-engine timing
