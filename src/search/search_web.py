@@ -45,6 +45,13 @@ ENGINE_WATCHDOG_TIMEOUT: float = 6.0
 RATE_WAIT_TIMEOUT: float = 60.0
 POOL_CAP: int = 10
 
+DEGRADED_ENGINE_FAILURE_RATIO: float = 0.30
+BROWSER_REPAIR_COMMAND: str = "./venv/bin/python -m patchright install chromium"
+_FAILURE_STATUSES: frozenset[str] = frozenset({
+    SE.ERROR_BROWSER, SE.ERROR_HTTP, SE.ERROR_PARSE, SE.ERROR_OTHER,
+    ST.TIMEOUT_WATCHDOG, ST.TIMEOUT_NONCOOP, ST.TIMEOUT_HTTPX,
+})
+
 ENGINE_MAX_RESULTS: dict[str, int] = {
     "google": 100,
     "duckduckgo": 10,
@@ -99,6 +106,7 @@ async def search_web_workflow(
     capped_pools = _cap_pools(pools)
 
     formatted_text = _format_breakdown(query, capped_pools, list(selected.keys()))
+    formatted_text = _prepend_degraded_notice(formatted_text, engine_stats)
 
     key = cache_key(query, language, engines, time_range)
     t0 = time.perf_counter()
@@ -326,6 +334,32 @@ def _format_breakdown(query: str, pools: dict[str, list[SearchResult]], all_engi
     lines.append("")
     lines.append(f'Use `websearch search_engine_drilldown "{query}" --engine <name>` to see URLs per engine.')
     return "\n".join(lines)
+
+
+def _prepend_degraded_notice(breakdown_text: str, engine_stats: dict) -> str:
+    notice = _format_degraded_notice(engine_stats)
+    if notice is None:
+        return breakdown_text
+    return f"{notice}\n\n{breakdown_text}"
+
+
+def _format_degraded_notice(engine_stats: dict) -> str | None:
+    total = len(engine_stats)
+    failing = _failing_engines(engine_stats)
+    if not total or len(failing) / total < DEGRADED_ENGINE_FAILURE_RATIO:
+        return None
+    lines = [f"Engine failures: {len(failing)}/{total} selected engines returned an error or timeout status."]
+    lines += [f"  {name:<20} {status}" for name, status in failing]
+    if any(status == SE.ERROR_BROWSER for _, status in failing):
+        lines.append(f"Repair: {BROWSER_REPAIR_COMMAND}")
+    return "\n".join(lines)
+
+
+def _failing_engines(engine_stats: dict) -> list[tuple[str, str]]:
+    return [
+        (name, stats["status"]) for name, stats in engine_stats.items()
+        if stats["status"] in _FAILURE_STATUSES
+    ]
 
 
 def _build_query_log_entry(

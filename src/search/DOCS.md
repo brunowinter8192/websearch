@@ -16,13 +16,13 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 ## Flow
 
-`search_web_workflow` selects engines → if any needs the browser, `_prewarm_browser` blocks (outside any watchdog) until this run's Chrome is up → `asyncio.gather` of `_engine_with_timing` tasks (each acquires a rate-limiter token, then runs the engine) → `finally: kill_own_chrome()` tears the browser down and releases the cross-process lock → flat `raw_results` → `build_engine_pools` groups by URL and keeps one entry per engine that returned it, each annotated with every engine's position for that URL → per-engine pool cap to a fixed 10 → `_format_breakdown` table → `cache_write` to `~/.cache/websearch/<key>.json`. `search_engine_drilldown` skips all of this: `cache_read` the per-engine pool → `format_engine_pool` numbers + cleans snippets.
+`search_web_workflow` selects engines → if any needs the browser, `_prewarm_browser` blocks (outside any watchdog) until this run's Chrome is up → `asyncio.gather` of `_engine_with_timing` tasks (each acquires a rate-limiter token, then runs the engine) → `finally: kill_own_chrome()` tears the browser down and releases the cross-process lock → flat `raw_results` → `build_engine_pools` groups by URL and keeps one entry per engine that returned it, each annotated with every engine's position for that URL → per-engine pool cap to a fixed 10 → `_format_breakdown` table → `_prepend_degraded_notice` (a no-op on a healthy run) → `cache_write` to `~/.cache/websearch/<key>.json`. `search_engine_drilldown` skips all of this: `cache_read` the per-engine pool → `format_engine_pool` numbers + cleans snippets.
 
 ## Modules
 
-### search_web.py (353 LOC)
+### search_web.py (387 LOC)
 
-**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table, and caches the result.
+**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table (prefixed with a degraded-run notice once the error/timeout share of selected engines crosses a fixed threshold), and caches the result.
 **Reads:** query + params; per-engine caps in `ENGINE_MAX_RESULTS`; default set via `_DEFAULT_ENGINES`; `_BROWSER_ENGINES` (which of the 8 need `browser.py`'s Chrome).
 **Writes:** disk cache `~/.cache/websearch/<key>.json` (via cache_write); query log (via log_query).
 **Called by:** `cli.py` (search_web_workflow); dev scripts (fetch_search_results).
