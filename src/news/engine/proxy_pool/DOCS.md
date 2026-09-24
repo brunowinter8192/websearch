@@ -49,7 +49,7 @@ the job lifecycle (lock, janitor). Do NOT touch when adding a browser-engine pla
 
 ---
 
-### fetch.py (36 LOC)
+### fetch.py (37 LOC)
 
 **Purpose:** curl_cffi chrome-impersonating HTTP fetch primitive + content-type gate (`"html"` | `"xml"`).
 **Reads:** remote URL via curl_cffi Session (routed through proxy).
@@ -83,7 +83,7 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
 
 ---
 
-### logger.py (48 LOC)
+### logger.py (52 LOC)
 
 **Purpose:** Streams per-fetch events to JSONL (line-buffered, kill-safe). Stats derived by `janitor.end_job`.
 **Reads:** events pushed via `record_attempt` / `record_pool_refresh` / `record_pool_source`.
@@ -174,3 +174,4 @@ also `ProxyScrapeConfig`'s `concurrency`/`buffer_size` defaults).
   2026-09-07 function-size split (the per-future call moved into `_apply_future_outcome` but fires
   at the exact same point in execution order; both `test_run_loop_refresh_*` tests still pass
   unchanged).
+- 2026-09-24 Phase 5: `fetch_url` returns `(status, content, reason)` and catches only curl_cffi `RequestException` (reason = exception class name; `http_<code>`; `content_marker_missing`); any other exception propagates. `AcquireLogger.record_attempt` persists `reason`, `record_pool_source` persists `error` (exception class name from `_try_source`).

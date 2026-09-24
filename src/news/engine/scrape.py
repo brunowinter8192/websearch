@@ -41,10 +41,9 @@ async def scrape_entries(
                        regwall_signals, scrape_cfg, output_dir, run_cfg)
             for i in range(len(entries))
         ],
-        return_exceptions=True,
     )
 
-    manifest = _collect_manifest(entries, raw_results)
+    manifest = list(raw_results)
     _check_regwall_guard(manifest, regwall_signals)
     return manifest
 
@@ -137,21 +136,6 @@ def _write_body(url_hash: str, content: str, output_dir: Path) -> Path:
     file_path = output_dir / f"{url_hash}.md"
     file_path.write_text(content, encoding="utf-8")
     return file_path
-
-
-def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
-    manifest = []
-    for i, r in enumerate(raw_results):
-        if isinstance(r, dict):
-            manifest.append(r)
-        else:
-            url = entries[i]["url"]
-            manifest.append({
-                "url": url, "hash": hashlib.sha256(url.encode()).hexdigest()[:12],
-                "file": None, "char_count": None,
-                "status": "failed", "error": str(r), "wait_strategy": None,
-            })
-    return manifest
 
 
 class RegwallGuardError(Exception):

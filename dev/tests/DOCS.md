@@ -211,11 +211,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/engine/proxy_pool/janitor.py: window stats and job.md counters.
 
-### test_proxy_pool_retry.py (92 LOC)
+### test_proxy_pool_retry.py (117 LOC)
 
 **Purpose:** src/news/engine/proxy_pool: fetch_with_retry backoff and load_backfill_pool per-source isolation.
 
-### test_proxy_pool_sources.py (136 LOC)
+### test_proxy_pool_sources.py (150 LOC)
 
 **Purpose:** src/news/engine/proxy_pool: pool-source logging, grouping, job.md source section.
 
@@ -231,17 +231,25 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/engine/dedup.py filter_new_entries exclude_urls precedence and pub_date_str fallback.
 
-### test_theblock_clean_pass.py (116 LOC)
+### test_theblock_clean_pass.py (123 LOC)
 
 **Purpose:** src/news/clean_pass.py _run_clean_pass: clean file write, bodyless URL union, raw files read-only.
 
-### test_theblock_discover.py (171 LOC)
+### test_theblock_discover.py (213 LOC)
 
 **Purpose:** src/news/platforms/theblock/discover.py: sub:A-B range selection and dispatch error paths.
 
-### test_coindesk_timeline.py (14 LOC)
+### test_coindesk_timeline.py (50 LOC)
 
-**Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [].
+**Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [], recorded shape parsed, missing required key raises, alternative date keys not accepted.
+
+### test_coindesk_cleanup_and_shards.py (44 LOC)
+
+**Purpose:** coindesk cleanup (no H1 returns empty and logs, missing end anchor logs) and load_discover_filtered (missing directory / year shard raise).
+
+### test_proxy_pool_fetch.py (48 LOC)
+
+**Purpose:** proxy_pool fetch_url: transport errors become fail with the exception class name, non-transport exceptions propagate, status reasons.
 
 ### test_coindesk_stop_date.py (27 LOC)
 

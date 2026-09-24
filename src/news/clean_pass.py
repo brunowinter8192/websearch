@@ -26,19 +26,16 @@ def _run_clean_pass(
     for i, entry in enumerate(ok_entries, start=1):
         h = entry["hash"]
         raw_path = raw_dir / f"{h}.md"
-        if not raw_path.exists():
-            log.warning(f"clean_pass: raw file missing — {raw_path}")
+        raw_html = raw_path.read_text(encoding="utf-8")
+        clean_md = platform.cleanup(raw_html, entry)
+        if not clean_md:
+            log.info(f"clean_pass: body-less — {entry['url']}")
+            bodyless_urls.append(entry["url"])
         else:
-            raw_html = raw_path.read_text(encoding="utf-8")
-            clean_md = platform.cleanup(raw_html, entry)
-            if not clean_md:
-                log.info(f"clean_pass: body-less — {entry['url']}")
-                bodyless_urls.append(entry["url"])
-            else:
-                pubdate = pub_date_str(entry)
-                out_path = collection_dir / f"theblock__{pubdate}__{h}.md"
-                out_path.write_text(clean_md, encoding="utf-8")
-                n_cleaned += 1
+            pubdate = pub_date_str(entry)
+            out_path = collection_dir / f"theblock__{pubdate}__{h}.md"
+            out_path.write_text(clean_md, encoding="utf-8")
+            n_cleaned += 1
         if i % 200 == 0:
             log.info(f"clean progress {i}/{total} — {n_cleaned} cleaned, {len(bodyless_urls)} body-less")
     n_bodyless = len(bodyless_urls)

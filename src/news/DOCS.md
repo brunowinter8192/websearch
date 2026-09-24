@@ -30,7 +30,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 **Called by:** `pipeline.py` (all 3 orchestrators + `_run_pipeline_proxy_pool`/`_run_pipeline_browser`).
 **Calls out:** none (stdlib `logging`, `urllib.request`, `json`).
 
-### clean_pass.py (51 LOC)
+### clean_pass.py (48 LOC)
 
 **Purpose:** The proxy_pool/TheBlock clean-pass stage (`_run_clean_pass`) — reads `raw/{hash}.md`, calls `platform.cleanup()`, writes cleaned articles into the RAG collection dir. As of 2026-09-09, `pub_date_str` is no longer defined here — this module imports the single surviving copy from `src.news.engine.dedup` (see that module's own entry and Gotchas).
 **Reads:** `raw_dir/{hash}.md` for each ok entry; existing `clean/bodyless_urls.txt` (set-union merge).
@@ -76,3 +76,4 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
   guard tripped (too many regwalls) — the exception's `.manifest` (partial, already-persisted
   results) is used AS the final manifest, not discarded; the arm proceeds to persist it normally
   (not treated as a hard failure — `n_ok`/raw files up to the abort point are kept).
+- 2026-09-24 Phase 5: `_run_clean_pass` raises `FileNotFoundError` when a manifest entry has no raw file (was: warning + skip, stats no longer added up).
