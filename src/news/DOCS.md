@@ -38,7 +38,7 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Called by:** pipeline.py.
 **Calls out:** engine/dedup.py.
 
-### __main__.py (155 LOC)
+### __main__.py (154 LOC)
 
 **Purpose:** Argparse entry point: imports platform modules for registration, resolves the platform and dispatches to the matching pipeline entry.
 **Reads:** CLI arguments.
@@ -46,9 +46,9 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Called by:** the `python -m src.news` entry.
 **Calls out:** platforms/, registry.py, pipeline.py.
 
-### platform.py (35 LOC)
+### platform.py (52 LOC)
 
-**Purpose:** The extension seam: the platform protocol and the scrape-configuration dataclasses.
+**Purpose:** The extension seam: the platform protocol with declared defaults for its optional attributes, and the scrape-configuration dataclasses.
 **Reads:** none.
 **Writes:** none.
 **Called by:** pipeline.py, registry.py, platforms/, engine/.

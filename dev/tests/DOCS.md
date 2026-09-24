@@ -303,5 +303,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Removed swallow handlers: engine value extraction, diagnosis, brave polling, and cache read now raise on corrupt input; a parse failure surfaces as a parse-error status; the prewarm failure log makes no retry claim.
 
+### test_platform_optional_attributes.py (58 LOC)
+
+**Purpose:** Platform protocol defaults, registered platforms' attribute values, and the scrape-only support check.
+
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.

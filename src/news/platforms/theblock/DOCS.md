@@ -6,7 +6,7 @@ The Block platform implementation using the proxy-pool scrape engine (no browser
 
 ## Public Interface
 
-`__init__.py` exports the platform class and registers an instance at import. Optional attributes read by the pipeline through getattr: discovery timeframe, a master-URL-list flag and a legacy dedup-mode attribute that is unused.
+`__init__.py` exports the platform class and registers an instance at import. The class subclasses the platform protocol and inherits its declared defaults for the optional attributes the pipeline reads directly; a legacy dedup-mode attribute is unused.
 
 ## Flow
 

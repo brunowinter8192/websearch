@@ -62,7 +62,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** nothing on an active pipeline path (DEAD CODE in the pipeline; kept for a future cleanup step).
 **Calls out:** none (stdlib only).
 
-### __init__.py (40 LOC)
+### __init__.py (41 LOC)
 
 **Purpose:** The CoinDesk platform class wrapping config, discovery, cleanup and scrape-entry loading; registers itself on import.
 **Reads:** none of its own.

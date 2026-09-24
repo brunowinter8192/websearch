@@ -1,6 +1,9 @@
 # INFRASTRUCTURE
 from dataclasses import dataclass
-from typing import Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from src.news.engine.proxy_riding.scrape import RidingScrapeConfig
 
 
 # FUNCTIONS
@@ -30,6 +33,20 @@ class Platform(Protocol):
     scrape_engine: str
     scrape_config: ScrapeConfig
     proxy_scrape_config: "ProxyScrapeConfig | None"
+    timeframe: str = "delta"
+    uses_master_list: bool = False
+    supports_scrape_only: bool = False
+    riding_scrape_config: "RidingScrapeConfig | None" = None
 
     async def discover(self) -> list[dict]: ...
+
+    def load_scrape_entries(
+        self,
+        year: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict]:
+        raise NotImplementedError
+
     def cleanup(self, raw_markdown: str, entry: dict) -> str: ...
