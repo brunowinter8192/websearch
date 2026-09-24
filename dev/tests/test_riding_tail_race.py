@@ -1,58 +1,8 @@
-#!/usr/bin/env python3
-
-# INFRASTRUCTURE
-
 import asyncio
 import hashlib
-import sys
 import tempfile
 import unittest.mock
 from pathlib import Path
-
-_WORKTREE = Path(__file__).parents[3]
-if str(_WORKTREE) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE))
-
-if str(Path(__file__).parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).parent))
-from _test_tail_race_watchdog import test_6_watchdog_wedge_after_all_resolved, test_7_watchdog_pool_refresh
-
-
-# ORCHESTRATOR
-
-def main() -> None:
-    results = [
-        _run("test_1_surplus_slots_race_both_done",              test_1_surplus_slots_race_both_done),
-        _run("test_2_write_exactly_once_per_url",                test_2_write_exactly_once_per_url),
-        _run("test_3_no_spurious_requeue",                       test_3_no_spurious_requeue),
-        _run("test_4_normal_path_no_racing",                     test_4_normal_path_no_racing),
-        _run("test_5_fail_before_success_done_once",             test_5_fail_before_success_done_once),
-        _run("test_6_watchdog_wedge_after_all_resolved",         test_6_watchdog_wedge_after_all_resolved),
-        _run("test_7_watchdog_pool_refresh",                     test_7_watchdog_pool_refresh),
-    ]
-    passed = sum(results)
-    print(f"\n{'='*55}")
-    print(f"Results: {passed}/{len(results)} passed")
-    if passed < len(results):
-        sys.exit(1)
-
-
-# FUNCTIONS
-
-def _run(name: str, fn) -> bool:
-    print(f"[test] {name} ...", end=" ", flush=True)
-    try:
-        fn()
-        print("PASS")
-        return True
-    except AssertionError as exc:
-        print(f"FAIL — {exc}")
-        return False
-    except Exception as exc:
-        import traceback
-        print(f"ERROR — {exc}")
-        traceback.print_exc()
-        return False
 
 
 def _url_hash(url: str) -> str:
@@ -146,7 +96,7 @@ def test_2_write_exactly_once_per_url() -> None:
         assert len(raw_files) == 1,            f"raw file count={len(raw_files)} (expected 1)"
 
 
-def _test_3_sub_a() -> None:
+def test_3a_stale_url_skipped() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
@@ -191,7 +141,7 @@ def _test_3_sub_a() -> None:
         assert state_a.done_urls == {url_x, url_y}, f"done_urls={state_a.done_urls}"
 
 
-def _test_3_sub_b() -> None:
+def test_3b_raced_fail_not_requeued() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
@@ -236,11 +186,6 @@ def _test_3_sub_b() -> None:
         assert url_x2 not in put_calls,        f"raced-fail was re-queued: {put_calls}"
         assert state_b.n_ok == 1,              f"n_ok={state_b.n_ok} (expected 1)"
         assert state_b.done_urls == {url_x2},  f"done_urls={state_b.done_urls}"
-
-
-def test_3_no_spurious_requeue() -> None:
-    _test_3_sub_a()
-    _test_3_sub_b()
 
 
 def test_4_normal_path_no_racing() -> None:
@@ -334,6 +279,3 @@ def test_5_fail_before_success_done_once() -> None:
         raw_files = list((p / RAW_SUBDIR).iterdir())
         assert len(raw_files) == 1,           f"raw file count={len(raw_files)} (expected 1)"
 
-
-if __name__ == "__main__":
-    main()

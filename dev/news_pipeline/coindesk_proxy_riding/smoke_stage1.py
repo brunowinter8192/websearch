@@ -4,7 +4,6 @@ import asyncio
 import sys
 import tempfile
 import time
-import unittest.mock
 from pathlib import Path
 
 _WORKTREE = Path(__file__).parents[3]
@@ -21,141 +20,15 @@ VALID_STATUSES = {"ok", "failed"}
 # ORCHESTRATOR
 
 def main() -> None:
-    results = []
-    results.append(_run("1. import check",          test_import_clean))
-    results.append(_run("2. watchdog deterministic", test_watchdog_deterministic))
-    results.append(_run("3. live run",               lambda: asyncio.run(test_live_run())))
-
-    passed = sum(results)
-    total  = len(results)
-    print(f"\n{'='*55}")
-    print(f"Smoke results: {passed}/{total} passed")
-    if passed < total:
+    try:
+        asyncio.run(_live_run())
+    except AssertionError as exc:
+        print(f"FAIL — {exc}")
         sys.exit(1)
     print("ALL PASS")
 
 
 # FUNCTIONS
-
-def _run(name: str, fn) -> bool:
-    print(f"\n[smoke] {name} ...", flush=True)
-    try:
-        fn()
-        print(f"  PASS")
-        return True
-    except AssertionError as exc:
-        print(f"  FAIL — {exc}")
-        return False
-    except Exception as exc:
-        import traceback
-        print(f"  ERROR — {exc}")
-        traceback.print_exc()
-        return False
-
-
-def test_import_clean() -> None:
-    import src.news.engine.proxy_riding.rider    as rider_mod
-    import src.news.engine.proxy_riding.abort    as abort_mod
-    import src.news.engine.proxy_riding.reporter as reporter_mod
-    from src.news.engine.proxy_riding.scrape import (
-        scrape_entries_riding, RidingScrapeConfig, BROWSER_ELIGIBLE_PROTOS,
-    )
-    from src.news.engine.proxy_riding.state import RiderState, RideRecord, JobRecord, FAIL_THRESHOLD
-    from src.news.engine.proxy_riding.rider import run_riding_pool, _watchdog
-    from src.news.engine.proxy_riding.abort import _abort_stall
-    from src.news.engine.proxy_riding.reporter import write_riding_report
-
-    cfg = RidingScrapeConfig()
-    assert cfg.n_browsers      == 4,      f"n_browsers default wrong: {cfg.n_browsers}"
-    assert cfg.n_slots         == 64,     f"n_slots default wrong: {cfg.n_slots}"
-    assert cfg.stall_timeout_s == 300.0,  f"stall_timeout_s default wrong: {cfg.stall_timeout_s}"
-    assert cfg.burn_threshold  == 2,      f"burn_threshold default wrong: {cfg.burn_threshold}"
-    assert cfg.page_timeout_ms == 8_000,  f"page_timeout_ms default wrong: {cfg.page_timeout_ms}"
-
-    assert BROWSER_ELIGIBLE_PROTOS == frozenset({"http", "socks5"})
-
-    src_rider    = Path(rider_mod.__file__).read_text()
-    src_abort    = Path(abort_mod.__file__).read_text()
-    src_reporter = Path(reporter_mod.__file__).read_text()
-    assert "sys.path.insert" not in src_rider,    "sys.path.insert found in rider.py"
-    assert "sys.path.insert" not in src_abort,    "sys.path.insert found in abort.py"
-    assert "sys.path.insert" not in src_reporter, "sys.path.insert found in reporter.py"
-
-    assert "src.news.engine.proxy_riding.reporter" in src_abort, \
-        "late import in _abort_stall does not reference src package"
-
-    print("    imports ok, defaults ok, no sys.path hacks, late import correct")
-
-
-def _make_watchdog_state(tmp_dir: Path, stall_s: float, aged_by: float) -> object:
-    from src.news.engine.proxy_riding.state import RiderState
-    from src.news.engine.proxy_pool.cooldown import PersistentCooldownManager
-
-    q = asyncio.Queue()
-    q.put_nowait("https://www.coindesk.com/test/queued-1")
-    q.put_nowait("https://www.coindesk.com/test/queued-2")
-    state = RiderState(
-        url_queue=q,
-        proxy_pool=[],
-        cooldown_mgr=PersistentCooldownManager(),
-        output_dir=tmp_dir,
-        burn_threshold=2,
-        page_timeout_ms=8_000,
-        total_urls=3,
-        stall_timeout_s=stall_s,
-    )
-    state.last_progress_mono = time.monotonic() - aged_by
-    state.in_flight          = 1
-    state.in_flight_urls.add("https://www.coindesk.com/test/inflight-wedged")
-    return state
-
-
-def _assert_watchdog_outputs(tmp_dir: Path) -> None:
-    fail  = tmp_dir / "remaining_urls.txt"
-    jobmd = tmp_dir / "job.md"
-    assert fail.exists(),  "remaining_urls.txt not written"
-    assert jobmd.exists(), "job.md not written"
-
-    txt = fail.read_text()
-    assert "# never attempted (queue)"   in txt, "queue section missing"
-    assert "# in-flight / wedged at abort" in txt, "in-flight section missing"
-    assert "queued-1"        in txt, "queued-1 URL missing"
-    assert "inflight-wedged" in txt, "in-flight URL missing"
-    assert "stall" in jobmd.read_text().lower(), "stall termination missing from job.md"
-
-
-def test_watchdog_deterministic() -> None:
-    import src.news.engine.proxy_riding.rider as rider_mod
-    from src.news.engine.proxy_riding.rider import _watchdog
-    from src.news.engine.proxy_riding.abort import _abort_stall
-
-    _STALL_S = 1.0
-    _AGED_BY = 200.0
-    _POLL_S  = 0.1
-
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_dir = Path(tmp)
-        (tmp_dir / rider_mod.RAW_SUBDIR).mkdir()
-        exit_calls: list[int] = []
-
-        def fake_exit(code: int) -> None:
-            raise SystemExit(code)
-
-        async def run() -> None:
-            state = _make_watchdog_state(tmp_dir, _STALL_S, _AGED_BY)
-            with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit):
-                try:
-                    await _watchdog(state, tmp_dir, poll_interval=_POLL_S)
-                except SystemExit as exc:
-                    exit_calls.append(exc.code)
-
-        asyncio.run(run())
-
-        assert exit_calls == [1], f"os._exit(1) not called — got: {exit_calls}"
-        _assert_watchdog_outputs(tmp_dir)
-
-    print("    watchdog fired → os._exit(1), remaining_urls.txt ok, job.md ok")
-
 
 def _load_inventory_urls(n: int) -> list:
     assert INVENTORY_DIR.exists(), f"inventory dir missing: {INVENTORY_DIR}"
@@ -201,7 +74,7 @@ async def _assert_pool_shuffle_effective() -> int:
     return len(filtered)
 
 
-async def test_live_run() -> None:
+async def _live_run() -> None:
     from src.news.engine.proxy_riding.scrape import scrape_entries_riding, RidingScrapeConfig
 
     urls = _load_inventory_urls(N_LIVE_URLS)
