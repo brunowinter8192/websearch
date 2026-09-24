@@ -145,7 +145,4 @@ async def _generic_diagnose(tab) -> dict:
     val = _extract_value(await tab.execute_script(_JS_GENERIC_DIAGNOSE))
     if not val:
         return {"marker": None, "url": "", "ready_state": "", "title": ""}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {"marker": None, "url": "", "ready_state": "", "title": ""}
+    return json.loads(val)

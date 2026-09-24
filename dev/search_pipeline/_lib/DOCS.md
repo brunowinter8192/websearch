@@ -11,7 +11,7 @@ A caller passes a smoke-report `Path` or raw snippet text in; the modules return
 
 ## Modules
 
-### parse.py (121 LOC)
+### parse.py (116 LOC)
 
 **Purpose:** Parses the `pipeline_smoke_<ts>.md` report format into per-URL records with query, class, engines, previews and per-engine snippets.
 **Reads:** report `Path` passed by the caller.

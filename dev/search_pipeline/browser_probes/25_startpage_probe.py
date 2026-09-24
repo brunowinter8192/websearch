@@ -208,10 +208,7 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     value = _extract_value(raw)
     if not value:
         return []
-    try:
-        items = json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    items = json.loads(value)
     return [item for item in items[:max_results] if item.get("url")]
 
 
@@ -220,10 +217,7 @@ async def _diagnose_empty(tab) -> dict:
     val = _extract_value(raw)
     diag = {"marker": None, "iframe_challenge": False, "title": "", "url": "", "body_len": 0}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     if diag["marker"] or diag["iframe_challenge"]:
         diag["reason"] = "BLOCK_MARKER"
     elif EXPECTED_RESULT_PATH not in diag.get("url", ""):

@@ -104,10 +104,7 @@ async def _dump_date_evidence(tab, engine: str) -> dict:
     val = _extract_value(await tab.execute_script(js))
     if not val:
         return {"count": 0, "samples": []}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {"count": 0, "samples": []}
+    return json.loads(val)
 
 
 async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:

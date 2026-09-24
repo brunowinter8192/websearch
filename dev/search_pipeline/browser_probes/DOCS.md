@@ -11,7 +11,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 
 ## Modules
 
-### 25_startpage_probe.py (265 LOC)
+### 25_startpage_probe.py (259 LOC)
 
 **Purpose:** Go/no-go probe for startpage.com scrapeability via the real homepage search form; ten queries, counts and block markers.
 **Reads:** none (live run).
@@ -27,7 +27,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `25_startpage_probe.py`.
 **Calls out:** stdlib only.
 
-### 26_brave_probe.py (240 LOC)
+### 26_brave_probe.py (234 LOC)
 
 **Purpose:** Three-condition gate probe for Brave Search (real rows, no PoW/CAPTCHA, latency at most five seconds); result DROP.
 **Reads:** none (live run).
@@ -43,7 +43,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `26_brave_probe.py`.
 **Calls out:** stdlib only.
 
-### 27_brave_headed_lane_probe.py (222 LOC)
+### 27_brave_headed_lane_probe.py (216 LOC)
 
 **Purpose:** Headed-background Chrome lane probe (macOS `open -g`) against Brave PoW; result DROP, launch mechanism validated.
 **Reads:** none (live run).
@@ -59,7 +59,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `27_brave_headed_lane_probe.py`.
 **Calls out:** stdlib only.
 
-### 28_bing_probe.py (259 LOC)
+### 28_bing_probe.py (250 LOC)
 
 **Purpose:** Go/no-go probe for bing.com as a second Bing-index path, including unwrapping of `ck/a` tracking redirects; result CANDIDATE.
 **Reads:** none (live run).
@@ -75,7 +75,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `28_bing_probe.py`.
 **Calls out:** stdlib only.
 
-### 29_yandex_probe.py (236 LOC)
+### 29_yandex_probe.py (230 LOC)
 
 **Purpose:** Go/no-go probe for yandex.com as an independent-index candidate under a relaxed criterion; result CANDIDATE.
 **Reads:** none (live run).
@@ -91,7 +91,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `29_yandex_probe.py`.
 **Calls out:** stdlib only.
 
-### 31_date_availability_probe.py (140 LOC)
+### 31_date_availability_probe.py (137 LOC)
 
 **Purpose:** Measurement probe: whether eight DOM-scraped engines expose result dates as elements, snippet text, nowhere or unmeasurable.
 **Reads:** none (live run).
@@ -99,7 +99,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, browser, nav and report siblings.
 
-### _date_availability_probe_browser.py (151 LOC)
+### _date_availability_probe_browser.py (148 LOC)
 
 **Purpose:** Inline pydoll session shape for the date probe: options, fingerprint patches, tab lifecycle, generic block diagnosis.
 **Reads:** none.
@@ -131,7 +131,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `patchright`, `crawl4ai.browser_manager` (flags only), cdp, js, launch and report siblings.
 
-### _altcha_trigger_probe_cdp.py (75 LOC)
+### _altcha_trigger_probe_cdp.py (72 LOC)
 
 **Purpose:** Raw-CDP shadow-DOM helpers: widget node lookup, shadow-root mode, coordinate click.
 **Reads:** none (CDP session passed in).

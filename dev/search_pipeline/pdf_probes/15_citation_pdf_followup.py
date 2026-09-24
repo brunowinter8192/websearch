@@ -241,11 +241,8 @@ async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
 
 
 def _base_domain(url: str) -> str:
-    try:
-        netloc = urlparse(url).netloc.lower()
-        return netloc[4:] if netloc.startswith("www.") else netloc
-    except Exception:
-        return ""
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
 
 
 if __name__ == "__main__":

@@ -181,10 +181,7 @@ def _clean_url(href: str) -> str:
         return href
     payload = u[2:] if len(u) > 2 else u
     padded = payload + "=" * (-len(payload) % 4)
-    try:
-        return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
-    except Exception:
-        return href
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
 async def _wait_for_results(tab) -> bool:
@@ -202,10 +199,7 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     value = _extract_value(raw)
     if not value:
         return []
-    try:
-        items = json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    items = json.loads(value)
     out = []
     for item in items[:max_results]:
         url = _clean_url(item.get("url", ""))
@@ -220,10 +214,7 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     diag = {"marker": None, "url": "", "ready_state": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     return diag
 
 

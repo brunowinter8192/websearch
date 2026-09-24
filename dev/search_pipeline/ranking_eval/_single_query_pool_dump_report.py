@@ -10,7 +10,7 @@ SNIPPET_CHARS = 200
 def _build_sections(
     query: str, ts_display: str, google_count: int, pool: list[dict], engine_stats: dict, wall_ms: int,
     raw_results: list, url_engine_pos: dict, c1_top: list[dict], c2_scored: list, c3_scored: list,
-    c4_scored: list, c1_ms: int, c2_ms: int, c3_ms: int, c4_ms: int,
+    c4_scored: list, c1_ms: int, c2_ms: int, c3_ms: int, c4_ms: int, c3_failed: bool, c4_failed: bool,
 ) -> list[str]:
     return [
         _section_header(query, ts_display, google_count, pool, engine_stats, wall_ms),
@@ -19,7 +19,7 @@ def _build_sections(
         _section_configs(
             query, google_count, pool,
             c1_top, c2_scored, c3_scored, c4_scored,
-            c1_ms, c2_ms, c3_ms, c4_ms,
+            c1_ms, c2_ms, c3_ms, c4_ms, c3_failed, c4_failed,
         ),
         _section_matrix(pool, google_count, c1_top, c2_scored, c3_scored, c4_scored),
     ]
@@ -133,6 +133,8 @@ def _section_configs(
     c2_ms: int,
     c3_ms: int,
     c4_ms: int,
+    c3_failed: bool,
+    c4_failed: bool,
 ) -> str:
     c1_entries = [(m, f"   engine_count: {len(m.get('engines', []))}") for m in c1_top]
     c2_entries = [(m, f"   bm25_score: {s:.4f}") for m, s in c2_scored]
@@ -142,8 +144,8 @@ def _section_configs(
     lines = [f"## Section 3 — Top-{google_count} per Config", ""]
     lines += _config_entries("C1 — Overlap-Count (−n_engines, min_position)", c1_ms, c1_entries)
     lines += _config_entries("C2 — BM25 (k1=1.2, b=0.75, sw=on, title+snippet)", c2_ms, c2_entries)
-    lines += _config_entries("C3 — Cross-Encoder (Qwen3-Reranker-0.6B, port 8082)", c3_ms, c3_entries)
-    lines += _config_entries("C4 — Embedding-Cosine (Qwen3-Embedding-0.6B, port 8084)", c4_ms, c4_entries)
+    lines += _config_entries("C3 — Cross-Encoder (Qwen3-Reranker-0.6B, port 8082)" + (" — API FAILED after retry" if c3_failed else ""), c3_ms, c3_entries)
+    lines += _config_entries("C4 — Embedding-Cosine (Qwen3-Embedding-0.6B, port 8084)" + (" — API FAILED after retry" if c4_failed else ""), c4_ms, c4_entries)
     return "\n".join(lines)
 
 

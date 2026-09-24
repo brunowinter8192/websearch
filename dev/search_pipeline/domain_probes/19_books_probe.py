@@ -282,11 +282,8 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
 
 
 def _domain(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.lower()
-        return host[4:] if host.startswith("www.") else host
-    except Exception:
-        return ""
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 if __name__ == "__main__":

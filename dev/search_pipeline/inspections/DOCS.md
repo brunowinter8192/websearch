@@ -11,7 +11,7 @@ Engine config from `ENGINE_REGISTRY` and a live page load in, seven DOM heuristi
 
 ## Modules
 
-### inspect_engine_dom.py (350 LOC)
+### inspect_engine_dom.py (344 LOC)
 
 **Purpose:** Navigates to an engine search page via the production browser and writes a seven-heuristic DOM report with diagnosis.
 **Reads:** `ENGINE_REGISTRY` (module-level config); live DOM via pydoll.

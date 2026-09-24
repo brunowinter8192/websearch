@@ -11,7 +11,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ## Modules
 
-### 00_single_query.py (155 LOC)
+### 00_single_query.py (152 LOC)
 
 **Purpose:** Single-query debug runner: hits one Google query via `01_google_smoke.py` helpers and prints DOM diagnostics to stdout.
 **Reads:** `config.yml`; query from `sys.argv[1]`.
@@ -27,7 +27,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI; loaded by `00_single_query.py` via importlib.
 **Calls out:** `src.search.engines.google`, `src.search.browser`.
 
-### 02_burst_smoke.py (273 LOC)
+### 02_burst_smoke.py (270 LOC)
 
 **Purpose:** Burst smoke against the production CLI: one `cli.py search_batch` subprocess per query batch.
 **Reads:** `config.yml`, `queries.txt`.
@@ -83,7 +83,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`.
 
-### 13_free_word_probe.py (277 LOC)
+### 13_free_word_probe.py (299 LOC)
 
 **Purpose:** Free-word injection probe: appends `pdf`/`book` to queries and measures domain-distribution shift across engines.
 **Reads:** hardcoded 3-query set.
@@ -187,7 +187,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `httpx`.
 
-### google_selector_probe.py (257 LOC)
+### google_selector_probe.py (251 LOC)
 
 **Purpose:** Google DOM-selector diagnostic: compares `#rso h3` matches with alternative selectors at `num=100`.
 **Reads:** live DOM fetch (hardcoded `QUERY`, `NUM`).
@@ -227,7 +227,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.snippet`.
 
-### with_google_decoupling_smoke.py (175 LOC)
+### with_google_decoupling_smoke.py (172 LOC)
 
 **Purpose:** Verifies Scholar is absent from the default engine set by inspecting the query log after five workflow runs.
 **Reads:** `src/logs/query_log.jsonl` (tail).

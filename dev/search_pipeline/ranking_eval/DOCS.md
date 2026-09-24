@@ -35,7 +35,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** `stage1_pool_fetch.py`.
 **Calls out:** config sibling.
 
-### stage3_method_run.py (179 LOC)
+### stage3_method_run.py (174 LOC)
 
 **Purpose:** Method run v2: applies overlap, BM25, BM25-capped and cross-encoder to each pool, writes methods JSON.
 **Reads:** `<ts_dir>/*_pool.json`.
@@ -67,7 +67,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** cheap and gpu siblings.
 **Calls out:** stdlib only.
 
-### _stage3_method_run_v3_gpu.py (188 LOC)
+### _stage3_method_run_v3_gpu.py (172 LOC)
 
 **Purpose:** GPU-service methods M6-M12: cross-encoder, instruction prefix, hybrids, SPLADE, LLM filter and selector.
 **Reads:** none (service URLs passed in).
@@ -99,7 +99,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** CLI only (`--pool-dir`, `--oracle-dir`, `--no-oracle`).
 **Calls out:** stdlib only.
 
-### value_eval_probe.py (336 LOC)
+### value_eval_probe.py (328 LOC)
 
 **Purpose:** Historical stage 1+2 (v1): fetches pools per mode and query, applies four C-methods, writes oracle-input pool and methods JSON.
 **Reads:** hardcoded mode-by-query matrix; live engine fetch.
@@ -123,7 +123,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** CLI only.
 **Calls out:** stdlib only.
 
-### single_query_pool_dump.py (179 LOC)
+### single_query_pool_dump.py (180 LOC)
 
 **Purpose:** Single-query capped-pool dump comparing four configs side by side with a comparison matrix.
 **Reads:** imports pool builders and GPU helpers from the parent bases.
@@ -131,7 +131,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** CLI only (`--query`, `--output`).
 **Calls out:** parent bases, report sibling, GPU services.
 
-### _single_query_pool_dump_report.py (203 LOC)
+### _single_query_pool_dump_report.py (205 LOC)
 
 **Purpose:** Section renderers and report writer for the single-query pool dump.
 **Reads:** none (arguments only).
@@ -139,7 +139,7 @@ No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/ra
 **Called by:** `single_query_pool_dump.py`.
 **Calls out:** stdlib only.
 
-### pooling_probe.py (355 LOC)
+### pooling_probe.py (362 LOC)
 
 **Purpose:** Capped-pool strategy comparison: overlap, BM25, cross-encoder and embedding-cosine on the same pool, hard-stop when google_count is zero.
 **Reads:** imports helpers and the 20-query set from the parent bases.

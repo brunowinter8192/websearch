@@ -1,7 +1,6 @@
 # INFRASTRUCTURE
 import json
 import re
-import sys
 import time
 
 import httpx
@@ -49,16 +48,11 @@ def _rerank_pool(pool: list[dict], query: str, reranker_url: str, query_text: st
     docs_v  = [m for m, _ in valid]
     texts_v = [t for _, t in valid]
     t0 = time.perf_counter()
-    try:
-        pairs      = _cross_encoder_rerank(query_text, texts_v, reranker_url)
-        score_dict = {docs_v[idx]["url"]: score for idx, score in pairs}
-        ranked     = sorted(pairs, key=lambda x: -x[1])[:TOP_N]
-        ms         = round((time.perf_counter() - t0) * 1000)
-        return [docs_v[idx]["url"] for idx, _ in ranked], ms, score_dict
-    except Exception as exc:
-        ms = round((time.perf_counter() - t0) * 1000)
-        print(f"  reranker error: {exc}", file=sys.stderr)
-        return [], ms, {}
+    pairs      = _cross_encoder_rerank(query_text, texts_v, reranker_url)
+    score_dict = {docs_v[idx]["url"]: score for idx, score in pairs}
+    ranked     = sorted(pairs, key=lambda x: -x[1])[:TOP_N]
+    ms         = round((time.perf_counter() - t0) * 1000)
+    return [docs_v[idx]["url"] for idx, _ in ranked], ms, score_dict
 
 
 def _normalize(scores: dict[str, float]) -> dict[str, float]:
@@ -92,23 +86,18 @@ def _apply_m9(pool: list[dict], query: str, splade_url: str) -> tuple[list[str],
     docs    = [_doc_repr(m, BM25_REPR) for m in pool]
     all_texts = [query] + docs
     t0 = time.perf_counter()
-    try:
-        r = httpx.post(splade_url, json={"input": all_texts, "model": "splade"}, timeout=120.0)
-        r.raise_for_status()
-        vectors   = [item["sparse_vector"] for item in r.json()["data"]]
-        q_vec     = vectors[0]
-        q_map     = dict(zip(q_vec["indices"], q_vec["values"]))
-        scores: dict[str, float] = {}
-        for m, d_vec in zip(pool, vectors[1:]):
-            dot = sum(q_map.get(i, 0.0) * v for i, v in zip(d_vec["indices"], d_vec["values"]))
-            scores[m["url"]] = dot
-        ranked = sorted(pool, key=lambda m: -scores[m["url"]])
-        ms     = round((time.perf_counter() - t0) * 1000)
-        return [m["url"] for m in ranked[:TOP_N]], ms, scores
-    except Exception as exc:
-        ms = round((time.perf_counter() - t0) * 1000)
-        print(f"  SPLADE error: {exc}", file=sys.stderr)
-        return [], ms, {}
+    r = httpx.post(splade_url, json={"input": all_texts, "model": "splade"}, timeout=120.0)
+    r.raise_for_status()
+    vectors   = [item["sparse_vector"] for item in r.json()["data"]]
+    q_vec     = vectors[0]
+    q_map     = dict(zip(q_vec["indices"], q_vec["values"]))
+    scores: dict[str, float] = {}
+    for m, d_vec in zip(pool, vectors[1:]):
+        dot = sum(q_map.get(i, 0.0) * v for i, v in zip(d_vec["indices"], d_vec["values"]))
+        scores[m["url"]] = dot
+    ranked = sorted(pool, key=lambda m: -scores[m["url"]])
+    ms     = round((time.perf_counter() - t0) * 1000)
+    return [m["url"] for m in ranked[:TOP_N]], ms, scores
 
 
 def _apply_m10(
@@ -147,23 +136,18 @@ def _call_generator(system: str, user: str, known_urls: set[str], generator_url:
         "temperature": 0.0,
     }
     t0 = time.perf_counter()
-    try:
-        r = httpx.post(generator_url, json=payload, timeout=120.0)
-        r.raise_for_status()
-        body       = r.json()
-        content    = body["choices"][0]["message"]["content"].strip()
-        tokens_in  = body.get("usage", {}).get("prompt_tokens", 0)
-        tokens_out = body.get("usage", {}).get("completion_tokens", 0)
-        if content.startswith("```"):
-            content = re.sub(r"^```[a-z]*\n?", "", content).rstrip("`").strip()
-        urls  = json.loads(content) if content.startswith("[") else []
-        urls  = [u for u in urls if isinstance(u, str) and u in known_urls][:TOP_N]
-        ms    = round((time.perf_counter() - t0) * 1000)
-        return urls, ms, (tokens_in, tokens_out)
-    except Exception as exc:
-        ms = round((time.perf_counter() - t0) * 1000)
-        print(f"  generator error: {exc}", file=sys.stderr)
-        return [], ms, (0, 0)
+    r = httpx.post(generator_url, json=payload, timeout=120.0)
+    r.raise_for_status()
+    body       = r.json()
+    content    = body["choices"][0]["message"]["content"].strip()
+    tokens_in  = body.get("usage", {}).get("prompt_tokens", 0)
+    tokens_out = body.get("usage", {}).get("completion_tokens", 0)
+    if content.startswith("```"):
+        content = re.sub(r"^```[a-z]*\n?", "", content).rstrip("`").strip()
+    urls  = json.loads(content) if content.startswith("[") else []
+    urls  = [u for u in urls if isinstance(u, str) and u in known_urls][:TOP_N]
+    ms    = round((time.perf_counter() - t0) * 1000)
+    return urls, ms, (tokens_in, tokens_out)
 
 
 def _apply_m11(
