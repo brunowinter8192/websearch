@@ -6,7 +6,7 @@ CLI-driven web research toolkit for Claude Code. `cli.py` is the sole root-level
 
 ## Modules
 
-### cli.py (218 LOC)
+### cli.py (219 LOC)
 
 **Purpose:** CLI entry-point. Configures daily-rotating file logging (no stderr handler) before any `src.*` import, then dispatches 5 argparse subcommands: `search_web` (query → `search_web_workflow`), `search_engine_drilldown` (query + required `--engine` → cache-read-or-rerun, then `format_engine_pool`), `scrape_url_chromium` (url → `scrape_url_chromium_workflow`, the crawl4ai/chromium lane; rejects `.pdf` paths, tells the user to download manually), `discover_urls` (seed_url + `--url-file` → `discover_urls_workflow`, then `_write_discovery_output` — see Gotchas for its file-vs-exit-status contract on failure), `index_scrapes` (collection + one-or-more URLs → `index_scrapes_workflow`, then `_dispatch_index_scrapes` prints one terse outcome line per URL — see `src/scraper/DOCS.md` for the workflow itself).
 **Reads:** CLI args (argparse), disk cache via `cache_read` (drilldown cache-miss path).
