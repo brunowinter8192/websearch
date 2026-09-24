@@ -15,13 +15,12 @@ from _p2_fetch import RAW_SUBDIR, _fetch_one_url, _url_hash, _write_raw
 from _p2_state import JobRecord, RideRecord, RiderState, STALL_TIMEOUT_S
 from _p2_watchdog import _abort_stall, _watchdog
 
-PAGE_TIMEOUT_MS   = 8_000    # default; overridden per-call via page_timeout_ms param
-FAIL_THRESHOLD    = 2        # failed/empty strikes before dropping a proxy (mirrors burn_threshold for regwall)
+PAGE_TIMEOUT_MS   = 8_000
+FAIL_THRESHOLD    = 2
 
 
 # ORCHESTRATOR
 
-# Launch n_slots concurrent rider tasks across n_browsers browser instances; return shared state when done.
 async def run_riding_pool(
     url_queue:       asyncio.Queue,
     proxy_pool:      list,
@@ -65,7 +64,6 @@ async def run_riding_pool(
 
 # FUNCTIONS
 
-# One rider task: pull proxy → ride URL queue → burn/rotate → repeat.
 async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -> None:
     print(f"[slot {slot_id}] started", file=sys.stderr)
 
@@ -178,7 +176,7 @@ def _apply_url_status(slot_id: int, state: RiderState, url: str, html: str,
         print(f"[slot {slot_id}] CF  rotating", file=sys.stderr)
         should_break = True
 
-    else:  # failed | empty
+    else:
         ride["fail_count"] += 1
         state.url_queue.put_nowait(url)
         print(
@@ -213,7 +211,6 @@ def _finalize_ride(slot_id: int, state: RiderState, pstr: str, proto: str, hp: s
     )
 
 
-# Atomically advance pool cursor; return (proto, hp) or None if pool is empty.
 async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
     async with state.proxy_lock:
         eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
@@ -224,7 +221,6 @@ async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
         return eligible[idx]
 
 
-# Mini smoke: 5 URLs, 4 slots, raw pool (no feeder), 5-min cap.
 if __name__ == "__main__":
     import json
     from p0_pool import load_backfill_pool

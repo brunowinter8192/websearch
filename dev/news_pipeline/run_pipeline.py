@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 PIPELINE_DIR = Path(__file__).parent
-PROJECT_ROOT = PIPELINE_DIR.parent.parent   # searxng-cli/
+PROJECT_ROOT = PIPELINE_DIR.parent.parent
 LOG_DIR = PROJECT_ROOT / "src" / "logs"
 LAST_RUN_FILE = LOG_DIR / "coindesk_pipeline_last_run.txt"
 PYTHON = str(PROJECT_ROOT / "venv" / "bin" / "python")
@@ -32,13 +32,11 @@ def pipeline_workflow():
 
     clear_intermediates(log)
 
-    # Stage 01 — discover (48h)
     discover_json = run_stage_discover(log)
     if discover_json is None:
         log.error("Stage 01 failed — aborting.")
         sys.exit(1)
 
-    # Stage 04 — dedup
     filtered_json, n_total, n_skipped, n_new = run_stage_dedup(log, discover_json)
     if filtered_json is None:
         log.error("Stage 04 failed — aborting.")
@@ -50,7 +48,6 @@ def pipeline_workflow():
         write_last_run_marker(log)
         return
 
-    # Stage 02b — scrape (only new URLs)
     n_ok, n_failed = run_stage_scrape(log, filtered_json)
     log.info(f"STAGE 02b: scrape → {n_ok} ok, {n_failed} failed")
 
@@ -59,11 +56,9 @@ def pipeline_workflow():
         write_last_run_marker(log)
         return
 
-    # Stage 03 — cleanup
     n_cleaned = run_stage_cleanup(log)
     log.info(f"STAGE 03: cleanup → {n_cleaned} files cleaned")
 
-    # Stage 05 — publish
     n_copied, n_chunks = run_stage_publish(log)
     log.info(f"STAGE 05: publish → {n_copied} copied, {n_chunks} chunks indexed")
 
@@ -73,7 +68,6 @@ def pipeline_workflow():
 
 # FUNCTIONS
 
-# Configure file + stderr logging; return logger
 def setup_logging() -> logging.Logger:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     log_file = LOG_DIR / f"coindesk_pipeline_{today}.log"
@@ -94,11 +88,9 @@ def setup_logging() -> logging.Logger:
     return log
 
 
-# Check (a) internet reachable, (b) rag-cli callable; return True if all pass
 def check_preconditions(log: logging.Logger) -> bool:
     log.info("Checking preconditions …")
 
-    # (a) Internet reachability
     try:
         with urllib.request.urlopen(PRECONDITION_URL, timeout=PRECONDITION_TIMEOUT):
             log.info("  [OK] Internet reachable (coindesk.com)")
@@ -106,7 +98,6 @@ def check_preconditions(log: logging.Logger) -> bool:
         log.error(f"  [FAIL] Internet unreachable: {e}")
         return False
 
-    # (b) rag-cli callable
     result = subprocess.run(
         ["rag-cli", "list_collections"],
         capture_output=True,
@@ -120,7 +111,6 @@ def check_preconditions(log: logging.Logger) -> bool:
     return True
 
 
-# Remove stale intermediate files so publish only indexes current-run articles
 def clear_intermediates(log: logging.Logger):
     dirs_to_clear = [
         PIPELINE_DIR / "02b_data",
@@ -136,7 +126,6 @@ def clear_intermediates(log: logging.Logger):
             log.info(f"Cleared intermediate: {d.name}/")
 
 
-# Run stage 01 (discover); return path to discover_*.json or None on failure
 def run_stage_discover(log: logging.Logger) -> Path | None:
     log.info("STAGE 01: discover (48h window) …")
     result = _run(["01_coindesk_discover.py"], log, "01")
@@ -145,7 +134,6 @@ def run_stage_discover(log: logging.Logger) -> Path | None:
 
     stdout, stderr = result
     combined = stdout + stderr
-    # Parse "Output           : /path/to/discover_<ts>.json"
     m = re.search(r"Output\s*:\s*(\S+discover_\S+\.json)", combined)
     if not m:
         log.error("STAGE 01: could not parse output path from stdout")
@@ -167,7 +155,6 @@ def run_stage_discover(log: logging.Logger) -> Path | None:
     return path
 
 
-# Run stage 04 (dedup); return (filtered_path, total, skipped, new) or (None, 0, 0, 0)
 def run_stage_dedup(log: logging.Logger, discover_json: Path) -> tuple:
     log.info("STAGE 04: dedup …")
     result = _run(["04_dedup.py", "--input", str(discover_json)], log, "04")
@@ -177,12 +164,10 @@ def run_stage_dedup(log: logging.Logger, discover_json: Path) -> tuple:
     stdout, stderr = result
     combined = stdout + stderr
 
-    # Parse counts
     total = _parse_int(combined, r"Total input\s*:\s*(\d+)")
     skipped = _parse_int(combined, r"Skipped.*?:\s*(\d+)")
     new = _parse_int(combined, r"New.*?:\s*(\d+)")
 
-    # Parse output path
     m = re.search(r"Output\s*:\s*(\S+discover_filtered_\S+\.json)", combined)
     if not m:
         log.error("STAGE 04: could not parse filtered output path")
@@ -191,7 +176,6 @@ def run_stage_dedup(log: logging.Logger, discover_json: Path) -> tuple:
     return Path(m.group(1)), total, skipped, new
 
 
-# Run stage 02b (scrape); return (n_ok, n_failed)
 def run_stage_scrape(log: logging.Logger, filtered_json: Path) -> tuple[int, int]:
     log.info(f"STAGE 02b: scrape ({filtered_json.name}) …")
     result = _run(
@@ -211,7 +195,6 @@ def run_stage_scrape(log: logging.Logger, filtered_json: Path) -> tuple[int, int
     return n_ok, n_failed
 
 
-# Run stage 03 (cleanup); return number of files processed
 def run_stage_cleanup(log: logging.Logger) -> int:
     log.info("STAGE 03: cleanup …")
     result = _run(["03_coindesk_cleanup.py"], log, "03")
@@ -223,7 +206,6 @@ def run_stage_cleanup(log: logging.Logger) -> int:
     return int(m.group(1)) if m else 0
 
 
-# Run stage 05 (publish); return (n_copied, n_chunks)
 def run_stage_publish(log: logging.Logger) -> tuple[int, int]:
     log.info("STAGE 05: publish …")
     result = _run(["05_publish.py"], log, "05")
@@ -240,7 +222,6 @@ def run_stage_publish(log: logging.Logger) -> tuple[int, int]:
     return n_copied, n_chunks
 
 
-# Subprocess helper: run a pipeline stage script; return (stdout, stderr) or None on failure
 def _run(script_args: list[str], log: logging.Logger, stage_label: str) -> tuple[str, str] | None:
     cmd = [PYTHON] + script_args
     try:
@@ -272,13 +253,11 @@ def _run(script_args: list[str], log: logging.Logger, stage_label: str) -> tuple
     return result.stdout, result.stderr
 
 
-# Parse first integer match for a regex pattern from text; return 0 if not found
 def _parse_int(text: str, pattern: str) -> int:
     m = re.search(pattern, text)
     return int(m.group(1)) if m else 0
 
 
-# Write timestamp to last-run marker file
 def write_last_run_marker(log: logging.Logger):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     LAST_RUN_FILE.write_text(ts + "\n", encoding="utf-8")

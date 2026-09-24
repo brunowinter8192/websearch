@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# Unified curated proxy source: monosans + proxifly, merged and deduped.
-# Standalone eval sources: TheSpeedX, databay-labs, jetkai, roosterkid.
-# Backfill pool: all 13 Top-Repo sources merged and deduped (~22k unique).
 
 # INFRASTRUCTURE
 
@@ -14,7 +11,6 @@ from proxy_status_log import proxy_key
 PROXIFLY_URL      = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.json"
 FETCH_TIMEOUT     = 15.0
 
-# (proto, url) pairs — multi-entry per proto allowed (jetkai http+https both → "http")
 THESPEEDX_SOURCES: list[tuple[str, str]] = [
     ("http",   "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"),
     ("socks4", "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt"),
@@ -37,7 +33,6 @@ ROOSTERKID_SOURCES: list[tuple[str, str]] = [
     ("socks5", "https://raw.githubusercontent.com/roosterkid/openproxylist/main/SOCKS5.txt"),
 ]
 
-# Backfill pool — 9 additional Top-13 repos (all parsed via _fetch_roosterkid/_IP_PORT_RE)
 THEMIRALAY_SOURCES: list[tuple[str, str]] = [
     ("http",   "https://raw.githubusercontent.com/themiralay/Proxy-List-World/master/data.txt"),
 ]
@@ -88,14 +83,12 @@ _IP_PORT_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}:\d+")
 # ORCHESTRATOR
 
 def load_curated_proxies() -> list[tuple[str, str]]:
-    """Fetch monosans + proxifly, merge, dedup; return [(protocol, host:port)]."""
     monosans = load_monosans_proxies()
     proxifly = _fetch_proxifly()
     return _merge_dedup(monosans + proxifly)
 
 
 def load_thespeedx_proxies() -> list[tuple[str, str]]:
-    """Fetch TheSpeedX http/socks4/socks5 bare txt files; dedup; return [(protocol, host:port)]."""
     entries: list[tuple[str, str]] = []
     for proto, url in THESPEEDX_SOURCES:
         entries.extend(_fetch_bare_txt(proto, url))
@@ -103,7 +96,6 @@ def load_thespeedx_proxies() -> list[tuple[str, str]]:
 
 
 def load_databay_proxies() -> list[tuple[str, str]]:
-    """Fetch databay-labs http/socks4/socks5 bare txt files; dedup; return [(protocol, host:port)]."""
     entries: list[tuple[str, str]] = []
     for proto, url in DATABAY_SOURCES:
         entries.extend(_fetch_bare_txt(proto, url))
@@ -111,7 +103,6 @@ def load_databay_proxies() -> list[tuple[str, str]]:
 
 
 def load_jetkai_proxies() -> list[tuple[str, str]]:
-    """Fetch jetkai http/https/socks4/socks5 bare txt files (https→http); dedup; return [(protocol, host:port)]."""
     entries: list[tuple[str, str]] = []
     for proto, url in JETKAI_SOURCES:
         entries.extend(_fetch_bare_txt(proto, url))
@@ -119,7 +110,6 @@ def load_jetkai_proxies() -> list[tuple[str, str]]:
 
 
 def load_roosterkid_proxies() -> list[tuple[str, str]]:
-    """Fetch roosterkid HTTPS/SOCKS4/SOCKS5 decorated txt files; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in ROOSTERKID_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -127,7 +117,6 @@ def load_roosterkid_proxies() -> list[tuple[str, str]]:
 
 
 def load_themiralay_proxies() -> list[tuple[str, str]]:
-    """Fetch themiralay/Proxy-List-World http bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in THEMIRALAY_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -135,7 +124,6 @@ def load_themiralay_proxies() -> list[tuple[str, str]]:
 
 
 def load_r00tee_proxies() -> list[tuple[str, str]]:
-    """Fetch r00tee/Proxy-List http/socks4/socks5 bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in R00TEE_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -143,7 +131,6 @@ def load_r00tee_proxies() -> list[tuple[str, str]]:
 
 
 def load_iplocate_proxies() -> list[tuple[str, str]]:
-    """Fetch iplocate/free-proxy-list http/socks4/socks5 bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in IPLOCATE_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -151,7 +138,6 @@ def load_iplocate_proxies() -> list[tuple[str, str]]:
 
 
 def load_sunny9577_proxies() -> list[tuple[str, str]]:
-    """Fetch sunny9577/proxy-scraper http/socks4/socks5 generated txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in SUNNY9577_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -159,7 +145,6 @@ def load_sunny9577_proxies() -> list[tuple[str, str]]:
 
 
 def load_aliilapro_proxies() -> list[tuple[str, str]]:
-    """Fetch ALIILAPRO/Proxy http/socks4/socks5 bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in ALIILAPRO_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -167,7 +152,6 @@ def load_aliilapro_proxies() -> list[tuple[str, str]]:
 
 
 def load_dpangestuw_proxies() -> list[tuple[str, str]]:
-    """Fetch dpangestuw/Free-Proxy http/socks4/socks5 scheme-prefixed txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in DPANGESTUW_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -175,7 +159,6 @@ def load_dpangestuw_proxies() -> list[tuple[str, str]]:
 
 
 def load_zaeem20_proxies() -> list[tuple[str, str]]:
-    """Fetch Zaeem20/FREE_PROXIES_LIST http/socks4/socks5 bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in ZAEEM20_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -183,7 +166,6 @@ def load_zaeem20_proxies() -> list[tuple[str, str]]:
 
 
 def load_zloi_proxies() -> list[tuple[str, str]]:
-    """Fetch zloi-user/hideip.me http/socks4/socks5 decorated txt (host:port:Country); regex-parse; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in ZLOI_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -191,7 +173,6 @@ def load_zloi_proxies() -> list[tuple[str, str]]:
 
 
 def load_hookzof_proxies() -> list[tuple[str, str]]:
-    """Fetch hookzof/socks5_list socks5 bare txt; regex-parse IP:PORT; dedup."""
     entries: list[tuple[str, str]] = []
     for proto, url in HOOKZOF_SOURCES:
         entries.extend(_fetch_roosterkid(proto, url))
@@ -199,13 +180,6 @@ def load_hookzof_proxies() -> list[tuple[str, str]]:
 
 
 def load_backfill_pool() -> list[tuple[str, str]]:
-    """Fetch all 13 Top-Repo sources; merge, dedup; return [(protocol, host:port)].
-
-    Top-13 by survey rank: monosans, roosterkid, databay-labs, TheSpeedX,
-    themiralay, r00tee, iplocate, sunny9577, ALIILAPRO, dpangestuw, Zaeem20,
-    zloi-user, hookzof. proxifly excluded (rank 15, below cutoff).
-    Target: ~22k unique.
-    """
     entries: list[tuple[str, str]] = []
     entries.extend(load_monosans_proxies())
     for loader in [
@@ -220,14 +194,12 @@ def load_backfill_pool() -> list[tuple[str, str]]:
 # FUNCTIONS
 
 def _fetch_proxifly() -> list[tuple[str, str]]:
-    """Fetch proxifly all/data.json; return [(protocol, host:port)]."""
     resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
     resp.raise_for_status()
     return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
 
 
 def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
-    """Fetch one bare host:port txt file (one entry per line); return [(proto, host:port)]."""
     resp = httpx.get(url, timeout=FETCH_TIMEOUT)
     resp.raise_for_status()
     entries: list[tuple[str, str]] = []
@@ -239,7 +211,6 @@ def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
 
 
 def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
-    """Fetch roosterkid decorated txt; regex-extract IP:PORT; skip header/metadata lines."""
     resp = httpx.get(url, timeout=FETCH_TIMEOUT)
     resp.raise_for_status()
     entries: list[tuple[str, str]] = []
@@ -251,7 +222,6 @@ def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
 
 
 def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """Deduplicate entries by canonical proxy_key; first occurrence wins."""
     seen:   set[str]              = set()
     result: list[tuple[str, str]] = []
     for proto, host_port in entries:

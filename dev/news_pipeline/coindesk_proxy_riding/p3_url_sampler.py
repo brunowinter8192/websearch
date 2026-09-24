@@ -6,13 +6,6 @@ from pathlib import Path
 
 
 def _repo_root() -> Path:
-    """Return main repo root — works from both worktrees and main checkout.
-
-    git rev-parse --git-common-dir returns a path relative to the subprocess CWD
-    (not the Python process CWD) when the repo is a main checkout.  Resolving
-    relative to Path(__file__).parent (= the subprocess CWD) is correct in both
-    cases; when git returns an absolute path, Path(dir / absolute) == absolute.
-    """
     result = subprocess.run(
         ["git", "rev-parse", "--git-common-dir"],
         capture_output=True, text=True,
@@ -25,25 +18,16 @@ def _repo_root() -> Path:
 
 INVENTORY_DIR = _repo_root() / "data" / "news" / "coindesk" / "inventory"
 
-# Years with meaningful article counts (2016 has 2 lines — exclude)
 SAMPLE_YEARS = list(range(2017, 2027))
 
-# Years with meaningful article counts (2016 has 2 lines — exclude)
 SAMPLE_YEARS = list(range(2017, 2027))
 
-MIN_PER_YEAR = 5  # floor: every represented year gets at least this many URLs
+MIN_PER_YEAR = 5
 
 
 # ORCHESTRATOR
 
-# Sample n_total URLs proportional to each year's share; floor MIN_PER_YEAR per year.
 def sample_urls(n_total: int = 500, seed: int = 42) -> list[str]:
-    """Read inventory shards, proportional-sample across 2017–2026.
-
-    Returns a flat list of n_total URL strings in random order.
-    Every year gets at least MIN_PER_YEAR URLs (floor), remainder
-    distributed proportionally to year line-count.
-    """
     year_lines = _load_year_lines()
     counts     = _compute_counts(year_lines, n_total)
     return _draw_sample(year_lines, counts, seed)
@@ -51,7 +35,6 @@ def sample_urls(n_total: int = 500, seed: int = 42) -> list[str]:
 
 # FUNCTIONS
 
-# Load {year: [raw_line, ...]} from inventory shards; skip missing or empty files
 def _load_year_lines() -> dict[int, list[str]]:
     year_lines: dict[int, list[str]] = {}
     for year in SAMPLE_YEARS:
@@ -64,7 +47,6 @@ def _load_year_lines() -> dict[int, list[str]]:
     return year_lines
 
 
-# Compute per-year sample count: floor MIN_PER_YEAR, remainder proportional to line counts
 def _compute_counts(year_lines: dict[int, list[str]], n_total: int) -> dict[int, int]:
     years   = sorted(year_lines)
     n_years = len(years)
@@ -78,7 +60,6 @@ def _compute_counts(year_lines: dict[int, list[str]], n_total: int) -> dict[int,
         prop      = len(year_lines[y]) / total_lines if total_lines else 0
         counts[y] = MIN_PER_YEAR + int(remainder * prop)
 
-    # Rounding gap: add 1 to the largest years until total == n_total
     assigned = sum(counts.values())
     gap      = n_total - assigned
     for y in sorted(years, key=lambda y: len(year_lines[y]), reverse=True):
@@ -87,14 +68,12 @@ def _compute_counts(year_lines: dict[int, list[str]], n_total: int) -> dict[int,
         counts[y] += 1
         gap        -= 1
 
-    # Cap at actual shard size
     for y in years:
         counts[y] = min(counts[y], len(year_lines[y]))
 
     return counts
 
 
-# Draw random sample per year, extract URL column (tab-separated YYYY-MM-DD\tURL)
 def _draw_sample(
     year_lines: dict[int, list[str]],
     counts: dict[int, int],

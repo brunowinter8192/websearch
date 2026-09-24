@@ -11,27 +11,25 @@ from pathlib import Path
 import httpx
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _06_capture import TARGET_URL, browser_load_feed  # noqa: E402
-from _06_progress import OUTPUT_DIR, log, log_checkpoint, save_checkpoint  # noqa: E402
-from _06_report import write_report  # noqa: E402
+from _06_capture import TARGET_URL, browser_load_feed
+from _06_progress import OUTPUT_DIR, log, log_checkpoint, save_checkpoint
+from _06_report import write_report
 
 TIMELINE_BASE = "https://www.coindesk.com/api/v1/articles/timeline"
 COINDESK_BASE = "https://www.coindesk.com"
 URLS_DIR = OUTPUT_DIR / "urls"
 
-STOP_DATE = "2017-01-01"        # stop when oldest article in batch < this date
-CALL_DELAY = 0.3                # seconds between cursor calls
-CHECKPOINT_EVERY = 50           # flush checkpoint JSON every N successful calls
-REWARM_EVERY = 240.0            # proactive re-warm interval in seconds
-CLICKS_WARMUP = 8               # clicks for initial warmup (SSR buffer clears at ~click 6)
-CLICKS_REWARM = 7               # clicks for browser re-warm (slightly faster)
-MAX_CURSOR_FALLBACKS = 3        # max articles to try as cursor anchor before declaring rewarm needed
+STOP_DATE = "2017-01-01"
+CALL_DELAY = 0.3
+CHECKPOINT_EVERY = 50
+REWARM_EVERY = 240.0
+CLICKS_WARMUP = 8
+CLICKS_REWARM = 7
+MAX_CURSOR_FALLBACKS = 3
 
 
 # ORCHESTRATOR
 
-# Full CoinDesk article discovery: browser warmup → httpx cursor loop → per-year URL files.
-# Re-warm strategy: httpx feedpage GET tested first; falls back to browser if httpx is insufficient.
 def full_discovery() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     URLS_DIR.mkdir(parents=True, exist_ok=True)
@@ -64,7 +62,6 @@ def full_discovery() -> None:
 
 # FUNCTIONS
 
-# Parse all articles from response body; extract _id, storyType, pathname, displayDate
 def parse_articles(body: bytes) -> list:
     try:
         data = json.loads(body)
@@ -93,12 +90,10 @@ def parse_articles(body: bytes) -> list:
     return result
 
 
-# Build pagination cursor URL from lastId + lastDisplayDate
 def build_cursor_url(last_id: str, last_date: str) -> str:
     return f"{TIMELINE_BASE}?size=16&lastId={last_id}&lastDisplayDate={last_date}&lang=en"
 
 
-# Fetch feed HTML page via plain httpx; return HTTP status code
 def fetch_feedpage(headers: dict) -> int:
     feed_hdrs = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept-language", "accept"}}
     try:
@@ -109,7 +104,6 @@ def fetch_feedpage(headers: dict) -> int:
         return -1
 
 
-# Write one article line to the appropriate per-year file; skip articles with no pathname
 def write_article(a: dict, year_files: dict, seen_ids: set) -> bool:
     art_id = a.get("_id")
     pathname = a.get("pathname") or ""
@@ -127,8 +121,6 @@ def write_article(a: dict, year_files: dict, seen_ids: set) -> bool:
     return True
 
 
-# Attempt re-warm: httpx feedpage first (cheap), then browser re-warm as fallback.
-# Returns (headers, body_bytes_or_None, method_str).
 def try_rewarm(failing_url: str, headers: dict, log_fh) -> tuple:
     log(log_fh, "[rewarm] Attempting httpx feedpage re-warm …")
     fp_status = fetch_feedpage(headers)
@@ -158,7 +150,6 @@ def try_rewarm(failing_url: str, headers: dict, log_fh) -> tuple:
 def write_batch_articles(articles: list, year_files: dict, seen_ids: set, year_counts: defaultdict) -> tuple:
     added = 0
     batch_oldest = None
-    # Write articles from this batch to per-year files
     for a in articles:
         if write_article(a, year_files, seen_ids):
             d = (a.get("displayDate") or "")[:10]
@@ -169,7 +160,6 @@ def write_batch_articles(articles: list, year_files: dict, seen_ids: set, year_c
     return added, batch_oldest
 
 
-# Build next cursor; fall back to N-1, N-2 articles on 403
 def advance_cursor(articles: list, headers: dict, log_fh, ok_calls: int) -> dict:
     next_body = None
     next_url = ""
@@ -210,7 +200,6 @@ def advance_cursor(articles: list, headers: dict, log_fh, ok_calls: int) -> dict
 
 
 def resolve_cursor_exhaustion(next_url: str, headers: dict, log_fh) -> dict:
-    # All cursor fallbacks exhausted → try re-warm
     new_headers, rewarm_body, method = try_rewarm(next_url, headers, log_fh)
     if method == "fatal" or rewarm_body is None:
         log(log_fh, "FATAL: re-warm failed. Stopping.")
@@ -229,7 +218,6 @@ def process_batch(body: bytes, year_files: dict, seen_ids: set, year_counts: def
     if batch_oldest and (oldest_date is None or batch_oldest < oldest_date):
         oldest_date = batch_oldest
 
-    # Termination: oldest article in batch older than STOP_DATE
     oldest_in_batch = (articles[-1].get("displayDate") or "")[:10]
     if oldest_in_batch and oldest_in_batch < STOP_DATE:
         log(log_fh, f"Reached stop date floor at {oldest_in_batch}. Stopping.")
@@ -288,7 +276,6 @@ def run_cursor_iteration(state: dict, year_files: dict, seen_ids: set, log_fh) -
     if batch["stop"]:
         return True
 
-    # Proactive re-warm every REWARM_EVERY seconds (only after httpx method confirmed)
     if state["httpx_rewarm_confirmed"] and time.monotonic() - state["last_rewarm_t"] >= REWARM_EVERY:
         fp = fetch_feedpage(state["headers"])
         log(log_fh, f"[proactive rewarm] httpx feedpage → {fp}")
@@ -303,7 +290,6 @@ def run_cursor_iteration(state: dict, year_files: dict, seen_ids: set, log_fh) -
     state["last_id"], state["last_date"] = step["last_id"], step["last_date"]
     apply_cursor_step(step, state)
 
-    # Checkpoint log every CHECKPOINT_EVERY calls
     if state["ok_calls"] % CHECKPOINT_EVERY == 0:
         log_checkpoint(log_fh, state["ok_calls"], state["total_articles"], state["oldest_date"],
                         state["last_date"], state["t_start"], state["elapsed_vals"],
@@ -314,7 +300,6 @@ def run_cursor_iteration(state: dict, year_files: dict, seen_ids: set, log_fh) -
     return False
 
 
-# Main cursor loop: pages backward to STOP_DATE, writing all article URLs to per-year files
 def cursor_loop(headers: dict, start_url: str, first_body: bytes, log_fh) -> dict:
     year_files: dict = {}
     seen_ids: set = set()

@@ -17,11 +17,6 @@ _LOC_RE        = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 # ORCHESTRATOR
 
 def build_sitemap_target(pool: list | None = None) -> list[str]:
-    """Fetch theblock sitemap index; return list of 64 sub-sitemap <loc> URLs.
-
-    Direct GET first (home IP may be CF-clear); falls back to proxy rotation on
-    any non-XML response (403, challenge page, error).
-    """
     content = _fetch_index_direct()
     if content is None:
         content = _fetch_index_via_proxy(pool if pool is not None else [])
@@ -30,7 +25,6 @@ def build_sitemap_target(pool: list | None = None) -> list[str]:
 
 # FUNCTIONS
 
-# Attempt direct httpx fetch of sitemap index; return bytes on XML success, None otherwise
 def _fetch_index_direct() -> bytes | None:
     try:
         r = httpx.get(THEBLOCK_INDEX, timeout=DIRECT_TIMEOUT, follow_redirects=True)
@@ -45,7 +39,6 @@ def _fetch_index_direct() -> bytes | None:
         return None
 
 
-# Fetch sitemap index through caller-supplied proxy pool; raise on exhaustion
 def _fetch_index_via_proxy(pool: list) -> bytes:
     cm   = PersistentCooldownManager()
     candidates = cm.eligible_candidates(pool)
@@ -57,10 +50,8 @@ def _fetch_index_via_proxy(pool: list) -> bytes:
             return content
         if status == "fail":
             cm.mark_burned(proto, hp)
-        # "dead": proxy reached origin (404 on index = site anomaly, not proxy fault) — skip, no burn
     raise RuntimeError("sitemap index fetch failed: all proxy candidates exhausted")
 
 
-# Extract all <loc> URLs from raw XML bytes
 def _parse_loc_urls(content: bytes) -> list[str]:
     return [m.group(1).decode().strip() for m in _LOC_RE.finditer(content)]

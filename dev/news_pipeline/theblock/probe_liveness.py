@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-# Instrumented async proxy liveness checker + concurrency sweep.
-# Stage 1: freeze pool → check liveness via curl_cffi.AsyncSession → classify failures → sweep_log.md
-#
-# Modes:
-#   --freeze               fetch 68 sources (lists imported from probe_pool_size.py), write frozen_pool/
-#   --sample N [--seed S]  check N random proxies; seed=42 default → identical sample across runs
-#   --full                 check entire frozen pool
-#
-# Usage:
-#   ./venv/bin/python dev/news_pipeline/theblock/probe_liveness.py --freeze
-#   ./venv/bin/python dev/news_pipeline/theblock/probe_liveness.py --sample 20000 --concurrency 512
-#   ./venv/bin/python dev/news_pipeline/theblock/probe_liveness.py --sample 20000 --concurrency 1000 --connect-timeout 5 --read-timeout 5
 
 # INFRASTRUCTURE
 
@@ -24,12 +12,11 @@ from pathlib import Path
 
 from curl_cffi.requests import AsyncSession
 
-# Source lists + async fetcher imported from probe_pool_size — do not re-type the 68 URLs
 sys.path.insert(0, str(Path(__file__).parent))
-from probe_pool_size import HTTP_SOURCES, SOCKS4_SOURCES, SOCKS5_SOURCES, fetch_all_sources  # noqa: E402
-from monosans_loader import load_monosans_proxies  # noqa: E402
-from proxy_status_log import record_run, partition_fresh  # noqa: E402
-from curated_sources import (  # noqa: E402
+from probe_pool_size import HTTP_SOURCES, SOCKS4_SOURCES, SOCKS5_SOURCES, fetch_all_sources
+from monosans_loader import load_monosans_proxies
+from proxy_status_log import record_run, partition_fresh
+from curated_sources import (
     load_curated_proxies, load_thespeedx_proxies,
     load_databay_proxies, load_jetkai_proxies, load_roosterkid_proxies,
 )
@@ -44,7 +31,6 @@ FROZEN_DIR  = SCRIPT_DIR / "frozen_pool"
 
 SAMPLE_SEED = 42
 
-# Eval-only sources: no freshness filter, no record_run (proxy_status_log untouched)
 EVAL_ONLY_SOURCES = {"thespeedx", "databay", "jetkai", "roosterkid"}
 
 FILTERED_LOADERS = {"monosans": load_monosans_proxies, "curated": load_curated_proxies}
@@ -139,7 +125,6 @@ def parse_args() -> argparse.Namespace:
 
 
 async def freeze_pool() -> None:
-    """Fetch all 68 sources, deduplicate per bucket, write sorted frozen_pool/{http,socks4,socks5}.txt."""
     print("=== freeze: fetching 68 sources ===")
     t0 = time.monotonic()
     source_results = await fetch_all_sources()
@@ -161,7 +146,6 @@ async def freeze_pool() -> None:
 
 
 def load_frozen_pool(frozen_dir: Path) -> list[tuple[str, str]]:
-    """Return [(protocol, host:port)] in deterministic order: http→socks4→socks5, sorted within each."""
     entries: list[tuple[str, str]] = []
     for proto in ("http", "socks4", "socks5"):
         path = frozen_dir / f"{proto}.txt"
@@ -173,7 +157,6 @@ def load_frozen_pool(frozen_dir: Path) -> list[tuple[str, str]]:
 
 
 def build_sample(entries: list[tuple[str, str]], n: int, seed: int) -> list[tuple[str, str]]:
-    """Deterministic sample: same seed + same frozen files → identical proxies every run."""
     return random.Random(seed).sample(entries, min(n, len(entries)))
 
 
@@ -183,7 +166,6 @@ async def run_checks(
     connect_s: float,
     read_s: float,
 ) -> list[dict]:
-    """Check all entries concurrently under Semaphore(concurrency); progress every 2000."""
     sem     = asyncio.Semaphore(concurrency)
     results: list[dict | None] = [None] * len(entries)
     done    = [0]
@@ -203,7 +185,7 @@ async def run_checks(
 
         await asyncio.gather(*[_one(i, proto, hp) for i, (proto, hp) in enumerate(entries)])
 
-    return results  # type: ignore[return-value]
+    return results
 
 
 if __name__ == "__main__":

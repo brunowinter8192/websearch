@@ -13,7 +13,7 @@ import httpx
 from pydoll.browser import Chrome
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _05_capture import (  # noqa: E402
+from _05_capture import (
     filter_headers,
     get_free_port,
     kill_chrome_on_port,
@@ -21,9 +21,9 @@ from _05_capture import (  # noqa: E402
     run_capture_phase,
     wait_for_ws_url,
 )
-from _05_fixed import fixed_cursor_loop  # noqa: E402
-from _05_parse import build_cursor_url, extract_cursor_std, parse_articles  # noqa: E402
-from _05_report import write_fixed_report, write_walk_report  # noqa: E402
+from _05_fixed import fixed_cursor_loop
+from _05_parse import build_cursor_url, extract_cursor_std, parse_articles
+from _05_report import write_fixed_report, write_walk_report
 
 OUTPUT_DIR = Path(__file__).parent / "05_data"
 
@@ -33,8 +33,6 @@ CALL_DELAY = 0.3
 
 # ORCHESTRATOR
 
-# Walk: paginate N calls logging ALL article storyTypes + identify TARGET_ID.
-# Fixed: paginate N calls using fixed cursor (skip invalid storyType anchors).
 async def cursor_probe_workflow(
     mode: str,
     n: int,
@@ -179,7 +177,6 @@ def advance_walk_cursor(articles: list, headers: dict, delay: float, call_num: i
     return resp.content
 
 
-# Paginate n calls logging ALL article metadata per call; detect TARGET_ID; report storyType distribution
 def storytype_walk(first_url: str, headers: dict, first_body: bytes, n: int, delay: float) -> dict:
     all_articles: list = []
     call_log: list = []

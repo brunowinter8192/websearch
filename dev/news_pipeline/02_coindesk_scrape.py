@@ -76,12 +76,10 @@ async def scrape_one_url(crawler: AsyncWebCrawler, entry: dict, run_config: Craw
 
     return result_entry
 
-# Load entries from discover JSON, newest file auto-picked if path not specified
 def load_entries(input_path: Path) -> list[dict]:
     return json.loads(input_path.read_text(encoding="utf-8"))
 
 
-# Build a base manifest entry for a URL
 def scrape_one(entry: dict, url_hash: str) -> dict:
     return {
         "url": entry["url"],
@@ -93,7 +91,6 @@ def scrape_one(entry: dict, url_hash: str) -> dict:
     }
 
 
-# Write YAML-frontmatter article file, return path
 def write_article(entry: dict, url_hash: str, content: str) -> Path:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     frontmatter = (
@@ -111,14 +108,12 @@ def write_article(entry: dict, url_hash: str, content: str) -> Path:
     return file_path
 
 
-# Write manifest JSON after all URLs processed
 def write_manifest(manifest: list[dict]):
     manifest_path = OUTPUT_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Manifest: {manifest_path}", file=sys.stderr)
 
 
-# Print run summary to stdout
 def print_summary(manifest: list[dict], total_s: float):
     ok = [e for e in manifest if e["status"] == "ok"]
     failed = [e for e in manifest if e["status"] == "failed"]
@@ -135,7 +130,6 @@ def print_summary(manifest: list[dict], total_s: float):
         print(f"  slowest : {slowest['url']} ({slowest.get('elapsed_s', '?')}s)")
 
 
-# Auto-pick newest discover_*.json from 01_json/
 def pick_latest_input() -> Path:
     candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
     if not candidates:

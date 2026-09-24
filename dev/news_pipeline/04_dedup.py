@@ -31,17 +31,14 @@ def dedup_workflow(input_path: Path, collection_dir: Path):
 
 # FUNCTIONS
 
-# Load entries from discover JSON
 def load_entries(input_path: Path) -> list[dict]:
     return json.loads(input_path.read_text(encoding="utf-8"))
 
 
-# Compute URL hash matching the publish filename convention
 def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]
 
 
-# Extract YYYY-MM-DD from publication_date field (ISO-8601 string) or URL path
 def pub_date_str(entry: dict) -> str:
     pub = entry.get("publication_date", "")
     if pub and len(pub) >= 10:
@@ -52,7 +49,6 @@ def pub_date_str(entry: dict) -> str:
     return ""
 
 
-# Return (new_entries, n_skipped): drop entries whose target MD already exists
 def filter_new(entries: list[dict], collection_dir: Path) -> tuple[list[dict], int]:
     new_entries = []
     n_skipped = 0
@@ -67,7 +63,6 @@ def filter_new(entries: list[dict], collection_dir: Path) -> tuple[list[dict], i
     return new_entries, n_skipped
 
 
-# Write filtered discover JSON, return path
 def write_output(entries: list[dict]) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -76,7 +71,6 @@ def write_output(entries: list[dict]) -> Path:
     return path
 
 
-# Print dedup summary to stdout
 def print_summary(total: int, skipped: int, new: int, output_path: Path):
     print(f"Total input : {total}")
     print(f"Skipped (already indexed): {skipped}")
@@ -84,7 +78,6 @@ def print_summary(total: int, skipped: int, new: int, output_path: Path):
     print(f"Output      : {output_path}")
 
 
-# Auto-pick newest discover_*.json from 01_json/
 def pick_latest_input() -> Path:
     input_dir = Path(__file__).parent / "01_json"
     candidates = sorted(input_dir.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)

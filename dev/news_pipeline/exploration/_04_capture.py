@@ -9,7 +9,7 @@ import urllib.request
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 TIMELINE_API_PATH = "/api/v1/articles/timeline"
-CLICKS_TO_TRIGGER = 8    # API fires ~click 6 (SSR buffer exhausted); 8 for safety
+CLICKS_TO_TRIGGER = 8
 
 REAL_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -45,14 +45,12 @@ _JS_CLICK_BTN = """
 
 # FUNCTIONS
 
-# Bind to port 0 to get a free OS-assigned port
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-# Launch Chrome in background via open -gna (new instance, no foreground)
 def launch_background_chrome(port: int, session_dir: str) -> None:
     subprocess.run(
         [
@@ -69,7 +67,6 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
     )
 
 
-# Poll /json/version until Chrome responds; return webSocketDebuggerUrl
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
@@ -83,7 +80,6 @@ def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     raise TimeoutError(f"Chrome did not start on port {port} within {timeout}s")
 
 
-# Kill the Chrome process bound to this debug port
 def kill_chrome_on_port(port: int) -> None:
     try:
         subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
@@ -91,7 +87,6 @@ def kill_chrome_on_port(port: int) -> None:
         print(f"pkill (non-fatal): {e}", file=sys.stderr)
 
 
-# Unpack CDP execute_script result dict
 def _extract_value(raw):
     try:
         return raw["result"]["result"]["value"]
@@ -99,7 +94,6 @@ def _extract_value(raw):
         return None
 
 
-# Click More-stories n times under HAR record; return first HAR entry matching TIMELINE_API_PATH
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     async with tab.request.record() as capture:
         for i in range(n_clicks):

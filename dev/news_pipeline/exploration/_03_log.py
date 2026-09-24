@@ -4,14 +4,12 @@ from datetime import datetime, timezone
 
 # FUNCTIONS
 
-# Write log file header with run metadata and column labels
 def write_log_header(log_fh, ts: str, cap_label: str) -> None:
     log_fh.write(f"# CoinDesk backfill — started {ts} — cap={cap_label}\n")
     log_fh.write("# timestamp                | click | total  | oldest     |  +new | btn            |    t(s)\n")
     log_fh.flush()
 
 
-# Append one progress line and flush immediately for tail -f visibility
 def write_log_line(
     log_fh, click_n: int, total: int, oldest: str,
     new_this: int, btn_state: str, elapsed: float,

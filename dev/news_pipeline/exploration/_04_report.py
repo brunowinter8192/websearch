@@ -60,7 +60,6 @@ def _render_cursor_summary(summary: dict) -> list:
     return lines
 
 
-# 403 diagnostics block (if present)
 def _render_403_diagnostics(diag: dict) -> list:
     lines = ["\n### 403 Diagnostics\n"]
     lines.append(f"**Failing URL:** `{diag.get('failing_url', '?')}`\n")
@@ -139,7 +138,6 @@ def _render_rate_test_section(cursor_results_rate: list) -> list:
     return lines
 
 
-# Write MD report with captured headers, replay status codes, cursor-loop results, and rate-test
 def write_report(
     path: Path,
     ts: str,

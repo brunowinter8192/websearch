@@ -13,7 +13,6 @@ from _p4_stats import _compute_stats
 
 # ORCHESTRATOR
 
-# Write job.md + three plots for a proxy-riding scrape run to job_dir.
 def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime) -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
     stats = _compute_stats(state, t_job_start)
@@ -188,7 +187,6 @@ def _render_plots_section() -> list:
     ]
 
 
-# Write job.md with all metrics, tables, failure lists, and plot links.
 def _write_md(
     job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
 ) -> None:

@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# Aggregate raw free-proxy pool size from 68 public source URLs.
-# Pure fetch+parse+count — NO liveness checking, NO proxy is contacted.
-# Output: console summary + dev/news_pipeline/theblock/probe_pool_size_reports/pool_size_<UTC>.md
 
 # INFRASTRUCTURE
 
@@ -19,10 +16,8 @@ REPORTS_DIR = SCRIPT_DIR / "probe_pool_size_reports"
 TIMEOUT_S      = 15.0
 SEMAPHORE_SIZE = 20
 
-# baseline from OldThemes 16: monosans single-source neutral run
 BASELINE_RAW = 17_202
 
-# (url, is_mixed) — is_mixed=True for protocol-unknown aggregate lists counted in HTTP bucket
 HTTP_SOURCES: list[tuple[str, bool]] = [
     ("https://api.proxyscrape.com/v3/free-proxy-list/get?request=getproxies&protocol=http",   False),
     ("https://api.proxyscrape.com/v3/free-proxy-list/get?request=getproxies&protocol=https",  False),
@@ -123,7 +118,6 @@ async def probe_pool_size_workflow() -> None:
 # FUNCTIONS
 
 def parse_proxy_line(line: str) -> str | None:
-    """Extract normalised host:port from bare, proto://, or proto://user:pass@ formats."""
     line = line.strip()
     if not line or line.startswith('#'):
         return None
@@ -144,7 +138,6 @@ async def fetch_source(
     bucket: str,
     is_mixed: bool,
 ) -> dict:
-    """GET one source, parse proxy lines; never raises."""
     async with sem:
         try:
             r = await client.get(url, timeout=TIMEOUT_S, follow_redirects=True)
@@ -178,7 +171,6 @@ def _dead(url: str, bucket: str, is_mixed: bool, status, error: str) -> dict:
 
 
 async def fetch_all_sources() -> list[dict]:
-    """Fetch all 68 sources concurrently under a semaphore."""
     tasks: list[tuple[str, str, bool]] = (
         [(u, "http",   m) for u, m in HTTP_SOURCES]
         + [(u, "socks4", m) for u, m in SOCKS4_SOURCES]
@@ -192,7 +184,6 @@ async def fetch_all_sources() -> list[dict]:
 
 
 def compute_stats(results: list[dict]) -> dict:
-    """Aggregate per-bucket and global counts + unique sets."""
     buckets: dict[str, dict] = {
         "http":   {"raw": 0, "proxies": set()},
         "socks4": {"raw": 0, "proxies": set()},
@@ -223,7 +214,6 @@ def compute_stats(results: list[dict]) -> dict:
 
 
 def _source_label(url: str) -> str:
-    """Short display label: last two path segments or API host."""
     if "proxyscrape.com" in url:
         proto = url.split("protocol=")[-1]
         return f"proxyscrape/{proto}"
@@ -241,7 +231,6 @@ def _render_header(results: list[dict], stats: dict, ts_str: str, elapsed: float
     ]
 
 
-# Headline
 def _render_headline(stats: dict) -> list:
     return [
         "## Headline",
@@ -258,7 +247,6 @@ def _render_headline(stats: dict) -> list:
     ]
 
 
-# Per-bucket summary
 def _render_bucket_summary(results: list[dict], stats: dict) -> list:
     lines = ["## Per-Protocol Bucket Summary", ""]
     lines += ["| Bucket | Sources | Raw | Unique |", "|---|---|---|---|"]
@@ -270,7 +258,6 @@ def _render_bucket_summary(results: list[dict], stats: dict) -> list:
     return lines
 
 
-# Per-source detail — one table per bucket
 def _render_source_detail(results: list[dict]) -> list:
     lines: list[str] = []
     for bucket in ("http", "socks4", "socks5"):
@@ -289,7 +276,6 @@ def _render_source_detail(results: list[dict]) -> list:
     return lines
 
 
-# Failed sources
 def _render_failed_sources(stats: dict) -> list:
     if stats["failed"]:
         lines = ["## Failed Sources", ""]
@@ -300,7 +286,6 @@ def _render_failed_sources(stats: dict) -> list:
     return ["## Failed Sources", "", "None.", ""]
 
 
-# Baseline comparison
 def _render_baseline_comparison(stats: dict) -> list:
     return [
         "## Baseline Comparison",

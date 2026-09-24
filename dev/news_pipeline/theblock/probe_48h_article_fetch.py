@@ -10,8 +10,8 @@ from pathlib import Path
 
 import httpx
 
-sys.path.insert(0, str(Path(__file__).parent))              # curated_sources
-sys.path.insert(0, str(Path(__file__).parent / "acquire_pipe"))  # p1_fetch
+sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "acquire_pipe"))
 
 from curated_sources import load_backfill_pool
 from p1_fetch import fetch_url, XML_MARKERS
@@ -19,7 +19,7 @@ from p1_fetch import fetch_url, XML_MARKERS
 INDEX_URL      = "https://www.theblock.co/sitemap_tbco_index.xml"
 OUTPUT_DIR     = Path(__file__).parent / "probe_48h_output"
 DIRECT_TIMEOUT = 15.0
-RACE_WIDTH     = 128   # proxies fired in parallel per URL
+RACE_WIDTH     = 128
 
 _INDEX_LOC_RE = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 _URL_BLOCK_RE = re.compile(rb"<url>(.*?)</url>", re.DOTALL)
@@ -83,7 +83,6 @@ def probe_48h_article_fetch_workflow(hours: float) -> None:
 
 # FUNCTIONS
 
-# Fetch sitemap index (direct then parallel); return post_type_post sub-sitemap URLs
 def _fetch_index(pool: list) -> list[str]:
     content = _fetch_index_direct()
     if content is None:
@@ -94,7 +93,6 @@ def _fetch_index(pool: list) -> list[str]:
     return [u.decode().strip() for u in locs if b"post_type_post" in u]
 
 
-# Attempt direct httpx GET of sitemap index; return bytes on XML success, None otherwise
 def _fetch_index_direct() -> bytes | None:
     try:
         r = httpx.get(INDEX_URL, timeout=DIRECT_TIMEOUT, follow_redirects=True)
@@ -109,7 +107,6 @@ def _fetch_index_direct() -> bytes | None:
         return None
 
 
-# Return the sub-sitemap URL with the highest trailing number (= newest page)
 def _pick_highest_numbered(urls: list[str]) -> str:
     def _num(u: str) -> int:
         m = _NUM_RE.search(u)
@@ -117,7 +114,6 @@ def _pick_highest_numbered(urls: list[str]) -> str:
     return max(urls, key=_num)
 
 
-# Fire pool in shuffled 128-proxy waves; return (True, content) on first success in any wave
 def _fetch_parallel(
     url: str, pool: list, content_type: str, n: int = RACE_WIDTH
 ) -> tuple[bool, bytes]:
@@ -139,7 +135,6 @@ def _fetch_parallel(
     return False, b""
 
 
-# Parse <url> blocks from sub-sitemap XML; return (loc, lastmod) pairs with UTC datetimes
 def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
     results: list[tuple[str, datetime]] = []
     for block in _URL_BLOCK_RE.finditer(content):

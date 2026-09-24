@@ -30,13 +30,6 @@ def acquire_pipe_workflow(
     concurrency: int,
     buffer_size: int,
 ) -> None:
-    """Sustained acquire-pipe: sitemap → 64 sub-sitemaps → ~27k article URLs.
-
-    One job at a time (box_lock global flock). Each job is a clean slate (in-memory
-    cooldown, start_job wipes transient logs). end_job derives the persistent
-    job.md + cumulative_hits.png and kills the transient JSONL.
-    On LockBusyError → print + sys.exit(1).
-    """
     cm           = PersistentCooldownManager()
     initial_pool = load_backfill_pool()
     print(f"[acquire_pipe] Loaded backfill pool: {len(initial_pool)} proxies")
@@ -124,7 +117,6 @@ def _write_article_urls(loc_urls: list[str]) -> None:
     print(f"[acquire_pipe] Article URLs: {len(article_urls)} unique → {ARTICLE_URLS_FILE}")
 
 
-# Slugify sub-sitemap URL into safe filename with .xml extension
 def _url_to_filename(url: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
     slug = re.sub(r"_+", "_", slug).strip("_")[:100]

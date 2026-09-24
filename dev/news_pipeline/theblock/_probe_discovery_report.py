@@ -73,7 +73,6 @@ def _render_header(ts, sub_stats, ctx) -> list:
     return lines
 
 
-# CF note
 def _render_cf_note() -> list:
     lines = []
     lines.append("\n## Cloudflare Rate-Limit Behaviour")
@@ -85,7 +84,6 @@ def _render_cf_note() -> list:
     return lines
 
 
-# Method 1
 def _render_method1(sitemap_urls, sub_stats, ctx) -> list:
     lines = []
     lines.append("\n---")
@@ -106,7 +104,6 @@ def _render_method1(sitemap_urls, sub_stats, ctx) -> list:
     return lines
 
 
-# Method 2
 def _render_method2(news_urls, news_from_cache, ctx) -> list:
     lines = []
     lines.append("\n## Method 2 — News Sitemap (`sitemap_tbco_news.xml`)")
@@ -120,7 +117,6 @@ def _render_method2(news_urls, news_from_cache, ctx) -> list:
     return lines
 
 
-# Method 3
 def _render_method3(rss_urls, rss_rate_limited, ctx) -> list:
     lines = []
     lines.append("\n## Method 3 — RSS (`rss.xml`)")
@@ -135,7 +131,6 @@ def _render_method3(rss_urls, rss_rate_limited, ctx) -> list:
     return lines
 
 
-# Method 4
 def _render_method4(ui_urls, ui_status, ctx) -> list:
     lines = []
     lines.append("\n## Method 4 — Bounded UI Crawl")
@@ -155,7 +150,6 @@ def _render_method4(ui_urls, ui_status, ctx) -> list:
     return lines
 
 
-# Cross-method
 def _render_cross_method_comparison(ctx) -> list:
     lines = []
     lines.append("\n---")
@@ -208,7 +202,6 @@ def _render_news_vs_archive(ctx) -> list:
     return lines
 
 
-# --- Build report ---
 def build_report(sitemap_urls, sub_stats, news_urls, news_from_cache,
                  rss_urls, rss_rate_limited, ui_urls, ui_status):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

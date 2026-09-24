@@ -87,7 +87,6 @@ def _render_subprocess_section(subprocess_result: dict | None) -> list:
     return lines
 
 
-# Write warmth probe report (MD)
 def write_warmth_report(
     path: Path,
     ts: str,

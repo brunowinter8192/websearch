@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-# Fetch monosans/proxy-list JSON and return (protocol, host:port) tuples.
 
 # INFRASTRUCTURE
 
-from pathlib import Path  # noqa: F401 — kept for consistency with sibling modules
+from pathlib import Path
 
 import httpx
 
@@ -13,7 +12,6 @@ FETCH_TIMEOUT = 15.0
 # ORCHESTRATOR
 
 def load_monosans_proxies() -> list[tuple[str, str]]:
-    """Fetch monosans proxies.json; return [(protocol, host:port)] in source order."""
     raw = _fetch_json(MONOSANS_URL)
     return [_build_entry(e) for e in raw]
 
@@ -26,7 +24,6 @@ def _fetch_json(url: str) -> list[dict]:
 
 
 def _build_entry(entry: dict) -> tuple[str, str]:
-    """Build (protocol, host_port) from one proxies.json entry."""
     proto    = entry["protocol"]
     host     = entry["host"]
     port     = entry["port"]

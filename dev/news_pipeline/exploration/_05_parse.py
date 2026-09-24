@@ -6,7 +6,6 @@ TIMELINE_BASE = "https://www.coindesk.com/api/v1/articles/timeline"
 
 # FUNCTIONS
 
-# Parse all articles from response body; return list of metadata dicts
 def parse_articles(body: bytes) -> list:
     try:
         data = json.loads(body)
@@ -36,7 +35,6 @@ def parse_articles(body: bytes) -> list:
     return result
 
 
-# Standard cursor: last article's _id + displayDate
 def extract_cursor_std(articles: list) -> tuple:
     if not articles:
         return None, None
@@ -44,6 +42,5 @@ def extract_cursor_std(articles: list) -> tuple:
     return last.get("_id"), last.get("displayDate")
 
 
-# Build cursor URL from lastId + lastDisplayDate
 def build_cursor_url(last_id: str, last_date: str) -> str:
     return f"{TIMELINE_BASE}?size=16&lastId={last_id}&lastDisplayDate={last_date}&lang=en"

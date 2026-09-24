@@ -8,8 +8,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# all_resolved=True (last URL in done_urls) but in_flight=1 (one wedged slot) →
-# _watchdog must call os._exit(0) and set termination='all-done', NOT return silently.
 def test_6_watchdog_wedge_after_all_resolved() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -36,9 +34,7 @@ def test_6_watchdog_wedge_after_all_resolved() -> None:
                 burn_threshold=2, page_timeout_ms=8_000,
                 total_urls=1, target_urls=frozenset([url_done]),
             )
-            # Simulate: last URL written by first-writer winner → all_resolved=True.
             state.done_urls.add(url_done)
-            # Simulate: one slot still suspended inside await _fetch_one_url on dup-race.
             state.in_flight = 1
 
             with (
@@ -48,7 +44,7 @@ def test_6_watchdog_wedge_after_all_resolved() -> None:
                 try:
                     await _watchdog(state, poll_interval=0.1)
                 except SystemExit:
-                    return state   # os._exit(0) raised by fake_exit — expected termination
+                    return state
             return state
 
         state = asyncio.run(run())
@@ -57,9 +53,6 @@ def test_6_watchdog_wedge_after_all_resolved() -> None:
     assert state.termination == "all-done", f"termination={state.termination!r}"
 
 
-# pool_provider is called once per refresh interval; proxy_pool is atomically replaced.
-# Patches POOL_REFRESH_INTERVAL_S=0.0 so the first poll always triggers refresh.
-# State has all_resolved=True + in_flight=0 → watchdog returns cleanly after the refresh.
 def test_7_watchdog_pool_refresh() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -90,10 +83,8 @@ def test_7_watchdog_pool_refresh() -> None:
                 total_urls=1, target_urls=frozenset([url_done]),
                 pool_provider=mock_provider,
             )
-            # all_resolved=True + in_flight=0 → watchdog returns cleanly after refresh
             state.done_urls.add(url_done)
 
-            # POOL_REFRESH_INTERVAL_S=0.0: any elapsed time satisfies the refresh check
             with unittest.mock.patch.object(rider_mod, "POOL_REFRESH_INTERVAL_S", 0.0):
                 await _watchdog(state, poll_interval=0.05)
             return state

@@ -12,9 +12,6 @@ from proxy_status_log import proxy_key
 # ORCHESTRATOR
 
 class AcquireLogger:
-    """Streams fetch events to JSONL (line-buffered, kill-safe). close() seals the
-    stream for janitor.end_job(); all stats derive from the JSONL there.
-    """
 
     def __init__(self, total_urls: int, log_dir: Path):
         self._total      = total_urls
@@ -24,7 +21,6 @@ class AcquireLogger:
         self._jsonl_fh   = self._jsonl_path.open("a", encoding="utf-8", buffering=1)
 
     def record_attempt(self, proto: str, host_port: str, url: str, ok: bool) -> None:
-        """Stream one fetch event to JSONL — {proxy_key, ts, url, result}."""
         event = {
             "proxy_key": proxy_key(proto, host_port),
             "ts":        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -34,7 +30,6 @@ class AcquireLogger:
         self._jsonl_fh.write(json.dumps(event) + "\n")
 
     def record_pool_refresh(self, size: int) -> None:
-        """Record pool-provider call result → JSONL pool_refresh event (read by janitor)."""
         event = {
             "event": "pool_refresh",
             "size":  size,
@@ -43,5 +38,4 @@ class AcquireLogger:
         self._jsonl_fh.write(json.dumps(event) + "\n")
 
     def close(self) -> None:
-        """Close the JSONL stream without writing per-run MD. Use before janitor.end_job()."""
         self._jsonl_fh.close()

@@ -41,7 +41,6 @@ def publish_workflow(input_dir: Path, collection_dir: Path, skip_index: bool = F
 
 # FUNCTIONS
 
-# Load manifest.json from cleaned output dir
 def load_manifest(input_dir: Path) -> list[dict]:
     manifest_path = input_dir / "manifest.json"
     if not manifest_path.exists():
@@ -50,12 +49,10 @@ def load_manifest(input_dir: Path) -> list[dict]:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-# Compute URL hash matching the filename convention
 def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]
 
 
-# Extract YYYY-MM-DD from publication_date field or URL path
 def pub_date_str(entry: dict) -> str:
     pub = entry.get("publication_date", "")
     if pub and len(pub) >= 10:
@@ -66,7 +63,6 @@ def pub_date_str(entry: dict) -> str:
     return "unknown"
 
 
-# Copy cleaned MDs to collection dir; return count of files copied
 def copy_articles(manifest: list[dict], input_dir: Path, collection_dir: Path) -> int:
     n_copied = 0
     for entry in manifest:
@@ -82,7 +78,6 @@ def copy_articles(manifest: list[dict], input_dir: Path, collection_dir: Path) -
     return n_copied
 
 
-# Run rag-cli index; return (files_indexed, chunks_indexed)
 def run_rag_index(collection: str) -> tuple[int, int]:
     result = subprocess.run(
         ["rag-cli", "index", "--collection", collection],
@@ -96,12 +91,10 @@ def run_rag_index(collection: str) -> tuple[int, int]:
     return parse_index_result(result.stdout + result.stderr)
 
 
-# Parse "Done: N files indexed (M chunks)" from rag-cli output
 def parse_index_result(output: str) -> tuple[int, int]:
     m = re.search(r"Done:\s*(\d+)\s*files?\s*indexed\s*\((\d+)\s*chunks?\)", output)
     if m:
         return int(m.group(1)), int(m.group(2))
-    # Fallback: try to find any numbers
     files_m = re.search(r"(\d+)\s*files?\s*indexed", output)
     chunks_m = re.search(r"\((\d+)\s*chunks?\)", output)
     files = int(files_m.group(1)) if files_m else 0

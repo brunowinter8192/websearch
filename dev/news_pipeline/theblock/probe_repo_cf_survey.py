@@ -13,7 +13,6 @@ import httpx
 from curl_cffi import requests as cffi
 
 sys.path.insert(0, str(Path(__file__).parent))
-# Import source lists from probe_pool_size — reuse, don't re-type
 from probe_pool_size import HTTP_SOURCES, SOCKS4_SOURCES, SOCKS5_SOURCES
 
 THEBLOCK_URL  = "https://www.theblock.co/sitemap_tbco_index.xml"
@@ -38,22 +37,17 @@ def probe_repo_cf_survey_workflow() -> None:
     repo_groups = build_repo_groups()
     print(f"Repos to survey: {len(repo_groups)}")
 
-    # Write report header
     write_report_header(report_path, ts, repo_groups)
 
-    # Fetch all proxy lists
     print("\n[1/3] Fetching proxy lists...")
     repo_proxies = asyncio.run(fetch_all_repos(repo_groups))
 
-    # Print repo sizes
     print("\nRepo unique counts:")
     for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
         print(f"  {rk:<30} {len(proxies):>7,}")
 
-    # Write fetch summary to report
     write_fetch_summary(report_path, repo_proxies)
 
-    # Check each repo
     print(f"\n[2/3] CF-checking repos (sample={SAMPLE_SIZE}, concurrency={CONCURRENCY})...")
     repo_results = {}
     for repo_key in sorted(repo_proxies.keys()):
@@ -65,14 +59,12 @@ def probe_repo_cf_survey_workflow() -> None:
         print(f"  {repo_key}: {len(proxies):,} unique → sampling {len(sample)}", flush=True)
         result = check_repo(repo_key, sample)
         repo_results[repo_key] = result
-        # Incremental write — partial results survive a crash
         write_repo_result(report_path, repo_key, result)
         total = result["sample"]
         passed = result["passed"]
         rate = passed / total * 100 if total else 0
         print(f"    → {passed}/{total} passed ({rate:.2f}%)", flush=True)
 
-    # Finalize — ranked table + cumulative unique
     print("\n[3/3] Finalising report...")
     finalize_report(report_path, repo_results, repo_proxies)
     print(f"\nReport: {report_path}")
@@ -80,19 +72,16 @@ def probe_repo_cf_survey_workflow() -> None:
 
 # FUNCTIONS
 
-# Derive short repo key from URL: "Owner/Repo" for GitHub raw URLs, "proxyscrape" for API
 def repo_key_from_url(url: str) -> str:
     if "proxyscrape.com" in url:
         return "proxyscrape"
     if "raw.githubusercontent.com" in url:
         parts = url.split("/")
-        # https://raw.githubusercontent.com/<owner>/<repo>/...
         idx = parts.index("raw.githubusercontent.com")
         return f"{parts[idx+1]}/{parts[idx+2]}"
-    return url.split("/")[2]  # fallback: hostname
+    return url.split("/")[2]
 
 
-# Build dict: repo_key → [(protocol, url, is_mixed), ...]
 def build_repo_groups() -> dict:
     groups: dict[str, list] = defaultdict(list)
     for url, is_mixed in HTTP_SOURCES:
@@ -104,7 +93,6 @@ def build_repo_groups() -> dict:
     return dict(groups)
 
 
-# Parse host:port from a raw proxy line (handles bare, proto://, user:pass@ formats)
 def parse_proxy_line(line: str) -> str | None:
     line = line.strip()
     if not line or line.startswith("#"):
@@ -119,7 +107,6 @@ def parse_proxy_line(line: str) -> str | None:
     return None
 
 
-# Fetch one URL, return set of (protocol, host:port)
 async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
                     protocol: str, url: str, is_mixed: bool) -> set:
     async with sem:
@@ -137,7 +124,6 @@ async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
             return set()
 
 
-# Fetch all URLs for all repos; return dict: repo_key → set of (protocol, host:port)
 async def fetch_all_repos(repo_groups: dict) -> dict:
     sem = asyncio.Semaphore(20)
     repo_proxies: dict[str, set] = defaultdict(set)
@@ -154,7 +140,6 @@ async def fetch_all_repos(repo_groups: dict) -> dict:
     return dict(repo_proxies)
 
 
-# Check single proxy via curl_cffi — same gate as jhao104 Stage 2 + curated probe
 def check_proxy(protocol: str, host_port: str) -> bool:
     purl = f"{protocol}://{host_port}"
     try:
@@ -166,7 +151,6 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         return False
 
 
-# Run CF checks on a sampled proxy list; return result dict
 def check_repo(repo_key: str, sample: list) -> dict:
     t0 = time.monotonic()
     passed_list = []
@@ -197,7 +181,6 @@ def check_repo(repo_key: str, sample: list) -> dict:
     }
 
 
-# Write header section to report file (created fresh)
 def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
     lines = [
         f"# Per-repo theblock-CF survey — {ts}",
@@ -213,7 +196,6 @@ def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-# Append fetch-summary section
 def write_fetch_summary(path: Path, repo_proxies: dict) -> None:
     lines = [
         "## Fetch summary (unique proxies per repo)",
@@ -230,7 +212,6 @@ def write_fetch_summary(path: Path, repo_proxies: dict) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-# Append one repo's result incrementally
 def write_repo_result(path: Path, repo_key: str, result: dict) -> None:
     r = result
     lines = [
@@ -256,7 +237,6 @@ def write_repo_result(path: Path, repo_key: str, result: dict) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-# Append ranked summary + cumulative-unique table
 def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
     ranked = sorted(repo_results.values(), key=lambda x: -x["rate"])
 
@@ -280,7 +260,6 @@ def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
             f"{r['rate']:.3f}% | {prate('http')} | {prate('socks4')} | {prate('socks5')} |"
         )
 
-    # Cumulative unique (top-down by CF-rate, global dedup across repos)
     lines += [
         "",
         "## Cumulative unique (top-down by CF-rate)",

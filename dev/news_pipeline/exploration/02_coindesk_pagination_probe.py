@@ -6,8 +6,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _02_depth import depth_workflow  # noqa: E402
-from _02_quick import probe_workflow  # noqa: E402
+from _02_depth import depth_workflow
+from _02_quick import probe_workflow
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

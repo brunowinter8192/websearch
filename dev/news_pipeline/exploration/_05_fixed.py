@@ -9,7 +9,6 @@ from _05_parse import build_cursor_url, extract_cursor_std, parse_articles
 
 # FUNCTIONS
 
-# Fixed cursor: scan backward to find last article NOT in invalid_types
 def extract_cursor_fixed(articles: list, invalid_types: frozenset) -> tuple:
     for a in reversed(articles):
         st = a.get("storyType") or ""
@@ -82,7 +81,6 @@ def run_fixed_iteration(body: bytes, headers: dict, delay: float, i: int, invali
     return {"stop": False, "row": row, "body": resp.content, "n_arts": n_arts, "last_date": last_date}
 
 
-# Paginate n calls using fixed cursor that skips invalid storyType anchors
 def fixed_cursor_loop(
     first_url: str,
     headers: dict,

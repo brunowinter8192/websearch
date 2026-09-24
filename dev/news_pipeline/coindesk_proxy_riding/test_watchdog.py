@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""
-Deterministic watchdog tests — no browser or proxy infrastructure needed.
-
-test 1 — watchdog task: constructs RiderState with pre-aged last_progress_mono,
-         patches os._exit to raise SystemExit, runs _watchdog, asserts it fires
-         _abort_stall, writes remaining_urls.txt (both sections) + job.md.
-
-test 2 — _abort_stall directly: same assertions via direct call, verifies section
-         headers and URL membership without going through the asyncio task layer.
-
-Usage:
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_watchdog.py
-"""
 
 # INFRASTRUCTURE
 
@@ -28,9 +15,9 @@ import p2_browser_rider as rider_mod
 from p2_browser_rider import RiderState, _abort_stall, _watchdog
 from p0_pool import PersistentCooldownManager
 
-_STALL_S = 1.0    # threshold short enough to fire in the test
-_AGED_BY = 200.0  # pre-age last_progress_mono well past threshold
-_POLL_S  = 0.1    # watchdog poll interval for test speed
+_STALL_S = 1.0
+_AGED_BY = 200.0
+_POLL_S  = 0.1
 
 
 # ORCHESTRATOR
@@ -63,7 +50,6 @@ def _run_test(name: str, fn) -> bool:
         return False
 
 
-# Build a minimal RiderState with two queued + one in-flight wedged URL.
 def _make_state(tmp_dir: Path, stall_timeout_s: float = _STALL_S) -> RiderState:
     q = asyncio.Queue()
     q.put_nowait("https://www.coindesk.com/test/queued-1")
@@ -84,7 +70,6 @@ def _make_state(tmp_dir: Path, stall_timeout_s: float = _STALL_S) -> RiderState:
     return state
 
 
-# _watchdog task detects pre-aged stall → _abort_stall → both sections written → os._exit(1).
 def test_watchdog_task_fires_and_writes_files() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -122,7 +107,6 @@ def test_watchdog_task_fires_and_writes_files() -> None:
         assert "stall" in md.lower(),                    "termination=stall missing from job.md"
 
 
-# _abort_stall called directly: sections, URL membership, idle_s in header, os._exit(1).
 def test_abort_stall_directly() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)

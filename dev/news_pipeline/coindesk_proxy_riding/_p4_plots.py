@@ -5,7 +5,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Step-plot of cumulative OK fetches vs elapsed seconds; save as cumulative.png.
 def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -24,7 +23,6 @@ def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Histogram of n_urls_attempted per proxy ride; save as ride_lengths.png.
 def _write_ride_length_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -42,7 +40,6 @@ def _write_ride_length_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Bar chart of regwall rate by ride position; save as regwall_position.png.
 def _write_regwall_position_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 

@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from pydoll.browser import Chrome
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _03_capture import (  # noqa: E402
+from _03_capture import (
     DISABLED_RETRY_MAX,
     _JS_DISMISS_COOKIE,
     _extract_value,
@@ -28,22 +28,21 @@ from _03_capture import (  # noqa: E402
     wait_for_new_articles,
     wait_for_ws_url,
 )
-from _03_log import write_log_header, write_log_line  # noqa: E402
-from _03_report import write_run_report  # noqa: E402
+from _03_log import write_log_header, write_log_line
+from _03_report import write_run_report
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 OUTPUT_DIR = Path(__file__).parent / "03_output"
 
-STAGE_A_CAP = 400        # bounded sanity run ceiling; None = uncapped Stage B
-PLATEAU_TOLERANCE = 3    # consecutive no-growth clicks before declaring feed end
-CHECKPOINT_EVERY = 50    # overwrite checkpoint_urls.json every N clicks
+STAGE_A_CAP = 400
+PLATEAU_TOLERANCE = 3
+CHECKPOINT_EVERY = 50
 
 DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 
 
 # ORCHESTRATOR
 
-# Paginate CoinDesk feed without date/round caps; write live log, periodic checkpoints, and final URL set.
 async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     run = prepare_backfill_run(stage_a_cap)
@@ -255,7 +254,6 @@ async def teardown_backfill_session(state: dict, checkpoint_path: Path, tab, chr
     log_fh.close()
 
 
-# Parse date from CoinDesk URL path (/YYYY/MM/DD/) → UTC midnight datetime
 def parse_url_date(url: str) -> datetime | None:
     m = DATE_RE.search(url)
     if not m:
@@ -266,7 +264,6 @@ def parse_url_date(url: str) -> datetime | None:
         return None
 
 
-# Return YYYY-MM-DD of oldest article URL in all_urls; "(none)" if no parseable dates
 def compute_oldest(all_urls: dict) -> str:
     dates = []
     for url in all_urls:
@@ -278,7 +275,6 @@ def compute_oldest(all_urls: dict) -> str:
     return min(dates).strftime("%Y-%m-%d")
 
 
-# Convert URL date to ISO-8601 string (UTC midnight)
 def _url_to_iso(url: str) -> str:
     dt = parse_url_date(url)
     if dt is None:
@@ -286,7 +282,6 @@ def _url_to_iso(url: str) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
-# Extract first path segment as section (e.g. /markets/2026/... → markets)
 def _extract_section(url: str) -> str:
     try:
         path = url.split("coindesk.com", 1)[1]
@@ -295,7 +290,6 @@ def _extract_section(url: str) -> str:
         return "unknown"
 
 
-# Build sorted output entry list from all_urls dict
 def build_entries(all_urls: dict) -> list[dict]:
     entries = []
     for url, article in all_urls.items():
@@ -311,19 +305,16 @@ def build_entries(all_urls: dict) -> list[dict]:
     return entries
 
 
-# Return True if URL is a CoinDesk live-blog (slug starts with "live-")
 def _is_live_blog(url: str) -> bool:
     slug = urlparse(url).path.rstrip("/").split("/")[-1]
     return slug.startswith("live-")
 
 
-# Remove live-blog URLs; return (filtered_list, count_removed)
 def filter_live_blogs(entries: list[dict]) -> tuple[list[dict], int]:
     kept = [e for e in entries if not _is_live_blog(e["url"])]
     return kept, len(entries) - len(kept)
 
 
-# Build live-blog-filtered entry list and overwrite path (crash-safe periodic save)
 def save_checkpoint(all_urls: dict, path: Path) -> None:
     entries = build_entries(all_urls)
     entries, _ = filter_live_blogs(entries)

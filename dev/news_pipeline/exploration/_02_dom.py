@@ -1,6 +1,6 @@
 # INFRASTRUCTURE
 import asyncio
-import re  # DATE_RE
+import re
 from pathlib import Path
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
@@ -11,11 +11,10 @@ REAL_UA = (
     "Chrome/146.0.7680.154 Safari/537.36"
 )
 POLL_INTERVAL = 0.5
-POLL_MAX = 40          # 20s max wait per click
+POLL_MAX = 40
 
 DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 
-# Extract feed article URLs — excludes aside/nav/footer/sidebar noise (mirrored from discover.py)
 _JS_EXTRACT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -43,7 +42,6 @@ _JS_EXTRACT = """
 })();
 """
 
-# Dismiss OneTrust cookie consent overlay (removes the DOM node so pointer events are unblocked)
 _JS_DISMISS_COOKIE = """
 (function() {
     var btn = document.querySelector('#onetrust-accept-btn-handler');
@@ -54,7 +52,6 @@ _JS_DISMISS_COOKIE = """
 })();
 """
 
-# Scroll "More stories" button into view and JS-click it; return true if found + clicked
 _JS_CLICK_BTN = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -70,7 +67,6 @@ _JS_CLICK_BTN = """
 })();
 """
 
-# Return descriptor of "More stories" button: {found, disabled, text} or {found: false}
 _JS_BTN_STATE = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -84,7 +80,6 @@ _JS_BTN_STATE = """
 })();
 """
 
-# Count feed-scoped article URLs (fast poll)
 _JS_COUNT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -110,13 +105,11 @@ _JS_COUNT = """
 
 # FUNCTIONS
 
-# Evaluate _JS_EXTRACT; return list of article href strings
 async def extract_articles(page) -> list[str]:
     result = await page.evaluate(_JS_EXTRACT)
     return result if isinstance(result, list) else []
 
 
-# Poll feed-scoped count until it grows past prev_count; return new count
 async def wait_for_new_articles(page, prev_count: int) -> int:
     for _ in range(POLL_MAX):
         await asyncio.sleep(POLL_INTERVAL)
@@ -126,7 +119,6 @@ async def wait_for_new_articles(page, prev_count: int) -> int:
     return prev_count
 
 
-# Parse oldest date string (YYYY-MM-DD) from a collection of CoinDesk article URLs
 def compute_oldest(urls) -> str:
     dates = []
     for url in urls:

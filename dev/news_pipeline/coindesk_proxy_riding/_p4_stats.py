@@ -18,7 +18,6 @@ def _compute_counts(jobs: list, state: RiderState) -> dict:
     n_ok              = sum(1 for j in jobs if j.status == "ok")
     n_regwall_fetches = sum(1 for j in jobs if j.status == "regwall")
     n_failed          = sum(1 for j in jobs if j.status in ("failed", "empty"))
-    # connect_fail breaks before job_records.append() → use authoritative state counter
     n_connect_fail    = state.n_connect_fail
     return {
         "n_total_fetches": n_total_fetches, "n_ok": n_ok,
@@ -82,7 +81,6 @@ def _compute_ride_stats(rides: list, n_ok: int) -> dict:
     }
 
 
-# Regwall rate by ride position (position = URL index within a proxy ride)
 def _compute_regwall_by_position(jobs: list) -> dict:
     rw_by_pos:    dict[int, int] = {}
     total_by_pos: dict[int, int] = {}
@@ -99,7 +97,6 @@ def _compute_regwall_by_position(jobs: list) -> dict:
     }
 
 
-# Retry outcome: among URLs that saw at least one regwall, final status
 def _compute_retry_outcomes(jobs: list) -> dict:
     url_final: dict[str, str] = {}
     url_rw:    set[str]       = set()
@@ -115,7 +112,6 @@ def _compute_retry_outcomes(jobs: list) -> dict:
     }
 
 
-# Derive all metrics from RiderState and job start time.
 def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     jobs  = state.job_records
     rides = state.ride_records
@@ -143,7 +139,6 @@ def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     }
 
 
-# Compute p10/p25/p50/p75/p90/p95 from a sorted list; return None if empty.
 def _percentiles(sorted_values: list) -> dict | None:
     n = len(sorted_values)
     if n == 0:
@@ -157,7 +152,6 @@ def _percentiles(sorted_values: list) -> dict | None:
     }
 
 
-# Compute mean/median/min/max of a list; return None-filled dict if empty.
 def _distribution_stats(values: list) -> dict:
     if not values:
         return {"mean": None, "median": None, "min": None, "max": None}
