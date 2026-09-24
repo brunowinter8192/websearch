@@ -78,10 +78,6 @@ dev/news_pipeline/theblock/source_snapshots/
 dev/news_pipeline/theblock/probe_curated_theblock_cf_reports/
 dev/news_pipeline/theblock/probe_repo_cf_survey_reports/
 
-# proxy_status_log: cumulative keyed proxy history (tracked — institutional data)
-!dev/news_pipeline/theblock/logs/
-!dev/news_pipeline/theblock/logs/proxy_status_log.json
-
 # jhao104/proxy_pool upstream clone (probe dependency, not vendored)
 dev/news_pipeline/theblock/jhao104/upstream/
 
