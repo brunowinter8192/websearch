@@ -33,11 +33,11 @@ URL discovery and traversal testing for Crawl4AI's BFS deep crawl strategy — r
 **Writes:** `md/04_docs_github_rest_<YYYYMMDD>.md`.
 **Called by:** CLI only. Strategy C (prefetch=False) resilient to GitHub WAF rate-limiting; other strategies need `--delay`.
 
-### 05_playwright_bfs.py (355 LOC)
+### 05_playwright_bfs.py (378 LOC)
 
 **Purpose:** Manual Playwright-per-page BFS — renders each page via `AsyncWebCrawler.arun()` (real browser, post-JS DOM), extracts `result.links.internal`, follows matching `--include-pattern` URLs. Measures recall vs goldstandard. Contrasts with `04_render_recall.py` (HTTP BFS). CLI flags: `--gold PATH`, `--seed URL`, `--include-pattern STR`, `--max-pages INT`, `--max-depth INT`, `--delay N.N`, `--page-timeout INT`, `--concurrency {1,2,3}`, `--stealth`.
 **Reads:** `goldstandard/docs_github_rest.txt`.
-**Writes:** `md/05_docs_github_rest_<YYYYMMDD>.md` — recall table (found/matched/missing/noise/latency), baseline comparison, sample missing URLs.
+**Writes:** `md/05_docs_github_rest_<YYYYMMDD>.md` — recall table (found/matched/missing/noise/latency/fetch failures), baseline comparison, sample missing URLs, and a Failed Fetches list. A fetch that raises is recorded with its error, counted in the failure stats and never added to the found set.
 **Called by:** CLI only.
 
 ### 06_nextdata_probe.py (343 LOC)

@@ -191,11 +191,7 @@ def diff_nodes(before: list, after: list) -> list:
 def nodes_to_preview(nodes: list) -> str:
     if not nodes:
         return ""
-    try:
-        preview_md = convert_nodes_to_markdown(nodes)
-    except Exception:
-        text_parts = [n.get("content", "") for n in nodes if n.get("type") == "text"]
-        preview_md = " ".join(text_parts)
+    preview_md = convert_nodes_to_markdown(nodes)
     return preview_md[:MAX_PREVIEW_CHARS * 4]
 
 

@@ -130,13 +130,10 @@ async def probe_url(
 
 async def fetch_html_baseline(
     client: httpx.AsyncClient, sem: asyncio.Semaphore, url: str
-) -> int | None:
+) -> int:
     async with sem:
-        try:
-            resp = await client.get(url)
-            return len(resp.content)
-        except Exception:
-            return None
+        resp = await client.get(url)
+        return len(resp.content)
 
 
 def write_report(

@@ -29,7 +29,7 @@ Resolve the Chromium bundle production launches -> launch Chrome on a dedicated 
 **Called by:** `brave_pydoll_probe.py`, `_brave_probe_query.py`, `test_brave_pydoll_core.py`.
 **Calls out:** `patchright` (executable path resolution), `pydoll` (Chrome, ChromiumOptions, BrowserProcessManager, ConnectionHandler, TargetCommands), `psutil`, macOS `open`/`osascript`/`pgrep`/`pkill`.
 
-### _brave_probe_query.py (186 LOC)
+### _brave_probe_query.py (183 LOC)
 
 **Purpose:** Drives and times one query on one tab — navigate, poll, fire the trigger, snapshot cookies — plus the control-URL tripwire.
 **Reads:** the live DOM and the browser cookie store via CDP.

@@ -65,7 +65,7 @@ Quality monitoring and configuration testing for the URL scraper module (`src/sc
 **Writes:** `02_raw_data/<ts>/` — 20 `<slug>_<6-char-md5>.md` files + `02_raw_report.md` triage table. Status `empty` includes optional annotation `(PDF)` or `(plugin-domain: github)`.
 **Called by:** CLI only.
 
-### 06_cloudflare_md_adoption.py (292 LOC)
+### 06_cloudflare_md_adoption.py (289 LOC)
 
 **Purpose:** Adoption probe for the `Accept: text/markdown` server-side markdown convention (Cloudflare Markdown-for-Agents, Vercel edge, others). Probes a curated 29-URL set across three categories (Cloudflare-owned positive controls, likely-CF-fronted candidate sites, non-CF negative controls) with the markdown Accept header via httpx async (Semaphore concurrency 10, 15s timeout). For URLs responding `text/markdown`, fetches a baseline HTML GET to compute byte-reduction. Baseline measurement for Phase-0-fast-path adoption (`fetch_markdown_fastpath` in production); re-run periodically to track adoption growth.
 **Reads:** hardcoded 29-URL set.

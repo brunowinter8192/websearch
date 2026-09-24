@@ -163,10 +163,7 @@ def extract_pow_time_ms(events: list[dict]) -> float | None:
         detail = record.get("detail")
         if not detail:
             continue
-        try:
-            payload = json.loads(detail).get("payload")
-        except (json.JSONDecodeError, TypeError):
-            continue
+        payload = json.loads(detail).get("payload")
         if not isinstance(payload, str):
             continue
         decoded = _decode_altcha_payload(payload)
@@ -183,10 +180,7 @@ def extract_widget_states(events: list[dict]) -> list[str]:
         detail = record.get("detail")
         if not detail:
             continue
-        try:
-            state = json.loads(detail).get("state")
-        except (json.JSONDecodeError, TypeError):
-            continue
+        state = json.loads(detail).get("state")
         if state:
             states.append(state)
     return states

@@ -38,7 +38,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, BrowserProcessManager, ConnectionHandler, TargetCommands), `psutil`, macOS `open`/`osascript`/`pgrep`/`pkill`.
 
-### _mojeek_pydoll_probe_query.py (233 LOC)
+### _mojeek_pydoll_probe_query.py (227 LOC)
 
 **Purpose:** Drives and times one query on one tab — navigate, poll, fire the trigger, buffer widget events, snapshot cookies — plus the control-URL tripwire.
 **Reads:** the live DOM and the browser cookie store via CDP.
@@ -46,7 +46,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
 **Calls out:** `pydoll` (StorageCommands), sibling core/js/launch modules.
 
-### _mojeek_pydoll_probe_core.py (208 LOC)
+### _mojeek_pydoll_probe_core.py (202 LOC)
 
 **Purpose:** The decidable core — page-state classifier, per-query verdicts, carry-over verdict, cookie fingerprinting and diffing, payload and duration maths.
 **Reads:** nothing (pure functions over dicts and lists).
