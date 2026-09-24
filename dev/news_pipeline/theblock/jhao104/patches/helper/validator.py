@@ -1,19 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Stage 2 overlay — replaces upstream/helper/validator.py.
-Applied by setup.sh after clone (cp patches/helper/validator.py upstream/helper/).
-
-Changes from stock validator.py:
-  - httpTimeOutValidator:   decorator REMOVED → not in http_validator list
-  - customValidatorExample: decorator REMOVED → not in http_validator list
-  - httpsTimeOutValidator:  decorator REMOVED → http_validator list empty; httpsValidator()
-                            returns True for all http-passers → they get https=True
-                            (accurate: they tunnelled HTTPS to theblock) and no wasted
-                            qq.com HEAD request per cycle
-  - theblockValidator:      NEW, registered as sole @ProxyValidator.addHttpValidator
-                            Uses curl_cffi impersonate="chrome" (correct browser JA3)
-                            against theblock sitemap index — the CF-pass gate.
-"""
 __author__ = 'JHao'
 
 import re
@@ -56,13 +40,10 @@ class ProxyValidator(withMetaclass(Singleton)):
 
 @ProxyValidator.addPreValidator
 def formatValidator(proxy):
-    """检查代理格式"""
     return True if IP_REGEX.fullmatch(proxy) else False
 
 
-# Decorator removed — not in http_validator list (theblockValidator is the sole gate)
 def httpTimeOutValidator(proxy):
-    """ http检测超时 (disabled: replaced by theblockValidator) """
     proxies = {"http": "http://{proxy}".format(proxy=proxy), "https": "https://{proxy}".format(proxy=proxy)}
     try:
         r = head(conf.httpUrl, headers=HEADER, proxies=proxies, timeout=conf.verifyTimeout)
@@ -71,11 +52,7 @@ def httpTimeOutValidator(proxy):
         return False
 
 
-# Decorator removed — not in https_validator list; httpsValidator() returns True for all
-# http-passers → they get https=True (accurate: they tunnelled HTTPS to theblock)
-# and no wasted qq.com HEAD request per cycle
 def httpsTimeOutValidator(proxy):
-    """https检测超时 (disabled: https_validator list empty)"""
     proxies = {"http": "http://{proxy}".format(proxy=proxy), "https": "https://{proxy}".format(proxy=proxy)}
     try:
         r = head(conf.httpsUrl, headers=HEADER, proxies=proxies, timeout=conf.verifyTimeout, verify=False)
@@ -84,19 +61,12 @@ def httpsTimeOutValidator(proxy):
         return False
 
 
-# Decorator removed — not in http_validator list
 def customValidatorExample(proxy):
-    """自定义validator函数 (disabled: not in http_validator list)"""
     return True
 
 
 @ProxyValidator.addHttpValidator
 def theblockValidator(proxy):
-    """CF-pass gate: curl_cffi chrome impersonation → theblock sitemap index.
-    Pass: status 200 AND XML marker in first 500 bytes.
-    One Session per call — safe across jhao104's 20 sync threads (no shared state).
-    proxy scheme: http://host:port for both proxies keys (Stage-1 pool is http-only).
-    """
     purl = "http://%s" % proxy
     try:
         s = cffi_requests.Session(impersonate="chrome")
