@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Max-results-per-call probe — empirically measures each engine's natural result ceiling."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -29,12 +28,11 @@ QUERIES = [
     "sparse retrieval models",
 ]
 
-# Per-engine max_results: high enough that post-fetch slice never binds; capped where engine hard-limits anyway
 ENGINE_MAX = {
-    "google":         100,  # num= capped server-side at 100; 100 avoids bot-signal of num=200
-    "google_scholar": 100,  # same as Google; Scholar renders max ~20
-    "duckduckgo":     200,  # no count param — slice-only; page renders naturally
-    "openalex":       200,  # per_page= API param; documented ceiling is 200
+    "google":         100,
+    "google_scholar": 100,
+    "duckduckgo":     200,
+    "openalex":       200,
 }
 
 BROWSER_ENGINES = {"google", "google_scholar", "duckduckgo"}
@@ -86,7 +84,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Run one (engine, query) probe call; return record dict
 async def probe_single(engine, engine_name: str, query: str, max_results: int) -> dict:
     record = {
         "engine":     engine_name,
@@ -109,7 +106,6 @@ async def probe_single(engine, engine_name: str, query: str, max_results: int) -
     return record
 
 
-# Build per-engine summary: ceiling (max returned across queries) and median latency
 def build_summary(records: list[dict]) -> dict[str, dict]:
     seen_order = list(dict.fromkeys(r["engine"] for r in records))
     summary = {}
@@ -123,7 +119,6 @@ def build_summary(records: list[dict]) -> dict[str, dict]:
     return summary
 
 
-# Write markdown report with detail table + per-engine summary; return path
 def write_report(records: list[dict], report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"max_results_probe_{ts}.md"

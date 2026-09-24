@@ -18,7 +18,6 @@ def _build_engine_summary(
     events: list[tuple[str, str, float]],
     all_statuses: dict[str, str],
 ) -> dict[str, dict]:
-    """Per-engine analysis from events captured during one query."""
     by_eng: dict[str, list[tuple[str, float]]] = defaultdict(list)
     for eng, evt, ts in events:
         by_eng[eng].append((evt, ts))
@@ -43,7 +42,6 @@ def _build_engine_summary(
 
 
 def _discriminator(eng_summary: dict[str, dict]) -> str:
-    """Classify query: ok / B / A-lock / A-sleep / C / mixed."""
     rs = [d for d in eng_summary.values() if d["status"] == "RATE_SKIP"]
     if not rs:
         return "ok"
@@ -76,7 +74,6 @@ def _dump_smoke(events: list, eng_summary: dict) -> None:
 
 
 def _agg_ratios(records: list[dict]) -> tuple:
-    """Avg entered/lg/ok/err ratios + p99 dur_ms for RATE_SKIP engines across query set."""
     ratios_ent, ratios_lg, ratios_ok, ratios_err, durs = [], [], [], [], []
     for r in records:
         rs = [d for d in r["eng_summary"].values() if d["status"] == "RATE_SKIP"]

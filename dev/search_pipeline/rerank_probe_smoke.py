@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""
-URL-Filter + BM25-Retrieve + Semantic Rerank Probe.
-
-5 configs side-by-side, top-10 each, on 20 diverse queries (5 academic / 5 product /
-5 technical / 5 mixed-intent pathology):
-  1. Hard-Slot baseline (12/6/2, no URL filter)
-  2. Filter + BM25-only
-  3. Filter + BM25-Retrieve-50 + Embedding-Cosine Rerank (Qwen3-Embedding-0.6B)
-  4. Filter + BM25-Retrieve-50 + Cross-Encoder Rerank (Qwen3-Reranker-0.6B)
-  5. BM25-Capped reference (K=google count, no filter, no rerank)
-
-Services required:
-  Embedding:    http://127.0.0.1:8084/v1/embeddings   (preset: embedding-0.6b)
-  Cross-encoder: http://127.0.0.1:8082/v1/rerank      (preset: reranker-0.6b)
-
-Output: dev/search_pipeline/md/rerank_probe_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -70,28 +53,23 @@ from _rerank_probe_smoke_rank import (
 )
 from _rerank_probe_smoke_report import _build_query_section, _write_report
 
-# Override imported 4-query set with 20-query validation set (g82 extended probe)
 QUERIES = [
-    # ACADEMIC (A1-A5) — paper-style; Scholar/CrossRef/OpenAlex contribute
     "bert fine-tuning natural language processing",
     "knowledge graph embedding relational learning",
     "contrastive learning self-supervised representations",
     "variational autoencoder latent space generative model",
     "graph neural network node classification",
-    # PRODUCT (P1-P5) — consumer-intent; general-web engines dominate
     "best espresso machine under 500 2026",
     "mechanical keyboard switches comparison tactile linear",
     "best noise cancelling headphones 2026",
     "standing desk ergonomics home office",
     "air fryer vs convection oven cooking",
-    # TECHNICAL (T1-T5) — how-to/implementation; Stack Exchange + Lobsters contribute
     "python asyncio event loop concurrency",
     "rust ownership borrowing lifetime explained",
     "docker compose network bridge host mode",
     "postgresql index types btree gin gist performance",
     "react useEffect cleanup subscription pattern",
-    # MIXED-INTENT / PATHOLOGY (M1-M5) — academic-noise pathology + Lobsters misclassification
-    "transformer attention mechanism",           # original Q1 anchor
+    "transformer attention mechanism",
     "neural network activation functions comparison",
     "gradient descent optimization methods stochastic",
     "protein structure prediction alphafold deep learning",
@@ -146,30 +124,25 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Run all 5 configs for one query; return (section_md, summary_dict)
 async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
     fs = await _fetch_and_filter(query, selected)
     cf = _run_configs(query, fs)
 
-    # --- Build section ---
     section = _build_query_section(query, fs, cf)
 
     return section, _query_summary(query, fs, cf)
 
 
 async def _fetch_and_filter(query: str, selected: dict) -> dict:
-    # --- Fetch ---
     t0 = time.perf_counter()
     raw_results, engine_stats = await _query_engines_concurrent(query, "en", 10, selected)
     fetch_ms = round((time.perf_counter() - t0) * 1000)
 
     raw_count = len(raw_results)
 
-    # --- URL filter ---
     filtered_raw, filtered_count, pattern_hist = _filter_search_pages(raw_results)
     removed_count   = raw_count - filtered_count
 
-    # --- Pool build (filtered) ---
     pool          = _build_pool(filtered_raw)
     unique_count  = len(pool)
 
@@ -183,23 +156,17 @@ async def _fetch_and_filter(query: str, selected: dict) -> dict:
 def _run_configs(query: str, fs: dict) -> dict:
     pool = fs["pool"]
 
-    # --- Config 1: Hard-Slot (unfiltered, production baseline) ---
     hs_top, slot_counts, hardslot_ms = _run_hardslot(fs["raw_results"])
 
-    # --- Config 2: Filter + BM25-only ---
     bm25_top, bm25_ms = _run_bm25_only(pool, query)
 
-    # --- Config 3 & 4: BM25 retrieve top-50, then rerank ---
     bm25_candidates, retrieve_ms, cand_docs, cand_texts = _retrieve_candidates(pool, query)
-    bm25_ms += retrieve_ms  # add to bm25_ms
+    bm25_ms += retrieve_ms
 
-    # --- Config 3: Embedding-Cosine Rerank ---
     embed_top, embed_ms = _run_embed_rerank(query, cand_docs, cand_texts)
 
-    # --- Config 4: Cross-Encoder Rerank ---
     ce_top, rerank_ms = _run_ce_rerank(query, cand_docs, cand_texts)
 
-    # --- Config 5: BM25-Capped reference ---
     K, capped_pool, capped_top, capped_ms = _run_capped(fs["raw_results"], fs["engine_stats"], query)
 
     return {

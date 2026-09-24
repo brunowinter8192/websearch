@@ -5,15 +5,13 @@ from urllib.parse import urlparse
 
 from _stage3_method_run_v3_config import TOP_N
 
-# From rerank_probe_smoke.py: BM25 scorer
 from rerank_probe_smoke import _bm25_score
 
-RRF_K        = 60    # Cormack 2009
+RRF_K        = 60
 
 
 # FUNCTIONS
 
-# M1 — C1 Overlap-Count
 def _apply_m1(pool: list[dict]) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     ranked = sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))
@@ -21,7 +19,6 @@ def _apply_m1(pool: list[dict]) -> tuple[list[str], int]:
     return [m["url"] for m in ranked[:TOP_N]], ms
 
 
-# M2 — RRF post-bucket using positions field; also returns rrf_scores for M8
 def _apply_m2(pool: list[dict]) -> tuple[list[str], int, dict[str, float]]:
     t0  = time.perf_counter()
     scores: dict[str, float] = {}
@@ -35,7 +32,6 @@ def _apply_m2(pool: list[dict]) -> tuple[list[str], int, dict[str, float]]:
     return [m["url"] for m in ranked[:TOP_N]], ms, scores
 
 
-# M3 — Structural URL Features (penalty scoring, lower is better)
 def _apply_m3(pool: list[dict]) -> tuple[list[str], int]:
     t0 = time.perf_counter()
 
@@ -59,7 +55,6 @@ def _apply_m3(pool: list[dict]) -> tuple[list[str], int]:
     return [m["url"] for m, _ in ranked[:TOP_N]], ms
 
 
-# M4 — C2 BM25 vanilla on pool_full
 def _apply_m4(pool_full: list[dict], query: str) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(pool_full, query, TOP_N)
@@ -67,7 +62,6 @@ def _apply_m4(pool_full: list[dict], query: str) -> tuple[list[str], int]:
     return [m["url"] for m, _ in scored], ms
 
 
-# M5 — C2' BM25-Capped on pool (filtered+capped = oracle input)
 def _apply_m5(pool: list[dict], query: str) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(pool, query, TOP_N)

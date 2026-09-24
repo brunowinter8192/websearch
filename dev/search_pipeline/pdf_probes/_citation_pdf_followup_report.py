@@ -9,14 +9,12 @@ from _citation_pdf_followup_config import (
 
 # FUNCTIONS
 
-# Write markdown report; return path
 def _write_report(results: list[dict], wall_secs: float, ts: str, report_dir: Path) -> Path:
     path = report_dir / f"citation_pdf_followup_{ts}.md"
     path.write_text("\n".join(_build_report(results, wall_secs, ts)), encoding="utf-8")
     return path
 
 
-# Assemble all report sections
 def _build_report(results: list[dict], wall_secs: float, ts: str) -> list[str]:
     lines: list[str] = [f"# Citation PDF Followup Probe — {ts}", ""]
     lines += _section_metadata(results, wall_secs, ts)
@@ -28,7 +26,6 @@ def _build_report(results: list[dict], wall_secs: float, ts: str) -> list[str]:
     return lines
 
 
-# Section 1 — Run Metadata
 def _section_metadata(results: list[dict], wall_secs: float, ts: str) -> list[str]:
     minutes, seconds = divmod(int(wall_secs), 60)
     outcome_counts: dict[str, int] = defaultdict(int)
@@ -61,7 +58,6 @@ def _section_metadata(results: list[dict], wall_secs: float, ts: str) -> list[st
     ]
 
 
-# Section 2 — Per-Source-Domain Table (where the ORIGINAL URL lives)
 def _section_source_domain_table(results: list[dict]) -> list[str]:
     by_domain: dict[str, list[dict]] = defaultdict(list)
     for r in results:
@@ -93,7 +89,6 @@ def _section_source_domain_table(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 3 — Per-PDF-Host-Domain Table (where citation_pdf_url points)
 def _section_pdf_host_table(results: list[dict]) -> list[str]:
     by_host: dict[str, list[dict]] = defaultdict(list)
     for r in results:
@@ -125,7 +120,6 @@ def _section_pdf_host_table(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 4 — PDF_OK Sample (first 20)
 def _section_pdf_ok_sample(results: list[dict]) -> list[str]:
     ok = [r for r in results if r["hop2_outcome"] == "PDF_OK"]
     lines = [
@@ -144,7 +138,6 @@ def _section_pdf_ok_sample(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 5 — HTML_FALLBACK Sample (first 20) with title + body preview
 def _section_html_fallback_sample(results: list[dict]) -> list[str]:
     fb = [r for r in results if r["hop2_outcome"] == "HTML_FALLBACK"]
     lines = [
@@ -164,7 +157,6 @@ def _section_html_fallback_sample(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 6 — Per-URL Detail Table (all 124)
 def _section_per_url_detail(results: list[dict]) -> list[str]:
     sorted_results = sorted(results, key=lambda r: (r["original_domain"], r["original_url"]))
 

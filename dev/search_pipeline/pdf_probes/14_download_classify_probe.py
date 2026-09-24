@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Download-classify probe — sniff-classifies academic URLs from the search pool without saving any content."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -29,7 +28,6 @@ async def run_probe() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Pool extraction
     smoke_path = _latest_report(SMOKE_REPORTS_GLOB, REPORT_DIR)
     free_path = _latest_report(FREE_WORD_REPORTS_GLOB, REPORT_DIR)
     print(f"[pool] smoke={smoke_path.name}", file=sys.stderr)
@@ -43,7 +41,6 @@ async def run_probe() -> None:
     total = len(sampled_pool)
     print(f"[pool] {total} URLs to classify (doi sample={len(doi_sample)}/all={sum(1 for u,t in tier_pool if t=='T3')})", file=sys.stderr)
 
-    # Classification
     t_wall_start = time.monotonic()
     results = await _classify_all(sampled_pool)
     wall_secs = time.monotonic() - t_wall_start

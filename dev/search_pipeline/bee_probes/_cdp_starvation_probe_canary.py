@@ -4,13 +4,12 @@ import statistics
 import time
 from collections import defaultdict
 
-COLD_START_SKIP_S = 5.0      # exclude first N seconds from statistics (Chrome boot noise)
-CANARY_INTERVAL_S = 0.1      # Pattern B: scheduling probe interval
+COLD_START_SKIP_S = 5.0
+CANARY_INTERVAL_S = 0.1
 
-# Shared state populated during the run
-_canary_samples: list[tuple[float, float, int]] = []  # (ts_mono, latency_ms, num_tasks)
+_canary_samples: list[tuple[float, float, int]] = []
 
-PROBE_START: float = 0.0  # set in run_cdp_probe before first query
+PROBE_START: float = 0.0
 
 
 # FUNCTIONS
@@ -31,7 +30,6 @@ async def _stop_canary_monitor(stop_canary: asyncio.Event, canary_task: asyncio.
     await canary_task
 
 
-# Pattern B: scheduling latency canary — measures actual asyncio.sleep(0.1) elapsed
 async def _canary_monitor(stop: asyncio.Event) -> None:
     while not stop.is_set():
         t0 = time.monotonic()
@@ -42,15 +40,13 @@ async def _canary_monitor(stop: asyncio.Event) -> None:
         _canary_samples.append((time.monotonic(), latency_ms, num_tasks))
 
 
-# Return category label for a canary sample based on which query was running at ts
 def _sample_category(ts: float, records: list[dict]) -> str:
     for r in records:
         if r["t_start"] <= ts < r["t_end"]:
             return r["category"]
-    return "between"  # sample fell between queries (rare gap)
+    return "between"
 
 
-# Compute p-th percentile
 def _pct(data: list[float], p: float) -> float:
     if not data:
         return 0.0
@@ -60,7 +56,6 @@ def _pct(data: list[float], p: float) -> float:
     return s[lo] + (k - lo) * (s[hi] - s[lo])
 
 
-# Compute latency stats broken out by query category + overall (cold-start excluded)
 def _compute_stats(records: list[dict]) -> dict[str, dict]:
     cold_cutoff = PROBE_START + COLD_START_SKIP_S
     by_cat: dict[str, list[float]] = defaultdict(list)

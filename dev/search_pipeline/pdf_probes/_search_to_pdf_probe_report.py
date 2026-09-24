@@ -7,8 +7,6 @@ from _search_to_pdf_probe_config import DOMAIN_CONCURRENCY_CAP, DOWNLOAD_DIR, DO
 
 # FUNCTIONS
 
-# ── Report ─────────────────────────────────────────────────────────────────────
-
 def _write_report(
     all_query_results: list[dict],
     queries: list[str],
@@ -38,7 +36,6 @@ def _build_report(
     return lines
 
 
-# Section 1 — Run Metadata
 def _section_metadata(
     all_query_results: list[dict],
     queries: list[str],
@@ -69,7 +66,6 @@ def _section_metadata(
     ]
 
 
-# Section 2 — Per-Query Summary Table
 def _section_per_query_summary(all_query_results: list[dict]) -> list[str]:
     lines = [
         "## Section 2 — Per-Query Summary Table",
@@ -96,7 +92,6 @@ def _section_per_query_summary(all_query_results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 3 — Per-Query Per-URL Detail
 def _section_per_query_detail(all_query_results: list[dict]) -> list[str]:
     lines = ["## Section 3 — Per-Query Per-URL Detail", ""]
     for q in all_query_results:
@@ -115,7 +110,6 @@ def _section_per_query_detail(all_query_results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 4 — Aggregate Path Distribution
 def _section_path_distribution(all_query_results: list[dict]) -> list[str]:
     all_rows = [r for q in all_query_results for r in q["rows"]]
     by_path: dict[str, list[dict]] = defaultdict(list)
@@ -143,7 +137,6 @@ def _section_path_distribution(all_query_results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 5 — Summary Highlights
 def _section_highlights(all_query_results: list[dict]) -> list[str]:
     all_rows = [r for q in all_query_results for r in q["rows"]]
     downloaded = [r for r in all_rows if r["outcome"] == "DOWNLOADED"]
@@ -151,7 +144,6 @@ def _section_highlights(all_query_results: list[dict]) -> list[str]:
     total_bytes = sum(r["saved_size"] for r in downloaded if r["saved_size"])
     size_str = f"{total_bytes / 1024 / 1024:.1f} MB" if total_bytes >= 1024 * 1024 else f"{total_bytes / 1024:.1f} KB"
 
-    # Engine contribution: count per engine across downloaded URLs
     engine_counts: Counter = Counter()
     for r in downloaded:
         for eng in (r["engines"] or [r["engine"]]):

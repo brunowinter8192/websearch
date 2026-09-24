@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-"""RateLimiter.acquire() instrumentation probe — Phase 2 bee investigation.
-
-Discriminates three hypotheses for zero_cascade queries (all 9+ engines RATE_SKIP):
-  B:       enter=N                  — Task never scheduled by asyncio
-  A-lock:  enter=Y, lg=N, ~5000ms  — entered acquire() but blocked waiting for the lock
-  A-sleep: enter=Y, lg=Y, ~5000ms  — got lock, blocked on asyncio.sleep(backoff_s)
-  C:       enter=Y, exit_ok        — acquire() innocent, bug elsewhere
-
-Phase 1 REFUTED CDP starvation (event loop p99=1.4ms, 0 CDP events during cascade).
-New hypothesis: Python 3.14 asyncio.Lock non-release under CancelledError causes
-stale lock that blocks subsequent queries on same engine.
-
-Usage:
-    ./venv/bin/python3 dev/search_pipeline/acquire_probe.py [--max-queries N] [--smoke]
-
-    --smoke: 4-query dry-run, prints per-engine event detail to stderr, no report written.
-             Run first to verify instrumentation is live before full 20-query run.
-
-Output (full run only):
-    dev/search_pipeline/md/acquire_probe_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -90,10 +69,6 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
     google_status = det.get("google", {}).get("status", "—")
     all_statuses = {k: v.get("status", "—") for k, v in det.items()}
     all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
-    # "captcha" (keyed on the removed EMPTY_BLOCK verdict) renamed to "empty" — the
-    # guessed-verdict-removal milestone collapsed EMPTY_BLOCK into bare "EMPTY", and
-    # engine_details (status+ms only) carries no diagnosis to reconstruct which kind of
-    # empty this was; an honest narrower label beats a familiar wrong one.
     category = (
         "empty" if google_status == "EMPTY"
         else "zero_cascade" if all_rate_skip
@@ -125,7 +100,6 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
 
 def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, bool]:
     zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
-    # Cascade expected: ≥5/20 based on Phase 1 baseline; for shorter smoke: 0 OK
     min_expected = max(3, len(query_records) // 4) if not smoke else 0
     cascade_ok = zero_n >= min_expected
     print(

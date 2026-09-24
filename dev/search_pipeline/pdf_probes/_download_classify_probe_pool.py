@@ -26,7 +26,6 @@ TIER4_DOMAINS = frozenset({
 
 # FUNCTIONS
 
-# Return path of most-recently-modified report matching glob
 def _latest_report(glob_pattern: str, report_dir: Path) -> Path:
     candidates = sorted(report_dir.glob(glob_pattern), key=lambda p: p.stat().st_mtime, reverse=True)
     if not candidates:
@@ -34,7 +33,6 @@ def _latest_report(glob_pattern: str, report_dir: Path) -> Path:
     return candidates[0]
 
 
-# Extract deduplicated URLs with real paths from both source reports
 def _extract_pool(smoke_path: Path, free_path: Path) -> set[str]:
     smoke_text = smoke_path.read_text(encoding="utf-8")
     free_text = free_path.read_text(encoding="utf-8")
@@ -49,11 +47,9 @@ def _extract_pool(smoke_path: Path, free_path: Path) -> set[str]:
     for m in re.finditer(r"\| \d+ \| \S+ \| \d+ \| (https?://\S+?) \|", free_text):
         urls.add(m.group(1))
 
-    # Drop root-domain-only URLs (path empty or '/')
     return {u for u in urls if _has_real_path(u)}
 
 
-# Return True if URL has a non-trivial path component
 def _has_real_path(url: str) -> bool:
     try:
         path = urlparse(url).path
@@ -62,7 +58,6 @@ def _has_real_path(url: str) -> bool:
         return False
 
 
-# Map URL to tier string or None
 def _url_tier(url: str) -> str | None:
     d = _base_domain(url)
     if d in TIER1_DOMAINS or any(d.endswith("." + t) for t in TIER1_DOMAINS):
@@ -76,7 +71,6 @@ def _url_tier(url: str) -> str | None:
     return None
 
 
-# Extract registrable base domain (strip www.)
 def _base_domain(url: str) -> str:
     try:
         netloc = urlparse(url).netloc.lower()
@@ -85,14 +79,12 @@ def _base_domain(url: str) -> str:
         return ""
 
 
-# Filter pool to academic URLs; return list of (url, tier) sorted by domain then url
 def _filter_and_tier(all_urls: set[str]) -> list[tuple[str, str]]:
     tiered = [(u, t) for u in all_urls if (t := _url_tier(u)) is not None]
     tiered.sort(key=lambda x: (_base_domain(x[0]), x[0]))
     return tiered
 
 
-# Apply doi.org sampling (seed=42, 300 URLs); return (full_sampled_pool, doi_sample_list)
 def _apply_doi_sampling(tier_pool: list[tuple[str, str]]) -> tuple[list[tuple[str, str]], list[str]]:
     doi_urls = [u for u, t in tier_pool if t == "T3"]
     non_doi = [(u, t) for u, t in tier_pool if t != "T3"]
@@ -104,7 +96,6 @@ def _apply_doi_sampling(tier_pool: list[tuple[str, str]]) -> tuple[list[tuple[st
     return sampled, doi_sample
 
 
-# Write pool.txt and doi_sample.txt; log paths to stderr
 def _write_pool_files(sampled_pool: list[tuple[str, str]], doi_sample: list[str], ts: str, data_dir: Path) -> None:
     pool_path = data_dir / f"pool_{ts}.txt"
     pool_path.write_text("\n".join(u for u, _ in sampled_pool) + "\n", encoding="utf-8")

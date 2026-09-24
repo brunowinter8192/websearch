@@ -9,7 +9,6 @@ from _rerank_probe_smoke_config import EMBEDDING_URL, RERANKER_URL
 
 # FUNCTIONS
 
-# Abort immediately if either service is unreachable
 def _verify_services() -> None:
     print("Verifying services …", file=sys.stderr)
     try:
@@ -28,14 +27,12 @@ def _verify_services() -> None:
     print(file=sys.stderr)
 
 
-# Embed batch of texts; returns list of embedding vectors
 def embed_batch(texts: list[str]) -> list[list[float]]:
     r = httpx.post(EMBEDDING_URL, json={"input": texts, "model": "qwen-emb-0.6b"}, timeout=60.0)
     r.raise_for_status()
     return [item["embedding"] for item in r.json()["data"]]
 
 
-# Cross-encoder rerank; returns [(original_index, relevance_score), ...]
 def cross_encoder_rerank(query: str, documents: list[str]) -> list[tuple[int, float]]:
     r = httpx.post(RERANKER_URL, json={"query": query, "documents": documents}, timeout=60.0)
     r.raise_for_status()
@@ -43,7 +40,6 @@ def cross_encoder_rerank(query: str, documents: list[str]) -> list[tuple[int, fl
     return [(item["index"], item["relevance_score"]) for item in results]
 
 
-# Cosine similarity between two embedding vectors
 def cosine_sim(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na  = math.sqrt(sum(x * x for x in a))

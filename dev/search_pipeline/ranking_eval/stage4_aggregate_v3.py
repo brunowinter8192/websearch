@@ -1,21 +1,4 @@
 #!/usr/bin/env python3
-"""
-Stage 4 v3 — Aggregate (Phase 13, 12-method eval).
-
-Loads pool_v3/*_pool.json + pool_v3/*_methods_v3.json + oracle_dir/*_oracle_v3clean.json,
-computes Jaccard per method, writes per-pair eval MD and summary MD into pool_dir.
-
-Summary includes:
-  - Per-mode mean Jaccard (12 methods)
-  - Per-method latency statistics (mean, p50, p95, max, cold)
-  - Quality × Latency Pareto table (DOMINATED flagged)
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/stage4_aggregate_v3.py \\
-      --pool-dir  dev/search_pipeline/runs/value_eval_v3_<ts> \\
-      --oracle-dir dev/search_pipeline/runs/value_eval_v2_20260523_000156 \\
-      [--no-oracle]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -95,7 +78,6 @@ def _percentile(vals: list[float], p: int) -> float:
     return sv[min(idx, len(sv) - 1)]
 
 
-# Load pool/methods_v3/oracle_v3clean for one pair; compute Jaccard; return result dict or None
 def _load_and_score_pair(
     pool_dir: Path, oracle_dir: Path, mode: str, query: str, no_oracle: bool
 ) -> dict | None:
@@ -134,7 +116,6 @@ def _load_and_score_pair(
     }
 
 
-# Write per-pair eval MD; return path
 def _write_query_md(result: dict, pool_dir: Path) -> Path:
     mode  = result["mode"]
     slug  = result["slug"]
@@ -183,7 +164,6 @@ def _write_query_md(result: dict, pool_dir: Path) -> Path:
     return path
 
 
-# Write summary eval MD with Jaccard + latency sections; return path
 def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
     path       = pool_dir / "eval_summary_v3.md"
     has_oracle = any(r["oracle_urls"] for r in results)
@@ -213,7 +193,6 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
 
 
 def _summary_per_mode_jaccard(scored: list[dict]) -> list[str]:
-    # Per-mode Jaccard table
     lines = ["## Per-Mode Mean Jaccard", ""]
     header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
     sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
@@ -232,7 +211,6 @@ def _summary_per_mode_jaccard(scored: list[dict]) -> list[str]:
 
 
 def _summary_overall_jaccard(overall: dict) -> list[str]:
-    # Overall mean Jaccard
     winner  = max(overall, key=overall.get)
     lines = ["## Overall Mean Jaccard", "", "| Method | Mean Jaccard |", "|--------|--------------|"]
     for k in METHOD_KEYS:
@@ -243,7 +221,6 @@ def _summary_overall_jaccard(overall: dict) -> list[str]:
 
 
 def _summary_per_mode_latency(results: list[dict]) -> list[str]:
-    # Per-mode mean latency
     lines = ["## Per-Mode Mean Latency (ms)", ""]
     header = "| Mode | " + " | ".join(k.upper() for k in METHOD_KEYS) + " |"
     sep    = "|------|" + "---|" * len(METHOD_KEYS)
@@ -260,7 +237,6 @@ def _summary_per_mode_latency(results: list[dict]) -> list[str]:
 
 
 def _summary_latency_statistics(results: list[dict]) -> list[str]:
-    # Per-method latency statistics across all 16 queries
     lines = ["## Per-Method Latency Statistics (across 16 pairs)", ""]
     lines += [
         "| Method | Mean | p50 | p95 | Max | Tokens in/out (LLM) |",
@@ -284,7 +260,6 @@ def _summary_latency_statistics(results: list[dict]) -> list[str]:
 
 
 def _summary_pareto(results: list[dict], overall: dict) -> list[str]:
-    # Quality × Latency Pareto
     lines = ["## Quality × Latency Pareto", ""]
     method_stats: list[tuple[str, float, float]] = []
     for k in METHOD_KEYS:
@@ -292,7 +267,7 @@ def _summary_pareto(results: list[dict], overall: dict) -> list[str]:
         ms_vals = [r["methods_meta"].get(f"{k}_ms", 0) for r in results]
         mean_ms = sum(ms_vals) / len(ms_vals) if ms_vals else 0
         method_stats.append((k, mean_j, mean_ms))
-    method_stats.sort(key=lambda x: -x[1])  # sort by quality desc
+    method_stats.sort(key=lambda x: -x[1])
 
     lines += [
         "| Method | Mean Jaccard | Mean Latency (ms) | Pareto Status |",

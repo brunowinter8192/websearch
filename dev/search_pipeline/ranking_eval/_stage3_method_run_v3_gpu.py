@@ -8,16 +8,13 @@ import httpx
 
 from _stage3_method_run_v3_config import TOP_N
 
-# From bm25_sweep_smoke.py: BM25 helpers
 from bm25_sweep_smoke import _doc_repr
 
 BM25_REPR    = "title+snippet"
-HYBRID_ALPHA = 0.5   # weight for C3 component in hybrids (M8, M10)
+HYBRID_ALPHA = 0.5
 
-# Instruction prefix for M7
 M7_PREFIX = "Find authoritative primary or official sources for: "
 
-# LLM prompt for M11 / M12 (see _build_llm_prompt)
 LLM_SYSTEM = (
     'You are evaluating search results for the query: "{query}"\n'
     "Select exactly 10 URLs from the candidate list below that are MOST LIKELY to be "
@@ -29,24 +26,20 @@ LLM_SYSTEM = (
 
 # FUNCTIONS
 
-# Cross-encoder rerank call; returns [(index, relevance_score), ...]
 def _cross_encoder_rerank(query: str, documents: list[str], reranker_url: str) -> list[tuple[int, float]]:
     r = httpx.post(reranker_url, json={"query": query, "documents": documents}, timeout=120.0)
     r.raise_for_status()
     return [(item["index"], item["relevance_score"]) for item in r.json().get("results", [])]
 
 
-# M6 — C3 Cross-Encoder vanilla; returns (urls, ms, score_dict)
 def _apply_m6(pool: list[dict], query: str, reranker_url: str) -> tuple[list[str], int, dict[str, float]]:
     return _rerank_pool(pool, query, reranker_url, query_text=query)
 
 
-# M7 — C3 + Instruction-Prefix; returns (urls, ms, score_dict)
 def _apply_m7(pool: list[dict], query: str, reranker_url: str) -> tuple[list[str], int, dict[str, float]]:
     return _rerank_pool(pool, query, reranker_url, query_text=M7_PREFIX + query)
 
 
-# Shared reranker implementation for M6/M7
 def _rerank_pool(pool: list[dict], query: str, reranker_url: str, query_text: str) -> tuple[list[str], int, dict[str, float]]:
     if not pool:
         return [], 0, {}
@@ -68,7 +61,6 @@ def _rerank_pool(pool: list[dict], query: str, reranker_url: str, query_text: st
         return [], ms, {}
 
 
-# Min-max normalize a score dict to [0, 1]; returns new dict
 def _normalize(scores: dict[str, float]) -> dict[str, float]:
     if not scores:
         return {}
@@ -79,7 +71,6 @@ def _normalize(scores: dict[str, float]) -> dict[str, float]:
     return {k: (v - lo) / (hi - lo) for k, v in scores.items()}
 
 
-# M8 — RRF + C3 Hybrid (no GPU; reuses c3_scores from M6 and rrf_scores from M2)
 def _apply_m8(
     pool: list[dict], c3_scores: dict[str, float], rrf_scores: dict[str, float]
 ) -> tuple[list[str], int]:
@@ -95,7 +86,6 @@ def _apply_m8(
     return [m["url"] for m in ranked[:TOP_N]], ms
 
 
-# M9 — SPLADE standalone; returns (urls, ms, splade_scores)
 def _apply_m9(pool: list[dict], query: str, splade_url: str) -> tuple[list[str], int, dict[str, float]]:
     if not pool:
         return [], 0, {}
@@ -121,7 +111,6 @@ def _apply_m9(pool: list[dict], query: str, splade_url: str) -> tuple[list[str],
         return [], ms, {}
 
 
-# M10 — SPLADE + C3 Hybrid (no GPU; reuses c3_scores from M6 + splade_scores from M9)
 def _apply_m10(
     pool: list[dict], c3_scores: dict[str, float], splade_scores: dict[str, float]
 ) -> tuple[list[str], int]:
@@ -137,7 +126,6 @@ def _apply_m10(
     return [m["url"] for m in ranked[:TOP_N]], ms
 
 
-# Build LLM prompt for M11/M12; pool_entries is the candidate list
 def _build_llm_prompt(query: str, pool_entries: list[dict]) -> tuple[str, str]:
     system = LLM_SYSTEM.format(query=query)
     lines  = ["Candidates:"]
@@ -151,7 +139,6 @@ def _build_llm_prompt(query: str, pool_entries: list[dict]) -> tuple[str, str]:
     return system, user
 
 
-# Call generator-4b; return (urls, ms, (tokens_in, tokens_out))
 def _call_generator(system: str, user: str, known_urls: set[str], generator_url: str) -> tuple[list[str], int, tuple[int, int]]:
     payload = {
         "model":       "qwen",
@@ -167,7 +154,6 @@ def _call_generator(system: str, user: str, known_urls: set[str], generator_url:
         content    = body["choices"][0]["message"]["content"].strip()
         tokens_in  = body.get("usage", {}).get("prompt_tokens", 0)
         tokens_out = body.get("usage", {}).get("completion_tokens", 0)
-        # Strip markdown fences if present
         if content.startswith("```"):
             content = re.sub(r"^```[a-z]*\n?", "", content).rstrip("`").strip()
         urls  = json.loads(content) if content.startswith("[") else []
@@ -180,23 +166,19 @@ def _call_generator(system: str, user: str, known_urls: set[str], generator_url:
         return [], ms, (0, 0)
 
 
-# M11 — Two-Stage C3 + LLM-Filter (C3 top-20 → generator filter → top-10)
 def _apply_m11(
     pool: list[dict], query: str, c3_scores: dict[str, float], generator_url: str
 ) -> tuple[list[str], int, tuple[int, int]]:
     if not pool:
         return [], 0, (0, 0)
-    # Stage a: take C3 top-20
     ranked_by_c3  = sorted(pool, key=lambda m: -c3_scores.get(m["url"], 0.0))
     top20_entries = ranked_by_c3[:20]
     known_urls    = {m["url"] for m in top20_entries}
-    # Stage b: generator filter
     system, user  = _build_llm_prompt(query, top20_entries)
     urls, ms, toks = _call_generator(system, user, known_urls, generator_url)
     return urls, ms, toks
 
 
-# M12 — LLM-as-Selector direct (full filtered pool → generator → top-10)
 def _apply_m12(pool: list[dict], query: str, generator_url: str) -> tuple[list[str], int, tuple[int, int]]:
     if not pool:
         return [], 0, (0, 0)

@@ -15,7 +15,6 @@ def _load_queries(path: Path, n: int | None) -> list[str]:
 
 
 def _snapshot_limiters(qi: int) -> dict:
-    """Layer 1: per-engine limiter state immediately before search_web_workflow call."""
     now = time.monotonic()
     engines = {}
     for name, lim in _rl_mod._limiters.items():
@@ -35,7 +34,6 @@ def _build_engine_detail(
     all_statuses: dict[str, str],
     snap: dict,
 ) -> dict[str, dict]:
-    """Per-engine Layer-2 analysis from acquire() events captured during one query."""
     by_eng: dict[str, list[tuple[str, float, float | None]]] = defaultdict(list)
     for eng, evt, ts, wait in events:
         by_eng[eng].append((evt, ts, wait))
@@ -67,7 +65,6 @@ def _build_engine_detail(
 
 
 def _query_discriminator(eng_detail: dict[str, dict]) -> str:
-    """Classify query by which branch fired across RATE_SKIP engines."""
     rs = [d for d in eng_detail.values() if d["status"] == "RATE_SKIP"]
     if not rs:
         return "ok"

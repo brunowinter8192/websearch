@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""
-Stage 3 — Method Run (value_eval_v2).
-
-Reads *_pool.json files from a Stage 1 ts_dir, runs 4 C-methods on each pool,
-writes per-pair methods.json.
-
-Methods:
-  C1  — Overlap-Count: sort (-n_engines, min_position) on pool (filt_capped)
-  C2  — BM25 vanilla (k1=1.2, b=0.75, sw=on, title+snippet) on pool_full (filt_pool)
-  C2' — BM25-Capped: BM25 on pool (filt_capped, same as oracle input)
-  C3  — Cross-Encoder rerank (Qwen3-Reranker, dynamic port via RAG server_manager)
-
-Requires reranker server running (or startable via RAG). Script exits with error
-if reranker cannot be reached after ensure_ready.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/stage3_method_run.py --ts-dir PATH [--smoke]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -35,13 +17,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(RAG_SRC))
 
-# From bm25_sweep_smoke.py: BM25 helpers
 from bm25_sweep_smoke import _doc_repr, _tokenize, BM25Uniform, VANILLA_K1
 
-# From rerank_probe_smoke.py: BM25 scorer (uses bm25_sweep_smoke helpers internally)
 from rerank_probe_smoke import _bm25_score
 
-# RAG server manager — dynamic reranker URL
 from rag.server_manager import ensure_ready, find_server_url
 
 import logging
@@ -50,7 +29,6 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(mes
 TOP_N     = 10
 BM25_REPR = "title+snippet"
 
-# Module-level; set once in run_method_run before any C3 call
 RERANKER_URL: str = ""
 
 MODES = ["general", "pdf", "books", "docs"]
@@ -88,10 +66,9 @@ def run_method_run(ts_dir: Path, smoke: bool) -> None:
     print(file=sys.stderr)
 
     for i, pool_file in enumerate(pool_files, 1):
-        # Filename: {mode}_{slug}_pool.json → stem ends with "_pool"
-        stem      = pool_file.stem          # e.g. "general_transformer_attention_mechan_pool"
-        name      = stem[:-5]               # strip "_pool" → "general_transformer_attention_mechan"
-        mode, slug = name.split("_", 1)     # split at first _ → mode, slug
+        stem      = pool_file.stem
+        name      = stem[:-5]
+        mode, slug = name.split("_", 1)
         data      = json.loads(pool_file.read_text())
         query     = data["query"]
         print(f"[{i}/{n}] mode={mode} | {query}", file=sys.stderr)
@@ -107,12 +84,10 @@ def run_method_run(ts_dir: Path, smoke: bool) -> None:
 
 # FUNCTIONS
 
-# Slug — must match stage1 _query_slug
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# C1 Overlap-Count: sort (-n_engines, min_position), return Top-N URLs + latency ms
 def _apply_c1(pool: list[dict], top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     ranked = sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))
@@ -120,7 +95,6 @@ def _apply_c1(pool: list[dict], top_n: int) -> tuple[list[str], int]:
     return [m["url"] for m in ranked[:top_n]], ms
 
 
-# C2 BM25 vanilla: score pool_full (full filtered), return Top-N URLs + latency ms
 def _apply_c2(pool_full: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(pool_full, query, top_n)
@@ -128,7 +102,6 @@ def _apply_c2(pool_full: list[dict], query: str, top_n: int) -> tuple[list[str],
     return [m["url"] for m, _ in scored], ms
 
 
-# C2' BM25-Capped: score pool (filtered+capped, same as oracle), return Top-N URLs + latency ms
 def _apply_c2p(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(pool, query, top_n)
@@ -136,14 +109,12 @@ def _apply_c2p(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int
     return [m["url"] for m, _ in scored], ms
 
 
-# Cross-encoder rerank via dynamic RERANKER_URL; returns [(original_index, relevance_score), ...]
 def _cross_encoder_rerank(query: str, documents: list[str]) -> list[tuple[int, float]]:
     r = httpx.post(RERANKER_URL, json={"query": query, "documents": documents}, timeout=60.0)
     r.raise_for_status()
     return [(item["index"], item["relevance_score"]) for item in r.json().get("results", [])]
 
 
-# C3 Cross-Encoder: rerank pool, return Top-N URLs + latency ms
 def _apply_c3(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     if not pool:
         return [], 0
@@ -164,10 +135,9 @@ def _apply_c3(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]
         return [], ms
 
 
-# Run all 4 methods on one pair's pools; save methods.json; return timing metadata
 def _run_one_pair(ts_dir: Path, mode: str, slug: str, query: str, pool_data: dict) -> dict:
-    pool      = pool_data["pool"]       # filt_capped: oracle + C1/C2'/C3
-    pool_full = pool_data.get("pool_full", pool)  # filt_pool: C2 BM25 vanilla
+    pool      = pool_data["pool"]
+    pool_full = pool_data.get("pool_full", pool)
 
     c1_urls,  c1_ms  = _apply_c1(pool,      TOP_N)
     c2_urls,  c2_ms  = _apply_c2(pool_full, query, TOP_N)

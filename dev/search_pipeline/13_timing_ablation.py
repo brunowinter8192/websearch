@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Timing ablation A vs B — Scholar polling reduction + HTTP rate-limit relaxation."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -13,7 +12,6 @@ from statistics import mean
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-# Import engine modules as objects so we can monkeypatch their attributes
 import src.search.engines.scholar as scholar_mod
 import src.search.engines.google as google_mod
 
@@ -27,8 +25,8 @@ from src.search.rate_limiter import _limiters, get_limiter
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 REPORT_DIR  = SCRIPT_DIR / "md"
-MAX_RESULTS = 10   # production default
-PAUSE_S     = 120  # seconds between A and B to drain rate-limiter buckets
+MAX_RESULTS = 10
+PAUSE_S     = 120
 
 QUERIES = [
     "python asyncio",
@@ -45,9 +43,6 @@ ENGINES = [
 
 HTTP_ENGINES = ("openalex",)
 
-# ── CONFIG B patch / restore ─────────────────────────────────────────────────
-
-# Capture CONFIG A originals before any patching
 _ORIG = {
     "scholar_MAX_WAIT_CYCLES": scholar_mod.MAX_WAIT_CYCLES,
     "scholar_WAIT_INTERVAL":   scholar_mod.WAIT_INTERVAL,
@@ -58,12 +53,10 @@ _ORIG = {
 
 
 async def _scholar_consent_noop(tab) -> None:
-    """Scholar consent — click only, sleep removed (CONFIG B; SOCS cookie prevents this firing)."""
     await tab.execute_script(scholar_mod._JS_CONSENT)
 
 
 async def _google_consent_noop(tab) -> None:
-    """Google consent — click only, sleep removed (CONFIG B; SOCS cookie prevents this firing)."""
     await tab.execute_script(google_mod._JS_CONSENT)
 
 
@@ -112,7 +105,6 @@ async def run_ablation() -> None:
     print(f"\nReport: {report_path}", file=sys.stderr)
 
 
-# Run 3 queries in concurrent-gather mode; return flat list of per-engine records
 async def run_config(label: str) -> list[dict]:
     all_records = []
     for qi, query in enumerate(QUERIES):
@@ -137,7 +129,6 @@ async def run_config(label: str) -> list[dict]:
 
 # FUNCTIONS
 
-# Acquire rate-limit token, call engine.search, return timing+URL record
 async def engine_timed(name: str, engine, query: str) -> dict:
     await get_limiter(engine.name).acquire()
     t0 = time.monotonic()
@@ -164,18 +155,15 @@ async def engine_timed(name: str, engine, query: str) -> dict:
         }
 
 
-# Build (engine, query) → record index from flat list
 def make_index(records: list[dict]) -> dict:
     return {(r["engine"], r["query"]): r for r in records}
 
 
-# Jaccard similarity between two URL sets
 def jaccard(a: set, b: set) -> float:
     union = a | b
     return len(a & b) / len(union) if union else 1.0
 
 
-# Build markdown report and return path
 def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
     ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
     path  = REPORT_DIR / f"timing_ablation_{ts}.md"
@@ -323,7 +311,6 @@ def _render_jaccard_summary(eng_names: list[str], jaccard_by_engine: dict) -> li
 
 
 def _render_bottom_line(records_a: list[dict], records_b: list[dict], jaccard_by_engine: dict) -> list[str]:
-    # Bottom line
     all_j  = [j for vals in jaccard_by_engine.values() for j in vals]
     mean_j = mean(all_j) if all_j else 0.0
     min_j  = min(all_j)  if all_j else 0.0

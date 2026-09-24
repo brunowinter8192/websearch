@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""
-BM25 per-engine top-K cap probe — 3 configs, top-10, 4 queries.
-
-Tests whether capping each engine's contribution to top-K URLs (where
-K = google result count for this query) before building the dedup pool
-improves BM25 result quality vs the uncapped full pool.
-
-Rationale: crossref/openalex return 200 results each — keyword-matched
-but often irrelevant. Google returns ~11 highly-curated results. Capping
-all engines to K~11 equalises engine contribution and removes the long
-tail of low-quality academic matches before BM25 scoring.
-
-Config matrix:
-  1. Hard-Slot   — _merge_and_rank baseline (12/6/2 slots)
-  2. BM25 UNCAPPED — BM25Uniform on full dedup pool
-  3. BM25 CAPPED   — BM25Uniform on pool built from top-K per engine
-     K = engine_stats['google']['result_count'] for this query;
-     fallback K=10 if google absent or returned 0.
-
-Report header per query shows:
-  raw=N, K=K, capped_pre_dedup=C, unique_capped=U, unique_full=F
-
-Imports: QUERIES, VANILLA_K1, STOPWORDS, _build_pool, _tokenize, _doc_repr,
-BM25Uniform from bm25_sweep_smoke.py (same directory).
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -60,7 +35,7 @@ REPORT_DIR = SCRIPT_DIR / "md"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 TOP_N     = 10
-BM25_K1   = VANILLA_K1   # 1.2
+BM25_K1   = VANILLA_K1
 BM25_B    = 0.75
 BM25_SW   = True
 BM25_REPR = "title+snippet"
@@ -122,18 +97,15 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# K = google result count; fallback 10 if absent or zero
 def _compute_K(engine_stats: dict) -> int:
     K = engine_stats.get("google", {}).get("result_count", 0)
     return K if K > 0 else 10
 
 
-# Keep only results within top-K per-engine position
 def _cap_raw_results(raw_results, K: int) -> list:
     return [r for r in raw_results if r.position <= K]
 
 
-# BM25Uniform score full pool; return [(doc, score), ...] sorted desc (no truncation)
 def _score_bm25(pool: list[dict], query: str) -> list[tuple[dict, float]]:
     if not pool:
         return []
@@ -148,7 +120,6 @@ def _score_bm25(pool: list[dict], query: str) -> list[tuple[dict, float]]:
     return [(pool[i], float(scores[i])) for i in ranked]
 
 
-# Run all 3 configs; return (config_tops, K, capped_pre_dedup, unique_capped, unique_full)
 def _rank_all_configs(raw_results, engine_stats: dict, query: str) -> tuple:
     K           = _compute_K(engine_stats)
     capped_raw  = _cap_raw_results(raw_results, K)
@@ -175,7 +146,6 @@ def _rank_all_configs(raw_results, engine_stats: dict, query: str) -> tuple:
     return results, K, len(capped_raw), len(capped_pool), len(full_pool)
 
 
-# Build markdown section: metadata + 3 stacked top-10 tables
 def _build_query_section(
     query: str,
     config_tops: list[dict],
@@ -224,7 +194,6 @@ def _build_query_section(
     return "\n".join(lines)
 
 
-# Write report: header + per-query sections
 def _write_report(sections: list[str], path: Path, total_ms: int) -> None:
     ts = path.stem.replace("bm25_capped_", "")
     header = "\n".join([

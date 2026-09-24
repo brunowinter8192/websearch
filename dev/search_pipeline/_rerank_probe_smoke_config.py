@@ -25,8 +25,8 @@ QUERY_CATEGORIES: dict[str, str] = {
 }
 
 TOP_N       = 10
-RETRIEVE_N  = 50   # BM25 retrieve candidate count before reranking
-BM25_K1     = VANILLA_K1   # 1.2
+RETRIEVE_N  = 50
+BM25_K1     = VANILLA_K1
 BM25_B      = 0.75
 BM25_SW     = True
 BM25_REPR   = "title+snippet"

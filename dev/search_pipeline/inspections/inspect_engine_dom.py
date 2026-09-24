@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""DOM inspection tool — diagnose engine selector drift. Run when engine returns persistent EMPTY/TIMEOUT."""
 
 # INFRASTRUCTURE
 import argparse
@@ -18,6 +17,8 @@ from src.search.browser import new_tab, close_browser
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
+DESCRIPTION = "DOM inspection tool — diagnose engine selector drift. Run when engine returns persistent EMPTY/TIMEOUT."
+
 ENGINE_REGISTRY = {
     "semantic_scholar": {
         "build_url":      lambda q: f"https://www.semanticscholar.org/search?q={quote_plus(q)}",
@@ -34,7 +35,6 @@ ENGINE_REGISTRY = {
             "title", "abstract", "snippet", "link", "entry",
         ],
     },
-    # TODO stubs — add current_selectors + dtid_keywords when inspecting
     "google":         {"_todo": True},
     "google_scholar": {"_todo": True},
     "duckduckgo":     {"_todo": True},
@@ -42,7 +42,6 @@ ENGINE_REGISTRY = {
     "lobsters":       {"_todo": True},
 }
 
-# H2: full data-test-id inventory (caller filters by dtid_keywords)
 _JS_H2 = """var _els = document.querySelectorAll('[data-test-id]');
 var _ids = {};
 for (var _i = 0; _i < _els.length; _i++) {
@@ -51,7 +50,6 @@ for (var _i = 0; _i < _els.length; _i++) {
 }
 return JSON.stringify(_ids);"""
 
-# H3: repeating first-class clusters (≥4 occurrences) on div/article/li
 _JS_H3 = """var _els = document.querySelectorAll('div, article, li');
 var _groups = {};
 for (var _i = 0; _i < _els.length; _i++) {
@@ -65,7 +63,6 @@ var _out = {};
 for (var _k in _groups) { if (_groups[_k] >= 4) _out[_k] = _groups[_k]; }
 return JSON.stringify(_out);"""
 
-# H4: class-substring scan for result-like semantic keywords
 _JS_H4 = """var _els = document.querySelectorAll('div, article, li');
 var _kw = ['paper', 'result', 'card', 'row', 'item', 'entry', 'cl-'];
 var _hits = {};
@@ -84,7 +81,6 @@ for (var _i = 0; _i < _els.length; _i++) {
 }
 return JSON.stringify(_hits);"""
 
-# H5: all distinct data-* attribute names on div/article (count-based)
 _JS_H5 = """var _els = document.querySelectorAll('div, article');
 var _attrs = {};
 for (var _i = 0; _i < _els.length; _i++) {
@@ -135,7 +131,7 @@ async def run_inspection(engine_name: str, query: str, wait_s: float) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("engine", choices=list(ENGINE_REGISTRY))
     parser.add_argument("query")
     parser.add_argument("--wait-s", type=float, default=3.0, dest="wait_s",

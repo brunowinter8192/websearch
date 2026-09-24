@@ -11,7 +11,7 @@ A caller passes a smoke-report `Path` or raw snippet text in; the modules return
 
 ## Modules
 
-### parse.py (133 LOC)
+### parse.py (121 LOC)
 
 **Purpose:** Parses the `pipeline_smoke_<ts>.md` report format into per-URL records with query, class, engines, previews and per-engine snippets.
 **Reads:** report `Path` passed by the caller.
@@ -19,7 +19,7 @@ A caller passes a smoke-report `Path` or raw snippet text in; the modules return
 **Called by:** `report_analysis/engine_distribution_analysis.py`, `report_analysis/snippet_quality_analysis.py`, `report_analysis/snippet_selection_simulator.py`.
 **Calls out:** none beyond stdlib.
 
-### text.py (93 LOC)
+### text.py (85 LOC)
 
 **Purpose:** EN+DE stopwords, bloat detection and stripping, and lexical-density scoring for snippet-quality comparisons.
 **Reads:** raw snippet text passed by the caller.
@@ -27,7 +27,7 @@ A caller passes a smoke-report `Path` or raw snippet text in; the modules return
 **Called by:** `report_analysis/snippet_quality_analysis.py`, `report_analysis/snippet_selection_simulator.py`.
 **Calls out:** none beyond stdlib.
 
-### test_text.py (32 LOC)
+### test_text.py (27 LOC)
 
 **Purpose:** Standalone assertion script for `strip_bloat` with six regression cases.
 **Reads:** none.

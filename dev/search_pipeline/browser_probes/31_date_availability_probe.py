@@ -1,31 +1,4 @@
 #!/usr/bin/env python3
-"""Date-availability probe — Milestone 2 measurement for the 8 DOM-scraped web engines
-(google, duckduckgo, mojeek, startpage, brave, bing, yandex, lobsters).
-
-Question: does the live result page carry a date, and if so how (dedicated element vs
-snippet-text-only vs nowhere)? Not a feature change — no src/ touched, no wiring.
-
-Self-contained: does NOT import src/ (dev-script isolation, matches 25/26/28/29/30_*_probe.py) —
-the pydoll Chrome session setup and each engine's navigation/wait/diagnose logic below are an
-inline copy of the CURRENT shape in src/search/browser.py + src/search/engines/*.py, not a
-shared import — the probe keeps measuring even if src/ changes underneath it later.
-
-Evidence capture, one JS pass per container (covers case 1 and case 2 together):
-  - <time> elements (tag + datetime attribute + text) -> dedicated-element evidence
-  - class/id tokens matching a WORD-BOUNDARY regex for date/time/age/publish/when/ago
-    (not a raw substring — substring would false-positive on 'update'/'candidate'/'validate')
-  - full container text (600 chars) -> snippet-text-only date-prefix evidence
-  - outerHTML head (3000 chars) -> structural context
-
-Pacing: self-imposed politeness gap between requests to the SAME engine — this script does NOT
-go through src/search/rate_limiter.py at all (self-contained), so there is no quota being
-respected here, just avoiding a rapid-fire burst against a live server. If an engine is non-OK
-across ALL primary queries, one retry follows a MINUTES-scale cooldown (not seconds) — a short
-gap cannot distinguish a probe-induced block from an engine that was already in a cooled-down
-state from unrelated earlier activity this session. google, duckduckgo, and brave are flagged
-up front as having returned 0 results in an EARLIER live run this session (unrelated to this
-probe) — a repeat non-OK on those three is annotated as pre-existing, not attributed to the probe.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -44,10 +17,6 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(mes
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# Self-imposed politeness gap — NOT derived from src/search/rate_limiter.py (this script never
-# goes through it). 20s between the 3 primary queries to the same engine; a MINUTES-scale gap
-# (not seconds) before a retry, since a short gap cannot tell a probe-induced block apart from a
-# pre-existing cooldown from earlier unrelated activity this session.
 INTER_QUERY_DELAY_S = 20.0
 INTER_ENGINE_DELAY_S = 3.0
 RETRY_COOLDOWN_S = 180.0
@@ -93,8 +62,6 @@ async def run_probe() -> None:
 
 
 # FUNCTIONS
-
-# --- Date evidence dump ---
 
 def _build_date_dump_js(container_selector: str, limit: int) -> str:
     escaped = container_selector.replace("'", "\\'")
@@ -143,7 +110,6 @@ async def _dump_date_evidence(tab, engine: str) -> dict:
         return {"count": 0, "samples": []}
 
 
-# Run one (engine, query) end-to-end: new tab -> navigate -> wait/diagnose -> dump evidence -> kill tab
 async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
     record: dict = {
         "engine": engine, "query": query, "axis": axis, "retry": retry,

@@ -12,7 +12,6 @@ from _cdp_starvation_probe_canary import (
 
 # FUNCTIONS
 
-# Derive verdict string from stats
 def _derive_verdict(stats: dict) -> str:
     s_cap = stats["empty"]
     s_zc = stats["zero_cascade"]
@@ -37,7 +36,6 @@ def _derive_verdict(stats: dict) -> str:
     return "REFUTED"
 
 
-# Write report to md/cdp_probe_<ts>.md; return path
 def _write_report(records: list[dict], report_dir: Path) -> Path:
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"cdp_probe_{ts_str}.md"
@@ -57,8 +55,6 @@ def _write_report(records: list[dict], report_dir: Path) -> Path:
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
-
-# Report section renderers
 
 def _r_header(records: list[dict], ts_str: str, run_dur_s: float, verdict: str) -> list[str]:
     empty_n = sum(1 for r in records if r["category"] == "empty")
@@ -124,7 +120,6 @@ def _r_latency_stats(stats: dict) -> list[str]:
 def _r_timeseries(records: list[dict]) -> list[str]:
     if not _canary_samples:
         return []
-    # 2-second buckets
     buckets: dict[int, list] = defaultdict(list)
     for ts, lat, ntasks in _canary_samples:
         offset_s = int((ts - PROBE_START) // 2) * 2

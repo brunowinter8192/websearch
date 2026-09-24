@@ -6,7 +6,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Write markdown data report and return path
 def write_report(records: list[dict], report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"startpage_probe_{ts}.md"
@@ -116,7 +115,6 @@ def _render_non_ok(records: list[dict]) -> list[str]:
     return lines
 
 
-# Compare first-half vs second-half timing/status to spot rate-limit drift across the run
 def _rate_limit_summary(records: list[dict]) -> str:
     n = len(records)
     if n < 4:

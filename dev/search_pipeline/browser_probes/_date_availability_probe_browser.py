@@ -10,7 +10,6 @@ from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import PageCommands, TargetCommands
 
-# Inline copy of the CURRENT src/search/browser.py session shape
 SESSION_DIR = str(Path.home() / ".websearch" / "browser-session")
 REAL_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -58,8 +57,6 @@ _browser = None
 
 
 # FUNCTIONS
-
-# --- Chrome session (inline copy of src/search/browser.py shape) ---
 
 def _kill_stale_chrome():
     subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)

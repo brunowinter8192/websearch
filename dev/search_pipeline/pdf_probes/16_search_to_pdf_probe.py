@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""End-to-end Search→PDF chain probe: queries all engines, runs DIRECT/TIER1/MULTI_STEP download chain, saves PDFs to ~/Downloads."""
 
 # INFRASTRUCTURE
 import argparse
@@ -73,7 +72,6 @@ async def run_probe(queries: list[str], top_n: int) -> None:
 
 # FUNCTIONS
 
-# Search, merge, chain-download top_n results; return per-query dict with rows
 async def _run_query(client: httpx.AsyncClient, query: str, top_n: int) -> dict:
     t0 = time.monotonic()
 
@@ -103,7 +101,6 @@ async def _run_query(client: httpx.AsyncClient, query: str, top_n: int) -> dict:
     }
 
 
-# Determine target domain for semaphore, acquire, process, release
 async def _process_url_with_cap(
     client: httpx.AsyncClient,
     result: SearchResult,
@@ -121,26 +118,23 @@ async def _process_url_with_cap(
         print(f"  [skip] {domain} (blacklist)", file=sys.stderr)
         return
 
-    # For MULTI_STEP we can't know target domain upfront — Hop 1 first, sem after
     if chain_path == "MULTI_STEP":
         row = await _multistep_download(client, result, rank, domain_sems)
         rows[idx] = row
         return
 
-    # DIRECT or TIER1: target domain is known
     if target_domain not in domain_sems:
         domain_sems[target_domain] = asyncio.Semaphore(DOMAIN_CONCURRENCY_CAP)
     async with domain_sems[target_domain]:
         if chain_path == "DIRECT":
             row = await _direct_download(client, result, rank, url)
-        else:  # TIER1
+        else:
             transformed = apply_tier1_transform(url)
             row = await _tier1_download(client, result, rank, transformed or url)
         await asyncio.sleep(COURTESY_SLEEP)
     rows[idx] = row
 
 
-# Return (chain_path, target_domain) for a URL
 def _classify_chain_path(url: str, domain: str) -> tuple[str, str]:
     if is_blacklisted(url) or is_github_blob(url):
         return "BLACKLIST", domain
@@ -151,19 +145,16 @@ def _classify_chain_path(url: str, domain: str) -> tuple[str, str]:
     return "MULTI_STEP", domain
 
 
-# DIRECT path: GET url as-is, save if PDF
 async def _direct_download(client: httpx.AsyncClient, result: SearchResult, rank: int, url: str) -> dict:
     outcome, saved_name, saved_size = await _get_pdf_and_save(client, url)
     return _row(result, rank, "DIRECT", outcome, saved_name, saved_size)
 
 
-# TIER1 path: apply transform, GET, save
 async def _tier1_download(client: httpx.AsyncClient, result: SearchResult, rank: int, transformed_url: str) -> dict:
     outcome, saved_name, saved_size = await _get_pdf_and_save(client, transformed_url)
     return _row(result, rank, "TIER1", outcome, saved_name, saved_size)
 
 
-# MULTI_STEP path: Hop 1 (extract citation_pdf_url), Hop 2 (download PDF)
 async def _multistep_download(
     client: httpx.AsyncClient,
     result: SearchResult,
@@ -172,12 +163,10 @@ async def _multistep_download(
 ) -> dict:
     url = result.url
 
-    # Hop 1: GET HTML, extract citation_pdf_url
     citation_pdf_url = await _extract_citation_pdf_url(client, url)
     if citation_pdf_url is None:
         return _row(result, rank, "MULTI_STEP", "NO_PDF_LINK", None, None)
 
-    # Hop 2: GET the citation PDF URL with per-host semaphore
     pdf_host = urlparse(citation_pdf_url).netloc
     if pdf_host not in domain_sems:
         domain_sems[pdf_host] = asyncio.Semaphore(DOMAIN_CONCURRENCY_CAP)
@@ -188,7 +177,6 @@ async def _multistep_download(
     return _row(result, rank, "MULTI_STEP", outcome, saved_name, saved_size)
 
 
-# GET url, verify PDF, save to ~/Downloads; return (outcome, filename, size_bytes)
 async def _get_pdf_and_save(client: httpx.AsyncClient, url: str) -> tuple[str, str | None, int | None]:
     try:
         body_chunks: list[bytes] = []
@@ -221,7 +209,6 @@ async def _get_pdf_and_save(client: httpx.AsyncClient, url: str) -> tuple[str, s
         return f"CONN_ERROR:{type(e).__name__}", None, None
 
 
-# GET HTML from url, return extracted citation_pdf_url or None
 async def _extract_citation_pdf_url(client: httpx.AsyncClient, url: str) -> str | None:
     try:
         body_chunks: list[bytes] = []
@@ -241,7 +228,6 @@ async def _extract_citation_pdf_url(client: httpx.AsyncClient, url: str) -> str 
         return None
 
 
-# Save bytes to ~/Downloads/<filename>, resolve name conflicts
 def _save_bytes(data: bytes, filename: str) -> Path:
     dest = DOWNLOAD_DIR / filename
     if dest.exists():
@@ -255,7 +241,6 @@ def _save_bytes(data: bytes, filename: str) -> Path:
     return dest
 
 
-# Extract filename from httpx response headers + URL (mirrors download_pdf.py logic)
 def _extract_filename_from_resp(headers: httpx.Headers, url: str) -> str:
     cd = headers.get("content-disposition", "")
     if cd:
@@ -271,7 +256,6 @@ def _extract_filename_from_resp(headers: httpx.Headers, url: str) -> str:
     return f"download_{int(time.time())}.pdf"
 
 
-# Strip www. from netloc
 def _base_domain(url: str) -> str:
     try:
         netloc = urlparse(url).netloc.lower()
@@ -280,7 +264,6 @@ def _base_domain(url: str) -> str:
         return ""
 
 
-# Build a result row dict
 def _row(result: SearchResult, rank: int, chain_path: str, outcome: str,
          saved_name: str | None, saved_size: int | None) -> dict:
     return {
@@ -296,8 +279,6 @@ def _row(result: SearchResult, rank: int, chain_path: str, outcome: str,
     }
 
 
-
-# ── CLI ────────────────────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Search-to-PDF chain probe")

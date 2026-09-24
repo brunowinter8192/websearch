@@ -25,12 +25,10 @@ def _build_sections(
     ]
 
 
-# Strip + truncate text to n chars, collapse newlines
 def _fmt_snippet(text: str, n: int = SNIPPET_CHARS) -> str:
     return (text or "").strip().replace("\n", " ")[:n]
 
 
-# Report header block
 def _section_header(
     query: str,
     ts_display: str,
@@ -57,7 +55,6 @@ def _section_header(
     ])
 
 
-# Section 1: per-engine raw results in engine-rank order (capped to google_count)
 def _section_per_engine(
     raw_results: list,
     engine_stats: dict,
@@ -87,7 +84,6 @@ def _section_per_engine(
     return "\n".join(lines)
 
 
-# Section 2: full capped pool sorted by (-engine_count, min_position)
 def _section_pool(pool: list[dict], url_engine_pos: dict[str, dict[str, int]]) -> str:
     sorted_pool = sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))
     lines = [f"## Section 2 — Capped Pool ({len(pool)} unique URLs after dedup)", ""]
@@ -108,7 +104,6 @@ def _section_pool(pool: list[dict], url_engine_pos: dict[str, dict[str, int]]) -
     return "\n".join(lines)
 
 
-# Render one config block: heading + numbered URL list with per-entry score line
 def _config_entries(label: str, ms: int, entries: list[tuple[dict, str]]) -> list[str]:
     lines = [f"### {label} — {ms}ms", ""]
     for i, (m, score_line) in enumerate(entries, 1):
@@ -126,7 +121,6 @@ def _config_entries(label: str, ms: int, entries: list[tuple[dict, str]]) -> lis
     return lines
 
 
-# Section 3: four config sub-sections with scores and per-config latencies
 def _section_configs(
     query: str,
     google_count: int,
@@ -153,7 +147,6 @@ def _section_configs(
     return "\n".join(lines)
 
 
-# Section 4: pool URL × 4 configs comparison matrix
 def _section_matrix(
     pool: list[dict],
     google_count: int,
@@ -169,7 +162,6 @@ def _section_matrix(
 
     all_top_n = (c1_rank, c2_rank, c3_rank, c4_rank)
 
-    # Pool order: same as Section 2 — (-engine_count, min_position)
     sorted_pool = sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))
 
     in_topn     = [m for m in sorted_pool if any(m["url"] in d for d in all_top_n)]
@@ -207,6 +199,5 @@ def _rank_cell(d: dict, url: str) -> str:
     return str(v) if v is not None else "—"
 
 
-# Join sections with separator and write to path
 def _write_report(sections: list[str], path: Path) -> None:
     path.write_text("\n\n---\n\n".join(sections), encoding="utf-8")

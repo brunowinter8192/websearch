@@ -3,10 +3,6 @@ from pathlib import Path
 
 from _stage1_pool_fetch_config import MODES
 
-# NOTE: _STATUS_HINTS duplicated from 11_pipeline_smoke.py, keep in sync manually
-# until extracted to shared helper.
-# EMPTY_NO_RESULTS/EMPTY_NO_CONTAINER/EMPTY_CONSENT/EMPTY_BLOCK/EMPTY_CONCURRENT_RACE entries
-# removed with the guessed-verdict sub-statuses — every empty result now logs bare "EMPTY".
 _STATUS_HINTS: dict[str, str] = {
     "TIMEOUT_WATCHDOG":      "watchdog timeout",
     "TIMEOUT_NONCOOP":       "non-cooperative",
@@ -23,7 +19,6 @@ _STATUS_HINTS: dict[str, str] = {
 
 # FUNCTIONS
 
-# Write engine_report.md for one pair
 def _save_engine_report(
     ts_dir: Path, mode: str, slug: str, query: str, fetched_ts: str,
     engine_stats: dict, oracle_pool: list[dict],
@@ -69,7 +64,6 @@ def _save_engine_report(
 
 
 def _engine_breakdown_rows(engine_stats: dict) -> list[tuple]:
-    # URLs = raw result_count from engine_stats (matches 11_pipeline_smoke.py convention)
     rows: list[tuple] = []
     for eng, info in engine_stats.items():
         status = info.get("status", "")
@@ -96,7 +90,6 @@ def _pool_url_listing(oracle_pool: list[dict]) -> list[str]:
     return lines
 
 
-# Write engine_report_summary.md aggregated over all pairs
 def _save_engine_summary(ts_dir: Path, rows: list[dict], ts: str) -> None:
     engine_data = _aggregate_engine_data(rows)
 
@@ -135,9 +128,6 @@ def _aggregate_engine_data(rows: list[dict]) -> dict[str, dict]:
 
 
 def _render_engine_aggregate(engine_data: dict[str, dict], rows: list[dict], ts: str) -> list[str]:
-    # EMPTY_NO_RESULTS/EMPTY_NO_CONTAINER/EMPTY_CONSENT/EMPTY_CONCURRENT_RACE/EMPTY_BLOCK were
-    # removed with the guessed-verdict sub-statuses — every empty result now logs bare "EMPTY", so
-    # there is no more BLOCK-vs-EMPTY distinction to bucket separately (BLOCK% column dropped below).
     _EMPTY_STATUSES   = {"EMPTY"}
     _TIMEOUT_STATUSES = {"TIMEOUT_WATCHDOG", "TIMEOUT_NONCOOP", "TIMEOUT_HTTPX"}
     _ERROR_STATUSES   = {"ERROR_BROWSER", "ERROR_HTTP", "ERROR_PARSE", "ERROR_OTHER", "ERROR"}

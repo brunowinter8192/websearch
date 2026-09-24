@@ -3,14 +3,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-# Flagged from an EARLIER live run this session (search_web across all 14 engines) — these three
-# returned 0 results THEN, unrelated to this probe. A repeat non-OK here is annotated, not fresh.
 PRE_FLAGGED_EMPTY_EARLIER = {"google", "duckduckgo", "brave"}
 
 
 # FUNCTIONS
-
-# --- Report ---
 
 def write_report(records: list[dict], report_dir: Path, queries: list, retry_cooldown_s: float) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

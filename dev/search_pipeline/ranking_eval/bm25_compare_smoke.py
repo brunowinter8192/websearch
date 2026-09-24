@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""
-BM25 focused comparison — top-10 URL dumps for 5 configs side-by-side (stacked).
-
-Imports pool/ranking helpers from bm25_sweep_smoke.py (same directory).
-Runs 5 configs per query:
-  1. Hard-Slot baseline  — _merge_and_rank (12/6/2 slots)
-  2. Vanilla BM25        — k1=1.2, b=0.75, sw=on, repr=title+snippet
-  3. b=0 extreme         — k1=1.2, b=0.00, sw=on, repr=title+snippet (no length-norm)
-  4. b=1 extreme         — k1=1.2, b=1.00, sw=on, repr=title+snippet (full length-norm)
-  5. Title3x variant     — k1=1.2, b=0.75, sw=on, repr=title3x
-
-Output: dev/search_pipeline/md/bm25_compare_<ts>.md
-Top-10 per config (not 20) — keeps tables eyeball-readable.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -95,7 +81,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Run all 5 configs; return list of {name, cfg, top10: [{url, engines, score}]}
 def _rank_all_configs(raw_results: list, pool: list[dict], query: str) -> list[dict]:
     results = []
     for cfg in COMPARE_CONFIGS:
@@ -112,7 +97,6 @@ def _rank_all_configs(raw_results: list, pool: list[dict], query: str) -> list[d
     return results
 
 
-# Build markdown section for one query: metadata + 5 stacked top-10 tables
 def _build_query_section(
     query: str,
     config_tops: list[dict],
@@ -155,7 +139,6 @@ def _build_query_section(
     return "\n".join(lines)
 
 
-# Write report: header + per-query sections separated by ---
 def _write_report(sections: list[str], path: Path, total_ms: int) -> None:
     ts = path.stem.replace("bm25_compare_", "")
     header = "\n".join([

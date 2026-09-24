@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-No-Google concurrent burst smoke — production ScholarEngine vs 8 production engines.
-
-Architectural discriminator test: does HTTP Scholar survive the concurrent multi-engine
-burst pattern when Google browser is absent?
-
-Engine set (9 total, no Google):
-  google_scholar (production HTTP), duckduckgo, mojeek, lobsters, crossref, openalex,
-  stack_exchange, semantic_scholar, open_library
-
-Queries: 12 canonical academic queries from ciw_concurrent_block_20260508.md
-(3 bursts × 4), reused for cross-test comparability.
-
-Import switched from ScholarHTTPProbe (dev probe) to ScholarEngine (production) 2026-05-09
-as part of bead searxng-f3i HTTP migration.
-
-Output: JSONL per-query records → dev/search_pipeline/jsonl/no_google_burst_<ts>.jsonl
-        Summary table → stderr
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -49,14 +30,11 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(mes
 REPORT_DIR = SCRIPT_DIR / "jsonl"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Watchdog timeouts per engine (seconds) — this probe's own values, independent of
-# search_web.py's ENGINE_WATCHDOG_TIMEOUT (uniform 6.0s across all engines as of 2026-08-25)
 WATCHDOG: dict[str, float] = {
     "google_scholar": 6.0,
 }
 DEFAULT_WATCHDOG = 3.6
 
-# 12 canonical queries — 3 bursts × 4, identical to ciw_concurrent_block_20260508.md
 QUERIES = [
     "neural network optimization Adam SGD convergence",
     "transformer architecture vision image classification",
@@ -113,7 +91,6 @@ async def run_smoke() -> None:
 
 # FUNCTIONS
 
-# Run all 9 engines concurrently for one query; return per-engine stats dict
 async def _run_burst(engines: dict, query: str, label: str) -> dict:
     t_wall = time.perf_counter()
     tasks = {
@@ -141,10 +118,6 @@ async def _run_burst(engines: dict, query: str, label: str) -> dict:
     }
 
 
-# A block observed as a FACT from scholar's diagnosis snapshot — the inline captcha-form element's
-# presence, or a 30x redirect status — never the removed EMPTY_BLOCK verdict this metric used to
-# key on. Applies to any engine's diagnosis shape that carries these two fields; scholar is the
-# only one in this probe's engine set that ever populates them.
 def _is_blocked(diagnosis: dict | None) -> bool:
     if not diagnosis:
         return False
@@ -154,7 +127,6 @@ def _is_blocked(diagnosis: dict | None) -> bool:
     return isinstance(status, int) and 300 <= status < 400
 
 
-# Drive one engine with watchdog timeout; return (status, search_ms, result_count, blocked)
 async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int, bool]:
     t0 = time.perf_counter()
     try:
@@ -184,7 +156,6 @@ async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int
         return "ERROR", search_ms, 0, False
 
 
-# Print per-query Scholar status table + aggregate to stderr
 def _print_summary(records: list[dict]) -> None:
     print("\n=== SCHOLAR HTTP (PRODUCTION) SUMMARY ===", file=sys.stderr)
     print(f"{'#':3} {'Label':7} {'Scholar status':22} {'ms':6} {'n':4} {'query':45}", file=sys.stderr)
@@ -202,10 +173,6 @@ def _print_summary(records: list[dict]) -> None:
     from collections import Counter
     counts = Counter(status for status, _ in scholar_entries)
     effective = [(status, blocked) for status, blocked in scholar_entries if status != S.RATE_SKIP]
-    # Block rate keyed on the FACT (scholar's diagnosis: captcha_form present, or a 30x http_status)
-    # instead of the removed EMPTY_BLOCK verdict — this metric is the probe's whole purpose, and
-    # search_with_reason's diagnosis dict is directly in hand here (unlike acquire_probe.py/
-    # branch_probe.py/cdp_starvation_probe.py, which only see status through engine_details).
     blocks = [blocked for _, blocked in effective if blocked]
 
     print(file=sys.stderr)

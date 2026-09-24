@@ -1,37 +1,4 @@
 #!/usr/bin/env python3
-"""Headed hard-engine lane probe (macOS) — Brave via headed-but-backgrounded Chrome.
-
-Self-contained: does NOT import src/ (dev-script isolation) — the pydoll session setup below
-follows the shape of src/search/browser.py, not a shared import.
-
-Background: dev/search_pipeline/26_brave_probe.py established that headless (both pydoll-stealth
-and Patchright+real-Chrome) trips Brave's PoW/CAPTCHA — pydoll-stealth got 4/10 clean before a
-persistent block, Patchright+real-Chrome was blocked immediately headless but passed HEADED. Xvfb
-is irrelevant here (Linux-only virtual-display trick; this Mac has a real screen). The lever tested
-in this probe: run the system Google Chrome HEADED (a real window renders) but BACKGROUNDED via
-macOS `open -g` so it never steals focus — pydoll connects to it over CDP exactly as if it had
-launched it directly.
-
-Launch mechanism (the actual novel piece of this probe):
-- pydoll's BrowserProcessManager accepts a `process_creator` callback: a function taking the full
-  launch command list (`[binary_location, "--remote-debugging-port=<port>", *other_args]`) and
-  returning a subprocess.Popen. Chrome(options) does not expose this via its constructor, so the
-  manager is swapped in AFTER construction, BEFORE start():
-      browser = Chrome(options)
-      browser._browser_process_manager = BrowserProcessManager(process_creator=_open_process_creator)
-      tab = await browser.start()
-- `_open_process_creator` drops the resolved binary_location (unused — `open -a` targets the app
-  bundle directly) and re-launches via:
-      open -g -n -a "Google Chrome" --args --remote-debugging-port=<port> --user-data-dir=<isolated dir> ...
-  `-g` = no foreground activation (no focus steal). `-n` = force a new instance (belt-and-suspenders;
-  the isolated --user-data-dir alone already forces a fresh process since Chrome's singleton check
-  is a lock file inside the profile dir).
-- `open -g` returns immediately, so the Popen handed back to pydoll is the short-lived `open`
-  wrapper, not Chrome itself — pydoll's own stop_process() has nothing to reap. Teardown is CDP
-  `browser.stop()` (Browser.close command — quits the whole isolated-profile Chrome instance since
-  it's the only window in that profile) PLUS an explicit `pkill -f user-data-dir=<isolated dir>`
-  safety net regardless of whether stop() succeeds.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -53,8 +20,6 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(mes
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# Dedicated, isolated profile — NOT the shared engine session dir (src/search/browser.py's
-# SESSION_DIR) — for block-isolation from production engines and to force a fresh Chrome instance.
 PROFILE_DIR = str(Path.home() / ".searxng-mcp" / "brave-headed-probe-session")
 
 SEARCH_URL = "https://search.brave.com/search?q={}"
@@ -62,7 +27,6 @@ LATENCY_GATE_S = 5.0
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
 
-# Same query set as 26_brave_probe.py (mixed axes, DE+EN)
 QUERIES = [
     ("beste kaffeemaschine test", "mainstream-de"),
     ("python asyncio tutorial", "docs-en"),
@@ -146,21 +110,17 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Launch the system Google Chrome headed-but-backgrounded via macOS `open -g` — the actual novel
-# launch mechanism this probe tests (see module docstring for the full rationale)
 def _open_process_creator(command: list[str]) -> subprocess.Popen:
-    args = command[1:]  # drop resolved binary_location; `open -a` targets the app bundle directly
+    args = command[1:]
     open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
     logging.info("Headed-background launch: %s", open_cmd)
     return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-# Kill any stale Chrome process pinned to the isolated probe profile
 def _kill_stale_chrome() -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={PROFILE_DIR}"], capture_output=True)
 
 
-# Start one shared headed-background Chrome instance (isolated profile) for the whole run
 async def _start_headed_background_browser() -> None:
     global _browser
     _kill_stale_chrome()
@@ -169,15 +129,11 @@ async def _start_headed_background_browser() -> None:
     options.add_argument(f"--user-data-dir={PROFILE_DIR}")
     options.block_popups = True
     options.block_notifications = True
-    # options.headless left at its default False — headed is the whole point of this probe
     _browser = Chrome(options)
     _browser._browser_process_manager = BrowserProcessManager(process_creator=_open_process_creator)
     await _browser.start()
 
 
-# Stop the browser via CDP Browser.close, then a pkill safety net regardless of outcome — the
-# process_creator's Popen (the short-lived `open` wrapper) gives pydoll's own stop_process() nothing
-# real to reap, so the pkill is not optional cleanup, it's the actual teardown guarantee.
 async def _stop_headed_background_browser() -> None:
     global _browser
     if _browser is not None:
@@ -189,7 +145,6 @@ async def _stop_headed_background_browser() -> None:
     _kill_stale_chrome()
 
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -197,7 +152,6 @@ def _extract_value(result):
         return None
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -208,7 +162,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Query DOM for div[data-type="web"] containers and return result dicts
 async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -221,7 +174,6 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     return [item for item in items[:max_results] if item.get("url")]
 
 
-# Diagnose PoW/CAPTCHA trigger via title/body marker scan + pow-captcha help-link presence
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)
@@ -234,7 +186,6 @@ async def _diagnose(tab) -> dict:
     return diag
 
 
-# Run one query end-to-end (new tab -> go_to -> diagnose/parse -> close tab), return a data record
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",

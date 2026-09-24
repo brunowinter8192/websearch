@@ -17,7 +17,6 @@ DDG_CAPTCHA_SELECTOR = "form#challenge-form"
 STARTPAGE_HOME_URL = "https://www.startpage.com/"
 YANDEX_BLOCK_MARKERS = ("showcaptcha", "checkcaptcha", "/captcha")
 
-# engine -> container selector used both for the wait-poll and the date-evidence dump
 CONTAINER_SELECTOR = {
     "google":     "div.MjjYud",
     "duckduckgo": "#links > div.web-result",
@@ -31,8 +30,6 @@ CONTAINER_SELECTOR = {
 
 
 # FUNCTIONS
-
-# --- Per-engine navigation (inline copy of each src/search/engines/<engine>.py flow) ---
 
 async def nav_google(tab, query: str):
     await tab._execute_command(NetworkCommands.set_cookie(

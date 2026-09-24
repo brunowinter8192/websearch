@@ -1,30 +1,4 @@
 #!/usr/bin/env python3
-"""
-BM25 IDF vs Engine-Weighting probe — 5 configs, top-10, 4 queries.
-
-Tests IDF and engine-count-inverse-weighting as separate and combined axes
-relative to the Vanilla BM25 baseline.
-
-Config matrix:
-  1. Hard-Slot         — _merge_and_rank baseline (12 General / 6 Academic / 2 QA)
-  2. Vanilla BM25      — BM25Uniform (no IDF, no weighting), b=0.75, k1=1.2
-  3. BM25 + IDF        — BM25Okapi (standard per-pool IDF), same params
-  4. BM25 + Weighting  — BM25Uniform × engine-count-inverse weight per URL
-  5. BM25+IDF+Weighting— BM25Okapi × engine-count-inverse weight per URL
-
-Engine-count-inverse weight for URL u:
-  wt(u) = sum(1.0 / engine_counts[e] for e in u.engines)
-  engine_counts[e] = number of raw results from engine e this query.
-  Multi-engine URLs accumulate summed weights; high-volume engines
-  (crossref=200, openalex=200) are naturally discounted vs low-volume
-  (google~11, mojeek~10). Weighted score = bm25_score × wt.
-
-Weighting applied to full pool (not truncated to 20 first) so re-ordering
-by weighting does not miss candidates outside vanilla top-20.
-
-Imports: QUERIES, VANILLA_K1, STOPWORDS, _build_pool, _tokenize, _doc_repr,
-BM25Uniform from bm25_sweep_smoke.py (same directory).
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -63,7 +37,7 @@ REPORT_DIR = SCRIPT_DIR / "md"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 TOP_N     = 10
-BM25_K1   = VANILLA_K1   # 1.2
+BM25_K1   = VANILLA_K1
 BM25_B    = 0.75
 BM25_SW   = True
 BM25_REPR = "title+snippet"
@@ -126,12 +100,10 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Count raw results per engine for this query
 def _compute_engine_counts(raw_results) -> dict[str, int]:
     return dict(Counter(r.engine for r in raw_results))
 
 
-# BM25 score full pool (no top-N truncation); return [(doc, score), ...] sorted desc
 def _score_pool(pool: list[dict], query: str, use_okapi: bool) -> list[tuple[dict, float]]:
     if not pool:
         return []
@@ -146,7 +118,6 @@ def _score_pool(pool: list[dict], query: str, use_okapi: bool) -> list[tuple[dic
     return [(pool[i], float(scores[i])) for i in ranked]
 
 
-# Multiply each score by engine-count-inverse weight; re-sort descending
 def _apply_engine_weighting(
     scored: list[tuple[dict, float]], engine_counts: dict[str, int]
 ) -> list[tuple[dict, float]]:
@@ -158,7 +129,6 @@ def _apply_engine_weighting(
     return weighted
 
 
-# Run all 5 configs; return list of {name, cfg, top10}
 def _rank_all_configs(raw_results, pool: list[dict], query: str, engine_counts: dict) -> list[dict]:
     results = []
     for cfg in COMPARE_CONFIGS:
@@ -185,7 +155,6 @@ def _rank_all_configs(raw_results, pool: list[dict], query: str, engine_counts: 
     return results
 
 
-# Build markdown section for one query: metadata + engine-weight line + 5 stacked tables
 def _build_query_section(
     query: str,
     config_tops: list[dict],
@@ -244,7 +213,6 @@ def _render_config_table(ct: dict) -> list[str]:
     return lines
 
 
-# Write report: header + per-query sections
 def _write_report(sections: list[str], path: Path, total_ms: int) -> None:
     ts = path.stem.replace("bm25_idf_engine_", "")
     header = "\n".join([

@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""
-HTTP Scholar probe — architectural alternative to src/search/engines/scholar.py.
-
-Status: PROBE (not in production). Tests whether HTTP-based Scholar can survive
-concurrent multi-engine burst patterns when Google browser is absent.
-
-Lives in dev/ per documentation rule "dev/ vs src/ for Exploratory Rewrites" —
-production stays browser-based until empirical evidence converges on a known-good
-fix that addresses the actual production problem.
-
-Source: cherry-picked from commit 82bc88f (discarded pydoll-stealth-probe branch),
-modeled on SearXNG's `searx/engines/google_scholar.py`.
-
-Usage: imported by `dev/search_pipeline/no_google_burst_smoke.py`. Not invoked by
-production cli.py or ENGINES dict in search_web.py.
-"""
 
 # INFRASTRUCTURE
 import logging
@@ -29,10 +13,6 @@ logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://scholar.google.com/scholar?q={}&hl={}&num={}&as_sdt=2007&as_vis=0"
 
-# Probe-local sub-status sentinels — deliberately NOT src.search.status's EMPTY_BLOCK/
-# EMPTY_NO_RESULTS, which were removed along with the query log's guessed-verdict sub-statuses.
-# This probe's own backoff experiment (self._limiter.backoff() on a detected block) is internal to
-# this file and never reaches the production query log, so it keeps its own local vocabulary.
 _BLOCK = "BLOCK"
 _NO_RESULTS = "NO_RESULTS"
 
@@ -47,24 +27,19 @@ _HEADERS = {
     "Accept-Encoding": "gzip, deflate, br",
 }
 
-# CONSENT=YES+ bypasses Google's cookie-consent gate without browser interaction
 _COOKIES = {"CONSENT": "YES+"}
 
-# 6.0s — Scholar HTTP latency 1-5s range; matches crossref/open_library override in production
 _TIMEOUT = 6.0
 
 
 # ORCHESTRATOR
 
-# HTTP Scholar probe — distinct name to separate from production browser Scholar in smoke output
 class ScholarHTTPProbe:
     name = "scholar_http"
 
     def __init__(self) -> None:
-        # Probe-local rate limiter — does NOT touch production _limiters dict
         self._limiter = RateLimiter(max_requests=20, window_seconds=60)
 
-    # Full HTTP search logic; returns (results, sub_status); exceptions propagate to smoke wrapper
     async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10) -> tuple[list[SearchResult], str | None]:
         logger.info("ScholarHTTPProbe search: %s", query)
         url = _build_url(query, language, max_results)
@@ -77,7 +52,6 @@ class ScholarHTTPProbe:
             logger.warning("ScholarHTTPProbe http error: %s", e)
             raise
 
-        # 30x redirect → /sorry/ is the concurrent-CAPTCHA signal
         if r.status_code in (301, 302, 303, 307, 308):
             location = r.headers.get("Location", "")
             logger.warning("ScholarHTTPProbe redirect → %s", location)
@@ -96,12 +70,10 @@ class ScholarHTTPProbe:
 
 # FUNCTIONS
 
-# Build Scholar search URL with encoded query and standard Scholar params
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)
 
 
-# Execute single httpx GET with browser headers; follow_redirects=False to catch /sorry/ redirect
 async def _fetch(url: str) -> httpx.Response:
     async with httpx.AsyncClient(
         headers=_HEADERS,
@@ -112,7 +84,6 @@ async def _fetch(url: str) -> httpx.Response:
         return await client.get(url)
 
 
-# Parse Scholar HTML; return (results, reason) — reason None on success, _BLOCK on captcha form
 def _parse_response(body: str, max_results: int) -> tuple[list[SearchResult], str | None]:
     dom = lhtml.fromstring(body)
     if dom.xpath("//form[@id='gs_captcha_f']"):
@@ -124,7 +95,6 @@ def _parse_response(body: str, max_results: int) -> tuple[list[SearchResult], st
     return results, None
 
 
-# Extract SearchResult list from parsed Scholar DOM — skips [CITATION] blocks (no anchor)
 def _extract_results(dom, max_results: int) -> list[SearchResult]:
     results = []
     for i, block in enumerate(dom.xpath("//div[@data-rp]")):

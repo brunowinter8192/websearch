@@ -1,29 +1,4 @@
 #!/usr/bin/env python3
-"""
-Capped-Pool Pooling Strategy Comparison — 4 configs, top-google_count each, 20 queries.
-
-Architecture (user-driven, bead searxng-g82):
-  Pool per query: each engine contributes at most google_count URLs (position <= google_count).
-  Pool bounded by 9 × google_count minus dedup overlap (~50-100 URLs per query).
-  Hard-stop: google_count == 0 → query SKIPPED, no fallback.
-  Output: top-google_count URLs per config.
-
-4 configs on the same capped pool:
-  C1 — Overlap-Count: sort (-n_engines, min_position) — structural signal only
-  C2 — BM25: BM25Uniform k1=1.2, b=0.75, sw=on, title+snippet
-  C3 — Cross-Encoder: Qwen3-Reranker-0.6B at port 8082, direct on full pool (no BM25 pre-filter)
-  C4 — Embedding-Cosine: Qwen3-Embedding-0.6B at port 8084, one-batch, cosine sort
-
-Services required (preset names: embedding-0.6b, reranker-0.6b):
-  Embedding:     http://127.0.0.1:8084/v1/embeddings
-  Cross-encoder: http://127.0.0.1:8082/v1/rerank
-
-Output:
-  dev/search_pipeline/md/pooling_probe_<ts>.md
-  dev/search_pipeline/jsonl/pooling_probe_<ts>.queries.jsonl
-
-All src/ dependencies routed through the already-committed dev/ modules that carry those imports.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -38,10 +13,8 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-# Pure BM25 / pool utilities (no src/ dependency)
 from bm25_sweep_smoke import BM25Uniform, VANILLA_K1, _build_pool, _doc_repr, _tokenize
 
-# GPU API helpers + 20-query set — all src/ deps routed through already-committed probe
 from rerank_probe_smoke import (
     QUERIES,
     QUERY_CATEGORIES,
@@ -66,7 +39,7 @@ DATA_DIR      = SCRIPT_DIR / "jsonl"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 BM25_REPR     = "title+snippet"
-SNIPPET_CHARS = 200   # chars shown in report for Müll-eyeball
+SNIPPET_CHARS = 200
 
 
 # ORCHESTRATOR
@@ -93,7 +66,6 @@ async def run_probe() -> None:
             query_sections.append(section)
             summaries.append(summary)
             _print_query_summary(summary)
-            # Cascade guard: >1 RATE_SKIP on same query → bee-fix regression, stop immediately
             if summary["rate_skip_count"] > 1:
                 _print_cascade_stop(qi, query, summary["rate_skip_engines"])
                 return
@@ -135,17 +107,14 @@ def _print_cascade_stop(qi: int, query: str, rsk: list) -> None:
     )
 
 
-# Capped pool: filter raw results to position <= google_count per engine, then dedup
 def _build_capped_pool(raw_results: list, google_count: int) -> list[dict]:
     return _build_pool([r for r in raw_results if r.position <= google_count])
 
 
-# C1 ranking: overlap-count desc, min_position asc; slice top-N
 def _rank_c1_overlap(pool: list[dict], top_n: int) -> list[dict]:
     return sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))[:top_n]
 
 
-# Cross-encoder rerank with one retry on API error (500s are transient on llama-server)
 def _safe_rerank(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> list[dict]:
     if not texts_v:
         return []
@@ -160,7 +129,6 @@ def _safe_rerank(query: str, texts_v: list[str], pool_v: list[dict], top_n: int)
     return []
 
 
-# Embedding-cosine rerank with one retry on API error
 def _safe_embed(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> list[dict]:
     if not texts_v:
         return []
@@ -176,7 +144,6 @@ def _safe_embed(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) 
     return []
 
 
-# Fan-out, build capped pool, apply 4 configs; return (section_md, summary_dict)
 async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
     t0 = time.perf_counter()
     raw_results, engine_stats = await _query_engines_concurrent(query, "en", 10, selected)
@@ -236,7 +203,6 @@ def _skipped_summary(query: str, rate_skip_engines: list, fetch_ms: int) -> dict
 
 
 def _valid_docs(pool: list[dict]) -> tuple[list[dict], list[str]]:
-    # Pre-filter empty docs for C3/C4 API calls (reranker returns 400 on empty documents)
     raw_texts   = [_doc_repr(m, BM25_REPR) for m in pool]
     valid_pairs = [(m, t) for m, t in zip(pool, raw_texts) if t.strip()]
     pool_v      = [m for m, _ in valid_pairs]
@@ -244,7 +210,6 @@ def _valid_docs(pool: list[dict]) -> tuple[list[dict], list[str]]:
     return pool_v, texts_v
 
 
-# Markdown section for google_count==0 queries
 def _build_skipped_section(query: str, engine_stats: dict, fetch_ms: int) -> str:
     ok  = [(n, s["result_count"]) for n, s in sorted(engine_stats.items()) if s["result_count"] > 0]
     rsk = [n for n, s in engine_stats.items() if s["status"] == "RATE_SKIP"]
@@ -258,7 +223,6 @@ def _build_skipped_section(query: str, engine_stats: dict, fetch_ms: int) -> str
     ])
 
 
-# Render one URL entry for Müll-eyeball (numbered, with title + snippet preview)
 def _url_entry(i: int, m: dict) -> str:
     url     = m["url"]
     engines = ", ".join(m.get("engines", []))
@@ -272,7 +236,6 @@ def _url_entry(i: int, m: dict) -> str:
     )
 
 
-# Markdown section for one query with 4 config blocks
 def _build_query_section(
     query: str,
     engine_stats: dict,
@@ -318,7 +281,6 @@ def _build_query_section(
     return "\n".join(lines)
 
 
-# Global summary header + per-query sections + Müll aggregate placeholders
 def _write_report(
     sections: list[str],
     summaries: list[dict],

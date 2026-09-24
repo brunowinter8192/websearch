@@ -6,7 +6,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Write markdown data report and return path
 def write_report(records: list[dict], report_dir: Path, latency_gate_s: float) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"brave_headed_lane_probe_{ts}.md"
@@ -135,7 +134,6 @@ def _render_non_ok(records: list[dict]) -> list[str]:
     return lines
 
 
-# Compute latency distribution (min/median/max) across all queries
 def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
     ms = sorted(r["elapsed_ms"] for r in records)
     n = len(ms)
@@ -143,7 +141,6 @@ def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
     return ms[0], median, ms[-1]
 
 
-# Longest run of consecutive OK (non-PoW, non-error) queries in original run order
 def _longest_clean_run(records: list[dict]) -> int:
     best = cur = 0
     for r in records:

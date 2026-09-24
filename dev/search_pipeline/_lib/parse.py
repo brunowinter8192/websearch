@@ -1,12 +1,9 @@
-"""Smoke report parser for dev/search_pipeline analysis scripts."""
-
 # INFRASTRUCTURE
 import ast
 import re
 from collections import defaultdict
 from pathlib import Path
 
-# Canonical set of 8 active search engine names — single source of truth for dev scripts
 KNOWN_ENGINES = {
     "google", "duckduckgo", "mojeek", "lobsters",
     "google_scholar", "openalex", "crossref", "stack_exchange",
@@ -15,7 +12,6 @@ KNOWN_ENGINES = {
 
 # FUNCTIONS
 
-# Parse Python repr-quoted string; fallback to stripping outer quote chars
 def _repr_unquote(s: str) -> str:
     s = s.strip()
     try:
@@ -26,7 +22,6 @@ def _repr_unquote(s: str) -> str:
         return s
 
 
-# Parse new pipeline_smoke MD format into URL records with snippets and previews
 def parse_smoke_report(path: Path) -> list[dict]:
     lines = path.read_text(encoding="utf-8").splitlines()
     records: list[dict] = []
@@ -53,7 +48,6 @@ def parse_smoke_report(path: Path) -> list[dict]:
 
 
 def _handle_query_header(line: str, state: dict) -> bool:
-    # Query header: ## Q1: python asyncio best practices
     m = re.match(r'^## Q\d+: (.+)$', line)
     if not m:
         return False
@@ -65,7 +59,6 @@ def _handle_query_header(line: str, state: dict) -> bool:
 
 
 def _handle_url_entry(line: str, state: dict, records: list[dict]) -> bool:
-    # URL entry: N. **[CLASS]** Title
     m = re.match(r'^\d+\. \*\*\[([A-Z]+)\]\*\* (.+)$', line)
     if not m:
         return False
@@ -94,26 +87,22 @@ def _handle_url_entry(line: str, state: dict, records: list[dict]) -> bool:
 
 
 def _apply_field_line(line: str, record: dict) -> None:
-    # URL field
     m = re.match(r'^\s+URL: (https?://\S+)', line)
     if m:
         record["url"] = m.group(1)
         return
 
-    # Engines field
     m = re.match(r'^\s+Engines: (.+)$', line)
     if m:
         record["engines"] = [e.strip() for e in m.group(1).split(",")]
         return
 
-    # source | display line
     m = re.match(r'^\s+source: (\S+) \| display: (.+)$', line)
     if m:
         record["source"]  = m.group(1)
         record["display"] = _repr_unquote(m.group(2))
         return
 
-    # og | meta line — checked before generic engine pattern ("og" not in KNOWN_ENGINES)
     m = re.match(r'^\s+og: (.*)', line)
     if m:
         rest = m.group(1)
@@ -125,7 +114,6 @@ def _apply_field_line(line: str, record: dict) -> None:
         record["meta"] = None if meta_part.strip() == "—" else meta_part.strip()
         return
 
-    # Per-engine snippet line: engine_name: 'repr-quoted text'
     m = re.match(r'^\s+(\w+): (.+)$', line)
     if m:
         eng = m.group(1).lower()

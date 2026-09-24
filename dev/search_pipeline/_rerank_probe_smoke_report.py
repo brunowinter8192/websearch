@@ -8,14 +8,11 @@ from _rerank_probe_smoke_config import BM25_B, BM25_K1, BM25_REPR, QUERY_CATEGOR
 
 # FUNCTIONS
 
-# Build markdown section for one query
 def _build_query_section(query: str, fs: dict, cf: dict) -> str:
     lines = _section_header(query, fs, cf)
 
-    # Config 1 — Hard-Slot
     lines += _table_hard_slot(cf["hs_top"])
 
-    # Config 2 — Filter + BM25
     lines += _table_scored(
         f"### 2. Filter + BM25-only (k1={BM25_K1}, b={BM25_B}, sw=on, repr={BM25_REPR})",
         "| # | BM25 Score | Engines | URL |",
@@ -23,7 +20,6 @@ def _build_query_section(query: str, fs: dict, cf: dict) -> str:
         cf["bm25_top"],
     )
 
-    # Config 3 — Embedding-Cosine
     lines += _table_scored(
         f"### 3. Filter + BM25→Top{RETRIEVE_N} + Embedding-Cosine Rerank (Qwen3-Embedding-0.6B)",
         "| # | Cosine | Engines | URL |",
@@ -31,7 +27,6 @@ def _build_query_section(query: str, fs: dict, cf: dict) -> str:
         cf["embed_top"],
     )
 
-    # Config 4 — Cross-Encoder
     lines += _table_scored(
         f"### 4. Filter + BM25→Top{RETRIEVE_N} + Cross-Encoder Rerank (Qwen3-Reranker-0.6B)",
         "| # | CE Score | Engines | URL |",
@@ -39,7 +34,6 @@ def _build_query_section(query: str, fs: dict, cf: dict) -> str:
         cf["ce_top"],
     )
 
-    # Config 5 — BM25-Capped
     lines += _table_scored(
         f"### 5. BM25-Capped reference (K={cf['K']}, no filter, no rerank)",
         "| # | BM25 Score | Engines | URL |",
@@ -117,7 +111,6 @@ def _table_scored(heading: str, header_row: str, sep_row: str, items: list[dict]
     return lines
 
 
-# Build per-category latency + pool-stats aggregation block
 def _build_category_summary(summaries: list[dict]) -> str:
     cats = _group_by_category(summaries)
 
@@ -194,7 +187,6 @@ def _category_quality(cats: dict[str, list[dict]], cat_order: list[str]) -> list
     return lines
 
 
-# Write full report: global summary + per-query sections
 def _write_report(
     sections: list[str],
     summaries: list[dict],

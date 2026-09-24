@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""CDP starvation probe — Pattern A (asyncio debug) + Pattern B (canary latency) + CDP event counter.
-
-Hypothesis: Chrome CDP event flooding during CAPTCHA navigation starves the asyncio event loop,
-causing all 9 engines' asyncio.wait_for(limiter.acquire(), 5.0) to time out simultaneously.
-Builds on prior zero-query diagnosis analysis.
-
-Usage:
-    ./venv/bin/python3 dev/search_pipeline/cdp_starvation_probe.py [--max-queries N]
-
-Output:
-    dev/search_pipeline/md/cdp_probe_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -20,12 +8,10 @@ import sys
 import time
 from pathlib import Path
 
-# sys.path before any local imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from _cdp_starvation_probe_instrument import _cdp_ts, SLOW_CB_THRESHOLD_S, _install_asyncio_log_capture
 
-# Dynamic imports to load production modules (avoids static 'from src.' hook in dev/ scripts)
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
 close_browser = _browser_mod.close_browser
@@ -43,7 +29,6 @@ FINDINGS_DIR = SCRIPT_DIR / "md"
 
 # ORCHESTRATOR
 
-# Run 20 queries with Pattern A + B + CDP counter active; write report + findings narrative
 async def run_cdp_probe(max_queries: int | None) -> None:
     _start_probe_clock()
     _enable_pattern_a()
@@ -61,7 +46,6 @@ def _enable_pattern_a() -> None:
     _install_asyncio_log_capture()
 
 
-# Load queries from file
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     qs = [ln.strip() for ln in lines if ln.strip()]
@@ -91,17 +75,12 @@ async def _run_single_query(qi: int, query: str, total: int) -> dict:
     det = timings.get("engine_details", {})
     google_status = det.get("google", {}).get("status", "—")
 
-    # All-RATE_SKIP = zero-cascade query (post-CAPTCHA starvation cascade)
     all_statuses = {k: v.get("status", "—") for k, v in det.items()}
     all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
 
     cdp_in_query = sum(1 for ts in _cdp_ts if t_start <= ts < t_end)
     dur_s = max(t_end - t_start, 0.001)
 
-    # "captcha" (keyed on the removed EMPTY_BLOCK verdict) renamed to "empty" — the
-    # guessed-verdict-removal milestone collapsed EMPTY_BLOCK into bare "EMPTY", and
-    # engine_details (status+ms only) carries no diagnosis to reconstruct which kind of
-    # empty this was; an honest narrower label beats a familiar wrong one.
     if google_status == "EMPTY":
         category = "empty"
     elif all_rate_skip:
