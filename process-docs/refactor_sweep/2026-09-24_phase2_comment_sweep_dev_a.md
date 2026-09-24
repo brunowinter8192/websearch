@@ -225,3 +225,95 @@ Gotchas of the two DOCS.md files; the rest of those docstrings was already in DO
   `dev/url_discovery/` and `dev/explore_pipeline/` DOCS.md needed only the LOC fix.
 - Review outcome: passed. Nothing in this sweep is left open except the two disclosed limits above
   (block-level triage split; script-based editing).
+
+## Phase 4 control-flow triage, src/search/ (issue #47), step 1: classification only (2026-09-24)
+
+Scope: every `except` handler in `src/search/` including `engines/` (34 handlers; `openalex.py`,
+`scholar.py`, `base.py`, `rate_limiter.py`, `merge.py`, `snippet.py`, `result.py`, `status*.py` have
+none; no `contextlib.suppress` either). No code changed in this step.
+Scan: `/tmp/orch_ws/exscan.py` copied to `/tmp/wgoogle/`, run through a small lister
+(`/tmp/wgoogle/list.py`) that prints file:line, function, exception type and scan class per handler.
+
+Evidence sources, all read from the MAIN checkout `src/logs/`:
+- `cli.log` plus rotated `cli.log.2026-08-31` .. `cli.log.2026-09-23` (root logger at DEBUG, so every
+  WARNING the handlers emit would be there). Oldest available day 2026-08-31.
+- `query_log.jsonl`: 209 `engine_run` records; 0 with status `ERROR_PARSE`. (An earlier sweep entry
+  reports 0 `ERROR_PARSE` in 4566 historical records.)
+- Grep counts over all `cli.log*` files for the handlers' own log lines:
+  `Cache read error` 0, `document-status capture setup failed` 0, `query_log write failed` 0,
+  `kill_tab close_target failed` 0, `Failed to remove temp file` 0, `close_browser failed` 6,
+  `Browser prewarm failed` 6 (all 2026-09-21, see the prewarm row).
+- The logs never record CDP `Runtime.evaluate` responses, so "a script returned no value" cannot be
+  observed from them either way.
+
+### Counts per class (34 handlers)
+
+| Class | Count | Rows |
+|---|---|---|
+| A status/report | 4 | google `_resolve_one` x2, search_web `_engine_with_timing` x2 |
+| B fallback | 20 | `_extract_value` x7, `_diagnose` x7, brave `_poll_state`, brave `_click_challenge_button`, `cache_read`, `start_document_status_capture`, `log_query`, `_prewarm_browser` |
+| C silent swallow | 0 | (the B rows below with a control-flow effect are called out in their evidence) |
+| D best-effort cleanup | 8 | browser.py x5, cache_write x1, plus the two scan-TRIPWIRE handlers (`get_tab`, `cache_write`) that clean up and re-raise |
+| E input-shape | 2 | browser_lock x2 |
+
+B verdicts: 18 B-remove, 1 B-keep (`_prewarm_browser`), 0 B-keep-needs-logging. One B-remove row
+(`log_query`) is weak and flagged for an owner decision. The 7 `_extract_value` rows carry a
+regression risk stated below.
+
+### Full table
+
+Scan class abbreviations: PO = PRODUCES-OUTPUT, LO = LOG-ONLY, SP = SWALLOW-PASS, TW = TRIPWIRE.
+
+| file:line | function | scan | class | verdict | evidence |
+|---|---|---|---|---|---|
+| engines/google.py:258 | `_resolve_one` (`Timeout`) | PO | A | keep | Returns reason `timeout`; counted in `diagnosis.goto_resolution` and one WARNING per run (added 2026-09-24). |
+| engines/google.py:261 | `_resolve_one` (`RequestException`) | PO | A | keep | Returns reason `request_error`; same recording. |
+| search_web.py:306 | `_engine_with_timing` (`TimeoutError`) | PO | A | keep | Becomes `TIMEOUT_WATCHDOG`/`TIMEOUT_NONCOOP` status plus `drop_reason`. |
+| search_web.py:326 | `_engine_with_timing` (`Exception`) | PO | A | keep | Classified by `_classify_engine_exception` into a status; warning logged; degraded notice uses it. |
+| search_web.py:155 | `_prewarm_browser` (`Exception`) | LO | B | B-keep | Observed 6 times on 2026-09-21 (10:40, 10:41, 10:45, 10:47, 11:56, 12:03): `DevToolsActivePort did not appear ... within 10.0s`; each WARNING is in `cli.log` and every browser engine of that run then shows `Engine browser error` (status `ERROR_BROWSER`). Traceable. Note: the message says "engines will retry individually"; in 6 of 6 observed cases the retry did not recover (4 browser engines each errored with `Cannot connect to host localhost:<port>`); only non-browser openalex returned URLs in 2 of the 6 runs. Removing the handler would abort the whole run and lose those openalex results, so it is kept; only the log wording is inaccurate. |
+| cache.py:92 | `cache_read` (`Exception`) | PO | B | B-remove | Corrupt/unreadable cache file becomes `None`, indistinguishable from a cache miss; the drilldown then tells the user to rerun `search_web`. Writes are atomic (`os.replace`). `Cache read error` never logged (0 in 24 days of logs). |
+| document_status.py:30 | `start_document_status_capture` (`Exception`) | LO | B | B-remove | Setup failure degrades to an empty status chain (`http_status: None`). Never observed (0 log hits). Documented as intentional in `src/search/DOCS.md`, but the standard requires an observed trigger. |
+| query_logger.py:24 | `log_query` (`Exception`) | LO | B | B-remove (weak) | Write failure only logs a WARNING and drops the record. Never observed (0 hits). Telemetry, not search output; owner decision whether telemetry counts as business logic. |
+| engines/google.py:137 | `_extract_value` (`KeyError, TypeError`) | PO | B | B-remove | CDP result without `value` (script threw, context destroyed) returns `None`, callers read it as 0 containers / no data and end in `EMPTY`. No observation possible from logs. Risk: the poll loops in `_wait_for_results` would abort the engine with `ERROR_PARSE` on a transient blip instead of polling on; verify live after removal. |
+| engines/bing.py:91 | `_extract_value` | PO | B | B-remove | Same as google. |
+| engines/brave.py:146 | `_extract_value` | PO | B | B-remove | Same as google. |
+| engines/duckduckgo.py:94 | `_extract_value` | PO | B | B-remove | Same as google. |
+| engines/mojeek.py:110 | `_extract_value` | PO | B | B-remove | Same as google. |
+| engines/startpage.py:95 | `_extract_value` | PO | B | B-remove | Same as google. Startpage polls across a form-submit navigation, the likeliest place for a transient no-value result; highest regression risk of the seven. |
+| engines/yandex.py:94 | `_extract_value` | PO | B | B-remove | Same as google. |
+| engines/google.py:289 | `_diagnose` (`JSONDecodeError, TypeError`) | SP | B | B-remove | Input is this project's own `JSON.stringify`; on failure the diag keeps blank defaults (`url: ""`). 0 `ERROR_PARSE` in 209 records. The 2026-09-09 sweep removed the sibling `_parse_results` handler and explicitly left this one unexamined. |
+| engines/bing.py:178 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/brave.py:206 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/duckduckgo.py:161 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/mojeek.py:207 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/startpage.py:156 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/yandex.py:157 | `_diagnose` | SP | B | B-remove | Same as google. |
+| engines/brave.py:183 | `_poll_state` (`JSONDecodeError, TypeError`) | SP | B | B-remove | Failure keeps the zero-state, so the loop polls on and ends `EMPTY`; own JSON, never observed. |
+| engines/brave.py:195 | `_click_challenge_button` (`JSONDecodeError, TypeError`) | PO | B | B-remove | Failure returns `False` ("not clicked"), which then shows as `challenge_triggered: False` in the diagnosis; own JSON, never observed. |
+| browser.py:265 | `kill_tab` (`Exception`) | LO | D | keep | Best-effort tab close, WARNING logged, `finally` still pops `_tabs_opened`. Never observed (0 hits). |
+| browser.py:150 | `_terminate_then_kill` (`NoSuchProcess`) | SP | D | keep | Process already gone between listing and signal. |
+| browser.py:156 | `_terminate_then_kill` (`NoSuchProcess`) | SP | D | keep | Same, on `kill`. |
+| browser.py:244 | `_cancel_focus_watchdog` (`CancelledError`) | SP | D | keep | Awaiting the task just cancelled; the expected outcome of `cancel()`. |
+| browser.py:285 | `kill_own_chrome` (`Exception`) | PO | D | keep | Teardown of a possibly dead Chrome, WARNING logged, safety net continues. Observed 6 times (`The browser is not running`, same 2026-09-21 runs), traceable. |
+| cache.py:77 | `cache_write` (`OSError`) | LO | D | keep | Temp-file unlink during cleanup, WARNING logged, original error is re-raised by the outer handler. |
+| browser.py:190 | `get_tab` (`Exception`) | TW | D (re-raise) | keep | Resets state, releases the lock, then `raise`. A tripwire with cleanup. |
+| cache.py:74 | `cache_write` (`Exception`) | TW | D (re-raise) | keep | Removes the temp file, then `raise`. |
+| browser_lock.py:58 | `_sidecar_age_s` (`OSError, JSONDecodeError, KeyError, ValueError`) | PO | E | keep (optional narrowing) | Sidecar legitimately absent or half-written: the lock holder takes `flock` first and writes the sidecar second, and `write_text` truncates before writing. `None` means "age unknown, keep polling", a real outcome of that two-step protocol. `KeyError`/`ValueError` (malformed content) are broader than the race and could be dropped. |
+| browser_lock.py:36 | `acquire` (`BlockingIOError`) | LO | E | keep | Lock contention is the normal outcome the loop exists for. |
+
+### Notes for the reviewer
+
+- No row is class C. The rows closest to it are the seven `_extract_value` handlers: they turn a
+  failed script into "nothing found", which the engines report as a genuine `EMPTY`. I classed them B
+  (default value) because the result is a recorded status either way; the difference to the
+  2026-09-09 removals is that no log or record can show the trigger.
+- If the seven `_extract_value` rows and the seven `_diagnose` rows are approved, the removal is
+  mechanical and identical in every engine. Expected new behaviour: a `KeyError`, `TypeError` or
+  `JSONDecodeError` propagates into `_engine_with_timing` and lands as `ERROR_PARSE` (the `TypeError`
+  and `KeyError` cases are in `_classify_engine_exception`'s tuple only via `KeyError`; a bare
+  `TypeError` falls to `ERROR_OTHER`, same caveat as the 2026-09-09 entry).
+- `_prewarm_browser`: keeping it is the recommendation; optional follow-up is correcting the WARNING
+  wording ("engines will retry individually") since 0 of 6 observed retries recovered.
+- Not investigated: whether a prewarm failure leaves a stale `_browser` for the engines' retry (the
+  engines connect to a port that refuses connections, which suggests it does). That is a lifecycle
+  question for `browser.py`, not part of this triage.
