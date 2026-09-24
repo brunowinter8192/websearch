@@ -5,6 +5,7 @@ import pytest
 
 from src.crawler import pipe_scraper
 from src.crawler import pipe_scraper_acquisition
+from src.crawler import pipe_scraper_report
 from src.crawler.pipe_scraper_acquisition import _onward_link_identity, _extract_onward_links
 from src.crawler.pipe_scraper_report import _collect_onward_links, _write_onward_links_file, _print_summary
 from dev.tests._pipe_scraper_fakes import _FakeResult, _camoufox_meta
@@ -112,10 +113,9 @@ def test_collect_onward_links_returns_none_for_camoufox_engine():
 
 
 @pytest.fixture
-def onward_links_scratch_path():
-    path = Path("/tmp/pipe_scraper_test_onward_domain_scrape_links.txt")
-    yield path
-    path.unlink(missing_ok=True)
+def onward_links_scratch_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipe_scraper_report, "Path", lambda p: tmp_path / Path(p).name)
+    return tmp_path / "pipe_scraper_test_onward_domain_scrape_links.txt"
 
 
 def test_write_onward_links_file_writes_one_url_per_line(onward_links_scratch_path):

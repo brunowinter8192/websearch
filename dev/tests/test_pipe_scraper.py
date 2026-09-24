@@ -37,8 +37,10 @@ def test_log_pipe_scrape_appends(tmp_path, monkeypatch):
     assert len(log_file.read_text(encoding="utf-8").splitlines()) == 3
 
 
-def test_log_pipe_scrape_fail_soft(monkeypatch, caplog):
-    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", "/nonexistent-root-dir/x/pipe_scrape_log.jsonl")
+def test_log_pipe_scrape_fail_soft(tmp_path, monkeypatch, caplog):
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x")
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(blocker / "x" / "pipe_scrape_log.jsonl"))
 
     with caplog.at_level("WARNING", logger="src.crawler.pipe_scrape_logger"):
         log_pipe_scrape({"ts": _now_ts(), "run_id": "r", "url": "https://x.test", "domain": "x.test",
