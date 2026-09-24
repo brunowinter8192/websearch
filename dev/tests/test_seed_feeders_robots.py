@@ -108,3 +108,16 @@ async def test_robots_feeder_workflow_network_error_is_failed_with_error(monkeyp
     assert result.ok is False
     assert result.urls == []
     assert "connection refused" in result.error
+
+
+@pytest.mark.asyncio
+async def test_fetch_robots_txt_server_error_raises_not_absent():
+    client = _FakeAsyncClient({"https://example.com/robots.txt": _FakeResponse(500)})
+    with pytest.raises(RuntimeError, match="500"):
+        await fetch_robots_txt(client, "https://example.com/")
+
+
+@pytest.mark.asyncio
+async def test_fetch_robots_txt_410_is_absent():
+    client = _FakeAsyncClient({"https://example.com/robots.txt": _FakeResponse(410)})
+    assert await fetch_robots_txt(client, "https://example.com/") is None

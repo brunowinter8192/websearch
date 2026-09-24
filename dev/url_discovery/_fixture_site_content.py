@@ -201,7 +201,7 @@ def _expected_seeds() -> list:
 
     add((SEED_PATH,), "seed")
     add(ROBOTS_DISALLOW_PATHS + ROBOTS_ALLOW_PATHS, "robots")
-    add(SITEMAP_BLOG_PAGES + SITEMAP_LEGAL_PAGES, "sitemap")
+    add(SITEMAP_BLOG_PAGES + SITEMAP_LEGAL_PAGES, "sitemap_declared")
     add(NAVTREE_CANONICAL_PAGES + NAVTREE_V1_ONLY_PAGES, "navtree_tree")
     return order
 

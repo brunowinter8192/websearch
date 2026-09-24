@@ -75,9 +75,10 @@ async def _scrape_one(
         t0 = time.time()
         try:
             result = await crawler.arun(url=url, config=run_cfg)
-        except Exception:
+        except Exception as exc:
             wall_ms = int((time.time() - t0) * 1000)
-            _log_pipe_record(run_ctx, ts, url, domain, None, 0, wall_ms, {})
+            _log_pipe_record(run_ctx, ts, url, domain, None, 0, wall_ms, {},
+                             error=f"{type(exc).__name__}: {exc}")
             return {'url': url, 'wall_ms': wall_ms, 'bytes': 0, 'status_code': None}
         wall_ms = int((time.time() - t0) * 1000)
 

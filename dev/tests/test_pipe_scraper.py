@@ -137,6 +137,22 @@ async def test_scrape_one_exception_becomes_tripwire_record(tmp_path, monkeypatc
     assert fail_record["bytes"] == 0
     assert "pipe_fallback_used" not in fail_record
     assert "pipe_fallback_resolved" not in fail_record
+    assert fail_record["error"] == "Exception: simulated network failure"
+    assert by_url_record["https://x.test/a"]["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_scrape_all_camoufox_executor_exception_propagates(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(tmp_path / "log.jsonl"))
+
+    async def _boom(url, block_images=False):
+        raise RuntimeError("executor bug")
+    monkeypatch.setattr(pipe_scraper_acquisition, "try_scrape_camoufox", _boom)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    with pytest.raises(RuntimeError, match="executor bug"):
+        await pipe_scraper._scrape_all(["https://x.test/a"], output_dir, download_delay=0.01,
+                                        concurrency_per_domain=1, engine="camoufox")
 
 
 @pytest.mark.asyncio

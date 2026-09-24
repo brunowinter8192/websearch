@@ -5,7 +5,7 @@ from xml.etree import ElementTree
 
 import httpx
 
-from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT, SITEMAP_FETCH_CONCURRENCY
+from src.crawler.seed_feeders_constants import ABSENT_STATUSES, HTTP_TIMEOUT_S, USER_AGENT, SITEMAP_FETCH_CONCURRENCY
 
 
 # FUNCTIONS
@@ -13,8 +13,10 @@ from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT, SITEM
 async def fetch_sitemap(client: httpx.AsyncClient, url: str) -> bytes | None:
     response = await client.get(url, timeout=HTTP_TIMEOUT_S,
                                 headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    if response.status_code != 200:
+    if response.status_code in ABSENT_STATUSES:
         return None
+    if response.status_code != 200:
+        raise RuntimeError(f"unexpected status {response.status_code} for {url}")
     content = response.content
     if url.endswith(".gz"):
         content = gzip.decompress(content)

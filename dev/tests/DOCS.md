@@ -155,19 +155,19 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Shared fake httpx client and XML/HTML payload builders. Not collected by pytest.
 **Called by:** test_seed_feeders_robots.py, test_seed_feeders_sitemap.py, test_seed_feeders_navtree.py.
 
-### test_seed_feeders_scope.py (93 LOC)
+### test_seed_feeders_scope.py (104 LOC)
 
 **Purpose:** src/crawler/seed_feeders_scope.py: normalize_url merge-vs-keep-distinct boundary and scope_and_dedup.
 
-### test_seed_feeders_robots.py (110 LOC)
+### test_seed_feeders_robots.py (123 LOC)
 
 **Purpose:** src/crawler/seed_feeders_robots.py: directive parsing, fetch with a fake client, feeder workflow.
 
-### test_seed_feeders_sitemap.py (216 LOC)
+### test_seed_feeders_sitemap.py (261 LOC)
 
 **Purpose:** src/crawler/seed_feeders_sitemap.py: sitemap parsing, nested index resolution, cycle guard, feeder workflow.
 
-### test_seed_feeders_navtree.py (275 LOC)
+### test_seed_feeders_navtree.py (305 LOC)
 
 **Purpose:** src/crawler/seed_feeders_navtree.py: payload detection, tree finding tiers, version union, feeder workflow.
 
@@ -176,7 +176,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Fixture-backed checks of the three seed feeders against the local fixture site.
 **Calls out:** dev.url_discovery._fixture_site.
 
-### test_discovery.py (105 LOC)
+### test_discovery.py (115 LOC)
 
 **Purpose:** src/crawler/discovery.py: seed assembly and merge priority (pure), plus one shared fixture-backed discovery run checked against ground truth.
 **Calls out:** dev.url_discovery._fixture_site.
@@ -190,7 +190,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/crawler/pipe_scraper_config.py: config stamp, live crawl4ai stealth wiring guard, fixed anti-bot posture, headed flag effect.
 
-### test_pipe_scraper.py (231 LOC)
+### test_pipe_scraper.py (247 LOC)
 
 **Purpose:** src/crawler/pipe_scraper*.py: per-URL JSONL log, run_id sharing, request-start timing, exception tripwire record, landed_url.
 
