@@ -11,3 +11,5 @@ curl_cffi
 camoufox
 psutil
 matplotlib
+pytest-xdist
+pytest-timeout

@@ -16,6 +16,8 @@ from src.search.engines.brave import BraveEngine
 
 logger = logging.getLogger(__name__)
 
+pytestmark = pytest.mark.browser
+
 
 _OWN_QUERY = "cloudflare turnstile captcha widget verify programmatically"
 _MARKER_IN_OWN_QUERY_HTML = f"""<!doctype html>
