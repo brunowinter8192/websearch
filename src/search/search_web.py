@@ -81,7 +81,7 @@ async def search_web_workflow(
 ) -> list[TextContent] | tuple[list[TextContent], dict]:
     t_total = time.perf_counter()
     logger.info("Searching: %s (language=%s)", query, language)
-    selected, all_excluded = _select_engines(engines)
+    selected = _select_engines(engines)
     effective_timeout = engine_timeout if engine_timeout is not None else ENGINE_WATCHDOG_TIMEOUT
 
     try:
@@ -108,7 +108,7 @@ async def search_web_workflow(
     cache_write_ms = round((time.perf_counter() - t0) * 1000)
 
     total_ms = round((time.perf_counter() - t_total) * 1000)
-    _build_query_log_entry(query, language, selected, total_ms, engine_stats, all_excluded, key)
+    _build_query_log_entry(query, language, selected, total_ms, engine_stats, key)
 
     return _build_search_result(
         formatted_text, _with_timings, engine_fanout_ms, engine_ms, engine_details,
@@ -124,7 +124,7 @@ def fetch_search_results(
     engines: str | None,
     pageno: int
 ) -> list:
-    selected, _ = _select_engines(engines)
+    selected = _select_engines(engines)
     results, _ = asyncio.run(_query_engines_concurrent(query, language, 10, selected))
     return [
         {
@@ -175,12 +175,14 @@ def _build_search_result(
     return result, timings
 
 
-def _select_engines(engines: str | None) -> tuple[dict, dict[str, str]]:
+def _select_engines(engines: str | None) -> dict:
     if not engines:
-        selected = {k: v for k, v in ENGINES.items() if k in _DEFAULT_ENGINES}
-        return selected, {}
+        return {k: v for k, v in ENGINES.items() if k in _DEFAULT_ENGINES}
     names = [e.strip().lower() for e in engines.split(",")]
-    return {k: v for k, v in ENGINES.items() if k in names}, {}
+    unknown = [n for n in names if n not in ENGINES]
+    if unknown:
+        raise ValueError(f"unknown engine(s): {', '.join(unknown)}; available: {', '.join(sorted(ENGINES))}")
+    return {k: v for k, v in ENGINES.items() if k in names}
 
 
 async def _run_engine_fanout(
@@ -336,7 +338,6 @@ def _build_query_log_entry(
     selected: dict,
     total_ms: int,
     engine_stats: dict,
-    engines_excluded: dict[str, str],
     search_key: str,
 ) -> None:
     bottleneck = max(engine_stats, key=lambda k: engine_stats[k]["search_ms"]) if engine_stats else None
@@ -347,7 +348,6 @@ def _build_query_log_entry(
         "query": query,
         "language": language,
         "engines_requested": [eng.name for eng in selected.values()],
-        "engines_excluded": engines_excluded,
         "total_wall_ms": total_ms,
         "bottleneck_engine": bottleneck,
         "engines": engine_stats,

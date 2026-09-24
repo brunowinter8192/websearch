@@ -12,6 +12,7 @@ class FeederResult:
     error: str | None = None
     source: str | None = None
     version_keys: list | None = None
+    dropped: int = 0
 
 
 # FUNCTIONS
@@ -41,15 +42,17 @@ def _dedup_key(normalized_url: str) -> str:
     return urlunsplit((parsed.scheme, netloc_key, parsed.path, parsed.query, ""))
 
 
-def scope_and_dedup(urls: list, seed_host: str) -> list:
+def scope_and_dedup(urls: list, seed_host: str) -> tuple:
     seed_key = host_key(seed_host)
     seen_keys = set()
     result = []
+    dropped = 0
     for raw in urls:
         try:
             normalized = normalize_url(raw)
             parsed = urlsplit(normalized)
         except ValueError:
+            dropped += 1
             continue
         if host_key(parsed.hostname or "") != seed_key:
             continue
@@ -58,7 +61,7 @@ def scope_and_dedup(urls: list, seed_host: str) -> list:
             continue
         seen_keys.add(key)
         result.append(normalized)
-    return result
+    return result, dropped
 
 
 def require_host(seed_url: str) -> str:

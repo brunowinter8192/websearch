@@ -134,3 +134,17 @@ def test_job_md_source_count_values(tmp_path):
     md = _md(tmp_path, events)
     assert "7832" in md
     assert "| fail | 0 |" in md
+
+
+def test_record_pool_source_writes_error_when_given(tmp_path):
+    from src.news.engine.proxy_pool.logger import AcquireLogger
+
+    logger = AcquireLogger(total_urls=0, log_dir=tmp_path / "logs")
+    logger.record_pool_source("https://a.test", False, 0, "ConnectError")
+    logger.record_attempt("http", "h:1", "https://t.test", False, "http_403")
+    logger.record_attempt("http", "h:1", "https://t.test", True)
+    logger.close()
+    events = [json.loads(l) for l in list((tmp_path / "logs").iterdir())[0].read_text().splitlines()]
+    assert events[0]["error"] == "ConnectError"
+    assert events[1]["reason"] == "http_403"
+    assert "reason" not in events[2]

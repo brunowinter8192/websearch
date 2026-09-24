@@ -34,10 +34,12 @@ def load_discover_filtered(
     limit: int | None = None,
 ) -> list[dict]:
     if not discover_dir.exists():
-        return []
+        raise FileNotFoundError(f"coindesk discover directory missing: {discover_dir}")
     if year is not None:
-        shards = [discover_dir / f"coindesk_{year}.txt"]
-        shards = [s for s in shards if s.exists()]
+        shard = discover_dir / f"coindesk_{year}.txt"
+        if not shard.exists():
+            raise FileNotFoundError(f"coindesk discover shard missing for year {year}: {shard}")
+        shards = [shard]
     else:
         shards = sorted(discover_dir.glob("coindesk_*.txt"))
     entries: list[dict] = []

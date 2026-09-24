@@ -41,6 +41,7 @@ _lock_handle: browser_lock.LockHandle | None = None
 _owned_pids: list[int] = []
 _session_dir: str | None = None
 _focus_watchdog_task: asyncio.Task | None = None
+_osascript_warned: set[str] = set()
 
 
 # FUNCTIONS
@@ -197,6 +198,13 @@ async def get_tab():
                 raise
 
 
+def _warn_osascript_once(what: str, detail: str) -> None:
+    if what in _osascript_warned:
+        return
+    _osascript_warned.add(what)
+    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
+
+
 def _get_frontmost_pid() -> int | None:
     result = subprocess.run(
         [
@@ -206,17 +214,21 @@ def _get_frontmost_pid() -> int | None:
         capture_output=True, text=True,
     )
     pid = result.stdout.strip()
+    if result.returncode != 0 or not pid.isdigit():
+        _warn_osascript_once("get_frontmost", f"returncode={result.returncode} stdout={pid!r} stderr={result.stderr.strip()!r}")
     return int(pid) if pid.isdigit() else None
 
 
 def _activate_pid(pid: int) -> None:
-    subprocess.run(
+    result = subprocess.run(
         [
             "osascript", "-e",
             f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true',
         ],
         capture_output=True, text=True,
     )
+    if result.returncode != 0:
+        _warn_osascript_once("activate", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
 
 
 async def _focus_steal_watchdog_by_pid(owned_pids: set[int], last_other_pid: int | None) -> None:

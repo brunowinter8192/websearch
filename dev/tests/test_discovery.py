@@ -103,3 +103,13 @@ def test_discover_urls_workflow_no_url_carries_a_fetched_or_canonical_field(disc
         assert isinstance(u, DiscoveredURL)
         assert not hasattr(u, "fetched")
         assert not hasattr(u, "canonical_url")
+
+
+def test_total_dropped_sums_ok_feeders_only():
+    from src.crawler.discovery import _total_dropped
+    results = {
+        "robots": FeederResult(urls=[], ok=True, source="robots", dropped=2),
+        "sitemap": FeederResult(urls=[], ok=True, source="sitemap_declared", dropped=3),
+        "navtree": FeederResult(urls=[], ok=False, error="x"),
+    }
+    assert _total_dropped(results) == 5

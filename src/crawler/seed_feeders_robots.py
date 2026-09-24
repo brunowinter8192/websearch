@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 
 import httpx
 
-from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT
+from src.crawler.seed_feeders_constants import ABSENT_STATUSES, HTTP_TIMEOUT_S, USER_AGENT
 
 _DIRECTIVE_RE = re.compile(r'^\s*(allow|disallow|sitemap)\s*:\s*(.+?)\s*$', re.IGNORECASE)
 
@@ -15,8 +15,10 @@ async def fetch_robots_txt(client: httpx.AsyncClient, base_url: str) -> str | No
     robots_url = urljoin(base_url, "/robots.txt")
     response = await client.get(robots_url, timeout=HTTP_TIMEOUT_S,
                                 headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    if response.status_code != 200:
+    if response.status_code in ABSENT_STATUSES:
         return None
+    if response.status_code != 200:
+        raise RuntimeError(f"unexpected status {response.status_code} for {robots_url}")
     return response.text
 
 

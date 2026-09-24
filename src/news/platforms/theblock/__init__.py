@@ -21,7 +21,7 @@ class TheBlockPlatform:
     uses_master_list: bool     = True
 
     async def discover(self, logger=None) -> list[dict]:
-        return await _discover(self.timeframe, logger=logger)
+        return await _discover(self.timeframe, acquire_logger=logger)
 
     def cleanup(self, raw_html: str, entry: dict) -> str:
         return _cleanup(raw_html, entry)

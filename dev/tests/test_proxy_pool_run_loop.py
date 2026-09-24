@@ -12,7 +12,7 @@ def _run_loop_with_mocked_time(pool_a, pool_b, sources, target_urls, concurrency
         (pool_a, sources),
         (pool_b, sources),
     ])
-    mock_fetch  = MagicMock(return_value=("ok", b"content"))
+    mock_fetch  = MagicMock(return_value=("ok", b"content", None))
     mock_logger = MagicMock(spec=AcquireLogger)
     cm          = PersistentCooldownManager()
 

@@ -1,3 +1,5 @@
+import pytest
+
 from src.scraper import camoufox_scrape
 
 
@@ -73,3 +75,13 @@ def test_ensure_no_focus_steal_noop_when_executable_path_missing(monkeypatch):
 def test_build_camoufox_kwargs_ignores_foreground_default_arg():
     kwargs = camoufox_scrape._build_camoufox_kwargs(block_images=False)
     assert kwargs["ignore_default_args"] == ["-foreground"]
+
+
+def test_ensure_no_focus_steal_unreadable_plist_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(camoufox_scrape.sys, "platform", "darwin")
+    app = tmp_path / "Camoufox.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    executable = app / "Contents" / "MacOS" / "camoufox"
+    executable.write_text("")
+    with pytest.raises(FileNotFoundError):
+        camoufox_scrape._ensure_no_focus_steal(str(executable))

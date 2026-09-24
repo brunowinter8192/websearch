@@ -10,8 +10,8 @@ Full-site discovery + capture-pipeline scrape step for offline documentation ind
 
 - `scrape_urls_workflow(urls, output_dir, download_delay, concurrency_per_domain=None, engine="chromium", block_images=False, headed=False)` (pipe_scraper.py) — batch raw-markdown scrape of a URL list. `engine` is a per-RUN choice ("chromium" default/unchanged behavior, or "camoufox" — a deliberate second lane, never auto-selected); `concurrency_per_domain=None` resolves to the ENGINE'S OWN default. `headed` (M3, 2026-09-15) reaches only the chromium engine's `BrowserConfig` — see this file's Gotchas.
 - `log_pipe_scrape(record)` (pipe_scrape_logger.py) — called by pipe_scraper.py.
-- `robots_feeder_workflow(seed_url)`, `sitemap_feeder_workflow(seed_url)`, `navtree_feeder_workflow(seed_url)` (seed_feeders.py) — each returns a `FeederResult(urls, ok, error, source)` (seed_feeders_scope.py). `source` is a short tag naming the extraction method ("robots", "sitemap", "navtree_tree", "navtree_flat" — see seed_feeders_scope.py's own Gotcha) so a caller can tell an authoritative navigation-tree inventory from a flat href scrap without either being filtered here.
-- `discover_urls_workflow(seed_url)` (discovery.py) — returns a `DiscoveryResult(urls, ok, wall_s, failed_feeders, error)`; `urls` is `list[DiscoveredURL(url, source)]`, `source` ∈ `{"seed", "robots", "sitemap", "navtree_tree", "navtree_flat"}`. No page is ever fetched by this function itself (see discovery.py's own entry below).
+- `robots_feeder_workflow(seed_url)`, `sitemap_feeder_workflow(seed_url)`, `navtree_feeder_workflow(seed_url)` (seed_feeders.py) — each returns a `FeederResult(urls, ok, error, source, version_keys, dropped)` (seed_feeders_scope.py). `source` is a short tag naming the extraction method ("robots", "sitemap_declared", "sitemap_conventional", "navtree_tree", "navtree_flat" — see seed_feeders_scope.py's own Gotcha) so a caller can tell an authoritative navigation-tree inventory from a flat href scrap without either being filtered here.
+- `discover_urls_workflow(seed_url)` (discovery.py) — returns a `DiscoveryResult(urls, ok, wall_s, failed_feeders, dropped, error)`; `urls` is `list[DiscoveredURL(url, source)]`, `source` ∈ `{"seed", "robots", "sitemap_declared", "sitemap_conventional", "navtree_tree", "navtree_flat"}`. No page is ever fetched by this function itself (see discovery.py's own entry below).
 - `host_key(host)` (seed_feeders_scope.py) — host-collapse (`www.`/apex) used internally by `scope_and_dedup`/`_dedup_key`; `require_host(seed_url)` — seed_url validation shared by all three feeders and by `discovery.py`.
 
 ## Flow
@@ -20,7 +20,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 
 ## Modules
 
-### pipe_scraper.py (118 LOC) — entry point
+### pipe_scraper.py (112 LOC) — entry point
 
 **Purpose:** Entry point + orchestrator for the capture-pipeline scrape step — dispatches a URL list per-RUN (never per-URL, never auto-selected) to one of two acquisition engines (chromium: shared crawler; camoufox: fresh browser per URL). As of the M3 milestone (2026-09-15), a `-g`/`--headed` flag flips the chromium engine's `BrowserConfig` to visible (`headless=False`) — see `pipe_scraper_config.py`'s own entry and this file's Gotchas for what the flag does and does not defend against; structurally inert under `--engine camoufox`, which is already headed unconditionally (see Gotchas).
 **Reads:** URL list from `--url-file` or caller-supplied list.
@@ -46,15 +46,15 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `pipe_scraper.py` (`_scrape_all`).
 **Calls out:** `crawl4ai` (BrowserConfig, CrawlerRunConfig, CacheMode, DefaultMarkdownGenerator); `pipe_scraper_constants.py`.
 
-### pipe_scraper_acquisition.py (128 LOC)
+### pipe_scraper_acquisition.py (129 LOC)
 
-**Purpose:** Per-URL engine executors for both acquisition engines (`_scrape_one` chromium, `_scrape_one_camoufox` camoufox). Neither executor classifies anything anymore — see this file's own Gotchas for the `outcome` removal. `_scrape_one`'s `except Exception` block is a pure tripwire since 2026-09-09 (status=None/bytes=0, logs, returns, run continues) — see this file's own Gotchas for the two curl_cffi fallback paths it replaces. `_scrape_one`'s success path also collects the page's own onward links (`_extract_onward_links`/`_onward_link_identity`) off the SAME crawl4ai result it already has in hand — chromium engine only, see this file's own Gotchas.
+**Purpose:** Per-URL engine executors for both acquisition engines (`_scrape_one` chromium, `_scrape_one_camoufox` camoufox). Neither executor classifies anything anymore — see this file's own Gotchas for the `outcome` removal. `_scrape_one`'s `except Exception` block records status=None/bytes=0 plus `error` (`Type: message`) in the JSONL record and the run continues; the batch itself no longer swallows executor exceptions (`return_exceptions` removed, a raising executor aborts the run) — see this file's own Gotchas for the two curl_cffi fallback paths it replaces. `_scrape_one`'s success path also collects the page's own onward links (`_extract_onward_links`/`_onward_link_identity`) off the SAME crawl4ai result it already has in hand — chromium engine only, see this file's own Gotchas.
 **Reads:** URL list passed in from `pipe_scraper._scrape_all`.
 **Writes:** per-URL `.md` to `--output-dir` (with source header, or camoufox-engine content — markdown, or empty on a conversion failure since the raw-HTML-as-content fallback was REMOVED 2026-09-09, see `src/scraper/DOCS.md`'s Gotchas); one JSONL record per URL via `pipe_scraper_records.py`.
 **Called by:** `pipe_scraper.py` (`_scrape_all`); `pipe_scraper_report.py` imports `_onward_link_identity` directly, to normalize the run's own input URLs the identical way before excluding them from the onward-links file.
 **Calls out:** `crawl4ai` (AsyncWebCrawler, CrawlerRunConfig); `src.scraper.chromium_scrape` (extract_crawl4ai_diagnosis); `src.scraper.camoufox_scrape` (try_scrape_camoufox); `src.crawler.seed_feeders_scope` (`host_key`); `pipe_scraper_pacing.py`; `pipe_scraper_records.py`; `pipe_scraper_constants.py`.
 
-### pipe_scraper_records.py (37 LOC)
+### pipe_scraper_records.py (39 LOC)
 
 **Purpose:** Assembles and writes one JSONL record per URL via `pipe_scrape_logger.log_pipe_scrape` — a chromium-engine function and a sibling camoufox-engine function, kept separate since the two engines' own fact sets differ entirely (crawl4ai diagnosis dict vs `try_scrape_camoufox`'s own meta dict), not for any fallback-specific reason anymore — `pipe_fallback_used`/`pipe_fallback_resolved` were REMOVED 2026-09-09 along with both curl_cffi fallback paths, see `pipe_scraper_acquisition.py`'s own Gotchas. As of 2026-09-03, `_log_pipe_camoufox_record` also carries `document_status_chain` straight off `meta` (`try_scrape_camoufox`'s own fact field — see `src/scraper/DOCS.md`'s Gotchas); `_log_pipe_camoufox_record` also now carries `acquisition_error` straight off `meta` for the same reason (see this file's own Gotchas on the `outcome` removal — this fact previously fed the removed camoufox `outcome="error"` branch and would otherwise have been silently dropped by removing it). `_log_pipe_record` (chromium engine, `_scrape_one`) has no equivalent — that engine's own `status_code`/listener fix was out of scope for this milestone, see `pipe_scraper_acquisition.py`'s own entry.
 **Called by:** `pipe_scraper_acquisition.py` (`_scrape_one`, `_scrape_one_camoufox`).
@@ -66,7 +66,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `pipe_scraper.py` (`scrape_urls_workflow`).
 **Calls out:** `pipe_scraper_acquisition.py` (`_onward_link_identity`).
 
-### seed_feeders.py (56 LOC) — entry point
+### seed_feeders.py (60 LOC) — entry point
 
 **Purpose:** Orchestrates all three feeders — `robots_feeder_workflow` (Allow/Disallow paths), `sitemap_feeder_workflow` (robots-declared `Sitemap:` locations, preferred, falling back to conventional paths only when robots declares none), and `navtree_feeder_workflow` (the site's own navigation tree, also passing through `FeederResult.version_keys` — see `seed_feeders_scope.py`; currently unconsumed outside this module, since `discovery.py`'s former link-graph traversal was its only external consumer and has been removed). All three validate `seed_url`, fetch, scope+dedup the result, tag `FeederResult.source`, and convert an unexpected orchestration failure (e.g. an unparseable `seed_url`) into `FeederResult(ok=False, error=...)` rather than raising — a normal per-fetch outcome (missing robots.txt, a 404 sitemap, no framework payload detected) stays `ok=True` with a possibly-empty `urls` list, never `ok=False`.
 **Reads:** live HTTP (robots.txt, sitemap, and navigation-tree-bearing HTML pages) via `httpx.AsyncClient`, one fresh client per workflow call.
@@ -74,31 +74,31 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `discovery.py` (`_run_feeders`), the only caller so far.
 **Calls out:** `httpx`; `seed_feeders_constants.py`, `seed_feeders_scope.py`, `seed_feeders_robots.py`, `seed_feeders_sitemap.py`, `seed_feeders_navtree.py` (all below).
 
-### seed_feeders_constants.py (7 LOC)
+### seed_feeders_constants.py (8 LOC)
 
 **Purpose:** Shared HTTP timeout, User-Agent, conventional sitemap fallback paths, sub-sitemap and nav-tree-version fetch concurrency caps.
 **Called by:** `seed_feeders_robots.py`, `seed_feeders_sitemap.py`, `seed_feeders_navtree.py`, `seed_feeders.py`.
 **Calls out:** none.
 
-### seed_feeders_scope.py (68 LOC)
+### seed_feeders_scope.py (71 LOC)
 
 **Purpose:** `FeederResult` dataclass (including `version_keys`, populated only by the navtree feeder, `None` for a version-less site — see `seed_feeders_navtree.py`; surfaced originally for `discovery.py`'s former traversal to recognize an explicit-version duplicate of an already-known canonical page, now unconsumed since that traversal was removed); `normalize_url` (the merge-vs-keep-distinct boundary — see Gotchas); `scope_and_dedup` (host-only scope, `www.`/apex collapsed for comparison only, order-preserving dedup, malformed URLs dropped not raised); `host_key` — promoted from a `seed_feeders.py`-private helper, used internally by `scope_and_dedup`/`_dedup_key`; `require_host` — seed_url validation, shared by all three feeders and by `discovery.py`.
 **Called by:** `seed_feeders.py` (all three workflows), `discovery.py` (`require_host` for seed_url validation).
 **Calls out:** none (stdlib only).
 
-### seed_feeders_robots.py (38 LOC)
+### seed_feeders_robots.py (40 LOC)
 
 **Purpose:** `fetch_robots_txt` (GET, `None` on any failure — normal outcome); `parse_robots_directives` (Allow/Disallow path values AND `Sitemap:` URLs, every `User-agent:` block collected together, not scoped to one).
 **Called by:** `seed_feeders.py` (both workflows).
 **Calls out:** `httpx`.
 
-### seed_feeders_sitemap.py (67 LOC)
+### seed_feeders_sitemap.py (69 LOC)
 
 **Purpose:** `fetch_sitemap` (GET, gunzips `.gz`, `None` only on a non-200 status; network errors, corrupt gzip and non-XML bodies propagate to the feeder workflow, which returns `ok=False` with `error`); `parse_sitemap_xml` (namespace-agnostic `ElementTree`, distinguishes `<sitemapindex>` from `<urlset>`); `resolve_sitemap_urls` (recursive, bounded concurrency via a shared `asyncio.Semaphore`, cycle-guarded via a shared visited set, arbitrary nesting depth).
 **Called by:** `seed_feeders.py` (`sitemap_feeder_workflow`).
 **Calls out:** `httpx`.
 
-### seed_feeders_navtree.py (258 LOC)
+### seed_feeders_navtree.py (264 LOC)
 
 **Purpose:** `extract_payloads` (detection dispatch, extensible list of shape-extractors — currently the Next.js Pages Router `__NEXT_DATA__` blob and the App Router RSC `self.__next_f.push` stream); `find_navigation_tree` (tier 1: the largest dict subtree structurally shaped like a nav tree, found anywhere in the payload by shape, never a hardcoded key path; tier 2 fallback: a flat href/url scan, filtered, when tier 1 finds nothing); `resolve_navigation_tree` (orchestrates: fetch seed → detect → walk → find + fetch every OTHER version the same payload declares → canonicalize each version's URLs back to the default version's shape → union). `navtree_feeder_workflow` (seed_feeders.py) wraps this with the shared `FeederResult`/scope/dedup contract, tagging `source` "navtree_tree" or "navtree_flat" from whichever tier produced the DEFAULT tree, and passing through `version_keys`. `canonicalize_version_url` is PUBLIC (not `_`-prefixed); it was promoted for `discovery.py`'s former link-graph traversal to reuse for version-duplicate recognition (see that module's own Gotchas for the removal) — that traversal is gone, and this function is now only used internally by this module's own version union.
 **Reads:** live HTTP (the seed page + each detected version's own root page) via `httpx.AsyncClient`, passed in by the caller (no client of its own).
@@ -106,7 +106,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `seed_feeders.py` (`navtree_feeder_workflow`).
 **Calls out:** `httpx`; `seed_feeders_constants.py`.
 
-### discovery.py (63 LOC) — entry point
+### discovery.py (70 LOC) — entry point
 
 **Purpose:** The URL-discovery entry point: `discover_urls_workflow` runs all three feeders concurrently against `seed_url` over plain HTTP, then merges their output plus the literal `seed_url` into one `{url: source}` seed set (a failed feeder's name+error lands in `failed_feeders`, never silently treated as an empty result — see Gotchas). No page is ever fetched in a browser — a prior version of this module additionally traversed the resulting URL set with `crawl4ai`'s `BFSDeepCrawlStrategy` to read each page's links, looking for pages no feeder had listed; that traversal was removed as a duplicate fetch of every page in the run (measured: the feeders returned 3571 URLs in ~2s on a real site, the traversal over those same 3571 URLs was still running after 12 minutes — see Gotchas and `process-docs/url_discovery/` for the removal and the traversal's prior history). Every result URL is tagged only with what produced it ("seed" or a feeder's own `source`) — there is no fetch-confirmation or version-duplicate-canonicalization concept left, since both existed solely to make the removed traversal's own findings legible.
 **Reads:** feeder output via `seed_feeders.py` (each feeder does its own live HTTP fetch; this module fetches nothing itself).
@@ -114,7 +114,7 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 **Called by:** `cli.py`'s `discover_urls` subcommand (`discover_urls_workflow(seed_url)`).
 **Calls out:** `seed_feeders.py` (all three workflows); `seed_feeders_scope.py` (`normalize_url`, `require_host`).
 
-### pipe_scrape_logger.py (25 LOC)
+### pipe_scrape_logger.py (19 LOC)
 
 **Purpose:** Per-URL JSONL log writer for pipe_scraper — one record per URL (`run_id`-grouped, `ts`=request start), shared by both acquisition engines (`"engine"` field discriminates), separate schema/file from `src/logs/scrape_log.jsonl`.
 **Reads:** `WEBSEARCH_PIPE_SCRAPE_LOG_PATH` env var (fallback `src/logs/pipe_scrape_log.jsonl`).
@@ -158,3 +158,9 @@ pipe_scraper: URL list in → per-domain paced raw crawl → one `.md` per URL +
 - **`discovery.py`'s browser-driven link-graph traversal (the `BFSDeepCrawlStrategy`/`_ExactHostFilter`/resume-state/pacing machinery this section used to document at length) was REMOVED, not tuned further.** It existed to find pages no feeder had listed, by re-fetching every already-discovered URL in a real headless browser purely to read its links — a duplicate fetch of every page in the run. Measured on a real site: the three feeders returned 3571 URLs in ~2s; the traversal over those same 3571 URLs was still running after 12 minutes, projected well over an hour. Link-following now belongs to the scrape step, which already loads each page for its content anyway. Everything that existed solely to make that traversal's own findings legible — `DEFAULT_MAX_DEPTH`/`MIN_MAX_PAGES`/`MAX_PAGES_PER_SEED`/`TRAVERSAL_MEAN_DELAY_S`/`TRAVERSAL_MAX_RANGE_S`/`TRAVERSAL_CONCURRENCY`, `DiscoveryResult.stop_reason`/`pages_fetched`/`pages_failed`, `DiscoveredURL.fetched`/`canonical_url`, `_ExactHostFilter`, `_build_resume_state`/`_validate_resume_state`/`_traverse`/`_determine_stop_reason`/`_resolve_canonical_alias`/`_merge_results`, and `discover_urls_workflow`'s `max_depth`/`max_pages` parameters and `cli.py`'s `--max-pages` flag — went with it. `seed_feeders_navtree.py`'s `canonicalize_version_url` and `FeederResult.version_keys` were this traversal's only external consumer; both remain on the feeder contract (the navtree feeder still uses `canonicalize_version_url` internally for its own version union) but neither is consumed by anything outside `seed_feeders_navtree.py` anymore. The full prior history (frontier wiring, fetch-success/frontier-visibility, pacing measurement, the version-duplicate-recognition gap and its closure) is preserved in `process-docs/url_discovery/` — read there for context, not here, since none of it still describes current code.
 - **`-g`/`--headed` (M3, 2026-09-15) flips only `BrowserConfig.headless` — it carries NO focus-defense mechanism, unlike the ad-hoc lane (`src/scraper/chromium_process.py`'s name-keyed `_focus_steal_watchdog`) or the search lane (`src/search/browser.py`'s PID-keyed watchdog).** A live-measured focus steal WAS observed on a real run: the headed browser (`"Google Chrome for Testing"`, crawl4ai's own `ManagedBrowser`, plain `playwright` — confirmed by reading `browser_manager.py` directly, not the `patchright` bundle the ad-hoc lane resolves) took focus once, at launch, for roughly 2 seconds, then released on its own with nothing reclaiming it — longer than either other lane's own sub-second, watchdog-bounded flicker. See `process-docs/pipe_scraper_hardening/` for the measurement (sample size, timing, and why a name-keyed watchdog is now a confirmed-workable follow-up, not attempted in this milestone).
 - **`-g` is structurally inert under `--engine camoufox`.** That engine already launches headed, unconditionally, via the ad-hoc lane's own `try_scrape_camoufox` (`src/scraper/camoufox_scrape.py`), with its own no-focus-steal mechanism already in place (`_ensure_no_focus_steal`/`LSUIElement`). `-g`'s only effect is on `pipe_scraper_config._build_configs`, which the camoufox code path never calls — passing `-g` alongside `--engine camoufox` changes nothing, silently.
+- 2026-09-24 Phase 5: `log_pipe_scrape` no longer catches write failures (a broken log path raises).
+
+## Gotchas (2026-09-24 Phase 5 pass)
+
+- Non-200 handling in the feeders: only 404/410 mean "absent" (`ABSENT_STATUSES`); any other non-200 raises, so the feeder is `ok=False` and `discovery` reports it in `failed_feeders`. A navtree version page that is absent is logged (`seed_feeders_navtree` logger) and skipped.
+- `scope_and_dedup` returns `(urls, dropped)`; malformed URLs are counted into `FeederResult.dropped`, summed into `DiscoveryResult.dropped` and printed by `cli.py` as `dropped_malformed_urls`.

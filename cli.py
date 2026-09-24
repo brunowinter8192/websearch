@@ -184,6 +184,7 @@ def _write_discovery_output(result, url_file: str) -> None:
 
     print(f"ok={result.ok} wall_s={result.wall_s:.1f}")
     print(f"failed_feeders: {result.failed_feeders}")
+    print(f"dropped_malformed_urls: {result.dropped}")
 
     by_source = {}
     for u in result.urls:

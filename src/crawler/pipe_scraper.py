@@ -62,7 +62,6 @@ async def _scrape_all(
             *[_scrape_one_camoufox(url, domain_states, download_delay, resolved_concurrency,
                                     output_dir, run_ctx, block_images)
               for url in urls],
-            return_exceptions=True,
         )
     else:
         browser_cfg, run_cfg = _build_configs(headed=headed)
@@ -77,13 +76,8 @@ async def _scrape_all(
                 *[_scrape_one(crawler, url, run_cfg, domain_states,
                               download_delay, resolved_concurrency, output_dir, run_ctx)
                   for url in urls],
-                return_exceptions=True,
             )
-    return [
-        r if isinstance(r, dict)
-        else {'url': urls[i], 'wall_ms': 0, 'bytes': 0, 'status_code': None}
-        for i, r in enumerate(raw)
-    ]
+    return list(raw)
 
 
 if __name__ == '__main__':

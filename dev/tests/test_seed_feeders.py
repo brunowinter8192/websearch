@@ -32,7 +32,7 @@ async def test_robots_feeder_against_fixture_collects_allow_and_disallow(fixture
 async def test_sitemap_feeder_against_fixture_resolves_two_level_nested_index(fixture_server):
     result = await seed_feeders.sitemap_feeder_workflow(seed_url(fixture_server))
     assert result.ok is True
-    assert result.source == "sitemap"
+    assert result.source == "sitemap_declared"
     expected = {_fixture_url(fixture_server, p) for p in SITEMAP_BLOG_PAGES + SITEMAP_LEGAL_PAGES}
     assert set(result.urls) == expected
 

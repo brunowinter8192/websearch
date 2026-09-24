@@ -37,7 +37,7 @@ Extra platform attributes (not in Protocol):
 
 ---
 
-### discover.py (155 LOC)
+### discover.py (161 LOC)
 
 **Purpose:** Sitemap-based article discovery. Fetches theblock sitemap index (direct httpx →
 proxy pool fallback), selects `post_type_post_*` sub-sitemaps by mode (`delta`/`full`/`sub:N`/`sub:A-B`),
@@ -72,3 +72,4 @@ apply `_post_clean()` regex pass → mutate `entry["publication_date"] = datePub
 
 - `precondition_url` is `https://www.google.com`, not theblock.co — theblock.co returns 403 on plain urllib.
 - `_SPONSOR_BLOCK_RE` in `cleanup.py` strips from the sponsor-block header to END OF STRING (no closing anchor) — corpus-verified safe on the validated 22,995-file corpus, but re-check that assumption against new corpus shapes before trusting it on fresh scrapes.
+- 2026-09-24 Phase 5: a failed direct sitemap fetch logs status and URL, each served sitemap logs its route (direct or proxy), and a sub-sitemap that fails direct + proxy raises `RuntimeError` like the index. `discover(timeframe, acquire_logger=None)` (the `AcquireLogger` parameter was renamed to free `logger` for the module logger).

@@ -1,6 +1,5 @@
 # INFRASTRUCTURE
 import asyncio
-import locale
 import logging
 import plistlib
 import subprocess
@@ -78,29 +77,24 @@ def _ensure_no_focus_steal(executable_path: str | None) -> None:
     if app_path is None:
         return
     plist_path = app_path / "Contents" / "Info.plist"
-    try:
-        with open(plist_path, "rb") as f:
-            data = plistlib.load(f)
-        if data.get("LSUIElement") is True:
-            return
-        data["LSUIElement"] = True
-        with open(plist_path, "wb") as f:
-            plistlib.dump(data, f)
-    except Exception as e:
-        logger.warning("Could not set LSUIElement on %s (no-focus-steal not applied): %s", plist_path, e)
+    with open(plist_path, "rb") as f:
+        data = plistlib.load(f)
+    if data.get("LSUIElement") is True:
+        return
+    data["LSUIElement"] = True
+    with open(plist_path, "wb") as f:
+        plistlib.dump(data, f)
 
 
 def _resolve_system_locale() -> str:
-    if sys.platform == "darwin":
-        result = subprocess.run(
-            ["defaults", "read", "-g", "AppleLocale"],
-            capture_output=True, text=True, timeout=5, check=True,
-        )
-        apple_locale = result.stdout.strip()
-        if apple_locale:
-            return apple_locale.replace("_", "-")
-    language_tag, _ = locale.getlocale()
-    return language_tag.replace("_", "-") if language_tag else "en-US"
+    result = subprocess.run(
+        ["defaults", "read", "-g", "AppleLocale"],
+        capture_output=True, text=True, timeout=5, check=True,
+    )
+    apple_locale = result.stdout.strip()
+    if not apple_locale:
+        raise RuntimeError("defaults read -g AppleLocale returned empty output")
+    return apple_locale.replace("_", "-")
 
 
 def _build_camoufox_kwargs(block_images: bool) -> dict:

@@ -169,3 +169,45 @@ def test_parse_url_blocks_reads_iso_lastmod():
 def test_parse_url_blocks_unparseable_lastmod_raises():
     with pytest.raises(ValueError):
         _parse_url_blocks(_url_block("not-a-date"))
+
+
+def test_fetch_direct_failure_logs_status_and_url(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(theblock_discover.httpx, "get", lambda *a, **kw: _FakeHttpResponse(403, b"<html>blocked</html>"))
+    with caplog.at_level(logging.WARNING, logger="src.news.platforms.theblock.discover"):
+        assert _fetch_direct("https://www.theblock.co/x.xml") is None
+    assert any("status=403" in m and "https://www.theblock.co/x.xml" in m for m in caplog.messages)
+
+
+def test_fetch_xml_logs_which_route_served(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(theblock_discover, "_fetch_direct", lambda url: None)
+    monkeypatch.setattr(theblock_discover, "load_backfill_pool", lambda: ([("http", "1.2.3.4:80")], []))
+    monkeypatch.setattr(theblock_discover, "fetch_url", lambda *a: ("ok", b"<urlset/>", None))
+    with caplog.at_level(logging.INFO, logger="src.news.platforms.theblock.discover"):
+        assert theblock_discover._fetch_xml("https://www.theblock.co/s.xml", []) == b"<urlset/>"
+    assert any("served via proxy http://1.2.3.4:80" in m for m in caplog.messages)
+
+
+def test_fetch_xml_records_attempt_reason_on_the_acquire_logger(monkeypatch):
+    recorded = []
+
+    class _Rec:
+        def record_attempt(self, proto, hp, url, ok, reason=None):
+            recorded.append((ok, reason))
+
+    monkeypatch.setattr(theblock_discover, "_fetch_direct", lambda url: None)
+    monkeypatch.setattr(theblock_discover, "fetch_url", lambda *a: ("fail", b"", "ConnectTimeout"))
+    theblock_discover._fetch_xml("https://www.theblock.co/s.xml", [("http", "h:1")], _Rec())
+    assert recorded == [(False, "ConnectTimeout")]
+
+
+def test_failed_sub_sitemap_raises_like_the_index():
+    import asyncio
+    from unittest.mock import patch
+
+    index = (b"<?xml version='1.0'?><sitemapindex><sitemap><loc>https://www.theblock.co/sitemap_tbco_post_type_post_1.xml</loc></sitemap></sitemapindex>")
+    replies = {"https://www.theblock.co/sitemap_tbco_index.xml": index}
+    with patch("src.news.platforms.theblock.discover._fetch_xml", side_effect=lambda url, pc, lg=None: replies.get(url)):
+        with pytest.raises(RuntimeError, match="sub-sitemap fetch failed"):
+            asyncio.run(theblock_discover.discover("full"))

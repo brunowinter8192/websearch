@@ -90,3 +90,28 @@ def test_load_backfill_pool_source_count_on_success():
     src = next(s for s in sources if s["url"] == thespeedx_http_url)
     assert src["ok"] is True
     assert src["count"] == 3
+
+
+def test_load_backfill_pool_records_error_type_of_failed_source():
+    from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
+
+    def mock_get(url, timeout):
+        raise httpx.ConnectError("blip")
+
+    with patch("httpx.get", side_effect=mock_get), patch.object(pool_retry, "_sleep"):
+        _, sources = load_backfill_pool()
+
+    assert all(s["ok"] is False and s["error"] == "ConnectError" for s in sources)
+
+
+def test_load_backfill_pool_successful_source_has_no_error_key():
+    from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
+
+    resp = MagicMock()
+    resp.text = "1.1.1.1:80\n"
+    resp.json.return_value = [{"protocol": "http", "host": "4.4.4.4", "port": 80}]
+    resp.raise_for_status = lambda: None
+    with patch("httpx.get", return_value=resp), patch.object(pool_retry, "_sleep"):
+        _, sources = load_backfill_pool()
+    ok = [s for s in sources if s["ok"]]
+    assert ok and all("error" not in s for s in ok)

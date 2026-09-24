@@ -163,7 +163,7 @@ async def test_sitemap_feeder_workflow_all_404_is_ok_empty_docs_github_shape(mon
     monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
     result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
-    assert result == FeederResult(urls=[], ok=True, source="sitemap")
+    assert result == FeederResult(urls=[], ok=True, source="sitemap_conventional")
 
 
 @pytest.mark.asyncio
@@ -214,3 +214,48 @@ async def test_sitemap_feeder_workflow_non_xml_sitemap_is_failed_with_error(monk
     assert result.ok is False
     assert result.urls == []
     assert result.error
+
+
+@pytest.mark.asyncio
+async def test_sitemap_feeder_workflow_declared_route_is_named_in_source(monkeypatch):
+    urlset = _xml('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://docs.example.com/a</loc></url></urlset>')
+    routes = {
+        "https://docs.example.com/robots.txt": _FakeResponse(200, text="Sitemap: https://docs.example.com/declared.xml\n"),
+        "https://docs.example.com/declared.xml": _FakeResponse(200, content=urlset),
+    }
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    assert result.source == "sitemap_declared"
+
+
+@pytest.mark.asyncio
+async def test_sitemap_feeder_workflow_conventional_route_is_named_in_source(monkeypatch):
+    urlset = _xml('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://docs.example.com/a</loc></url></urlset>')
+    routes = {"https://docs.example.com/sitemap.xml": _FakeResponse(200, content=urlset)}
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    assert result.source == "sitemap_conventional"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [404, 410])
+async def test_fetch_sitemap_absent_statuses_return_none(status):
+    client = _FakeAsyncClient({"https://example.com/s.xml": _FakeResponse(status)})
+    assert await fetch_sitemap(client, "https://example.com/s.xml") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [403, 429, 500, 503])
+async def test_fetch_sitemap_other_non_200_raises(status):
+    client = _FakeAsyncClient({"https://example.com/s.xml": _FakeResponse(status)})
+    with pytest.raises(RuntimeError, match=str(status)):
+        await fetch_sitemap(client, "https://example.com/s.xml")
+
+
+@pytest.mark.asyncio
+async def test_sitemap_feeder_workflow_server_error_is_failed_not_empty(monkeypatch):
+    routes = {"https://docs.example.com/robots.txt": _FakeResponse(503)}
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    assert result.ok is False
+    assert "503" in result.error

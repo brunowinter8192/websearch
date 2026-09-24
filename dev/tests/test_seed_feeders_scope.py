@@ -1,6 +1,10 @@
 import pytest
 
-from src.crawler.seed_feeders_scope import normalize_url, scope_and_dedup
+from src.crawler.seed_feeders_scope import normalize_url, scope_and_dedup as _scope_and_dedup
+
+
+def scope_and_dedup(urls, seed_host):
+    return _scope_and_dedup(urls, seed_host)[0]
 
 
 def test_normalize_url_lowercases_scheme_and_host():
@@ -91,3 +95,10 @@ def test_scope_and_dedup_drops_malformed_url_without_raising():
 def test_scope_and_dedup_preserves_first_seen_order():
     urls = ["https://example.com/c", "https://example.com/a", "https://example.com/c"]
     assert scope_and_dedup(urls, "example.com") == ["https://example.com/c", "https://example.com/a"]
+
+
+def test_scope_and_dedup_counts_dropped_malformed_urls():
+    urls = ["https://example.com:notaport/a", "https://example.com/b", "https://example.com:x/c"]
+    result, dropped = _scope_and_dedup(urls, "example.com")
+    assert result == ["https://example.com/b"]
+    assert dropped == 2
