@@ -166,10 +166,7 @@ async def diagnostic_scan(tab) -> dict:
     val = extract_value(raw)
     if not val:
         return {}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    return json.loads(val)
 
 
 async def diagnose(tab) -> dict:
@@ -177,8 +174,5 @@ async def diagnose(tab) -> dict:
     val = extract_value(raw)
     diag = {"title": "", "url": "", "ready_state": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     return diag

@@ -5,7 +5,7 @@ Logging tooling: AST-based audit over `src/` logger call-sites (identify misclas
 
 ## Modules
 
-### 01_audit.py (119 LOC)
+### 01_audit.py (115 LOC)
 
 **Purpose:** AST walker over `src/`; emits one row per `logger.X()` / `logging.X()` call with file:line, logger object name, current level, and message template (truncated to 120 chars).
 **Reads:** `src/**/*.py` source files.

@@ -22,7 +22,7 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ---
 
-### _dom.py (184 LOC)
+### _dom.py (178 LOC)
 
 **Purpose:** Google results-page interaction — consent detection/handling, result wait/parse, the /sorry/ block check, and the structural diagnostic JS pass.
 **Reads:** nothing — executes JS against the `tab` object passed by the caller.
@@ -52,7 +52,7 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ---
 
-### 02_google_wml_probe.py (289 LOC)
+### 02_google_wml_probe.py (286 LOC)
 
 **Purpose:** Path B probe entry point — browserless WML-route fetch (Nokia UA + curl_cffi `chrome99_android` impersonation) per query, classified into the same four-state outcome model.
 **Reads:** `queries.json`.

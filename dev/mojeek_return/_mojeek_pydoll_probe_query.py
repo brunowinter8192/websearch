@@ -78,10 +78,7 @@ async def _eval_json(tab, script: str) -> dict | list | None:
     value = _extract_value(raw)
     if not value:
         return None
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return None
+    return json.loads(value)
 
 
 async def read_cookie_fingerprints(tab, domain_filter: str | None = COOKIE_DOMAIN_FILTER) -> list[dict]:
@@ -118,10 +115,7 @@ def _record_state(record: dict) -> str | None:
     detail = record.get("detail")
     if not detail:
         return None
-    try:
-        return json.loads(detail).get("state")
-    except (json.JSONDecodeError, TypeError):
-        return None
+    return json.loads(detail).get("state")
 
 
 def _event_rel_ms(measurement: QueryMeasurement, record: dict, poll_ms: float) -> float:

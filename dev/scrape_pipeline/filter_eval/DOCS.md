@@ -12,7 +12,7 @@ Crawl4AI content-filter configuration exploration — compares filter strategies
 **Writes:** `04_reports/<domain>_<config>_raw.md` / `_fit.md`.
 **Called by:** CLI only.
 
-### 05_filter_debug.py (378 LOC)
+### 05_filter_debug.py (374 LOC)
 
 **Purpose:** Instruments the scraping pipeline step-by-step to show what each filter removes at each stage — node counts, character counts, percentage deltas, markdown previews of removed content. Used during active profile development.
 **Reads:** `domains.txt` (pipeline root) or a URL CLI arg; `--profile`.

@@ -62,11 +62,7 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
 
 def _scan_file(filepath: Path) -> list[dict]:
     src_text = filepath.read_text(encoding="utf-8", errors="replace")
-    try:
-        tree = ast.parse(src_text, filename=str(filepath))
-    except SyntaxError as e:
-        print(f"  [WARN] SyntaxError in {filepath}: {e}", file=sys.stderr)
-        return []
+    tree = ast.parse(src_text, filename=str(filepath))
     return _extract_calls(tree, src_text, filepath)
 
 

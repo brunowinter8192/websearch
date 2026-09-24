@@ -83,10 +83,7 @@ def _clean_url(href: str) -> str:
 
 
 def _parse_results(body: str) -> tuple[int, list, list]:
-    try:
-        doc = lhtml.fromstring(body)
-    except Exception:
-        return 0, [], []
+    doc = lhtml.fromstring(body)
     containers = doc.xpath(_CONTAINER_XPATH)
     results = []
     for c in containers:
