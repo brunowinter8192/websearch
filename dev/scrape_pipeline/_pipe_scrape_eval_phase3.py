@@ -10,14 +10,13 @@ from _pipe_scrape_eval_common import REPORTS_DIR, compute_metrics
 
 DATA_DIR = Path(__file__).parent / "07_pipe_scrape_eval_data"
 
-PHASE3_BATCH_SIZE = 30       # URLs per batch — matches WAF burst window from Phase 1
-PHASE3_INTER_BATCH_S = 30.0  # pause between batches (conservative WAF recovery)
-PHASE3_RETRY_COOLDOWN_S = 60.0  # wait before retry pass on 429 URLs
+PHASE3_BATCH_SIZE = 30
+PHASE3_INTER_BATCH_S = 30.0
+PHASE3_RETRY_COOLDOWN_S = 60.0
 
 
 # FUNCTIONS
 
-# WAF probe: fetch N URLs at c=1, return True if WAF is clear (no 429s). Retries up to max_attempts.
 async def waf_probe_wait(
     urls: list[str],
     n: int = 3,
@@ -42,7 +41,6 @@ async def waf_probe_wait(
     return False
 
 
-# Write Phase 3 report — batched run with optional retry pass
 def write_phase3_report(
     m_main: dict,
     m_final: dict,
@@ -160,12 +158,10 @@ def _format_phase3_waf_urls_section(waf_urls_main: list[str]) -> list:
     return ["", "## WAF-429 URLs", "", "None — WAF-safe at full scale (c=5, batched+paced)."]
 
 
-# Phase 3 — Full run: WAF probe → batched main pass → optional retry pass
 async def phase3_full_run(urls: list[str], delay_s: float, concurrency: int = 5) -> None:
     print(f"Phase 3: {len(urls)} URLs | c={concurrency} | delay={delay_s}s | "
           f"batch={PHASE3_BATCH_SIZE} | inter_batch={PHASE3_INTER_BATCH_S}s")
 
-    # WAF probe: confirm budget reset before committing to 316-URL run
     print("\nStep 1: WAF probe (up to 10min wait) ...")
     clear = await waf_probe_wait(urls, n=3, max_attempts=10, wait_s=60.0)
     if not clear:
@@ -200,7 +196,6 @@ async def phase3_full_run(urls: list[str], delay_s: float, concurrency: int = 5)
           f"empty={m_final['empty']} bytes_p50={m_final['bytes_p50']:,} wall={total_wall_s:.0f}s")
 
 
-# Main pass: batched with inter-batch pause
 async def run_main_pass_step(
     urls: list[str], delay_s: float, concurrency: int, output_dir: Path, t0: float,
 ) -> tuple[list[dict], float]:
@@ -242,7 +237,6 @@ def summarize_main_pass(all_results: list[dict], m_main: dict, main_wall_s: floa
     return waf_urls_main, waf_onset
 
 
-# Retry pass: one attempt for any 429s after cooldown
 async def run_retry_pass_step(
     waf_urls_main: list[str], delay_s: float, concurrency: int, output_dir: Path,
 ) -> list[dict]:
@@ -262,7 +256,6 @@ async def run_retry_pass_step(
     return retry_results
 
 
-# Merge retry successes back into results
 def merge_retry_results(all_results: list[dict], retry_results: list[dict]) -> list[dict]:
     final_results = list(all_results)
     if retry_results:

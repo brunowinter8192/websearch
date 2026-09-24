@@ -10,17 +10,15 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 logger = logging.getLogger(__name__)
 
-EMPTY_THRESHOLD_BYTES = 100  # below this = effectively empty
+EMPTY_THRESHOLD_BYTES = 100
 
 # FUNCTIONS
 
-# Derive safe filename from URL for output dir
 def url_to_filename(url: str) -> str:
     slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
     slug = re.sub(r'_+', '_', slug).strip('_')[:100]
     return f"{slug}.md"
 
-# Scrape one URL inside an open crawler, return metrics dict. Saves raw markdown if output_dir set.
 async def _scrape_one(
     crawler: AsyncWebCrawler,
     url: str,
@@ -69,7 +67,6 @@ async def _scrape_one(
 
 # ORCHESTRATOR
 
-# Scrape URL list raw/maximal. No garbage drop — write everything. Returns per-URL metrics.
 async def scrape_urls(
     urls: list[str],
     delay_s: float = 1.0,

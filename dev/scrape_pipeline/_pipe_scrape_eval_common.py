@@ -8,19 +8,16 @@ REPORTS_DIR = Path(__file__).parent / "md"
 
 # FUNCTIONS
 
-# Load URL list from discovered-URLs file
 def load_urls(path: Path = DISCOVERED_URLS) -> list[str]:
     return [ln.strip() for ln in path.read_text(encoding='utf-8').splitlines() if ln.strip()]
 
 
-# Stratified sample: sort URLs alphabetically then pick every N-th (spreads across sections)
 def stratify(urls: list[str], n: int) -> list[str]:
     sorted_urls = sorted(urls)
     step = max(1, len(sorted_urls) // n)
     return sorted_urls[::step][:n]
 
 
-# Compute aggregate latency + outcome metrics from a results list
 def compute_metrics(results: list[dict]) -> dict:
     ok = [r for r in results if r['outcome'] == 'ok']
     lats = sorted(r['wall_ms'] for r in ok)

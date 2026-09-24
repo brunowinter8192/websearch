@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Audit all logger.X() / logging.X() call-sites in src/ and emit a markdown report."""
 
 # INFRASTRUCTURE
 import ast
@@ -7,7 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent.parent  # repo root (worktree)
+ROOT = Path(__file__).parent.parent.parent
 SRC_DIR = ROOT / "src"
 REPORT_DIR = Path(__file__).parent / "md"
 LEVELS = {"debug", "info", "warning", "error", "critical"}
@@ -16,7 +15,6 @@ MSG_LIMIT = 120
 
 # FUNCTIONS
 
-# Extract logger call nodes from a parsed AST
 def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
     results = []
     src_lines = src_text.splitlines()
@@ -25,13 +23,11 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        # Match: logger.warning(...) / logging.warning(...) / log.warning(...)
         if not isinstance(func, ast.Attribute):
             continue
         method = func.attr.lower()
         if method not in LEVELS:
             continue
-        # Recover the object name (logger / logging / log / any alias)
         obj = func.value
         if isinstance(obj, ast.Name):
             obj_name = obj.id
@@ -41,7 +37,6 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
             obj_name = "?"
 
         lineno = node.lineno
-        # Best-effort message template from first positional arg
         msg_template = ""
         if node.args:
             first_arg = node.args[0]
@@ -50,7 +45,6 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
             except Exception:
                 msg_template = "<unparseable>"
 
-        # Truncate
         if len(msg_template) > MSG_LIMIT:
             msg_template = msg_template[: MSG_LIMIT - 3] + "..."
 
@@ -62,12 +56,10 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
             "msg": msg_template,
         })
 
-    # sort by line number
     results.sort(key=lambda r: r["lineno"])
     return results
 
 
-# Parse one .py file and return call records
 def _scan_file(filepath: Path) -> list[dict]:
     src_text = filepath.read_text(encoding="utf-8", errors="replace")
     try:
@@ -78,7 +70,6 @@ def _scan_file(filepath: Path) -> list[dict]:
     return _extract_calls(tree, src_text, filepath)
 
 
-# Walk src/ and collect all logger call records
 def _scan_src(src_dir: Path) -> list[dict]:
     all_records: list[dict] = []
     for py_file in sorted(src_dir.rglob("*.py")):
@@ -87,7 +78,6 @@ def _scan_src(src_dir: Path) -> list[dict]:
     return all_records
 
 
-# Render markdown report
 def _render_report(records: list[dict]) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
@@ -106,7 +96,6 @@ def _render_report(records: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-# Write report to disk
 def _write_report(content: str) -> Path:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     ts_file = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

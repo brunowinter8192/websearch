@@ -55,7 +55,6 @@ async def run_fix_prototype():
 
 # FUNCTIONS
 
-# Scrape all unique URLs with 3s delay between requests
 async def scrape_all_urls(urls: list[str]) -> dict:
     markdown_generator = DefaultMarkdownGenerator(
         content_filter=PruningContentFilter(threshold=0.48)
@@ -79,7 +78,6 @@ async def scrape_all_urls(urls: list[str]) -> dict:
     return results
 
 
-# Build Fix 1 section: status_code >= 400 triggers http_error
 def build_fix1_section(results: dict) -> str:
     lines = ["## Fix 1: status_code based 404 detection\n"]
     lines.append("| URL | status_code | Would trigger http_error? | Correct? |")
@@ -101,7 +99,6 @@ def build_fix1_section(results: dict) -> str:
     return "\n".join(lines)
 
 
-# Build Fix 2 section: strip consent prefix by density + heading search
 def build_fix2_section(results: dict) -> str:
     lines = ["## Fix 2: consent prefix stripping\n"]
 
@@ -137,7 +134,6 @@ def build_fix2_section(results: dict) -> str:
     return "\n".join(lines)
 
 
-# Strip leading consent block: detect by keyword density, cut before first heading
 def strip_consent_prefix(content: str) -> str:
     if not content:
         return content
@@ -152,7 +148,6 @@ def strip_consent_prefix(content: str) -> str:
     return content
 
 
-# Build recommendation based on actual fix outcomes
 def build_recommendation(results: dict) -> str:
     medium_url = "https://medium.com/nonexistent-article-xyz-12345"
     wiki_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"

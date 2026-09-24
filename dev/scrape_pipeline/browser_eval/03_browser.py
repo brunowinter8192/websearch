@@ -46,7 +46,6 @@ JS_TEST_URLS = [
 ]
 
 
-# Convert URL to filesystem-safe slug
 def url_to_slug(url: str) -> str:
     parsed = urlparse(url)
     path = parsed.path.strip("/")
@@ -59,7 +58,6 @@ def url_to_slug(url: str) -> str:
     return parts[:80]
 
 
-# Load URLs from CLI arguments or use defaults
 def get_urls():
     if len(sys.argv) > 1:
         return sys.argv[1:]
@@ -102,7 +100,6 @@ async def main():
 
 # FUNCTIONS
 
-# Scrape single URL with all configs, rate-limited by semaphore
 async def scrape_url_configs(sem, crawler, url, results):
     async with sem:
         domain = url.split("//")[-1].split("/")[0].replace(".", "_")

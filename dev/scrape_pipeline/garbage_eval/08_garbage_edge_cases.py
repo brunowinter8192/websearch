@@ -54,7 +54,6 @@ async def run_edge_case_suite():
 
 # FUNCTIONS
 
-# Scrape URL with and without filter, run garbage detection
 async def test_url(category: str, url: str) -> str:
     markdown_generator = DefaultMarkdownGenerator(
         content_filter=PruningContentFilter(threshold=0.48)
@@ -75,7 +74,6 @@ async def test_url(category: str, url: str) -> str:
     return format_url_section(category, url, raw, filtered)
 
 
-# Format one URL result as markdown section under its category
 def format_url_section(category: str, url: str, raw: str, filtered: str) -> str:
     raw_result = is_garbage_content(raw) if raw else "NO CONTENT"
     filtered_result = is_garbage_content(filtered) if filtered else "NO CONTENT"
@@ -101,7 +99,6 @@ def format_url_section(category: str, url: str, raw: str, filtered: str) -> str:
     return "\n".join(lines)
 
 
-# Determine whether garbage detection behaved correctly for this category
 def assess_result(category: str, raw_result, filtered_result) -> str:
     if category == "baseline_good":
         if raw_result is None and filtered_result is None:

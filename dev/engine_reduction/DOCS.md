@@ -11,7 +11,7 @@ No `__init__.py` — not a package. `openalex_pdf_probe.py` is the sole entry po
 
 ## Modules
 
-### openalex_pdf_probe.py (239 LOC)
+### openalex_pdf_probe.py (215 LOC)
 
 **Purpose:** Milestone 1 measurement — for 7 real agent queries, how often does an OpenAlex work carry a direct PDF URL (`best_oa_location.pdf_url`) vs a landing page only vs no OA location, over the full 100-result page and over the top 10; plus a `type` breakdown of pdf_url-present works and an eyeball listing (title/type/chosen URL/pdf_url) for 2 queries.
 **Reads:** none (live HTTP fetch against `https://api.openalex.org/works`, no `mailto`, no API key).

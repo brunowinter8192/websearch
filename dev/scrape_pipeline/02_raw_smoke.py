@@ -37,14 +37,12 @@ async def raw_smoke_workflow(input_path: str, query_id: int, output_dir: str | N
 
 # FUNCTIONS
 
-# Parse smoke report MD: return query text and list of (pos, class_label, url)
 def parse_smoke_report(input_path: str, query_id: int) -> tuple[str, list[tuple[int, str, str]]]:
     lines = Path(input_path).read_text(encoding="utf-8").splitlines()
     query_text, start, end = find_query_section(lines, query_id)
     return query_text, extract_urls(lines, start, end)
 
 
-# Find start/end line indices for query N in smoke report
 def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
     start = -1
     query_text = ""
@@ -62,7 +60,6 @@ def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
     return query_text, start, len(lines)
 
 
-# Extract (pos, class_label, url) tuples from a query section's line range
 def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str, str]]:
     entries = []
     current_pos, current_class = None, None
@@ -79,7 +76,6 @@ def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str,
     return entries
 
 
-# Create output dir and return its path
 def prepare_output_dir(output_dir: str | None) -> Path:
     if output_dir is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -90,14 +86,12 @@ def prepare_output_dir(output_dir: str | None) -> Path:
     return out
 
 
-# Convert URL to safe filename with short hash suffix (full URL in hash for query-string disambiguation)
 def sanitize_filename(url: str) -> str:
     slug = re.sub(r"[^\w]", "_", url)[:80]
     h = hashlib.md5(url.encode()).hexdigest()[:6]
     return f"{slug}_{h}"
 
 
-# Dispatch all URLs via arun_many, save files, return result dicts in input order
 async def scrape_all(url_entries: list[tuple[int, str, str]], out_dir: Path) -> list[dict]:
     urls = [url for _, _, url in url_entries]
     browser_config = BrowserConfig(headless=True, verbose=False)
@@ -113,7 +107,6 @@ async def scrape_all(url_entries: list[tuple[int, str, str]], out_dir: Path) -> 
             for pos, cl, url in url_entries
         ]
 
-    # Index by URL — arun_many returns in dispatch order, not input order
     result_by_url: dict[str, object] = {r.url: r for r in raw_results}
 
     results = []
@@ -145,7 +138,6 @@ async def scrape_all(url_entries: list[tuple[int, str, str]], out_dir: Path) -> 
     return results
 
 
-# Return informational hint string for empty results (not routing logic)
 def _empty_hint(url: str) -> str:
     ext = Path(url.split("?")[0]).suffix.lower()
     if ext == ".pdf":
@@ -158,7 +150,6 @@ def _empty_hint(url: str) -> str:
     return ""
 
 
-# Write minimal triage report, return its path
 def write_report(
     results: list, query_text: str, query_id: int,
     input_path: str, out_dir: Path, runtime: float,

@@ -4,14 +4,12 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Local import — run from project root: ./venv/bin/python dev/scrape_pipeline/07_pipe_scrape_eval.py
 sys.path.insert(0, str(Path(__file__).parent))
-# From p1_pipe_scraper.py: raw URL scraper (domcontentloaded, no filter, configurable knobs)
-from p1_pipe_scraper import scrape_urls  # noqa: E402
-from _pipe_scrape_eval_common import DISCOVERED_URLS, load_urls  # noqa: E402
-from _pipe_scrape_eval_phase1 import phase1_concurrency_sweep  # noqa: E402
-from _pipe_scrape_eval_phase2 import phase2_delay_sweep  # noqa: E402
-from _pipe_scrape_eval_phase3 import phase3_full_run  # noqa: E402
+from p1_pipe_scraper import scrape_urls
+from _pipe_scrape_eval_common import DISCOVERED_URLS, load_urls
+from _pipe_scrape_eval_phase1 import phase1_concurrency_sweep
+from _pipe_scrape_eval_phase2 import phase2_delay_sweep
+from _pipe_scrape_eval_phase3 import phase3_full_run
 
 
 # ORCHESTRATOR
@@ -33,7 +31,6 @@ async def main(phase: str, delay: float) -> None:
 
 # FUNCTIONS
 
-# Smoke test: 1 URL, verify module runs end-to-end
 async def smoke_test(urls: list[str]) -> None:
     print(f"Smoke test: 1 URL — delay=1.0s, timeout=15000ms, concurrency=1")
     sample = [urls[0]]

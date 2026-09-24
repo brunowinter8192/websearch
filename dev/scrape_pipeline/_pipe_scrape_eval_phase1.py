@@ -9,7 +9,6 @@ from _pipe_scrape_eval_common import DISCOVERED_URLS, REPORTS_DIR, compute_metri
 
 # FUNCTIONS
 
-# Markdown table row for the concurrency sweep report
 def fmt_sweep_row(concurrency: int, m: dict, wall_s: float) -> str:
     waf_safe = "✓" if m['waf_429'] == 0 else "✗"
     return (
@@ -20,7 +19,6 @@ def fmt_sweep_row(concurrency: int, m: dict, wall_s: float) -> str:
     )
 
 
-# Write Phase 1 report to file; return recommended concurrency (highest WAF-safe level)
 def write_phase1_report(sweep_rows: list[tuple], sample_n: int) -> tuple[Path, int]:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
@@ -66,7 +64,6 @@ def write_phase1_report(sweep_rows: list[tuple], sample_n: int) -> tuple[Path, i
     return path, best
 
 
-# Phase 1 — Concurrency sweep for WAF detection
 async def phase1_concurrency_sweep(urls: list[str], sample_n: int = 30) -> int:
     sample = stratify(urls, sample_n)
     print(f"Phase 1: concurrency sweep — {len(sample)} stratified URLs, delay=1.0s, timeout=15000ms")

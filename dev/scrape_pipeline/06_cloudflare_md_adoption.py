@@ -16,13 +16,11 @@ TIMEOUT = 15.0
 USER_AGENT = "Mozilla/5.0 (compatible; cf-md-probe/1.0)"
 
 URLS: list[tuple[str, str]] = [
-    # Category A — CF-owned (positive controls)
     ("A", "https://blog.cloudflare.com/"),
     ("A", "https://blog.cloudflare.com/markdown-for-agents/"),
     ("A", "https://developers.cloudflare.com/"),
     ("A", "https://developers.cloudflare.com/workers/"),
     ("A", "https://www.cloudflare.com/"),
-    # Category B — likely CF-fronted sites we'd typically scrape
     ("B", "https://dev.to/"),
     ("B", "https://www.npmjs.com/"),
     ("B", "https://discord.com/blog"),
@@ -42,7 +40,6 @@ URLS: list[tuple[str, str]] = [
     ("B", "https://posthog.com/blog"),
     ("B", "https://render.com/docs"),
     ("B", "https://medium.com/"),
-    # Category C — negative controls (not CF-fronted)
     ("C", "https://en.wikipedia.org/wiki/Web_scraping"),
     ("C", "https://docs.python.org/3/"),
     ("C", "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept"),
@@ -86,7 +83,6 @@ async def cf_md_adoption_workflow(output_dir: Path) -> None:
 
 # FUNCTIONS
 
-# Probe URL with Accept: text/markdown; return result dict
 async def probe_url(
     client: httpx.AsyncClient, sem: asyncio.Semaphore, cat: str, url: str
 ) -> dict:
@@ -132,7 +128,6 @@ async def probe_url(
             }
 
 
-# Fetch HTML baseline body size (no Accept-MD header) for byte-reduction comparison
 async def fetch_html_baseline(
     client: httpx.AsyncClient, sem: asyncio.Semaphore, url: str
 ) -> int | None:
@@ -144,7 +139,6 @@ async def fetch_html_baseline(
             return None
 
 
-# Write report to output_dir; return report path
 def write_report(
     results: list[dict], ts: str, start_time: float, end_time: float, output_dir: Path
 ) -> Path:
@@ -158,7 +152,6 @@ def write_report(
     return report_path
 
 
-# Format report header block
 def format_header(
     results: list[dict], ts: str, start_time: float, end_time: float
 ) -> str:
@@ -175,7 +168,6 @@ def format_header(
     )
 
 
-# Format per-URL results table: HTML-bytes = baseline for MD-served, probe response for others
 def format_table(results: list[dict]) -> str:
     lines = [
         "## Per-URL Results\n",
@@ -210,7 +202,6 @@ def format_table(results: list[dict]) -> str:
     return "\n".join(lines)
 
 
-# Format aggregate summary section
 def format_summary(results: list[dict]) -> str:
     cf_fronted = [r for r in results if r["cf_fronted"]]
     md_served = [r for r in results if r["md_served"]]

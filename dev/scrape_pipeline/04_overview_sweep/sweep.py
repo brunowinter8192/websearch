@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""
-sweep.py — Crawl4AI filter sweep against Q24 URLs.
-
-Iterates filter × content_source × excluded_selector combos defined in
-sweep_config.yml. Saves one .md per (config, URL). Writes _run_metadata.json
-with timing + size info for analyzer.
-
-NO prod imports. NO cli.py subprocess. Crawl4AI directly via arun_many.
-
-Usage:
-    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py
-    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py --config <path>
-    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py --output-dir <path>
-"""
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -35,17 +21,29 @@ from crawl4ai import (
 )
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
+DESCRIPTION = """
+sweep.py — Crawl4AI filter sweep against Q24 URLs.
+
+Iterates filter × content_source × excluded_selector combos defined in
+sweep_config.yml. Saves one .md per (config, URL). Writes _run_metadata.json
+with timing + size info for analyzer.
+
+NO prod imports. NO cli.py subprocess. Crawl4AI directly via arun_many.
+
+Usage:
+    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py
+    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py --config <path>
+    ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/sweep.py --output-dir <path>
+"""
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DEFAULT_CONFIG = PROJECT_ROOT / "dev" / "scrape_pipeline" / "04_overview_sweep" / "sweep_config.yml"
 OUTPUT_BASE = PROJECT_ROOT / "dev" / "scrape_pipeline" / "04_overview_sweep" / "sweep_data"
 
-# Smoke-report parsing (copied from 02_raw_smoke.py — dev scripts stay self-contained)
 QUERY_SECTION_RE = re.compile(r"^## Q(\d+): (.+)$")
 ENTRY_RE = re.compile(r"^(\d+)\. \*\*\[([A-Z?]+)\]\*\*")
 URL_LINE_RE = re.compile(r"^\s+URL: (https?://\S+)$")
 
-
-# ===================== ORCHESTRATOR =====================
 
 async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
     sweep_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -116,11 +114,7 @@ async def run_one_combo(crawler, combo: dict, index: int, total: int, urls: list
     }
 
 
-# ===================== CONFIG / COMBO GENERATION =====================
-
 def generate_combos(sweep_cfg: dict):
-    """Cartesian product of filters × content_sources × excluded_selectors.
-    For 'none' filter, content_source still varies (markdown gen sees different HTML)."""
     for f in sweep_cfg["filters"]:
         for cs in sweep_cfg["content_sources"]:
             for sel in sweep_cfg["excluded_selectors"]:
@@ -137,7 +131,6 @@ def build_run_config(combo: dict) -> CrawlerRunConfig:
     cs = combo["content_source"]
     sel = combo["selector"]
 
-    # Build content_filter
     if f["type"] == "none":
         content_filter = None
     elif f["type"] == "pruning":
@@ -153,18 +146,14 @@ def build_run_config(combo: dict) -> CrawlerRunConfig:
     )
 
     return CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,  # fresh fetch per config to keep results comparable
+        cache_mode=CacheMode.BYPASS,
         wait_until="networkidle",
         excluded_selector=sel["value"],
         markdown_generator=markdown_generator,
     )
 
 
-# ===================== OUTPUT HANDLING =====================
-
 def save_combo_outputs(combo: dict, results: list, urls: list, config_dir: Path) -> list:
-    """For each URL, pick markdown variant (fit_markdown if filter, else raw_markdown),
-    save to file, return outputs metadata list."""
     has_filter = combo["filter"]["type"] != "none"
     result_by_url = {r.url: r for r in results}
     outputs = []
@@ -216,8 +205,6 @@ def sanitize_filename(url: str) -> str:
     return f"{slug}_{h}"
 
 
-# ===================== SMOKE-REPORT PARSING =====================
-
 def parse_q_urls(smoke_report: Path, query_id: int) -> tuple[str, list]:
     lines = smoke_report.read_text(encoding="utf-8").splitlines()
     q_text, start, end = find_query_section(lines, query_id)
@@ -257,10 +244,8 @@ def extract_urls(lines: list, start: int, end: int) -> list:
     return urls
 
 
-# ===================== CLI =====================
-
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to sweep_config.yml")
     parser.add_argument("--output-dir", default=None, help="Output dir (default: sweep_data/<timestamp>/)")
     args = parser.parse_args()

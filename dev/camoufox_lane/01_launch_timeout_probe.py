@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Camoufox launch-timeout enforcement probe — camoufox_lane budget-grounding area, milestone 1.
-
-Sends an absurdly low launch timeout (1ms) through the SAME chain
-src/scraper/camoufox_scrape.py uses in production (kwargs -> camoufox.launch_options ->
-AsyncCamoufox(from_options=...)), to determine whether the launch-timeout kwarg the production
-code forwards is actually enforced at runtime, or silently ignored. A second run repeats the exact
-same chain with the production default (30000ms) as a control, confirming a clean launch through the
-same probe path (not a different code path that happens to also launch Camoufox).
-
-Dev scripts may not import from src/ — PROD_KWARGS below is a literal copy of the kwargs
-camoufox_scrape.py's _build_camoufox_kwargs() builds (same headless/os/block_images/timeout
-values), not a re-derivation; kept in sync by inspection, not by import.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -27,13 +14,9 @@ from camoufox.async_api import AsyncCamoufox
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# Mirrors src/scraper/camoufox_scrape.py's _PLAYWRIGHT_DEFAULT_TIMEOUT_MS (the production value
-# passed as the "timeout" kwarg through launch_options()/AsyncCamoufox).
 PROD_TIMEOUT_MS = 30000
 LOW_TIMEOUT_MS = 1
 
-# Mirrors src/scraper/camoufox_scrape.py's _build_camoufox_kwargs(block_images=False) — same
-# headless/os/block_images values; "timeout" is overridden per run below.
 PROD_KWARGS = {
     "headless": False,
     "os": "macos",
@@ -52,9 +35,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Resolve launch_options with the given timeout override, launch AsyncCamoufox through the SAME
-# chain camoufox_scrape.py's _acquire() uses, observe the outcome. Returns dict: timeout_ms,
-# outcome ("launched"|"exception"), wall_s, exception_type, exception_str, traceback.
 async def attempt_launch(timeout_ms: int, label: str) -> dict:
     kwargs = {**PROD_KWARGS, "timeout": timeout_ms}
     print(f"=== {label} ===", file=sys.stderr)
@@ -82,7 +62,6 @@ async def attempt_launch(timeout_ms: int, label: str) -> dict:
         }
 
 
-# Write the markdown report and return its path
 def write_report(low: dict, control: dict) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"01_launch_timeout_probe_{ts}.md"

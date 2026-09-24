@@ -57,13 +57,11 @@ async def filter_debug_suite(urls: list[str]):
 
 # FUNCTIONS
 
-# Resolve profile name string for display and folder naming
 def resolve_profile_name(url: str) -> str:
     config = load_config()
     return match_url_to_profile(url, config.get("routing", {}))
 
 
-# Run pipeline step-by-step and capture intermediate state
 def run_pipeline_debug(url: str, raw_html: str, profile: dict, profile_name: str) -> dict:
     parsed = parse_html(raw_html)
     nodes = parsed.get("nodes", [])
@@ -139,7 +137,6 @@ def run_markdown_cleanup_steps(raw_md: str, profile: dict) -> tuple[list, str]:
     return md_steps, after_whitespace
 
 
-# Build step dict for a node-level filter step
 def make_step(name: str, before_nodes: list | None, after_nodes: list, config: list | None = None) -> dict:
     if before_nodes is None:
         return {
@@ -172,7 +169,6 @@ def make_step(name: str, before_nodes: list | None, after_nodes: list, config: l
     }
 
 
-# Build step dict for a markdown-level cleanup step
 def make_md_step(name: str, before: str, after: str, config: list | None = None) -> dict:
     delta_pct = ((len(after) - len(before)) / len(before) * 100) if len(before) > 0 else 0.0
     return {
@@ -183,18 +179,15 @@ def make_md_step(name: str, before: str, after: str, config: list | None = None)
     }
 
 
-# Estimate total text chars from node list
 def estimate_chars(nodes: list) -> int:
     return sum(len(n.get("content", "")) for n in nodes if n.get("type") == "text")
 
 
-# Find nodes present in before but not in after using index tracking
 def diff_nodes(before: list, after: list) -> list:
     after_set = set(id(n) for n in after)
     return [n for n in before if id(n) not in after_set]
 
 
-# Convert removed nodes to readable markdown preview
 def nodes_to_preview(nodes: list) -> str:
     if not nodes:
         return ""
@@ -206,7 +199,6 @@ def nodes_to_preview(nodes: list) -> str:
     return preview_md[:MAX_PREVIEW_CHARS * 4]
 
 
-# Print compact console summary table
 def print_console_summary(report: dict):
     url = report["url"]
     profile = report["profile_name"]
@@ -243,7 +235,6 @@ def print_console_summary(report: dict):
     print(f"Final output: {report['final_chars']} chars")
 
 
-# Save detailed report to file
 def save_report(report: dict):
     profile = report["profile_name"]
     domain_name = extract_domain_name(report["url"])
@@ -294,7 +285,6 @@ def save_report(report: dict):
     print(f"  Clean MD: {clean_file}")
 
 
-# Write single filter step detail to report file
 def write_filter_step(f, step: dict):
     f.write(f"\n=== STEP: {step['name']} ===\n")
 
@@ -318,7 +308,6 @@ def write_filter_step(f, step: dict):
         f.write("\n" + "-" * 40 + "\n")
 
 
-# Write single markdown step detail to report file
 def write_markdown_step(f, step: dict):
     f.write(f"\n--- {step['name']} ---\n")
     delta = f"{step['delta_pct']:+.1f}%" if step["delta_pct"] is not None else ""
@@ -327,7 +316,6 @@ def write_markdown_step(f, step: dict):
         f.write(f"Config: {step['config']}\n")
 
 
-# Extract clean domain name from URL
 def extract_domain_name(url: str) -> str:
     parsed = urlparse(url)
     path_parts = [p for p in parsed.path.split("/") if p]
@@ -348,7 +336,6 @@ def extract_domain_name(url: str) -> str:
         return parsed.netloc.replace(".", "_")
 
 
-# Load domains from domains.txt
 def load_domains() -> list[str]:
     domains = []
     with open(DOMAINS_FILE, "r") as f:
@@ -359,12 +346,10 @@ def load_domains() -> list[str]:
     return domains
 
 
-# Filter domains by profile name
 def filter_domains_by_profile(domains: list[str], profile_name: str) -> list[str]:
     return [url for url in domains if resolve_profile_name(url) == profile_name]
 
 
-# Parse CLI arguments
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Filter debug pipeline for scraping suite")
     group = parser.add_mutually_exclusive_group(required=True)

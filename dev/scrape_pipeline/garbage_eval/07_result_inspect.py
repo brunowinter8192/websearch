@@ -41,7 +41,6 @@ async def run_result_inspection():
 
 # FUNCTIONS
 
-# Scrape URL and enumerate all CrawlResult attributes
 async def inspect_url(label: str, url: str) -> str:
     browser_config = BrowserConfig(headless=True, verbose=False)
     run_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, wait_until="networkidle")
@@ -54,7 +53,6 @@ async def inspect_url(label: str, url: str) -> str:
     return format_url_section(label, url, attr_rows, http_fields)
 
 
-# Enumerate all non-private, non-callable attributes with type and truncated value
 def build_attribute_table(result) -> list[tuple]:
     rows = []
     for attr in sorted(a for a in dir(result) if not a.startswith("_")):
@@ -70,7 +68,6 @@ def build_attribute_table(result) -> list[tuple]:
     return rows
 
 
-# Extract HTTP-relevant fields and check existence
 def build_http_section(result) -> dict:
     findings = {}
     for field in HTTP_FIELDS:
@@ -85,7 +82,6 @@ def build_http_section(result) -> dict:
     return findings
 
 
-# Format one URL inspection as markdown section
 def format_url_section(label: str, url: str, attr_rows: list[tuple], http_fields: dict) -> str:
     lines = [f"\n## [{label}] URL: {url}\n"]
 
