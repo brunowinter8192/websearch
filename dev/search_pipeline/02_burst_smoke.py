@@ -181,10 +181,19 @@ def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
                  queries_per_burst, cooldown) -> Path:
     path = report_dir / f"burst_{ts}.md"
     counts = Counter(r["status"] for r in records)
+    lines = _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts)
+    lines += _render_status_distribution(counts)
+    lines += _render_per_query_results(records)
+    lines += _render_timing_summary(records, batch_times)
+    lines += _render_sample_results(records)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts) -> list[str]:
     dist = " / ".join(f"{v} {k}" for k, v in counts.most_common())
     total_min, total_sec = divmod(int(total_s), 60)
-
-    lines = [
+    return [
         f"# Burst Smoke Report — burst_{ts}",
         "",
         "## Configuration",
@@ -199,14 +208,22 @@ def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
         f"- Total wall time: {total_min} min {total_sec} s",
         f"- Status distribution: {dist}",
         "",
+    ]
+
+
+def _render_status_distribution(counts) -> list[str]:
+    lines = [
         "## Status Distribution",
         "| Status | Count |",
         "|--------|-------|",
     ]
     for status, cnt in counts.most_common():
         lines.append(f"| {status} | {cnt} |")
+    return lines
 
-    lines += [
+
+def _render_per_query_results(records) -> list[str]:
+    lines = [
         "",
         "## Per-Query Results",
         "| Idx | Query | Status | Results | Domains | ~ms/query | Batch |",
@@ -216,11 +233,14 @@ def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
         q = r["query"][:50].replace("|", "\\|")
         lines.append(f"| {i} | {q} | {r['status']} | {r['count']} "
                      f"| {r['domains']} | {r['search_ms']} | {r['batch']} |")
+    return lines
 
+
+def _render_timing_summary(records, batch_times) -> list[str]:
     times = [r["search_ms"] for r in records]
     st = sorted(times)
     n = len(st)
-    lines += [
+    lines = [
         "",
         "## Timing Summary",
         "",
@@ -234,8 +254,11 @@ def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
     ]
     for bi, bt in enumerate(batch_times, 1):
         lines.append(f"- Batch {bi}: {bt:.1f}s")
+    return lines
 
-    lines += ["", "## Sample Results (first 3 per query)", ""]
+
+def _render_sample_results(records) -> list[str]:
+    lines = ["", "## Sample Results (first 3 per query)", ""]
     for i, r in enumerate(records, 1):
         lines.append(f"### Q{i}: {r['query']}")
         if not r["sample_results"]:
@@ -246,9 +269,7 @@ def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
                 if res["snippet"]:
                     lines.append(f"  Snippet: {res['snippet']}")
         lines.append("")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    return lines
 
 
 if __name__ == "__main__":

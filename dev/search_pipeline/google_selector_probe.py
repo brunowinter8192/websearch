@@ -189,6 +189,15 @@ def write_report(counts: dict, structure: list, url: str) -> Path:
     path = REPORT_DIR / f"google_selector_probe_{ts}.md"
     hypothesis, detail = diagnose(counts)
 
+    lines = _render_dom_counts(counts, ts, url)
+    lines += _render_structure(structure)
+    lines += _render_hypothesis(hypothesis, detail)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _render_dom_counts(counts: dict, ts: str, url: str) -> list[str]:
     LABELS = [
         ("rso_h3",                   "`#rso h3` — current parse selector"),
         ("div_g",                    "`div.g` — classic organic container"),
@@ -218,8 +227,11 @@ def write_report(counts: dict, structure: list, url: str) -> Path:
     ]
     for key, label in LABELS:
         lines.append(f"| {label} | {counts.get(key, 'N/A')} |")
+    return lines
 
-    lines += [
+
+def _render_structure(structure: list) -> list[str]:
+    lines = [
         "",
         "## First-6 `#rso h3` Structure",
         "",
@@ -232,8 +244,11 @@ def write_report(counts: dict, structure: list, url: str) -> Path:
             f"| {i} | {s.get('title','')} | {s.get('has_MjjYud')} | "
             f"{s.get('has_rso_div')} | {s.get('parent_tag')} | {link} |"
         )
+    return lines
 
-    lines += [
+
+def _render_hypothesis(hypothesis: str, detail: str) -> list[str]:
+    return [
         "",
         "## Hypothesis",
         "",
@@ -241,9 +256,6 @@ def write_report(counts: dict, structure: list, url: str) -> Path:
         "",
         detail,
     ]
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

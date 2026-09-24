@@ -123,75 +123,94 @@ async def run_probe():
         await tab.take_screenshot(SCREENSHOT_PATH)
         print(f"[probe] Screenshot saved.")
 
-        # Extract sannysoft results table
-        print("[probe] Extracting sannysoft result table...")
-        raw_table = await tab.execute_script(EXTRACT_RESULTS_JS)
-        table_json = _extract_value(raw_table)
-        table_results = json.loads(table_json) if table_json else []
-
-        # Direct navigator reads
-        print("[probe] Reading navigator properties...")
-        raw_nav = await tab.execute_script(READ_NAVIGATOR_JS)
-        nav_json = _extract_value(raw_nav)
-        nav_props = json.loads(nav_json) if nav_json else {}
-
-        # Permissions check (async JS)
-        print("[probe] Checking permissions API...")
-        raw_perm = await tab.execute_script(CHECK_PERMISSIONS_JS, await_promise=True)
-        perm_state = _extract_value(raw_perm) or "error"
+        table_results, nav_props, perm_state = await _read_probe_data(tab)
 
         # Report
-        print("\n" + "="*60)
-        print("SANNYSOFT BOT CHECK — RESULTS TABLE")
-        print("="*60)
-        passed = [r for r in table_results if r['status'] == 'PASS']
-        failed = [r for r in table_results if r['status'] == 'FAIL']
-        unknown = [r for r in table_results if r['status'] == 'UNKNOWN']
-        print(f"  PASS: {len(passed)} | FAIL: {len(failed)} | UNKNOWN: {len(unknown)}\n")
-        for r in table_results:
-            marker = "✅" if r['status'] == 'PASS' else ("❌" if r['status'] == 'FAIL' else "❓")
-            print(f"  {marker} {r['label']}: {r['value']}")
-
-        print("\n" + "="*60)
-        print("DIRECT NAVIGATOR / WEBGL READS")
-        print("="*60)
-        for k, v in nav_props.items():
-            print(f"  {k}: {v}")
-        print(f"  permissions.notifications: {perm_state}")
-
-        print("\n" + "="*60)
-        print("KEY SIGNALS (SUMMARY)")
-        print("="*60)
-        webdriver_val = nav_props.get('webdriver')
-        print(f"  navigator.webdriver   = {webdriver_val!r}  {'✅ undefined/false' if not webdriver_val else '❌ TRUE — bot flagged'}")
-        print(f"  navigator.plugins     = {nav_props.get('plugins_length')} entries  {'✅' if nav_props.get('plugins_length', 0) > 0 else '❌ 0 — headless tell'}")
-        wgl = nav_props.get('webgl_renderer', '')
-        swiftshader = 'SwiftShader' in str(wgl) or 'llvmpipe' in str(wgl).lower()
-        print(f"  webgl_renderer        = {wgl!r}  {'❌ SwiftShader — headless GPU' if swiftshader else '✅'}")
-        perm_ok = 'default' in str(perm_state)
-        print(f"  notifications perm    = {perm_state!r}  {'✅' if perm_ok else '❌ not default — headless tell'}")
-        print(f"  navigator.languages   = {nav_props.get('languages')}")
-        fail_labels = [r['label'] for r in failed]
-        print(f"\n  FAILED CHECKS: {fail_labels}")
-        print(f"  Screenshot: {SCREENSHOT_PATH}")
-
-        # Compact JSON summary for report
-        summary = {
-            "passed_count": len(passed),
-            "failed_count": len(failed),
-            "unknown_count": len(unknown),
-            "table_results": table_results,
-            "navigator": nav_props,
-            "permissions_notifications": perm_state,
-        }
-        print("\nJSON_SUMMARY_START")
-        print(json.dumps(summary, indent=2))
-        print("JSON_SUMMARY_END")
+        passed, failed, unknown = _print_results_table(table_results)
+        _print_navigator_reads(nav_props, perm_state)
+        _print_key_signals(nav_props, perm_state, failed)
+        _print_json_summary(passed, failed, unknown, table_results, nav_props, perm_state)
 
     finally:
         await close_browser()
 
 # FUNCTIONS
+
+async def _read_probe_data(tab) -> tuple[list, dict, str]:
+    # Extract sannysoft results table
+    print("[probe] Extracting sannysoft result table...")
+    raw_table = await tab.execute_script(EXTRACT_RESULTS_JS)
+    table_json = _extract_value(raw_table)
+    table_results = json.loads(table_json) if table_json else []
+
+    # Direct navigator reads
+    print("[probe] Reading navigator properties...")
+    raw_nav = await tab.execute_script(READ_NAVIGATOR_JS)
+    nav_json = _extract_value(raw_nav)
+    nav_props = json.loads(nav_json) if nav_json else {}
+
+    # Permissions check (async JS)
+    print("[probe] Checking permissions API...")
+    raw_perm = await tab.execute_script(CHECK_PERMISSIONS_JS, await_promise=True)
+    perm_state = _extract_value(raw_perm) or "error"
+    return table_results, nav_props, perm_state
+
+
+def _print_results_table(table_results: list) -> tuple[list, list, list]:
+    print("\n" + "="*60)
+    print("SANNYSOFT BOT CHECK — RESULTS TABLE")
+    print("="*60)
+    passed = [r for r in table_results if r['status'] == 'PASS']
+    failed = [r for r in table_results if r['status'] == 'FAIL']
+    unknown = [r for r in table_results if r['status'] == 'UNKNOWN']
+    print(f"  PASS: {len(passed)} | FAIL: {len(failed)} | UNKNOWN: {len(unknown)}\n")
+    for r in table_results:
+        marker = "✅" if r['status'] == 'PASS' else ("❌" if r['status'] == 'FAIL' else "❓")
+        print(f"  {marker} {r['label']}: {r['value']}")
+    return passed, failed, unknown
+
+
+def _print_navigator_reads(nav_props: dict, perm_state: str) -> None:
+    print("\n" + "="*60)
+    print("DIRECT NAVIGATOR / WEBGL READS")
+    print("="*60)
+    for k, v in nav_props.items():
+        print(f"  {k}: {v}")
+    print(f"  permissions.notifications: {perm_state}")
+
+
+def _print_key_signals(nav_props: dict, perm_state: str, failed: list) -> None:
+    print("\n" + "="*60)
+    print("KEY SIGNALS (SUMMARY)")
+    print("="*60)
+    webdriver_val = nav_props.get('webdriver')
+    print(f"  navigator.webdriver   = {webdriver_val!r}  {'✅ undefined/false' if not webdriver_val else '❌ TRUE — bot flagged'}")
+    print(f"  navigator.plugins     = {nav_props.get('plugins_length')} entries  {'✅' if nav_props.get('plugins_length', 0) > 0 else '❌ 0 — headless tell'}")
+    wgl = nav_props.get('webgl_renderer', '')
+    swiftshader = 'SwiftShader' in str(wgl) or 'llvmpipe' in str(wgl).lower()
+    print(f"  webgl_renderer        = {wgl!r}  {'❌ SwiftShader — headless GPU' if swiftshader else '✅'}")
+    perm_ok = 'default' in str(perm_state)
+    print(f"  notifications perm    = {perm_state!r}  {'✅' if perm_ok else '❌ not default — headless tell'}")
+    print(f"  navigator.languages   = {nav_props.get('languages')}")
+    fail_labels = [r['label'] for r in failed]
+    print(f"\n  FAILED CHECKS: {fail_labels}")
+    print(f"  Screenshot: {SCREENSHOT_PATH}")
+
+
+def _print_json_summary(passed: list, failed: list, unknown: list, table_results: list, nav_props: dict, perm_state: str) -> None:
+    # Compact JSON summary for report
+    summary = {
+        "passed_count": len(passed),
+        "failed_count": len(failed),
+        "unknown_count": len(unknown),
+        "table_results": table_results,
+        "navigator": nav_props,
+        "permissions_notifications": perm_state,
+    }
+    print("\nJSON_SUMMARY_START")
+    print(json.dumps(summary, indent=2))
+    print("JSON_SUMMARY_END")
+
 
 def main():
     asyncio.run(run_probe())
