@@ -346,3 +346,139 @@ Lessons for a successor:
   only reliable fix is a test under `dev/tests/` that imports the production module.
 - When retargeting such a test at `src`, set the retention variable through `monkeypatch` with the
   production name, and keep fixtures relative to the retention value (20 days old vs 2 days old at 14).
+
+# Phase 4 control-flow triage, dev/ (2026-09-24, issue #47) - step 1, classification only
+
+Scope: every `.py` under `dev/` except `search_pipeline/`, `news_pipeline/`, `tests/` (i.e. `_lib`,
+`access_recovery`, `agentic_discovery`, `brave_return`, `browser_posture`, `camoufox_lane`,
+`engine_reduction`, `explore_pipeline`, `lane_choice`, `logging`, `mojeek_return`,
+`pipe_scraper_hardening`, `scrape_pipeline`). No code was changed in this step.
+
+Method: the read-only scanner (copied into a session-private `/tmp` dir) found 82 except handlers:
+54 PRODUCES-OUTPUT, 15 SWALLOW-PASS, 7 LOG-ONLY, 4 SWALLOW-FLOW, 2 TRIPWIRE. The 2 TRIPWIRE handlers
+(`verify_environment_reachable` in `brave_return/_brave_probe_query.py` and
+`mojeek_return/_mojeek_pydoll_probe_query.py`, both re-raise as `RuntimeError("Environment
+tripwire ...")`) are allowed and not listed. The other 80 were each classified after reading the
+whole surrounding function. Evidence for B rows was searched in the `dev/*/md/` reports of the
+worktree, the `process-docs/` areas, and the main checkout's `src/logs/` (production logs; none of
+these dev probes write there, so they contain no evidence for these handlers).
+
+## Counts (80 handlers)
+
+| class | count | meaning |
+|---|---|---|
+| A status/report | 36 | exception becomes an explicit recorded failure fact |
+| D cleanup/teardown | 19 | best-effort kill/close/cancel |
+| E input-shape | 13 | legitimate outcome, not a hidden failure |
+| B fallback | 11 | all 11 verdict B-remove (0 B-keep, 0 B-keep-needs-logging) |
+| C silent swallow | 1 | remove |
+
+Why E is not a hidden failure: 6 handlers around `result["result"]["result"]["value"]` (CDP omits
+`value` when the evaluated script returns undefined, so None is a real outcome the callers handle);
+6 psutil race handlers (a process can vanish between listing and reading it; the poller retries
+or the report shows None); 1 external ALTCHA widget payload decode (the payload shape is not under
+our control and None means an explicit "unknown pow time").
+
+## B-remove and C rows
+
+| file:line | function | class | why |
+|---|---|---|---|
+| access_recovery/02_google_wml_probe.py:88 | _parse_results | B | lxml failure returns (0,[],[]) which becomes outcome NO_CONTAINERS, same as a genuine empty page; NO_CONTAINERS=0 in `md/google_wml_probe_20260915_201200.md`, never observed |
+| access_recovery/_dom.py:171 | diagnostic_scan | B | json.loads of the probe's own JSON.stringify output; `{}` reads as "no diagnostic"; never observed |
+| access_recovery/_dom.py:182 | diagnose | B | same source; swallow leaves empty-string defaults |
+| brave_return/_brave_probe_query.py:74 | _eval_json | B | own JSON.stringify output (`_brave_probe_js.py`); None reads as "no facts"; never observed |
+| mojeek_return/_mojeek_pydoll_probe_query.py:83 | _eval_json | B | same |
+| mojeek_return/_mojeek_pydoll_probe_query.py:123 | _record_state | B | own `JSON.stringify(ev.detail)`; None hides a malformed statechange |
+| mojeek_return/_mojeek_pydoll_probe_core.py:168 | extract_pow_time_ms | B | same source; skip on malformed detail |
+| mojeek_return/_mojeek_pydoll_probe_core.py:188 | extract_widget_states | B | same source; a malformed detail silently drops a widget state |
+| logging/01_audit.py:67 | _scan_file | B | SyntaxError returns [] so the file is silently absent from the audit (stderr only); src always parses, never observed |
+| scrape_pipeline/06_cloudflare_md_adoption.py:138 | fetch_html_baseline | B | failed baseline fetch returns None, rendered "—" and dropped from the reduction stats like a missing baseline; every md-served row in `md/06_cf_md_adoption_*.md` has a numeric HTML-bytes cell, never observed |
+| scrape_pipeline/filter_eval/05_filter_debug.py:196 | nodes_to_preview | B | raw joined text instead of a markdown preview; module cannot import (dead `src.scraper` imports), so unreachable and unobserved |
+| explore_pipeline/05_playwright_bfs.py:214 | fetch_page | C | exception becomes `(None, [], latency)` and `_process_batch_results` treats status None as success (only 429 and >=400 skip), so a failed fetch is appended to `found` and inflates recall; console WARN only; no fetch failure in `md/05_docs_github_rest_20260529.md` (266 pages fetched) |
+
+B-keep-needs-logging rows: none.
+
+## Full table (all 80)
+
+| file:line | function | scan | class | verdict | evidence |
+|---|---|---|---|---|---|
+| dev/_lib/browser_launch.py:127 | close_tab | LOG-ONLY | D | allowed | best-effort tab close, warning logged, registry popped in finally |
+| dev/_lib/browser_launch.py:142 | teardown | LOG-ONLY | D | allowed | browser.stop() failure logged, falls through to kill_by_profile |
+| dev/_lib/browser_launch.py:138 | teardown | SWALLOW-PASS | D | allowed | CancelledError of the watchdog task being cancelled on teardown |
+| dev/access_recovery/01_google_dom_probe.py:138 | run_navigation | PRODUCES-OUTPUT | A | allowed | record outcome=ERROR plus error field, written to the report |
+| dev/access_recovery/02_google_wml_probe.py:88 | _parse_results | PRODUCES-OUTPUT | B | B-remove | lxml failure (e.g. empty body via `resp.text or ""`) returns (0,[],[]), which run_query records as NO_CONTAINERS, same as a genuine empty page; NO_CONTAINERS=0 in dev/access_recovery/md/google_wml_probe_20260915_201200.md, condition never observed |
+| dev/access_recovery/02_google_wml_probe.py:150 | run_query | PRODUCES-OUTPUT | A | allowed | record outcome=ERROR plus error field |
+| dev/access_recovery/_dom.py:107 | extract_value | PRODUCES-OUTPUT | E | allowed | CDP result has no value key when the script returns undefined; None is a real outcome handled by callers |
+| dev/access_recovery/_dom.py:171 | diagnostic_scan | PRODUCES-OUTPUT | B | B-remove | json.loads of the probe's own JSON.stringify output; {} reads as 'no diagnostic'; malformed output never observed in dev/access_recovery/md |
+| dev/access_recovery/_dom.py:182 | diagnose | SWALLOW-PASS | B | B-remove | same source; swallow leaves the empty-string defaults, indistinguishable from an empty page |
+| dev/agentic_discovery/clean_web_cookieyes.py:150 | _process_files | PRODUCES-OUTPUT | A | allowed | errors list printed with STATUS: ISSUES_REMAINING |
+| dev/agentic_discovery/clean_web_searxng.py:175 | _process_files | PRODUCES-OUTPUT | A | allowed | prints ERROR per file and reports the skipped count |
+| dev/brave_return/_brave_probe_launch.py:215 | kill_tab | LOG-ONLY | D | allowed | best-effort tab close, warning logged |
+| dev/brave_return/_brave_probe_launch.py:230 | teardown | LOG-ONLY | D | allowed | browser.stop() failure logged, falls through to pid kill |
+| dev/brave_return/_brave_probe_launch.py:110 | _terminate_then_kill | SWALLOW-PASS | D | allowed | NoSuchProcess: process already gone before terminate |
+| dev/brave_return/_brave_probe_launch.py:116 | _terminate_then_kill | SWALLOW-PASS | D | allowed | NoSuchProcess: process already gone before kill |
+| dev/brave_return/_brave_probe_launch.py:226 | teardown | SWALLOW-PASS | D | allowed | CancelledError of the watchdog task being cancelled on teardown |
+| dev/brave_return/_brave_probe_query.py:63 | _extract_value | PRODUCES-OUTPUT | E | allowed | CDP result has no value key when the script returns undefined |
+| dev/brave_return/_brave_probe_query.py:74 | _eval_json | PRODUCES-OUTPUT | B | B-remove | json.loads of own JSON.stringify output (_brave_probe_js.py); None reads as 'no facts'; malformed output never observed |
+| dev/brave_return/_brave_probe_query.py:172 | run_query | PRODUCES-OUTPUT | A | allowed | measurement.nav_error set and warning logged |
+| dev/brave_return/test_brave_pydoll_core.py:106 | check_tripwire_aborts_on_dead_control | PRODUCES-OUTPUT | A | allowed | test harness catches the expected tripwire RuntimeError and records a check result |
+| dev/brave_return/test_brave_pydoll_core.py:119 | check_tripwire_passes_on_live_control | PRODUCES-OUTPUT | A | allowed | test harness turns a RuntimeError into a failed check |
+| dev/browser_posture/01_launch_latency_probe.py:72 | measure_latency | PRODUCES-OUTPUT | A | allowed | nav_failures counter in the report plus stderr line |
+| dev/browser_posture/02_parallel_chrome_probe.py:80 | attempt_backgrounded_launch | PRODUCES-OUTPUT | A | allowed | result['error'] recorded in the report |
+| dev/browser_posture/02_parallel_chrome_probe.py:86 | attempt_backgrounded_launch | PRODUCES-OUTPUT | A | allowed | result['stop_error'] recorded |
+| dev/browser_posture/04_headed_chromium_probe.py:71 | find_chrome_descendant | PRODUCES-OUTPUT | E | allowed | process-table race; None means 'not found yet', the poller retries |
+| dev/browser_posture/04_headed_chromium_probe.py:112 | _run_crawl4ai_once | PRODUCES-OUTPUT | A | allowed | returns (False, error string) that the report prints |
+| dev/browser_posture/04_headed_chromium_probe.py:76 | find_chrome_descendant | SWALLOW-FLOW | E | allowed | process vanished between listing and exe(); skipping it is a real outcome |
+| dev/browser_posture/04_headed_chromium_probe.py:92 | _poll_browser_and_focus | SWALLOW-PASS | E | allowed | process vanished mid-read; retried on the next poll iteration |
+| dev/browser_posture/05_cdp_headed_probe.py:80 | find_chrome_descendant | PRODUCES-OUTPUT | E | allowed | process-table race, None = not found yet |
+| dev/browser_posture/05_cdp_headed_probe.py:123 | capture_reference_cmdline | PRODUCES-OUTPUT | A | allowed | error string returned in the result dict |
+| dev/browser_posture/05_cdp_headed_probe.py:156 | scrape_over_cdp | PRODUCES-OUTPUT | A | allowed | success False plus error string returned |
+| dev/browser_posture/05_cdp_headed_probe.py:188 | _run_self_launch_and_scrape | PRODUCES-OUTPUT | A | allowed | self_launch_result['error'] set and printed |
+| dev/browser_posture/05_cdp_headed_probe.py:85 | find_chrome_descendant | SWALLOW-FLOW | E | allowed | process vanished between listing and exe() |
+| dev/browser_posture/05_cdp_headed_probe.py:183 | _run_self_launch_and_scrape | PRODUCES-OUTPUT | E | allowed | process vanished before cmdline read; self_cmdline stays None and the report shows it |
+| dev/browser_posture/05_cdp_headed_probe.py:107 | poll_loop | SWALLOW-PASS | E | allowed | process vanished mid-read; retried next iteration |
+| dev/browser_posture/_cdp_launch.py:59 | check_cdp_http_ready | PRODUCES-OUTPUT | A | allowed | retry poll until deadline; last_error returned as detail when never ready |
+| dev/browser_posture/_cdp_teardown.py:25 | kill_survivors | SWALLOW-PASS | D | allowed | survivor kill sweep, process already gone |
+| dev/browser_posture/_cdp_teardown.py:32 | kill_survivors | SWALLOW-PASS | D | allowed | survivor kill sweep, process already gone |
+| dev/browser_posture/_chromium_teardown.py:27 | kill_survivors | SWALLOW-PASS | D | allowed | survivor kill sweep, process already gone |
+| dev/browser_posture/_chromium_teardown.py:35 | kill_survivors | SWALLOW-PASS | D | allowed | survivor kill sweep, process already gone |
+| dev/browser_posture/_lib.py:155 | extract_value | PRODUCES-OUTPUT | E | allowed | CDP result has no value key when the script returns undefined |
+| dev/browser_posture/_lib.py:138 | stop_chrome | LOG-ONLY | D | allowed | browser.stop() failure logged, falls through to kill_by_profile |
+| dev/camoufox_lane/01_launch_timeout_probe.py:55 | attempt_launch | PRODUCES-OUTPUT | A | allowed | outcome=exception with type, message and traceback in the report |
+| dev/engine_reduction/openalex_pdf_probe.py:43 | run_probe | PRODUCES-OUTPUT | A | allowed | 429 recorded as 'Stopped early' in the report and stderr |
+| dev/explore_pipeline/05_playwright_bfs.py:214 | fetch_page | PRODUCES-OUTPUT | C | remove | exception becomes (None, [], latency); _process_batch_results treats status None as success (only 429 and >=400 are skipped), so a failed fetch is appended to `found` and inflates recall; only a console WARN; no 'fetch failed' in dev/explore_pipeline/md/05_docs_github_rest_20260529.md (266 pages fetched) |
+| dev/explore_pipeline/06_nextdata_probe.py:149 | fetch_ghes_sidebars | PRODUCES-OUTPUT | A | allowed | WARN line appended to the report log per failing version |
+| dev/lane_choice/01_backfill_pairs.py:117 | fire_one_pair | PRODUCES-OUTPUT | A | allowed | harness_status=harness_timeout recorded per pair |
+| dev/logging/01_audit.py:67 | _scan_file | PRODUCES-OUTPUT | B | B-remove | SyntaxError returns [] so the file is silently absent from the audit (stderr only); src always parses, never observed |
+| dev/logging/01_audit.py:45 | _extract_calls | PRODUCES-OUTPUT | A | allowed | explicit '<unparseable>' marker shown in the report |
+| dev/mojeek_return/_mojeek_pydoll_probe_core.py:155 | _decode_altcha_payload | PRODUCES-OUTPUT | E | allowed | decodes an external ALTCHA widget payload whose shape the probe does not control; None = explicit 'unknown pow time' |
+| dev/mojeek_return/_mojeek_pydoll_probe_core.py:168 | extract_pow_time_ms | SWALLOW-FLOW | B | B-remove | json.loads of our own JSON.stringify(ev.detail) (_mojeek_pydoll_probe_js.py); skip on malformed reads as no verified event; never observed |
+| dev/mojeek_return/_mojeek_pydoll_probe_core.py:188 | extract_widget_states | SWALLOW-FLOW | B | B-remove | same source; malformed detail silently drops a widget state |
+| dev/mojeek_return/_mojeek_pydoll_probe_launch.py:194 | kill_tab | LOG-ONLY | D | allowed | best-effort tab close, warning logged |
+| dev/mojeek_return/_mojeek_pydoll_probe_launch.py:209 | teardown | LOG-ONLY | D | allowed | browser.stop() failure logged, falls through to pid kill |
+| dev/mojeek_return/_mojeek_pydoll_probe_launch.py:89 | _terminate_then_kill | SWALLOW-PASS | D | allowed | NoSuchProcess: already gone before terminate |
+| dev/mojeek_return/_mojeek_pydoll_probe_launch.py:95 | _terminate_then_kill | SWALLOW-PASS | D | allowed | NoSuchProcess: already gone before kill |
+| dev/mojeek_return/_mojeek_pydoll_probe_launch.py:205 | teardown | SWALLOW-PASS | D | allowed | CancelledError of the watchdog task being cancelled on teardown |
+| dev/mojeek_return/_mojeek_pydoll_probe_query.py:72 | _extract_value | PRODUCES-OUTPUT | E | allowed | CDP result has no value key when the script returns undefined |
+| dev/mojeek_return/_mojeek_pydoll_probe_query.py:83 | _eval_json | PRODUCES-OUTPUT | B | B-remove | json.loads of own JSON.stringify output; None reads as 'no facts'; never observed |
+| dev/mojeek_return/_mojeek_pydoll_probe_query.py:123 | _record_state | PRODUCES-OUTPUT | B | B-remove | json.loads of own JSON.stringify(ev.detail); None hides a malformed statechange |
+| dev/mojeek_return/_mojeek_pydoll_probe_query.py:218 | run_query | PRODUCES-OUTPUT | A | allowed | measurement.nav_error set and warning logged |
+| dev/mojeek_return/mojeek_challenge_capture.py:79 | _extract_value | PRODUCES-OUTPUT | E | allowed | CDP result has no value key when the script returns undefined |
+| dev/mojeek_return/test_mojeek_pydoll_core.py:102 | check_tripwire_aborts_on_dead_control | PRODUCES-OUTPUT | A | allowed | test harness catches the expected tripwire RuntimeError and records a check |
+| dev/mojeek_return/test_mojeek_pydoll_core.py:115 | check_tripwire_passes_on_live_control | PRODUCES-OUTPUT | A | allowed | test harness turns a RuntimeError into a failed check |
+| dev/pipe_scraper_hardening/01_stealth_concurrency_probe.py:94 | _scrape_one | PRODUCES-OUTPUT | A | allowed | outcome=error plus verbatim text in crash_log, printed in the report |
+| dev/scrape_pipeline/01_dual_mode_smoke.py:147 | run_subprocess_async | PRODUCES-OUTPUT | A | allowed | rc -1 becomes status 'timeout' in the report |
+| dev/scrape_pipeline/01_dual_mode_smoke.py:150 | run_subprocess_async | SWALLOW-PASS | D | allowed | kill of a subprocess that may already have exited |
+| dev/scrape_pipeline/02_raw_smoke.py:103 | scrape_all | PRODUCES-OUTPUT | A | allowed | every URL gets status 'exception: <Type>' in the report |
+| dev/scrape_pipeline/02_raw_smoke.py:122 | scrape_all | PRODUCES-OUTPUT | A | allowed | status 'exception: <Type>' in the report |
+| dev/scrape_pipeline/04_overview_sweep/sweep.py:94 | run_one_combo | PRODUCES-OUTPUT | A | allowed | exception recorded in _run_metadata.json |
+| dev/scrape_pipeline/04_overview_sweep/sweep.py:177 | save_combo_outputs | PRODUCES-OUTPUT | A | allowed | status 'exception: <Type>' per output |
+| dev/scrape_pipeline/05_paper_mode/download.py:36 | download_one | PRODUCES-OUTPUT | A | allowed | status failed + HTTP code in the table |
+| dev/scrape_pipeline/05_paper_mode/download.py:38 | download_one | PRODUCES-OUTPUT | A | allowed | status failed + message in the table |
+| dev/scrape_pipeline/05_paper_mode/download.py:53 | download_one | PRODUCES-OUTPUT | A | allowed | status failed + write error in the table |
+| dev/scrape_pipeline/06_cloudflare_md_adoption.py:112 | probe_url | PRODUCES-OUTPUT | A | allowed | error field, listed under 'Request errors' in the report |
+| dev/scrape_pipeline/06_cloudflare_md_adoption.py:138 | fetch_html_baseline | PRODUCES-OUTPUT | B | B-remove | failed baseline fetch returns None, rendered '—' and dropped from the reduction stats like a missing baseline; every md-served row in dev/scrape_pipeline/md/06_cf_md_adoption_*.md has a numeric HTML-bytes cell, never observed |
+| dev/scrape_pipeline/filter_eval/05_filter_debug.py:196 | nodes_to_preview | PRODUCES-OUTPUT | B | B-remove | joined raw text instead of markdown preview; module cannot import (dead src.scraper imports), unreachable and unobserved |
+| dev/scrape_pipeline/garbage_eval/07_result_inspect.py:66 | build_attribute_table | PRODUCES-OUTPUT | A | allowed | row ('ERROR', message) written to the report |
+| dev/scrape_pipeline/garbage_eval/07_result_inspect.py:78 | build_http_section | PRODUCES-OUTPUT | A | allowed | 'ERROR: <msg>' written to the report |
+| dev/scrape_pipeline/p1_pipe_scraper.py:33 | _scrape_one | PRODUCES-OUTPUT | A | allowed | outcome='error' is an explicit failure fact |
