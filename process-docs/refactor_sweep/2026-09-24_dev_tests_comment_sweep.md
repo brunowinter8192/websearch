@@ -777,6 +777,15 @@ Anchor: docstring at `_make_urls` (next def).
 > Covers: _subs_in_range, _sub_by_index (regression), and the discover() dispatch
 >         error paths for sub:A-B.
 
+## Process notes (recap)
+
+- Order used: comment sweep first, re-measure, then split only what stayed at 400 LOC or more, then the DOCS.md rewrite. This order avoided splitting `test_query_logger.py` at all.
+- The sweep is scripted (tokenize for comments, AST for docstrings, per-file AST-equality check against the original minus docstrings). A file whose AST differed would have been skipped and reported; none was.
+- The `/tmp` directory is shared between workers: a generic `/tmp/scan.py` written early was overwritten by another worker's script. Use a private subdirectory (`/tmp/<name>/`) for scratch files.
+- Tool hooks in this environment refuse piping a CLI into another command and reading a redirected CLI output with `cat` in the same call; redirect first, read with Read in the next call.
+- Files touched (`git diff integration --name-only --`): 52 `dev/tests/*.py` files swept, `dev/tests/test_brave_build_results.py` added, `dev/tests/test_brave_engine.py` reduced, `dev/tests/DOCS.md` rewritten (255 lines, LOC headings match `wc -l`), this file.
+- Not done: no investigation of the two intermittent brave tests; no manual review of every (b) decision.
+
 ## Appendix: previous `dev/tests/DOCS.md` (601 lines), verbatim
 
 The DOCS.md rewrite cut per-module detail that repeated code. The full previous text follows so nothing is lost.
