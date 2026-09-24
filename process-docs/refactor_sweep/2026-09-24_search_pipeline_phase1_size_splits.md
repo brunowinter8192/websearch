@@ -1930,3 +1930,59 @@ Proof:
 - Phase 1 rendered-output scenarios (27 targets) rerun against the pre-Phase-1 snapshot: identical except where a removed handler is exercised. `00`: the deliberately malformed JSON case now raises `JSONDecodeError` instead of printing `Parsed results: 0`. `s3`: the generator-failure mode now raises out of `run_method_run_v3` instead of storing empty M11/M12 lists. `pool` and `sq`: the diff consists only of the new failure markers (header line, heading suffix in the API-error mode, summary flags, the two new JSONL fields, the extra stderr fields); the success-mode output of all three is unchanged.
 - `pytest dev/tests/ -q`: 492 passed before and after (the suite grew with the merged `integration`; the count did not change across this step).
 - DOCS.md: 27 LOC headings re-derived from `wc -l`, 0 mismatches after. No purpose text needed to change.
+
+
+# Deletion of the 14 unimportable modules and their helpers (2026-09-24)
+
+Owner decision via the orchestrator: delete the modules that depend on production code removed on purpose (`src.search.merge` slot ranking, `src.scraper.pdf_chain`, scholar internals, the old `01_google_smoke` helpers) instead of rebuilding that logic in `dev/`.
+
+## Closure
+
+Every module of the area was imported standalone (own folder and project root on `sys.path`) after merging `integration`. 20 failed: the 14 from the baseline table above plus 6 siblings that fail only through an import of a failing module. The import graph then added every module used only by deleted modules. Result: 27 files. Two more qualified under that rule and were deliberately kept by decision: `ranking_eval/clean_pool.py` (only user was `stage3_method_run_v3`) and `ranking_eval/value_eval_aggregate.py` (only user was `value_eval_probe`); both import cleanly, have their own CLI and only read artifacts. No surviving module imports a deleted one, and no name from a deleted module is used by anything that stays.
+
+## Deleted files
+
+Last commit where each file existed, taken with `git log -1 --format=%h -- <path>` immediately before `git rm`; restore any of them with `git show <hash>:dev/search_pipeline/<path>`. Files at `aa714bc` still had their pre-comment-sweep text there only if the hash says so; the newest commit that touched them is what is listed.
+
+| file (under `dev/search_pipeline/`) | last commit | missing symbol / reason |
+|---|---|---|
+| `00_single_query.py` | `4ab6739` | `01_google_smoke.load_config`, `start_browser`, `stop_browser`, `_build_js_patches`, `_inject_consent_cookie`, `_extract_scalar` (the script copied six names that module no longer defines) |
+| `13_timing_ablation.py` | `e6cc533` | `src.search.engines.scholar.MAX_WAIT_CYCLES`, `WAIT_INTERVAL`, `_handle_consent`, `_JS_CONSENT`; `_limiters['openalex']` |
+| `bm25_sweep_smoke.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `_bm25_sweep_smoke_report.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `rerank_probe_smoke.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `_rerank_probe_smoke_config.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `_rerank_probe_smoke_gpu.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `_rerank_probe_smoke_rank.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `_rerank_probe_smoke_report.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `pdf_probes/16_search_to_pdf_probe.py` | `4ab6739` | `src.scraper.pdf_chain` (whole module) |
+| `pdf_probes/_search_to_pdf_probe_config.py` | `aa714bc` | sibling of `16_search_to_pdf_probe.py` (no other user) |
+| `pdf_probes/_search_to_pdf_probe_report.py` | `e6cc533` | sibling of `16_search_to_pdf_probe.py` (no other user) |
+| `ranking_eval/bm25_capped_smoke.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/bm25_compare_smoke.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/bm25_idf_engine_smoke.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/pooling_probe.py` | `4ab6739` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/single_query_pool_dump.py` | `4ab6739` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/_single_query_pool_dump_report.py` | `4ab6739` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/stage1_pool_fetch.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/_stage1_pool_fetch_config.py` | `aa714bc` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/_stage1_pool_fetch_report.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/stage3_method_run.py` | `4ab6739` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/stage3_method_run_v3.py` | `e6cc533` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+| `ranking_eval/_stage3_method_run_v3_cheap.py` | `e6cc533` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/_stage3_method_run_v3_config.py` | `aa714bc` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/_stage3_method_run_v3_gpu.py` | `4ab6739` | sibling helper of a deleted entry (no surviving user); fails import only transitively |
+| `ranking_eval/value_eval_probe.py` | `4ab6739` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (directly or through `bm25_sweep_smoke`/`rerank_probe_smoke`) |
+
+## Where the results live
+
+The reports and run data these scripts produced stay in place. `md/`: `bm25_sweep_*` (2), `bm25_compare_*` (2), `bm25_capped_*` (1), `bm25_idf_engine_*` (1), `rerank_probe_*` (3 Markdown plus `jsonl/rerank_probe_*.queries.jsonl`), `pooling_probe_*` (Markdown plus `jsonl/pooling_probe_20260521_215844.queries.jsonl`), `single_query_pool_postgresql_index_types_btree_g_20260521_231405.md`, `search_to_pdf_20260507_175019.md`, `timing_ablation_20260507_034522.md`. `runs/`: `value_eval_20260522_015113` (v1 stage 1+2 output), `value_eval_v2_20260523_000156` and `value_eval_v3_20260523_021216` (pool, methods, oracle JSON and eval Markdown). The `stage4_aggregate*`, `value_eval_aggregate`, `pool_diff_v2_v3` and `clean_pool` scripts that read the run data remain. Interpretation of the results (rerank validation, value eval, 12-method eval) is in the `pooling` process-docs area.
+
+## Documentation and verification
+
+- Removed 27 module entries from the root, `ranking_eval/` and `pdf_probes/` `DOCS.md` files and rewrote the Role, Public Interface, Flow, State and two `Called by` lines that referred to deleted modules (`ranking_eval/` is now offline evaluation of stored runs, `pdf_probes/` has two probes). No unit subfolder became empty, so no `DOCS.md` and no root reference was removed. LOC headings re-derived from `wc -l`: 0 mismatches, every remaining module documented (`_lib/__init__.py` is empty and was never listed).
+- Import check over all 81 remaining `.py` files of the area: 81 of 81 import.
+- Size and comment scan over the area: no module over 400 LOC, no function at or above 50 LOC, no comment or docstring.
+- `pytest dev/tests/ -q`: 541 passed.
+- `git grep` for the deleted module names outside process-docs and the three edited `DOCS.md` files: no hit in code.
+- Tooling note: in this shell `> file` with no command waits on stdin (zsh runs `cat`); the first attempt at collecting the commit hashes hung on exactly that. Use `: > file`.
