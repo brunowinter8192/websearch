@@ -14,7 +14,7 @@ URL list in -> baseline run, a fixed gap, stealth run, each with the same pacing
 ### 01_stealth_concurrency_probe.py (240 LOC)
 
 **Purpose:** Runs the same URL list without and with crawl4ai stealth and reports outcome counts, crash signatures and byte deltas.
-**Reads:** `dev/explore_pipeline/06_discovered_urls.txt`; live sites.
+**Reads:** the discovered-URL list produced by the explore_pipeline area (the file is not tracked); live sites.
 **Writes:** `json/01_<variant>_results.json`, `md/01_stealth_concurrency_probe_<date>.md`, scraped markdown under `/tmp/pipe_scraper_hardening_<variant>/`.
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
