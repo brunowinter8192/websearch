@@ -866,6 +866,43 @@ Trade-off shared by 5 B-remove rows (`navtree:215`, `robots:19`, `sitemap:17`, `
 | src/scraper/scrape_logger.py:47 | write_sidecar | PRODUCES-OUTPUT | D | keep | sidecar write is best-effort; warning logged; the log record carries sidecar_path None |
 | src/scraper/scrape_logger.py:60 | log_scrape | LOG-ONLY | D | keep | JSONL log write is best-effort telemetry; warning logged |
 
+## Phase 4 control-flow triage, step 2: removals (2026-09-24)
+
+Orchestrator decisions applied exactly as approved. Suite: 492 passed before, 513 passed after (21 new tests; the old `parse_sitemap_xml` malformed test was rewritten to assert the raise, not deleted). Comment/docstring scan of `dev/tests` still prints nothing.
+
+| site | change | test |
+|---|---|---|
+| `seed_feeders_navtree._extract_next_data_payloads` | `json.loads` error propagates | malformed `__NEXT_DATA__` raises `JSONDecodeError`; feeder returns `ok=False` with error |
+| `seed_feeders_navtree._fetch_html` | `httpx.HTTPError` propagates, non-200 still returns `None` | `ConnectError` propagates from `resolve_navigation_tree`; feeder `ok=False` with the message |
+| `seed_feeders_robots.fetch_robots_txt` | network error propagates, 404 still `None` | `ConnectError` propagates; feeder `ok=False` |
+| `seed_feeders_sitemap.fetch_sitemap` | network error and corrupt gzip propagate, non-200 still `None` | `ReadTimeout` propagates; corrupt `.gz` raises `OSError`; a valid `.gz` is still decompressed |
+| `seed_feeders_sitemap.parse_sitemap_xml` | `ParseError` propagates; a well-formed unrelated root still returns `("unknown", [])` | rewritten test asserts `ParseError`; an HTML 200 on `/sitemap.xml` makes the sitemap feeder `ok=False` |
+| `theblock/discover._fetch_direct` | exception branch removed; 200 with XML marker returns content, anything else returns `None` so the proxy-pool fallback (observed: HTTP 403) still triggers | 403 without marker returns `None`; 200 with marker returns content; `ConnectError` propagates |
+| `theblock/discover._parse_url_blocks` | unparseable `lastmod` raises `ValueError` | ISO `lastmod` parses; `not-a-date` raises |
+| `camoufox_scrape._resolve_system_locale` | failed or timed-out `defaults read -g AppleLocale` propagates; the `locale.getlocale()` / `en-US` tail stays for non-darwin and empty output | `CalledProcessError` propagates; `de_DE` becomes `de-DE` |
+| `coindesk/discover._parse_stop_date` | explicit `"delta"` branch (same `DEFAULT_DELTA_DAYS`), other unparseable value raises; the `stop_date` line printed by `discover()` is untouched | new `test_coindesk_stop_date.py`: full, delta, integer, `"deltaa"` raises |
+
+Live verification (real runs, this worktree, `./venv/bin/python cli.py discover_urls`):
+
+- `https://docs.python.org/3/`: `ok=True`, `failed_feeders: {}`, 29 URLs (robots=21, seed=1, sitemap=7).
+- `https://platform.claude.com/docs`: `ok=True`, `failed_feeders: {}`, 3631 URLs (navtree_flat=6, robots=1, seed=1, sitemap=3623).
+
+No feeder failed after the removals on either host. The claim in step 1 that soft-404 HTML sitemaps might turn a clean empty into `ok=False` is therefore still only a hypothesis: neither host triggered it.
+
+Not run live, by instruction: theblock and coindesk (proven by tests only).
+
+Gotchas for the next agent:
+- Shell cwd: a `cd process-docs` in one Bash call persists into the next call and broke relative paths; use absolute paths or a subshell.
+- The `/tmp` directory is shared between workers; scratch files live in `/tmp/wnotice/`.
+- The sitemap feeder now fails as a whole when one sub-sitemap fetch raises (the trade-off named in step 1). If this shows up in real use, the fix is a decision about a visible per-sub failure fact, not a handler that returns `None`.
+
+## Process notes (recap, Phase 4 step 2)
+
+- Files touched relative to `integration` for this task: `src/crawler/seed_feeders_navtree.py`, `seed_feeders_robots.py`, `seed_feeders_sitemap.py`, `src/news/platforms/theblock/discover.py`, `src/news/platforms/coindesk/discover.py`, `src/scraper/camoufox_scrape.py`; tests `test_seed_feeders_navtree.py`, `test_seed_feeders_robots.py`, `test_seed_feeders_sitemap.py`, `_seed_feeders_fakes.py`, `test_theblock_discover.py`, `test_camoufox_scrape_output.py`, new `test_coindesk_stop_date.py`; `dev/tests/DOCS.md`, `src/crawler/DOCS.md`, `src/news/platforms/theblock/DOCS.md`, `src/news/platforms/coindesk/DOCS.md`, `src/scraper/DOCS.md`.
+- DOCS.md LOC headings of the touched modules were already stale before this task (for example the crawler sitemap entry said 76, the file had 67); they now match `wc -l`. Other headings in `src/news/` DOCS files were not re-checked.
+- The finding that mattered most from step 1 was not a removal: the CLI default `--timeframe delta` was reaching CoinDesk's `_parse_stop_date` only through a swallowed `ValueError`. Read the caller's default before judging a handler.
+- Not done: no live theblock, coindesk or camoufox run (by instruction).
+
 ## Appendix: previous `dev/tests/DOCS.md` (601 lines), verbatim
 
 The DOCS.md rewrite cut per-module detail that repeated code. The full previous text follows so nothing is lost.
