@@ -31,7 +31,7 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 
 ### probe_discovery.py (283 LOC)
 
-**Purpose:** Measures discovery coverage + URL taxonomy. Fetches the 64-sub sitemap union, news sitemap, RSS, and bounded UI crawl. Resume-safe via per-sub checkpoint files in `cache/`. CF behaviour: IP-level 403/429 fires after ~21 sequential sub-sitemap fetches.
+**Purpose:** Measures discovery coverage + URL taxonomy. Fetches the 64-sub sitemap union, news sitemap, RSS, and bounded UI crawl. Resume-safe via per-sub checkpoint files in `cache/`. CF behaviour: IP-level 403/429 fired after ~21 sequential sub-sitemap fetches at a 1 s delay (measured; `news_pipeline` process-docs, CF-block entry). At the probe's 5 s per-sub delay no measurement exists; an older ~25 figure is unmeasured.
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
 **Writes:** `discover_coverage_report.md`; per-sub checkpoints in `cache/`.
 **Called by:** CLI only; `pipe_theblock.py` (imports `load_sub_cache`, `save_sub_cache`, `extract_locs`, `normalize_url`, `CACHE_DIR`).

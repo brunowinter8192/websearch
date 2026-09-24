@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import p2_browser_rider as rider_mod
+import _p2_watchdog
 from p2_browser_rider import RiderState, _abort_stall, _watchdog
 from p0_pool import PersistentCooldownManager
 
@@ -81,7 +82,7 @@ def test_watchdog_task_fires_and_writes_files() -> None:
 
         async def run() -> None:
             state = _make_state(tmp_dir)
-            with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit_1):
+            with unittest.mock.patch.object(_p2_watchdog.os, "_exit", fake_exit_1):
                 try:
                     await _watchdog(state, tmp_dir, poll_interval=_POLL_S)
                 except SystemExit as exc:
@@ -118,7 +119,7 @@ def test_abort_stall_directly() -> None:
 
         async def run() -> None:
             state = _make_state(tmp_dir, stall_timeout_s=60.0)
-            with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit_2):
+            with unittest.mock.patch.object(_p2_watchdog.os, "_exit", fake_exit_2):
                 try:
                     _abort_stall(state, tmp_dir, idle_s=999.0)
                 except SystemExit as exc:
