@@ -159,3 +159,268 @@ Chrome; that is now stale but the section was outside this task.
 - The bash environment in this project refused a command once with "add redirect: ... > /tmp/name.md 2>&1"
   when it combined several python runs; nothing had executed. Retrying with output redirected to a file worked.
 - zsh has no `timeout`; BSD `sed -i` needs a suffix argument (`-i.bak`).
+
+
+# Phase 2 - comment and docstring sweep of dev/news_pipeline (2026-09-24, same session)
+
+Scope: every `.py` under `dev/news_pipeline/` except `theblock/jhao104/` (vendored), `monosans_*` and
+`__pycache__`. Commit `42f96a5`. Standard applied: no comments, no docstrings; only the three section
+markers and a line-1 shebang remain.
+
+## Exclusion decided by the orchestrator
+
+`theblock/jhao104/patches/helper/validator.py` (6 comments, 6 docstrings) is a patched copy of a third-party
+file and stays untouched so it remains diffable against upstream. Without it the scan finds 820 items
+(730 comments + 90 docstrings), which is exactly the figure the task quoted; a scan that includes it reports
+736 + 96. Any future sweep must skip the whole `jhao104/` tree, not only `upstream/`.
+
+## Method
+
+1. `grep __doc__` over the tree: no hit, and no `argparse(description=__doc__)`. All 17 files that build an
+   `ArgumentParser` pass explicit string literals, so nothing needed to be replaced by a constant.
+2. Every comment token (tokenize) and every docstring (AST) was listed per module and triaged:
+   (a) substance already in the directory's DOCS.md or in `process-docs/news_pipeline/`, (b) a real fact
+   recorded nowhere, (c) self-evident. Facts of class (b) are in the next section. Deletion itself was
+   mechanical: a script removed all comment tokens and docstring statements at once, and the triage only
+   decided what had to be written down first. The (a) and (c) counts are reported merged: telling a
+   description that duplicates DOCS.md from one that merely restates the next line was not worth a second
+   pass, and both are deleted either way.
+3. Heading comments above a `def` (the Phase 1 leftovers named in the Phase 1 section, e.g. the three in
+   `probe_curl_cffi_discriminator.py`, `# Per-protocol breakdown`, `# Phase 2 - Tail`) went through the same
+   triage; none carried a fact.
+4. Trailing comments were trimmed to the code (`# noqa: E402`, `# type: ignore[...]`, field-meaning notes);
+   where a trailing comment carried a value set or a unit it is in the (b) list below.
+5. Blank-line tidy only at deletion sites (cap 1 inside indented blocks, 2 at top level, none at file start).
+
+## Verification
+
+- Scan (tokenize + AST) over the same file set prints nothing: 78 files, 0 hits.
+- Behavior proof: for every one of the 78 files `ast.dump` of the old and new source, both with docstring
+  statements removed (empty bodies get `pass` on both sides), is identical. The script refused to write a file
+  where it was not, and refused none. This proves the executable code is unchanged, including every
+  string literal such as argparse `description=`/`help=`.
+- Parser diff (static, no script was run): `ArgumentParser`, `add_argument`, `parse_args`, `add_subparsers`
+  and `add_mutually_exclusive_group` call sources compared through `ast.unparse` between HEAD and the working
+  tree: 17 files carry such calls, 0 differ. So `--help` output is unchanged by construction. `--help` was not
+  executed anywhere: several of these scripts import pydoll/crawl4ai or touch the network at import or
+  before argument parsing, and that was not checked script by script.
+- `py_compile` of all 78 files: clean.
+- `./venv/bin/python -m pytest dev/tests/ -q`: 488 passed before, 488 passed after (the suite grew from 476
+  to 488 when `integration` was merged into the branch at the start of this task).
+- DOCS.md: the five directory DOCS.md files (`dev/news_pipeline/`, `exploration/`, `coindesk_proxy_riding/`,
+  `theblock/`, `theblock/acquire_pipe/`) had 76 LOC headings out of date because every module shrank; all
+  were rewritten from `wc -l` and re-checked (0 mismatches). No other DOCS.md text was changed, and no DOCS.md
+  gotcha was added: every (b) item is either a coupling between two named modules or a why that only matters
+  to someone editing that one line, and the standard says to keep DOCS.md slim.
+
+## Pitfall for the next sweeper: /tmp is shared between agents
+
+My first scan script `/tmp/scan.py` was silently overwritten by another session between two of my runs; the
+second run printed `dev/browser_posture/...` hits from a different script. It was only caught because the
+output paths were foreign. Use a session-unique prefix for scratch files (`/tmp/<worktree>_*.py`).
+
+## Triage counts
+
+Items = comment tokens + docstrings, measured before deletion. Directory totals:
+
+| Directory | Files | Items | Recorded (b) | Deleted (a)+(c) | of which comments | of which docstrings |
+|---|---|---|---|---|---|---|
+| `root` | 9 | 145 | 21 | 124 | 145 | 0 |
+| `coindesk_proxy_riding/` | 17 | 167 | 16 | 151 | 157 | 10 |
+| `exploration/` | 26 | 222 | 13 | 209 | 221 | 1 |
+| `theblock/` | 16 | 229 | 16 | 213 | 173 | 56 |
+| `theblock/acquire_pipe/` | 10 | 57 | 2 | 55 | 34 | 23 |
+| total | 78 | 820 | 68 | 752 | 730 | 90 |
+
+Per module (Deleted = (a) + (c)):
+
+| Module | Items | Recorded (b) | Deleted |
+|---|---|---|---|
+| `01_coindesk_discover.py` | 28 | 5 | 23 |
+| `02_coindesk_scrape.py` | 6 | 0 | 6 |
+| `02b_coindesk_scrape_fresh_context.py` | 24 | 3 | 21 |
+| `03_coindesk_cleanup.py` | 29 | 10 | 19 |
+| `04_dedup.py` | 7 | 1 | 6 |
+| `05_publish.py` | 7 | 1 | 6 |
+| `coindesk_proxy_riding/_p2_fetch.py` | 8 | 2 | 6 |
+| `coindesk_proxy_riding/_p2_state.py` | 7 | 4 | 3 |
+| `coindesk_proxy_riding/_p2_watchdog.py` | 13 | 7 | 6 |
+| `coindesk_proxy_riding/_p4_plots.py` | 3 | 0 | 3 |
+| `coindesk_proxy_riding/_p4_stats.py` | 6 | 0 | 6 |
+| `coindesk_proxy_riding/_test_tail_race_watchdog.py` | 10 | 0 | 10 |
+| `coindesk_proxy_riding/analyze_write_times.py` | 20 | 1 | 19 |
+| `coindesk_proxy_riding/p0_pool.py` | 6 | 0 | 6 |
+| `coindesk_proxy_riding/p2_browser_rider.py` | 7 | 1 | 6 |
+| `coindesk_proxy_riding/p3_url_sampler.py` | 11 | 1 | 10 |
+| `coindesk_proxy_riding/p4_reporter.py` | 2 | 0 | 2 |
+| `coindesk_proxy_riding/run_coindesk_riding.py` | 2 | 0 | 2 |
+| `coindesk_proxy_riding/smoke_stage1.py` | 18 | 0 | 18 |
+| `coindesk_proxy_riding/test_cooldown_policy.py` | 24 | 0 | 24 |
+| `coindesk_proxy_riding/test_sigint_report.py` | 5 | 0 | 5 |
+| `coindesk_proxy_riding/test_tail_race.py` | 18 | 0 | 18 |
+| `coindesk_proxy_riding/test_watchdog.py` | 7 | 0 | 7 |
+| `exploration/01_coindesk_ui_probe.py` | 16 | 2 | 14 |
+| `exploration/02_coindesk_pagination_probe.py` | 2 | 0 | 2 |
+| `exploration/03_coindesk_backfill_traversal.py` | 15 | 0 | 15 |
+| `exploration/04_coindesk_timeline_replay_probe.py` | 7 | 0 | 7 |
+| `exploration/05_coindesk_cursor_probe.py` | 7 | 0 | 7 |
+| `exploration/05b_coindesk_warmth_probe.py` | 20 | 0 | 20 |
+| `exploration/06_coindesk_full_discovery.py` | 25 | 4 | 21 |
+| `exploration/_01_dom.py` | 13 | 0 | 13 |
+| `exploration/_02_depth.py` | 4 | 0 | 4 |
+| `exploration/_02_dom.py` | 10 | 1 | 9 |
+| `exploration/_02_quick.py` | 17 | 3 | 14 |
+| `exploration/_02_report.py` | 7 | 0 | 7 |
+| `exploration/_03_capture.py` | 18 | 1 | 17 |
+| `exploration/_03_log.py` | 2 | 0 | 2 |
+| `exploration/_03_report.py` | 2 | 0 | 2 |
+| `exploration/_04_capture.py` | 7 | 0 | 7 |
+| `exploration/_04_replay.py` | 21 | 2 | 19 |
+| `exploration/_04_report.py` | 2 | 0 | 2 |
+| `exploration/_05_capture.py` | 7 | 0 | 7 |
+| `exploration/_05_fixed.py` | 2 | 0 | 2 |
+| `exploration/_05_parse.py` | 3 | 0 | 3 |
+| `exploration/_05_report.py` | 2 | 0 | 2 |
+| `exploration/_05b_report.py` | 1 | 0 | 1 |
+| `exploration/_06_capture.py` | 9 | 0 | 9 |
+| `exploration/_06_progress.py` | 2 | 0 | 2 |
+| `exploration/_06_report.py` | 1 | 0 | 1 |
+| `prod_scrape_smoke.py` | 9 | 1 | 8 |
+| `run_pipeline.py` | 22 | 0 | 22 |
+| `scrape_isolation_smoke.py` | 13 | 0 | 13 |
+| `theblock/_pipe_theblock_cf.py` | 2 | 0 | 2 |
+| `theblock/_probe_discovery_report.py` | 7 | 0 | 7 |
+| `theblock/_probe_liveness_classify.py` | 7 | 4 | 3 |
+| `theblock/_probe_liveness_report.py` | 2 | 0 | 2 |
+| `theblock/acquire_pipe/acquire_pipe.py` | 2 | 0 | 2 |
+| `theblock/acquire_pipe/box_lock.py` | 8 | 1 | 7 |
+| `theblock/acquire_pipe/p1_fetch.py` | 2 | 0 | 2 |
+| `theblock/acquire_pipe/p2_cooldown.py` | 7 | 0 | 7 |
+| `theblock/acquire_pipe/p3_target.py` | 5 | 1 | 4 |
+| `theblock/acquire_pipe/p4_loop.py` | 9 | 0 | 9 |
+| `theblock/acquire_pipe/p4_race.py` | 2 | 0 | 2 |
+| `theblock/acquire_pipe/p5_logger.py` | 4 | 0 | 4 |
+| `theblock/acquire_pipe/p6_buffer.py` | 7 | 0 | 7 |
+| `theblock/acquire_pipe/p7_janitor.py` | 11 | 0 | 11 |
+| `theblock/curated_sources.py` | 24 | 2 | 22 |
+| `theblock/monosans_loader.py` | 4 | 0 | 4 |
+| `theblock/pipe_theblock.py` | 27 | 1 | 26 |
+| `theblock/probe_48h_article_fetch.py` | 8 | 0 | 8 |
+| `theblock/probe_curated_theblock_cf.py` | 6 | 0 | 6 |
+| `theblock/probe_curl_cffi_discriminator.py` | 31 | 0 | 31 |
+| `theblock/probe_discovery.py` | 18 | 4 | 14 |
+| `theblock/probe_liveness.py` | 23 | 1 | 22 |
+| `theblock/probe_pool_size.py` | 15 | 2 | 13 |
+| `theblock/probe_repo_cf_survey.py` | 22 | 0 | 22 |
+| `theblock/proxy_status_log.py` | 6 | 0 | 6 |
+| `theblock/source_tracker.py` | 27 | 2 | 25 |
+
+
+## Class (b): facts moved here, grouped by module
+
+Line numbers refer to the files before this commit (`git show 42f96a5~1:<path>`).
+
+### root
+
+- `01_coindesk_discover.py`: `MAX_CLICK_ROUNDS = 8` is a safety cap sized as 8 clicks x ~16 URLs per batch,
+  i.e. at most about 128 URLs per run. Live-blog URLs are dropped on purpose: a live blog is a continuously
+  updated multi-story container that does not fit a daily-cron pipeline with URL-dedup. `_is_live_blog` keys
+  on the slug (last path segment) starting with `live-`, which also catches `live-markets-`, `live-updates-`
+  and any future `live-X-` variant.
+- `02b_coindesk_scrape_fresh_context.py`: `_ensure_domain_state` is asyncio-safe only because there is no
+  `await` between the lookup and the creation of the per-domain entry; adding an await there reintroduces a
+  race. `print_summary` keeps a fixed line format (`ok` / `failed` counts) because `run_pipeline.py` parses the
+  stage's stdout; rewording those lines breaks the runner's counts silently.
+- `03_coindesk_cleanup.py`: the in-body tag-footer strip matches one or more concatenated links, broader than
+  the end-anchor pattern (`{2,}`), because orphan single-tag lines such as `[Tokenization](url)` also occur in
+  the body. It must run before inline-link substitution, otherwise the `[text](url)` form is gone. The inline
+  link substitution runs after image-line removal and does not match image markup (leading `!`), which
+  `_RE_IMAGE`/`_RE_IMAGE_LINK` own. Pass 1 order: tag-footer, image, byline/date, google-badge, empty-links,
+  inline-link (+ trailing-whitespace count); pass 2: paragraph normalization and blank-run collapse to 1.
+- `04_dedup.py` and `05_publish.py`: both derive the target filename `coindesk__<date>__<hash>.md`. The dedup
+  gate's only state is that file's presence in the collection directory, so the hash and date logic of the two
+  scripts must stay identical.
+- `prod_scrape_smoke.py`: the production scraper is loaded with `importlib.import_module("src.crawler.pipe_scraper")`
+  after putting the repo root (`parents[2]`) on `sys.path`, to satisfy the rule that dev scripts do not write
+  `from src...` imports.
+
+### exploration/
+
+- `01_coindesk_ui_probe.py`: the browser is started and stopped explicitly instead of `async with`, because
+  `__aexit__` tries to restore `Preferences.backup`, which does not exist in a fresh temporary session dir
+  (pydoll bug with ephemeral profiles).
+- `_02_dom.py`: the OneTrust consent overlay is dismissed by removing its DOM node so pointer events are no
+  longer blocked. `_02_quick.py` clicks through JS for the same reason (a JS click bypasses the overlay's
+  pointer-event interception), reads the POST body synchronously from the Playwright impl object (no `await`
+  needed, `post_data` is available synchronously) and detects gzip-compressed bodies by magic bytes.
+- `_03_capture.py`: the button-state JS returns a JSON string `{found, disabled}` so pydoll's CDP result can
+  be unwrapped through `_extract_value`.
+- `_04_replay.py` (same strip in `_05_capture.py`, `_06_capture.py`, `05b_coindesk_warmth_probe.py`): HTTP/2
+  pseudo-headers and client-managed headers of the captured request are stripped before replay; the rest of the
+  headers are replayed exactly.
+- `06_coindesk_full_discovery.py`: `CLICKS_WARMUP = 8` because the SSR buffer clears at about click 6;
+  `CLICKS_REWARM = 7` (slightly fewer for the browser re-warm); `MAX_CURSOR_FALLBACKS = 3` is how many
+  articles are tried as cursor anchor before a re-warm is declared necessary. Re-warm order: an httpx
+  feed-page GET first (cheap), the browser only if that is insufficient.
+
+### coindesk_proxy_riding/
+
+- `_p2_fetch.py`: `_PROXY_ERR` is the list of Playwright error substrings that mark a proxy-side failure
+  rather than a CoinDesk-side one. The URL hash (SHA-256, first 12 hex chars) matches the `scrape.py`
+  convention, so raw files from the two tools name the same article identically.
+- `_p2_state.py` and `p2_browser_rider.py`: value sets that are otherwise only visible by reading every
+  assignment: `JobRecord.status` is `ok | regwall | connect_fail | failed | empty`; `RiderState.termination`
+  is `all-done | stall | pool-exhausted` (initial `running`); `n_failed` counts the URLs that triggered the
+  fail-rotation (2-strike drop); `ride_position` is the ordinal of the URL on the current proxy (1st, 2nd, ...);
+  `FAIL_THRESHOLD = 2` counts `failed`/`empty` strikes before a proxy is dropped and mirrors the regwall
+  `burn_threshold`.
+- `_p2_watchdog.py`: the watchdog is its own asyncio task and is timer-based (`asyncio.sleep`), so it fires
+  even when every slot task is suspended forever in `await crawler.arun()`. Default poll interval is
+  `min(30, stall_timeout_s / 4)` so a short smoke-test timeout still gets fast detection. `_abort_stall` ends in
+  `os._exit(1)` deliberately: it bypasses asyncio teardown and `browser.close()`, so wedged Chrome processes
+  cannot hang the shutdown again; the raw files are already flushed to disk before it is reached. In-flight
+  URLs are written to `remaining_urls.txt` first because the wedged ones are the diagnostically useful ones.
+- `analyze_write_times.py`: `git rev-parse --git-common-dir` returns e.g. `/repo/.git` or
+  `/repo/.git/worktrees/<name>`, which is why the repo root is derived from it (works inside worktrees).
+- `p3_url_sampler.py`: `_repo_root` resolves the path returned by `git rev-parse --git-common-dir` relative
+  to `Path(__file__).parent` because git reports it relative to the subprocess CWD (the script directory) when
+  the repo is a main checkout; when git returns an absolute path, `dir / absolute` is the absolute path, so the
+  same expression is right in both cases.
+
+### theblock/
+
+- `_probe_liveness_classify.py`: `socks5` is sent as `socks5h` so DNS resolves remotely through the proxy (less
+  local DNS load, more representative of what a fetch through it would do). Elapsed time is measured from
+  semaphore acquisition, not from queueing, and the hard Python deadline is `connect + read + 2s` slack on top
+  of curl's own timeouts. In `classify_error`, `ProxyError` is checked before `CurlConnectionError` because
+  curl_cffi's `code2error()` re-maps `RECV_ERROR` + "CONNECT" to `ProxyError`; that case must land in
+  `proxy_handshake_error`, not `connection_refused`. Timeout split: elapsed time is the primary discriminator
+  (stable across libcurl versions), message text the fallback, and a timeout matching neither goes to
+  `unknown` as a version-drift signal.
+- `curated_sources.py`: a source may list several URLs per protocol (jetkai: http and https both map to
+  `http`). `_merge_dedup` keeps the first occurrence per canonical `proxy_key`.
+- `pipe_theblock.py` (`fetch_one_sub`): when every remaining proxy fails transiently for one sub-sitemap, the
+  sub is skipped and left uncached so the next run retries it.
+- `probe_discovery.py`: IP-level 429 fires after about 25 sequential sub-sitemap fetches even at 5 s per sub
+  (`SUB_DELAY = 5.0`); per-sub 429 retry waits are 60/120/180 s (`BACKOFF_WAIT`, `MAX_RETRIES = 3`), and
+  `MAX_RETRIES = 0` gives a fast no-retry scan. The RSS sample taken before the first sitemap run held 22
+  `<link>` tags, 20 of them unique `/post/` URLs. Discrepancy: `theblock/DOCS.md` says the block fires after
+  about 21 fetches; two measurements, not reconciled.
+- `probe_liveness.py`: the eval-only sources (`thespeedx`, `databay`, `jetkai`, `roosterkid`) skip the
+  freshness filter and never call `record_run`, so `proxy_status_log` stays untouched by them.
+- `probe_pool_size.py`: `BASELINE_RAW = 17_202` is the raw count of the earlier monosans single-source neutral
+  run (the "OldThemes 16" baseline). In the source tables, `is_mixed = True` marks aggregate lists of unknown
+  protocol that are counted in the HTTP bucket.
+- `source_tracker.py`: `unique_latest` is overwritten each run (latest run only) while the other counters
+  accumulate; the first freshness diff for a source is a baseline with no meaningful new/dropped numbers.
+- `acquire_pipe/box_lock.py`: in `cleanup_stale`, an unreadable sidecar and a live PID owned by another user
+  (`PermissionError`) are both treated as held, never cleaned.
+- `acquire_pipe/p3_target.py`: a `dead` status (404/410) on the sitemap index means the proxy reached the
+  origin; that is a site anomaly, not a proxy fault, so the proxy is skipped without being burned.
+
+## Observed inconsistencies, not fixed
+
+- `p4_loop.run_loop`'s docstring said `build_active_buffer()` returns "socks4-first"; `p6_buffer` and its
+  DOCS.md say pool order is preserved with no socks4-first sort. The docstring was the stale side.
+- `run_pipeline.py` carried `# searxng-cli/` on `PROJECT_ROOT` (leftover from the project rename).
+- The 21-vs-25 figure above.
