@@ -55,13 +55,5 @@ GITHUB
 REDDIT
 YYYYMMDD_HHMMSS
 
-# Shell function parameter names (documented in src/spawn/tmux_spawn.sh, not Python)
-PROJECT_PATH
-MODEL
-TASK_PROMPT
-EXTRA_FLAGS
-PROMPT_FILE
-WINDOW_NAME
-
 # Concept label in scrape03_garbage.md prose — actual code uses get_plugin_hint() function
 PLUGIN_HINTS

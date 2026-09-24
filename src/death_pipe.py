@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # INFRASTRUCTURE
-import logging
 import os
 import shutil
 import subprocess
@@ -9,8 +8,6 @@ import time
 from pathlib import Path
 
 import psutil
-
-logger = logging.getLogger(__name__)
 
 _LOG_PATH = Path(
     os.environ.get("WEBSEARCH_DEATH_PIPE_LOG_PATH")
@@ -56,13 +53,10 @@ def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
 
 
 def _log_intervention(message: str) -> None:
-    try:
-        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        with open(_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(f"{ts} [WARNING] src.death_pipe:watchdog - {message}\n")
-    except OSError as e:
-        logger.warning("death_pipe intervention-log write failed: %s", e)
+    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    with open(_LOG_PATH, "a", encoding="utf-8") as f:
+        f.write(f"{ts} [WARNING] src.death_pipe:watchdog - {message}\n")
 
 
 def _watchdog_main() -> None:
@@ -75,7 +69,7 @@ def _watchdog_main() -> None:
     dir_removed = False
     if cleanup_dir and Path(cleanup_dir).exists():
         shutil.rmtree(cleanup_dir, ignore_errors=True)
-        dir_removed = True
+        dir_removed = not Path(cleanup_dir).exists()
 
     if killed or dir_removed:
         _log_intervention(

@@ -267,11 +267,15 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** browser focus helpers log a warning once on failing osascript.
 
+### test_death_pipe_tripwires.py (47 LOC)
+
+**Purpose:** death_pipe intervention-log write failure raises, `removed_dir` reflects the real outcome.
+
 ### test_coindesk_stop_date.py (27 LOC)
 
 **Purpose:** src/news/platforms/coindesk/discover.py _parse_stop_date: full, explicit delta, integer days, unparseable value raises.
 
-### test_log_janitor.py (92 LOC)
+### test_log_janitor.py (108 LOC)
 
 **Purpose:** src/log_janitor.py get_retention_days: default and malformed-value behavior.
 

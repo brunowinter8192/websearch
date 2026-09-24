@@ -90,3 +90,19 @@ def test_prune_jsonl_reruns_when_marker_is_stale(tmp_path, retention_14):
     maybe_prune_jsonl(log)
     assert "injected-old" not in _queries(log)
     assert len(_queries(log)) == 3
+
+
+def test_prune_jsonl_keeps_unparseable_lines(tmp_path, retention_14, caplog):
+    import logging
+    log = tmp_path / "query_log.jsonl"
+    _write_jsonl(log)
+    with open(log, "a", encoding="utf-8") as f:
+        f.write("not json at all\n")
+        f.write(json.dumps({"no_ts": 1}) + "\n")
+    with caplog.at_level(logging.WARNING, logger="src.log_janitor"):
+        maybe_prune_jsonl(log)
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert "not json at all" in lines
+    assert json.dumps({"no_ts": 1}) in lines
+    assert [json.loads(l).get("query") for l in lines if l.startswith("{")][:3] == ["recent-1", "recent-2", "recent-3"]
+    assert len([m for m in caplog.messages if "keeping unparseable" in m]) == 2
