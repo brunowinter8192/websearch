@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # INFRASTRUCTURE
 import argparse
-import importlib.util
 import subprocess
 import sys
 import threading
@@ -15,11 +14,8 @@ CLI_PATH = WORKTREE_ROOT / "cli.py"
 PYTHON = WORKTREE_ROOT / "venv" / "bin" / "python"
 REPORT_DIR = SCRIPT_DIR / "md"
 
-_spec = importlib.util.spec_from_file_location("focus_poll_smoke", SCRIPT_DIR / "02_focus_poll_smoke.py")
-_focus_poll_smoke = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_focus_poll_smoke)
-get_frontmost_app = _focus_poll_smoke.get_frontmost_app
-
+LANE = "chromium"
+SUBCOMMAND = "scrape_url_chromium"
 POLL_INTERVAL_S = 0.25
 COUNTDOWN_S = 10
 DEFAULT_URL = "https://example.com"
@@ -27,11 +23,8 @@ DEFAULT_URL = "https://example.com"
 
 # ORCHESTRATOR
 
-def live_focus_probe_workflow(urls: list[str], use_chromium: bool) -> None:
-    lane = "chromium" if use_chromium else "camoufox"
-    subcommand = "scrape_url_chromium" if use_chromium else "scrape_url_camoufox"
-
-    print_countdown(lane)
+def live_focus_probe_workflow(urls: list[str]) -> None:
+    print_countdown(LANE)
     baseline_app = get_frontmost_app()
     print(f"Baseline frontmost app (post-countdown, expected throughout): {baseline_app}\n")
 
@@ -43,7 +36,7 @@ def live_focus_probe_workflow(urls: list[str], use_chromium: bool) -> None:
     )
     frontmost_thread.start()
 
-    url_runs = run_urls_in_sequence(urls, subcommand, t0)
+    url_runs = run_urls_in_sequence(urls, SUBCOMMAND, t0)
 
     stop_event.set()
     frontmost_thread.join()
@@ -57,12 +50,23 @@ def live_focus_probe_workflow(urls: list[str], use_chromium: bool) -> None:
     print_per_url_verdicts(per_url_verdicts)
 
     report_path = write_report(
-        lane, url_runs, baseline_app, frontmost_samples, verdict, per_url_verdicts,
+        LANE, url_runs, baseline_app, frontmost_samples, verdict, per_url_verdicts,
     )
     print(f"\nFull sample series report: {report_path}")
 
 
 # FUNCTIONS
+
+def get_frontmost_app() -> str:
+    result = subprocess.run(
+        [
+            "osascript", "-e",
+            'tell application "System Events" to get name of first application process whose frontmost is true',
+        ],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
 
 def print_countdown(lane: str) -> None:
     print("=" * 64)
@@ -299,13 +303,9 @@ def main():
         help=f"URL to scrape — repeat for multiple URLs, each run back-to-back with a fresh browser "
         f"after one shared countdown (default if omitted: {DEFAULT_URL})",
     )
-    parser.add_argument(
-        "--chromium", action="store_true",
-        help="Run the chromium lane instead of camoufox (default: camoufox)",
-    )
     args = parser.parse_args()
     urls = args.urls or [DEFAULT_URL]
-    live_focus_probe_workflow(urls, args.chromium)
+    live_focus_probe_workflow(urls)
 
 
 if __name__ == "__main__":

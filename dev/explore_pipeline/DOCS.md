@@ -26,7 +26,7 @@ URL discovery and traversal testing for Crawl4AI's BFS deep crawl strategy — r
 **Writes:** `md/03_explore_strategies_<domain>_<timestamp>.md` — strategy comparison table (pages, time, per-page ms, duplicates), speedup calc, depth distribution per strategy.
 **Called by:** CLI only.
 
-### 04_render_recall.py (295 LOC)
+### 04_render_recall.py (292 LOC)
 
 **Purpose:** Measures URL discovery recall on docs.github.com/de/rest against a 305-URL gold standard. Compares three BFS strategies (prefetch+dCL baseline, prefetch+NI, full-render NI) to isolate JS-rendering effect on discovered URL count. CLI flags: `--gold PATH`, `--max-pages INT`, `--depth INT`, `--no-regression`, `--strategies COMMA_LIST`, `--delay INT`.
 **Reads:** `goldstandard/docs_github_rest.txt` (305 URLs, github/docs content/rest repo tree).

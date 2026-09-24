@@ -539,3 +539,77 @@ Lessons for a successor:
   tuple and make the consumer branch on it before any success bookkeeping.
 - Line numbers in a triage table go stale after edits; the table in this file is the state before
   step 2.
+
+# Dead dev paths after removed production paths (2026-09-24)
+
+Owner rule for this task, same as everywhere in this session: no resurrecting removed production
+paths; a script whose purpose disappears with the path is deleted, historical artifacts are kept.
+
+## Step-5 findings (before any change)
+
+Subcommands present in `cli.py`: `search_web`, `search_engine_drilldown`, `scrape_url_chromium`,
+`discover_urls`, `index_scrapes`. Dead calls found outside `search_pipeline`/`tests`:
+`scrape_url_raw` in `01_dual_mode_smoke.py`; `scrape_url_camoufox` in `lane_choice/01_backfill_pairs.py`
+(ENGINES list) and `lane_choice/03_live_focus_probe.py` (default lane). Import check of 171 modules
+(each in its own subprocess, `main` not run): 3 failures: `filter_eval/05_filter_debug.py` (dead
+`src.scraper.routing` etc.), `garbage_eval/08_garbage_edge_cases.py` (`src.crawler.garbage_filter`
+retired 2026-09-09), and the vendored `news_pipeline/theblock/jhao104/patches/helper/validator.py`
+(imports `util` from the upstream project it patches; left alone per owner decision).
+
+## Changes
+
+- Deleted `scrape_pipeline/01_dual_mode_smoke.py` (with Mode 1 gone only a chromium call plus a
+  report built on the retired garbage classifier's failure strings remained). Its
+  `01_dual_mode_data/` (36 tracked files) is kept and noted as historical in
+  `dev/scrape_pipeline/DOCS.md`.
+- `explore_pipeline/04_render_recall.py`: removed the `include_pattern` parameter and its
+  `URLPatternFilter` branch (the name was never imported, and both callers passed None) from
+  `discover_with_config` and its two call sites.
+- Deleted `scrape_pipeline/filter_eval/05_filter_debug.py` (unimportable; nothing else used only by
+  it: no output directory on disk, no shared helper).
+- `filter_eval/DOCS.md`: `04_filtering.py` Writes path corrected from `04_reports/` to
+  `03_filter_comparison/`, which is where the code writes.
+- Deleted `scrape_pipeline/garbage_eval/08_garbage_edge_cases.py` (tested the retired
+  `is_garbage_content`); `garbage_eval/md/08_garbage_edge_cases_20260331_193034.md` kept and noted
+  as historical in its DOCS.md.
+- `lane_choice`: deleted `01_backfill_pairs.py` (its purpose was firing both lanes, i.e. pairs; with
+  chromium as the only lane there are no pairs) and `02_focus_poll_smoke.py` (only wrapped the
+  backfill). `03_live_focus_probe.py` imported `get_frontmost_app` from `02_` through
+  `importlib.util`; that 7-line function moved into `03_` and the import machinery was removed. The
+  camoufox lane and its switch are gone: `--chromium` flag and `use_chromium` parameter dropped,
+  constants `LANE = "chromium"` and `SUBCOMMAND = "scrape_url_chromium"` replace them, and the
+  report still prints `Lane: chromium`. `04_lane_metrics.py` and its `_lane_metrics_*` modules were
+  kept: they call no removed path, only read the historical chromium and camoufox records already in
+  the production log. All `md/` reports and `jsonl/backfill_pairs_state.jsonl` kept.
+  `lane_choice/DOCS.md` was rewritten: Role marks the camoufox comparison HISTORICAL and points to
+  `process-docs/lane_choice/` and `process-docs/camoufox_lane/`; entries and gotchas of the deleted
+  scripts were removed.
+
+## Verification
+
+- Function-level AST diff: `04_render_recall.py` changed only `discover_with_config`,
+  `render_recall_workflow`, `run_regression`; `03_live_focus_probe.py` changed `get_frontmost_app`
+  (new), `live_focus_probe_workflow`, `main`, plus the intended top-level change (removed importlib
+  block, added the two constants).
+- `py_compile` passes on both edited files; the AST + tokenize scan of `lane_choice`,
+  `explore_pipeline`, `scrape_pipeline` prints nothing.
+- Import check re-run over 166 modules: only `validator.py` fails.
+- Test suite: 541 passed before (stash run) and 541 passed after; the earlier 492 in this file
+  predates a merge that brought new tests in.
+- DOCS.md LOC headings in `lane_choice`, `scrape_pipeline`, `filter_eval`, `garbage_eval`,
+  `explore_pipeline` re-checked against `wc -l`: all match, no heading points to a missing file.
+
+## Recap (2026-09-24)
+
+Files changed versus `integration`: deleted `01_dual_mode_smoke.py`, `05_filter_debug.py`,
+`08_garbage_edge_cases.py`, `lane_choice/01_backfill_pairs.py`, `lane_choice/02_focus_poll_smoke.py`;
+edited `03_live_focus_probe.py`, `04_render_recall.py`; DOCS.md of `lane_choice`, `scrape_pipeline`,
+`filter_eval`, `garbage_eval`; this file.
+
+Lessons for a successor:
+- Before deleting a script, grep who imports from it: `03_` loaded a helper from `02_` through
+  `importlib` and would have broken silently at the next run.
+- A script that exists to compare two things loses its purpose when one side is removed; the data it
+  produced stays valuable, so keep the outputs and label them historical in the DOCS.md.
+- The import check needs a subprocess per module and a `sys.path` entry for the module's own
+  directory; several dev scripts import siblings by bare name.

@@ -1,7 +1,7 @@
 # dev/scrape_pipeline/
 
 ## Role
-Quality monitoring and configuration testing for the URL scraper module (`src/scraper/`). Own-level scripts cover the GH REST API docs pipe-scraper eval, dual-mode A/B comparison, raw-scrape baseline, and Cloudflare markdown-adoption probing. Sub-suites (`filter_eval/`, `browser_eval/`, `garbage_eval/`, `03_cleanup/`, `04_overview_sweep/`, `05_paper_mode/`) each document their own modules.
+Quality monitoring and configuration testing for the URL scraper module (`src/scraper/`). Own-level scripts cover the GH REST API docs pipe-scraper eval, raw-scrape baseline, and Cloudflare markdown-adoption probing. Sub-suites (`filter_eval/`, `browser_eval/`, `garbage_eval/`, `03_cleanup/`, `04_overview_sweep/`, `05_paper_mode/`) each document their own modules.
 
 ## Modules
 
@@ -51,13 +51,6 @@ Quality monitoring and configuration testing for the URL scraper module (`src/sc
 **Called by:** `07_pipe_scrape_eval.py`.
 **Calls out:** `p1_pipe_scraper.scrape_urls`; `_pipe_scrape_eval_common.py`.
 
-### 01_dual_mode_smoke.py (350 LOC)
-
-**Purpose:** A/B comparison harness — parses URLs from a chosen query in a search-results markdown report, scrapes each URL through BOTH production CLI modes in parallel via asyncio: Mode 1 (`scrape_url_raw`, raw markdown to file, no filter) and Mode 2 (`scrape_url_chromium`, PruningContentFilter@0.48, 15K char cap, in-memory). Reusable for library A/B testing — replace the cli.py-subprocess invocation with another extraction library.
-**Reads:** `--input <path-to-search-md>` (required, e.g. `dev/search_pipeline/md/pipeline_smoke_*.md`), `--query <id-or-text>` (default 1).
-**Writes:** `--output-dir` (default `01_dual_mode_data/<ts>/`) — per-mode subdirs (`mode1_raw/`, `mode2_filtered/`) with one .md per URL, plus `01_dual_mode_report.md` at parent level (per-URL byte sizes, garbage detection, first content lines).
-**Called by:** CLI only.
-
 ### 02_raw_smoke.py (199 LOC)
 
 **Purpose:** Dev-only Mode 1 raw scrape — Crawl4AI direct via `arun_many`, no prod imports, no `cli.py` subprocess. Parses Q24 URLs from a search smoke report, scrapes all in parallel. Slug includes full-URL md5 hash to prevent query-string collisions (e.g. HN `?id=N` URLs both preserved). NO fallback chain (single Crawl4AI config), NO garbage detection, NO cookie strip — fail fast, see what's actually there. Clean baseline for downstream cleanup work + comparison against filter outputs.
@@ -75,6 +68,8 @@ Quality monitoring and configuration testing for the URL scraper module (`src/sc
 ## State
 `domains.txt` — shared test URL list for `browser_eval/` and `filter_eval/` scripts, one URL per line, `#` comments. `failures.jsonl` (gitignored) — persistent failure log from production `scrape_url_chromium` runs; written by `log_scrape_failure()` in `src/scraper/chromium_scrape.py` at the final failure exit in `scrape_url_chromium_workflow()`. Fields: `ts` (ISO 8601 UTC), `url`, `garbage_type` (`http_error`/`cookie_wall`/`login_wall`/`cloudflare`/`nav_dump`/`crawl4ai_error`/null), `status_code` (int/null). Local analysis only — accumulates across production MCP tool calls, not committed.
 
+## Historical data
+`01_dual_mode_data/` holds the outputs of the deleted `01_dual_mode_smoke.py` (raw-vs-filtered A/B comparison, one run from 2026-05-05). Its Mode 1 called the removed `scrape_url_raw` subcommand, so the script was deleted; the data stays as a historical record and nothing reads it.
+
 ## Gotchas
 `failures.jsonl` inspection: `cat dev/scrape_pipeline/failures.jsonl | jq .`; by garbage_type: `jq -r '.garbage_type // "none"' | sort | uniq -c | sort -rn`; 404s only: `jq 'select(.status_code == 404)'`.
-- `01_dual_mode_smoke.py` Mode 1 shells out to `cli.py scrape_url_raw`, a subcommand `cli.py` no longer has, so Mode 1 cannot succeed today; its Mode 2 parsers search the whole stdout because crawl4ai prints progress lines before the CLI output.
