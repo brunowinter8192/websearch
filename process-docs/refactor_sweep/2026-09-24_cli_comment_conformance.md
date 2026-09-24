@@ -482,3 +482,60 @@ B-keep-needs-logging rows: none.
 | dev/scrape_pipeline/garbage_eval/07_result_inspect.py:66 | build_attribute_table | PRODUCES-OUTPUT | A | allowed | row ('ERROR', message) written to the report |
 | dev/scrape_pipeline/garbage_eval/07_result_inspect.py:78 | build_http_section | PRODUCES-OUTPUT | A | allowed | 'ERROR: <msg>' written to the report |
 | dev/scrape_pipeline/p1_pipe_scraper.py:33 | _scrape_one | PRODUCES-OUTPUT | A | allowed | outcome='error' is an explicit failure fact |
+
+## Phase 4 dev, step 2: approved rows applied (2026-09-24)
+
+Owner decisions: remove all 11 B-remove rows (including `05_filter_debug.py nodes_to_preview`,
+whose module stays unimportable because its `src.scraper` imports are dead); rewrite the one C row
+A-style instead of propagating.
+
+Applied (function-level AST diff against the previous commit, which shows exactly these functions
+changed and no other function or top-level statement in any file):
+- `access_recovery/02_google_wml_probe.py _parse_results`: `lhtml.fromstring(body)` now propagates
+  (an empty body raises); `run_query`'s existing A handler records it as `outcome=ERROR` with the
+  error field instead of a fake `NO_CONTAINERS`.
+- `access_recovery/_dom.py diagnostic_scan`, `diagnose`; `brave_return/_brave_probe_query.py
+  _eval_json`; `mojeek_return/_mojeek_pydoll_probe_query.py _eval_json`, `_record_state`;
+  `mojeek_return/_mojeek_pydoll_probe_core.py extract_pow_time_ms`, `extract_widget_states`: the
+  `json.loads` of the probe's own `JSON.stringify` output now propagates. For `verify_environment_reachable`
+  in the brave and mojeek probes the surrounding tripwire still converts any failure into the
+  "Environment tripwire" abort, so that behavior is unchanged.
+- `logging/01_audit.py _scan_file`: `ast.parse` `SyntaxError` now propagates.
+- `scrape_pipeline/06_cloudflare_md_adoption.py fetch_html_baseline`: request errors propagate
+  through `asyncio.gather` and abort the run; return annotation `int | None` became `int`
+  (`html_bytes` still starts as None for URLs that got no baseline request).
+- `scrape_pipeline/filter_eval/05_filter_debug.py nodes_to_preview`: the markdown conversion
+  propagates; the raw-text fallback is gone. The script is still unimportable (dead imports) and
+  therefore unverifiable by running; this change is proven by AST diff and `py_compile` only.
+- C row `explore_pipeline/05_playwright_bfs.py fetch_page`: kept the catch (a BFS must not abort on
+  the first network error) but it is now an explicit failed fetch. `fetch_page` returns a 4-tuple
+  `(status, links, latency_ms, error)`; a raised fetch returns the error string
+  `"<ExceptionType>: <message>"`. `_process_batch_results` appends `(url, error)` to a new `failed`
+  list, prints the same WARN line as before, and `continue`s BEFORE `found.append`, so a failed URL
+  is no longer counted as found (this was the recall inflation). `_build_bfs_stats` gained
+  `fetch_failures` and `failed_fetches`; the report gained a `Fetch failures` table row and a
+  `Failed Fetches` section. `_handle_429_batch` was adjusted only for the 4-tuple unpacking.
+  Latency of a failed fetch is still appended to `page_latencies`, as before.
+
+Verification: `ast.dump` per function shows only the 9 files' intended functions changed (listed
+above, plus `_format_fetch_failures`, `format_report`, `_format_header_and_recall_table`,
+`_build_bfs_stats`, `bfs_crawl` for the BFS report wiring); no non-function top-level change;
+`py_compile` passes on all 9 files; no live runs. Test suite: 492 passed twice in a row. One run
+in between showed 1 failed / 491 passed and passed on the immediate reruns; the DOCS.md of
+`dev/tests/` already records intermittent brave failures in full-suite runs.
+
+## Recap, Phase 4 dev step 2 (2026-09-24)
+
+Files changed versus `integration`: the 9 `.py` files above, the DOCS.md files of
+`dev/access_recovery`, `dev/brave_return`, `dev/mojeek_return`, `dev/logging`, `dev/scrape_pipeline`,
+`dev/scrape_pipeline/filter_eval`, `dev/explore_pipeline` (LOC headings re-checked against `wc -l`
+after the edit: all match; only the `05_playwright_bfs.py` entry also got a text change for the new
+failure handling), and this file.
+
+Lessons for a successor:
+- Removing an `except` that returns a placeholder is safe only after checking who consumes the
+  placeholder: here the placeholder `None` status was counted as a found page one call later.
+- When a catch must stay (a crawl must survive a network error), put the error into the returned
+  tuple and make the consumer branch on it before any success bookkeeping.
+- Line numbers in a triage table go stale after edits; the table in this file is the state before
+  step 2.
