@@ -141,10 +141,7 @@ class BraveEngine(BaseEngine):
 # FUNCTIONS
 
 def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return result["result"]["result"]["value"]
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> tuple[bool, bool, bool]:
@@ -178,10 +175,7 @@ async def _poll_state(tab) -> dict:
     val = _extract_value(raw)
     state = {"count": 0, "pow_link": False, "button_present": False, "button_matched": False}
     if val:
-        try:
-            state.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        state.update(json.loads(val))
     return state
 
 
@@ -190,10 +184,7 @@ async def _click_challenge_button(tab) -> bool:
     val = _extract_value(raw)
     if not val:
         return False
-    try:
-        return bool(json.loads(val).get("clicked"))
-    except (json.JSONDecodeError, TypeError):
-        return False
+    return bool(json.loads(val).get("clicked"))
 
 
 async def _diagnose(tab) -> dict:
@@ -201,10 +192,7 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     return diag
 
 

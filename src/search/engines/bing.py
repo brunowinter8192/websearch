@@ -86,10 +86,7 @@ class BingEngine(BaseEngine):
 # FUNCTIONS
 
 def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return result["result"]["result"]["value"]
 
 
 def _clean_url(href: str) -> str:
@@ -173,8 +170,5 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     return diag

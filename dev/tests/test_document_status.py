@@ -51,10 +51,10 @@ async def test_ignores_other_frames_iframe_documents():
 
 
 @pytest.mark.asyncio
-async def test_setup_failure_degrades_to_empty_list_not_an_exception():
+async def test_setup_failure_propagates_instead_of_degrading_to_an_empty_chain():
     tab = _BrokenTab(target_id="T1")
-    chain = await start_document_status_capture(tab)
-    assert chain == []
+    with pytest.raises(RuntimeError, match="cdp boom"):
+        await start_document_status_capture(tab)
 
 
 def test_last_entry_of_chain_is_http_status_not_first_hop():

@@ -86,12 +86,8 @@ def cache_read(key: str, ttl_seconds: int = DEFAULT_TTL) -> dict | None:
     age = time.time() - path.stat().st_mtime
     if age > ttl_seconds:
         return None
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning("Cache read error %s: %s", path, e)
-        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def format_engine_pool(pool: list[dict], engine_name: str, query: str) -> str:
