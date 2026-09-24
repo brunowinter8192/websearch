@@ -46,7 +46,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 ### 15_citation_pdf_followup.py (249 LOC)
 
 **Purpose:** Two-hop validation: re-GETs HTML_HAS_PDF_LINK URLs from probe 14, follows `citation_pdf_url`, classifies actual PDF delivery.
-**Reads:** `../md/<SOURCE_REPORT>` (hardcoded), `../txt/<SOURCE_POOL>`.
+**Reads:** a hardcoded source report in `../md/` and its pool file in `../txt/`.
 **Writes:** `../md/citation_pdf_followup_<ts>.md`, `../txt/pool_has_pdf_link_<ts>.txt`.
 **Called by:** CLI only.
 **Calls out:** `httpx`, config and report siblings.

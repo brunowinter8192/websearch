@@ -1,86 +1,83 @@
 # dev/mojeek_return/
 
 ## Role
-Measurement tooling for the question of whether mojeek.com can return to the engine pool, asked against the SEARCH lane's browser (pydoll, `src/search/browser.py` shape) rather than the scrape lane's. Touch this to re-measure Mojeek's ALTCHA behaviour or to check for drift. Do not touch it to change production: nothing here is wired into `src/`, and `mojeek` is still absent from the engine pool.
+Measurement tooling for whether mojeek.com can return to the engine pool, asked against the search lane's browser. Touch it to re-measure Mojeek's ALTCHA behaviour or check for drift. Nothing here is wired into `src/`, and mojeek remains absent from the engine pool.
 
 ## Public Interface
-No `__init__.py`. Three entry points, all run directly and both relying on Python putting the script's own directory on `sys.path` for the sibling `_*` imports:
-`./venv/bin/python -m pytest -o addopts="" dev/mojeek_return/test_mojeek_pydoll_core.py` — pytest module, one real headless Chrome per check on loopback fixtures, no network. Run per check in parallel with `-n auto`.
-`./venv/bin/python3 dev/mojeek_return/mojeek_pydoll_probe.py` — live, spends requests against mojeek.com.
-`./venv/bin/python3 dev/mojeek_return/mojeek_challenge_capture.py` — live, one request, dumps the challenge page verbatim.
+No `__init__.py` — not a package. Three entry points: the pytest module (offline, loopback fixtures), the live probe, and the live one-request challenge capture. Sibling `_*` modules are imported via the script's own directory.
 
 ## Flow
-Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navigate, poll the DOM into one of five states, fire `verify()` if a widget appears, snapshot cookies before/after -> three phases (cold, same profile after a process kill, second fresh profile) -> markdown report into `md/`.
+Launch Chrome on a dedicated profile -> control-URL tripwire -> per query navigate, poll the DOM into a page state, fire the widget verify, snapshot cookies -> three phases -> markdown report in `md/`.
 
 ## Modules
 
 ### mojeek_challenge_capture.py (165 LOC)
 
-**Purpose:** Single-navigation capture of Mojeek's challenge page as actually served — title, body text, widget state, `#captcha-note` at every transition — to settle which strings are real before an engine keys on one.
-**Reads:** none (one live navigation against mojeek.com on a cold profile).
-**Writes:** `md/mojeek_challenge_capture_<ts>.md`; creates and deletes a temporary Chrome profile.
+**Purpose:** Single-navigation capture of the challenge page as served, to settle which strings are real before an engine keys on one.
+**Reads:** One live navigation against mojeek.com.
+**Writes:** `md/mojeek_challenge_capture_<ts>.md`; temporary Chrome profile.
 **Called by:** CLI only.
-**Calls out:** `_mojeek_pydoll_probe_launch.py`, `_mojeek_pydoll_probe_query.py` (tripwire).
+**Calls out:** the launch and query siblings.
 
 ### mojeek_pydoll_probe.py (182 LOC)
 
-**Purpose:** Live three-phase probe answering whether the ALTCHA flow completes, what it costs, and whether a solved challenge carries over.
-**Reads:** nothing (queries are hardcoded per phase; live navigations against mojeek.com and a neutral control URL).
-**Writes:** `md/mojeek_pydoll_probe_<ts>.md`; creates and deletes two temporary Chrome profiles.
+**Purpose:** Live three-phase probe: does the ALTCHA flow complete, what does it cost, does a solved challenge carry over.
+**Reads:** nothing; hardcoded queries, live navigations.
+**Writes:** `md/mojeek_pydoll_probe_<ts>.md`; two temporary Chrome profiles.
 **Called by:** CLI only.
-**Calls out:** its `_mojeek_pydoll_probe_*` siblings.
+**Calls out:** the `_mojeek_pydoll_probe_*` siblings.
 
 ### _mojeek_pydoll_probe_launch.py (213 LOC)
 
-**Purpose:** Chrome launch, focus-steal watchdog and teardown — an inline copy of `src/search/browser.py`'s shape, not a shared import.
-**Reads:** the profile's `DevToolsActivePort`.
-**Writes:** nothing directly; spawns and kills Chrome processes and an asyncio watchdog task.
+**Purpose:** Chrome launch, focus-steal watchdog, and teardown, an inline copy of the production browser shape.
+**Reads:** The profile's DevTools port file.
+**Writes:** nothing directly; spawns and kills Chrome processes.
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
-**Calls out:** `pydoll` (Chrome, ChromiumOptions, BrowserProcessManager, ConnectionHandler, TargetCommands), `psutil`, macOS `open`/`osascript`/`pgrep`/`pkill`.
+**Calls out:** `pydoll`, `psutil`, macOS process tools.
 
 ### _mojeek_pydoll_probe_query.py (227 LOC)
 
-**Purpose:** Drives and times one query on one tab — navigate, poll, fire the trigger, buffer widget events, snapshot cookies — plus the control-URL tripwire.
-**Reads:** the live DOM and the browser cookie store via CDP.
-**Writes:** nothing; returns a `QueryMeasurement`.
+**Purpose:** Drives and times one query on one tab, plus the control-URL tripwire.
+**Reads:** Live DOM and browser cookie store via CDP.
+**Writes:** nothing; returns a measurement.
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
-**Calls out:** `pydoll` (StorageCommands), sibling core/js/launch modules.
+**Calls out:** `pydoll`, the core, js, and launch siblings.
 
 ### _mojeek_pydoll_probe_core.py (202 LOC)
 
-**Purpose:** The decidable core — page-state classifier, per-query verdicts, carry-over verdict, cookie fingerprinting and diffing, payload and duration maths.
-**Reads:** nothing (pure functions over dicts and lists).
+**Purpose:** Decidable core: page-state classifier, verdicts, cookie fingerprinting and diffing, payload and duration maths.
+**Reads:** nothing.
 **Writes:** nothing.
 **Called by:** `_mojeek_pydoll_probe_query.py`, `_mojeek_pydoll_probe_report.py`, `_mojeek_pydoll_pure_checks.py`.
-**Calls out:** none beyond stdlib.
+**Calls out:** none.
 
 ### _mojeek_pydoll_probe_js.py (85 LOC)
 
-**Purpose:** JS snippet constants and builders — page facts, widget event buffer, the `verify()` call, widget attributes and configuration.
+**Purpose:** JS snippets and builders for page facts, the widget event buffer, and the verify call.
 **Reads:** nothing.
 **Writes:** nothing.
 **Called by:** `_mojeek_pydoll_probe_query.py`.
-**Calls out:** none beyond stdlib.
+**Calls out:** none.
 
 ### _mojeek_pydoll_probe_report.py (340 LOC)
 
-**Purpose:** Assembles the markdown report, one section per question plus phases, cookies, limits and methodology.
-**Reads:** nothing (pure assembly over the objects passed in).
-**Writes:** `md/mojeek_pydoll_probe_<ts>.md` via `write_report`.
+**Purpose:** Assembles the markdown report, one section per question plus methodology.
+**Reads:** nothing.
+**Writes:** `md/mojeek_pydoll_probe_<ts>.md`.
 **Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
 **Calls out:** `_mojeek_pydoll_probe_core.py`.
 
 ### test_mojeek_pydoll_core.py (338 LOC)
 
-**Purpose:** Pytest module — one test per check, each with its own loopback fixture server, Chrome and profile; drives the real query runner and builds a report from measured results.
+**Purpose:** Pytest module with one test per check, each on its own loopback fixture server, Chrome, and profile.
 **Reads:** `fixtures/*.html`.
-**Writes:** a fixture report under pytest `tmp_path`; creates and deletes a temporary Chrome profile.
-**Called by:** pytest (module-level `browser` marker semantics: verification, not part of the default run).
-**Calls out:** `pydoll` via the launch/query siblings, stdlib `http.server`.
+**Writes:** A fixture report under the pytest tmp path.
+**Called by:** pytest (verification, not part of the default run).
+**Calls out:** `pydoll` via the siblings, stdlib `http.server`.
 
 ### _mojeek_pydoll_pure_checks.py (155 LOC)
 
-**Purpose:** The network-free half of the test module — classifier, verdict, carry-over, cookie-diff and maths checks.
+**Purpose:** The network-free checks of the test module: classifier, verdict, carry-over, cookie-diff, maths.
 **Reads:** nothing.
 **Writes:** stdout.
 **Called by:** `test_mojeek_pydoll_core.py`.
@@ -88,20 +85,13 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 
 ### _mojeek_pydoll_check_result.py (5 LOC)
 
-**Purpose:** `check()` helper that raises AssertionError on a failed condition (fail-fast per test).
+**Purpose:** Assertion helper that fails fast on a false condition.
 **Reads:** nothing.
 **Writes:** stdout.
 **Called by:** `test_mojeek_pydoll_core.py`, `_mojeek_pydoll_pure_checks.py`.
-**Calls out:** none beyond stdlib.
+**Calls out:** none.
 
 ---
 
 ## State
-`fixtures/` holds four static pages driving the offline checks: a results page with no challenge, a challenge that succeeds, one that stalls in the server round trip, and one that ends in a refusal. The three challenge fixtures define their own `altcha-widget` custom element, so the trigger is exercised against a page-defined class method without touching the network. Reports go to `md/`, named after the script that wrote them. Chrome profiles are temporary directories created and deleted per run — production's profile at `~/.websearch/browser-session` is never touched.
-
-## Gotchas
-Cookies must be read browser-wide. `Tab.get_cookies()` resolves to CDP `Network.getCookies` scoped to whatever the tab currently shows, so a snapshot taken on `about:blank` before a navigation comes back empty and silently voids any before/after comparison. This cost one full live run. The query module uses `Storage.getCookies` instead, and `test_mojeek_pydoll_core.py` guards it with a check that reads a known cookie from a blank tab.
-
-The page-state classifier must never call a terminal verdict on Mojeek's block-page boilerplate. That text is on screen from the first poll and stays there for the whole verification sequence, so `CHALLENGE_PENDING` and `IN_FLIGHT` exist as explicitly non-terminal states and `challenge_success.html` keeps the boilerplate visible along the entire success path to assert it.
-
-The results poll stops at the first matching result link, which is what the removed production engine did too — so a challenged query's measured time is time-to-first-link, and the table's link count can read 1 rather than 10 when the list is still rendering.
+`fixtures/` holds four static pages driving the offline checks. Reports go to `md/`, named after the writing script. Chrome profiles are temporary and deleted per run; production's profile is never touched. Gotchas: process-docs area refactor_sweep and mojeek_return.

@@ -7,13 +7,13 @@ Smoke tests, selector-drift probes, ranking-method eval harness and bee-investig
 No `__init__.py`. Scripts run as `./venv/bin/python dev/search_pipeline/<script>.py`; `_google_fixture.py` is imported by `dev/tests/test_google_engine.py`. Unit subfolders, each with own DOCS.md: `bee_probes/`, `browser_probes/`, `pdf_probes/`, `domain_probes/`, `ranking_eval/`, `report_analysis/`; `_lib/` and `inspections/` also keep their own.
 
 ## Flow
-Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/search/` engines or self-contained pydoll sessions, and write reports to the area-level output folders. Moved scripts resolve `SCRIPT_DIR` to this directory, so output paths are unchanged by the subfolder layout.
+Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/search/` engines or self-contained pydoll sessions, and write reports to the area-level output folders. Scripts moved into subfolders still write to this directory's output folders.
 
 ## Modules
 
 ### 01_google_smoke.py (121 LOC)
 
-**Purpose:** Google production-mode smoke: `GoogleEngine().search()` per query, status OK/EMPTY.
+**Purpose:** Google production-mode smoke: one engine search per query, status OK or EMPTY.
 **Reads:** `queries.txt`.
 **Writes:** `md/google_smoke_<ts>.md`.
 **Called by:** CLI only.
@@ -21,15 +21,15 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### selector_js_equivalence_check.py (113 LOC)
 
-**Purpose:** Runs the pre-change (git rev) and current `_JS_PARSE` of google/bing/brave/yandex in headless Chrome on synthetic HTML covering every selector alternative and verifies identical items apart from the new `sel` key.
-**Reads:** `git show <BASE_REV>:src/search/engines/<engine>.py`, current engine modules.
-**Writes:** `md/selector_js_equivalence_check_<timestamp>.md`; prints `VERDICT PASS|FAIL`.
+**Purpose:** Runs old and current parse JS of four engines in headless Chrome on synthetic HTML, verifying identical items apart from the new selector key.
+**Reads:** Engine sources at a pinned git revision, current engine modules.
+**Writes:** `md/selector_js_equivalence_check_<timestamp>.md`; prints a pass or fail verdict.
 **Called by:** manual run.
 **Calls out:** `pydoll`.
 
 ### 02_burst_smoke.py (270 LOC)
 
-**Purpose:** Burst smoke against the production CLI: one `cli.py search_batch` subprocess per query batch.
+**Purpose:** Burst smoke against the production CLI: one batch-search subprocess per query batch.
 **Reads:** `config.yml`, `queries.txt`.
 **Writes:** `md/burst_<ts>.md`.
 **Called by:** CLI only (`--queries-per-burst`, `--cooldown`, `--max-queries`).
@@ -37,7 +37,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### 04_ddg_smoke.py (121 LOC)
 
-**Purpose:** DuckDuckGo production-mode smoke via `DuckDuckGoEngine`, same pattern as `01_google_smoke.py`.
+**Purpose:** DuckDuckGo production-mode smoke, same pattern as `01_google_smoke.py`.
 **Reads:** `queries.txt`.
 **Writes:** `md/ddg_smoke_<ts>.md`.
 **Called by:** CLI only.
@@ -45,7 +45,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### 05_search_smoke.py (223 LOC)
 
-**Purpose:** Multi-engine comparison smoke: per-engine fanout, merge by URL keeping per-engine snippets, bypassing `_merge_and_rank`.
+**Purpose:** Multi-engine smoke: per-engine fanout, URL merge keeping per-engine snippets, bypassing production ranking.
 **Reads:** `queries.txt`.
 **Writes:** `md/search_smoke_<ts>.md`.
 **Called by:** CLI only (`--engines`, `--max-queries`).
@@ -69,15 +69,15 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### 11_pipeline_smoke.py (369 LOC)
 
-**Purpose:** Full-pipeline smoke through `search_web_workflow`; produces the baseline report other analysis scripts consume.
-**Reads:** `queries.txt`; cache via `cache_key`/`cache_read`.
+**Purpose:** Full-pipeline smoke through the production search workflow; produces the baseline report other analysis scripts consume.
+**Reads:** `queries.txt`; the search cache.
 **Writes:** `md/pipeline_smoke_<ts>.md`.
 **Called by:** CLI only (`--max-queries`, `--language`, `--engine-timeout`, `--report-prefix`); output consumed by `report_analysis/`.
 **Calls out:** `src.search.browser`, `src.search.cache`, `src.search.search_web`.
 
 ### 12_max_results_probe.py (168 LOC)
 
-**Purpose:** Per-engine single-call ceiling probe: one high-`max_results` call per query, records count, latency, status.
+**Purpose:** Per-engine single-call ceiling probe: one high-limit call per query, records count, latency, status.
 **Reads:** hardcoded 3-query set.
 **Writes:** `md/max_results_probe_<ts>.md`.
 **Called by:** CLI only.
@@ -85,7 +85,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### 13_free_word_probe.py (299 LOC)
 
-**Purpose:** Free-word injection probe: appends `pdf`/`book` to queries and measures domain-distribution shift across engines.
+**Purpose:** Free-word injection probe: appends a word to queries and measures domain-distribution shift across engines.
 **Reads:** hardcoded 3-query set.
 **Writes:** `md/free_word_injection_probe_<ts>.md`.
 **Called by:** CLI only.
@@ -93,7 +93,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### 24_pydoll_teardown_verify.py (268 LOC)
 
-**Purpose:** Integration test for `kill_tab` teardown: hung, normal and parallel-batch tab cases against real Chrome.
+**Purpose:** Integration test for tab teardown: hung, normal, and parallel-batch tab cases against real Chrome.
 **Reads:** none (self-contained hang simulation).
 **Writes:** `md/teardown_verify_<ts>.md`, stdout.
 **Called by:** CLI only.
@@ -101,7 +101,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### _capture_sorry.py (223 LOC)
 
-**Purpose:** Helper script capturing Google's `/sorry/` block page as HTML, screenshot and Markdown summary.
+**Purpose:** Helper script capturing Google's block page as HTML, screenshot, and markdown summary.
 **Reads:** `config.yml`.
 **Writes:** `md/sorry_<ts>.md`, `html/sorry_<ts>.html`, `png/sorry_<ts>.png`.
 **Called by:** CLI only.
@@ -109,7 +109,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### _google_fixture.py (217 LOC)
 
-**Purpose:** Local HTTP fixture serving a Google-shaped results page and `/goto` redirect table for engine tests.
+**Purpose:** Local HTTP fixture serving a Google-shaped results page and redirect table for engine tests.
 **Reads:** none (in-memory specs).
 **Writes:** none (serves HTTP on loopback).
 **Called by:** `dev/tests/test_google_engine.py`.
@@ -125,15 +125,15 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### google_selector_probe.py (251 LOC)
 
-**Purpose:** Google DOM-selector diagnostic: compares `#rso h3` matches with alternative selectors at `num=100`.
-**Reads:** live DOM fetch (hardcoded `QUERY`, `NUM`).
+**Purpose:** Google DOM-selector diagnostic comparing the main heading selector with alternatives on a 100-result page.
+**Reads:** Live DOM fetch with a hardcoded query.
 **Writes:** `md/google_selector_probe_<ts>.md`.
 **Called by:** CLI only.
 **Calls out:** `src.search.browser`, `src.search.engines.google`.
 
 ### no_google_burst_smoke.py (186 LOC)
 
-**Purpose:** No-Google concurrent burst smoke: production `ScholarEngine` against two other engines to test burst survival.
+**Purpose:** No-Google concurrent burst smoke: the production Scholar engine against two other engines to test burst survival.
 **Reads:** hardcoded 12-query set.
 **Writes:** `jsonl/no_google_burst_<ts>.jsonl`; summary table to stderr.
 **Called by:** CLI only.
@@ -149,10 +149,10 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ### scholar_http_probe.py (119 LOC)
 
-**Purpose:** Dev-only HTTP alternative to the browser Scholar engine: httpx plus lxml against scholar.google.com.
+**Purpose:** Dev-only HTTP alternative to the browser Scholar engine, using httpx and lxml.
 **Reads:** live HTTP fetch.
-**Writes:** returns `SearchResult` list; no file output.
-**Called by:** imported historically by `no_google_burst_smoke.py` (import now unused).
+**Writes:** Returns a result list; no file output.
+**Called by:** none in use; `no_google_burst_smoke.py` imports it but the import is unused. Effectively DEAD CODE.
 **Calls out:** `httpx`, `lxml.html`, `src.search.{rate_limiter,result,status}`.
 
 ### with_google_decoupling_smoke.py (172 LOC)
@@ -166,4 +166,4 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 ---
 
 ## State
-`config.yml` holds run parameters (`queries_file`, `page_load_timeout`, `consent_settle`) and the report dir, read by `02_burst_smoke.py`, and `_capture_sorry.py`. `queries.txt` is the 30-query baseline shared by the per-engine smokes, `11_pipeline_smoke.py` and the bee probes. Reports go to `md/`; payload data to `jsonl/`, `txt/`, `png/`, `runs/` (per-run pool/methods/oracle JSON co-located with eval MDs). All are area-level, shared by every subfolder.
+`config.yml` holds run parameters and the report dir, read by `02_burst_smoke.py`, and `_capture_sorry.py`. `queries.txt` is the 30-query baseline shared by the per-engine smokes, `11_pipeline_smoke.py` and the bee probes. Reports go to `md/`; payload data to `jsonl/`, `txt/`, `png/`, `runs/` (per-run pool/methods/oracle JSON co-located with eval MDs). All are area-level, shared by every subfolder.

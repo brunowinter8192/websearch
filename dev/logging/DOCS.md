@@ -1,16 +1,25 @@
 # dev/logging/
 
 ## Role
-Logging tooling: AST-based audit over `src/` logger call-sites (identify misclassified log levels). Backs `process-docs/logging/`. The log_janitor retention tests live in `dev/tests/test_log_janitor.py`.
+Logging tooling: an AST-based audit over `src/` logger call-sites to identify misclassified log levels. Backs the logging area of process-docs. Log-janitor retention tests live in `dev/tests/`, not here.
+
+## Public Interface
+No `__init__.py` — not a package. The audit script is the entry point, run directly via `./venv/bin/python`.
+
+## Flow
+`src/` Python sources -> AST walk over logger call-sites -> markdown report under `md/`; path to stdout, progress to stderr.
 
 ## Modules
 
 ### 01_audit.py (115 LOC)
 
-**Purpose:** AST walker over `src/`; emits one row per `logger.X()` / `logging.X()` call with file:line, logger object name, current level, and message template (truncated to 120 chars).
-**Reads:** `src/**/*.py` source files.
-**Writes:** MD report to `md/01_audit_<ts>.md`. Prints report path to stdout; scan progress to stderr.
-**Called by:** CLI only. Run: `./venv/bin/python dev/logging/01_audit.py`.
+**Purpose:** Walks `src/` and emits one report row per logger call with location, level, and message template.
+**Reads:** `src/**/*.py`.
+**Writes:** `md/01_audit_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** none.
 
-## Gotchas
-- Re-run `01_audit.py` after a call-site relevel pass to verify target categories moved off WARNING — compare successive `md/01_audit_<ts>.md` reports.
+---
+
+## State
+None. Successive reports in `md/` are compared by hand after a re-level pass.

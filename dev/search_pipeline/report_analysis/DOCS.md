@@ -4,7 +4,7 @@
 Offline analysis of existing artifacts: pipeline-smoke reports (engine slot distribution, snippet quality and selection) and the query log (engine health, summary). No live engine calls. Touch to interpret past smoke baselines; not for production logging.
 
 ## Public Interface
-No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/report_analysis/<script>.py`; three import `_lib.parse`/`_lib.text` from the parent directory via a `sys.path` insert.
+No `__init__.py`. Entry scripts run as `./venv/bin/python dev/search_pipeline/report_analysis/<script>.py`; three import the shared parser and text helpers from `../_lib/` via a `sys.path` insert.
 
 ## Flow
 Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.jsonl`), compute aggregates, and write Markdown to `../md/` or stdout.
@@ -17,7 +17,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 **Reads:** newest `../md/pipeline_smoke_*.md`.
 **Writes:** `../md/engine_distribution_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `_lib.parse`.
+**Calls out:** `../_lib/parse.py`.
 
 ### snippet_quality_analysis.py (371 LOC)
 
@@ -25,7 +25,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 **Reads:** newest `../md/pipeline_smoke_*.md`.
 **Writes:** `../md/snippet_quality_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `_lib.parse`, `_lib.text`.
+**Calls out:** `../_lib/parse.py`, `../_lib/text.py`.
 
 ### snippet_selection_simulator.py (189 LOC)
 
@@ -33,7 +33,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 **Reads:** newest `../md/pipeline_smoke_*.md`.
 **Writes:** `../md/snippet_selection_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `_lib.parse`, `_lib.text`.
+**Calls out:** `../_lib/parse.py`, `../_lib/text.py`.
 
 ### engine_health_audit.py (178 LOC)
 
