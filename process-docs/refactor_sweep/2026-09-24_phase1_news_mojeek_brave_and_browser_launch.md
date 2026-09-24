@@ -596,3 +596,94 @@ B-remove (23): the 13 `_extract_value`-family rows, the 2 `parse_articles` rows,
 B-keep-needs-logging (1): `theblock/probe_repo_cf_survey.py:123`.
 C (1): `theblock/probe_48h_article_fetch.py:152`.
 Everything else is A, D or E and stays.
+
+
+# Phase 4 - control-flow triage of dev/news_pipeline, step 2: removals (2026-09-24, same session)
+
+The orchestrator approved all 23 B-remove rows, the B-keep-needs-logging row and the C row of the step 1 table.
+Code commit: "refactor: remove unobserved fallbacks and swallows in dev/news_pipeline". Handler count in the
+scope went from 113 to 90 (23 handlers deleted); the 79 PRODUCES-OUTPUT / 7 LOG-ONLY / 3 TRIPWIRE / 1
+SWALLOW-FLOW that remain are the A, D, E rows plus the two handlers described under "kept on purpose".
+
+## What changed, by row group
+
+- **`_extract_value` family (13 rows).** `_extract_value` is now a bare `return raw["result"]["result"]["value"]`
+  in `01_coindesk_discover.py`, `exploration/_01_dom.py`, `_03_capture.py`, `_04_capture.py`, `_05_capture.py`,
+  `_06_capture.py` and `05b_coindesk_warmth_probe.py` (7 handlers), and the `json.loads(val)` handlers that
+  turned a parse error into `[]`/`{}`/`None`/`{"found": False, "disabled": False}` are gone from
+  `01_coindesk_discover.extract_articles`, `_01_dom` (`inspect_containers`, `extract_articles`, `find_button`) and
+  `_03_capture` (`extract_articles`, `check_btn_state`) (6 handlers). Effect: a CDP result without the expected
+  shape raises `KeyError`/`TypeError`, a non-JSON value raises `json.JSONDecodeError`, and the click loop or the
+  daily `run_pipeline.py` discover stage stops with a traceback instead of reading it as end of feed / button gone.
+  The `if not val:` early returns in front of the `json.loads` calls are not handlers and were left alone: a
+  JS snippet that legitimately returns an empty string still yields the empty result.
+- **`parse_articles` (2 rows).** `exploration/06_coindesk_full_discovery.py` and `exploration/_05_parse.py` now do a
+  bare `json.loads(body)`. The stop message in `06`'s `process_batch` became "Empty response — reached API bottom.
+  Stopping." (same wording as the src fix of 2026-09-09, `git grep "parse failure"` finds nothing left).
+  `_04_replay.count_articles` also parses bare. (1 more row.)
+- **Stall stub (2 rows).** `_p2_watchdog._write_stall_job_md` no longer builds a hand-written `job.md`. What
+  stays, mirroring the src version: the `except Exception` around `write_riding_report` prints
+  `[watchdog] write_riding_report WARN: <exc>` and the caller still flushes stderr and calls `os._exit(1)`. The
+  `idle_s` parameter existed only for the stub and was removed from the function and its single caller; `idle_s`
+  is still printed by `_abort_stall` itself. A missing `job.md` after a stall abort is now the signal that the
+  reporter failed.
+- **Weak rows (5).** `p3_target._fetch_index_direct` and `probe_48h_article_fetch._fetch_index_direct` lost their
+  `except Exception` arm: a raised network error from the direct index GET now propagates (the non-200 / no-XML
+  path, which is the observed home-IP 403, still prints and falls back to the proxy rotation, unchanged).
+  `probe_discovery.load_sub_cache`, `_reconstruct_sub_urls_from_cache` and `fetch_news_sitemap` lost their
+  corrupt-cache handlers: a corrupt JSON cache file now raises `json.JSONDecodeError`.
+- **C row.** `probe_48h_article_fetch._parse_url_blocks` no longer skips a block whose `lastmod` is not ISO; the
+  `ValueError` propagates. The tz-naive-to-UTC handling stays.
+- **B-keep-needs-logging row.** `probe_repo_cf_survey.fetch_one` now returns `(proxies, error)` where error is
+  `HTTP <status>` or `<ExceptionType>: <first 100 chars>`; `fetch_all_repos` returns
+  `(repo_proxies, failed_sources)` with `(repo, protocol, url, error)` tuples; `write_fetch_summary` appends a
+  `### Failed sources` table (or `None.`) to the report and the workflow prints the failed-source count. The handler
+  itself stays (class A now): a failing source must not abort the survey of the other repos.
+
+## Kept on purpose
+
+- `_p2_watchdog._write_stall_job_md` keeps its `except Exception` (WARN only), because `_abort_stall` must reach
+  `os._exit(1)` even when the reporter fails; that is the tripwire shape src kept.
+- `probe_repo_cf_survey.fetch_one` keeps its `except Exception`, see above.
+
+## Proof
+
+- AST diff (`ast.unparse` old vs new per file, HEAD vs working tree): 15 files differ, and every changed line is one
+  of the edits above; the other 63 files of the scope are byte-identical to HEAD. No file changed outside the
+  listed rows (the survey diff also shows the changed signatures/call sites listed under its row).
+- `py_compile` of all 20 touched files: clean. The comment/docstring scan of the scope still prints nothing
+  (78 files, 0 hits).
+- Full suite `./venv/bin/python -m pytest dev/tests/ -q`: 492 passed before, 492 after (none of the touched
+  scripts is imported by `dev/tests/`).
+- Offline propagation checks, no network, no browser: `_extract_value({})` raises `KeyError` and
+  `_extract_value(None)` raises `TypeError` in all 6 modules that define it; `parse_articles(b"not json")` raises
+  `JSONDecodeError` in `06` and `_05_parse`; `count_articles(b"<html>")` raises; `load_sub_cache` and
+  `_reconstruct_sub_urls_from_cache` raise on a corrupt cache file; `_parse_url_blocks` raises `ValueError` on a bad
+  `lastmod` and still returns the parsed pair for a good one. For the survey, `fetch_all_repos` was run against a
+  stub client with an ok source, a 404 source and a raising source: the proxy sets are identical to the old
+  version's, and the two failures come back as `HTTP 404` and `RuntimeError: connection reset`; the rendered
+  fetch summary contains the Failed sources table (and `None.` when empty).
+- The offline scripts `coindesk_proxy_riding/test_sigint_report.py`, `test_tail_race.py`,
+  `test_cooldown_policy.py` exit 0 before and after; `test_watchdog.py` exits 1 before and after with identical
+  output (`module 'p2_browser_rider' has no attribute 'os'` in both tests): it patches an attribute that
+  `p2_browser_rider` no longer has, so it never reaches the stub and did not depend on it. Pre-existing, not
+  fixed here.
+
+## DOCS.md
+
+Six sentences adjusted where documented behaviour changed: `theblock/DOCS.md` (`probe_repo_cf_survey` writes a
+Failed sources table; `probe_48h_article_fetch` falls back on a non-XML response), `theblock/acquire_pipe/DOCS.md`
+(`p3_target`: network errors from the direct GET propagate), `coindesk_proxy_riding/DOCS.md` (`_p2_watchdog`: WARN
+only, no stub), root `DOCS.md` (`01_coindesk_discover`: unwrap/parse failures raise) and `exploration/DOCS.md`
+(`_05_parse`: non-JSON raises). Recap re-check: all LOC headings of the five DOCS.md files match `wc -l`
+(0 mismatches; 15 headings were updated, e.g. `_p2_watchdog.py` 100 -> 82, `probe_repo_cf_survey.py` 282 -> 295).
+
+## For a successor
+
+- The two `p3_target` / `probe_48h` direct-fetch arms were removed on the strength of "no raised network error
+  observed", while the status-based fallback next to them is observed. If a raised `httpx` error from the home
+  IP is ever seen in a real run, the fix is to log and fall back on that specific exception type, not to restore
+  a bare `except Exception`.
+- Rows with class A still lose the exception detail in several places (`cf_get` returns `(b"", 0)`,
+  `check_proxy` returns `False`): they are counted as failures, which is the intended outcome for free proxies, so
+  they were not touched.
