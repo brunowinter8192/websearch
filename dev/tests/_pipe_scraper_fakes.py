@@ -1,4 +1,7 @@
+import asyncio
+import time
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 
 def _now_ts() -> str:
@@ -47,3 +50,34 @@ def _camoufox_meta(**overrides):
     }
     base.update(overrides)
     return base
+
+
+class _FakeClock:
+    def __init__(self):
+        self.now = time.time()
+        self.sleeps = []
+
+    def time(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _install_fake_pacing(monkeypatch):
+    from src.crawler import pipe_scraper_acquisition, pipe_scraper_pacing
+    clock = _FakeClock()
+    monkeypatch.setattr(pipe_scraper_pacing, "time", SimpleNamespace(time=clock.time))
+    monkeypatch.setattr(pipe_scraper_pacing, "asyncio",
+                        SimpleNamespace(Lock=asyncio.Lock, Semaphore=asyncio.Semaphore, sleep=clock.sleep))
+    monkeypatch.setattr(pipe_scraper_pacing, "random",
+                        SimpleNamespace(uniform=lambda low, high: (low + high) / 2))
+
+    class _ClockDatetime:
+        @staticmethod
+        def now(tz=None):
+            return datetime.fromtimestamp(clock.now, tz)
+
+    monkeypatch.setattr(pipe_scraper_acquisition, "datetime", _ClockDatetime)
+    return clock

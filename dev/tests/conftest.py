@@ -48,3 +48,8 @@ def _no_real_osascript(monkeypatch):
         return real_run(args, *a, **kw)
 
     monkeypatch.setattr(subprocess, "run", _guarded_run)
+
+
+@pytest.fixture(autouse=True)
+def _constant_system_locale(monkeypatch):
+    monkeypatch.setattr(camoufox_scrape, "_resolve_system_locale", lambda: "en-US")

@@ -6,7 +6,7 @@ import pytest
 from src.crawler import pipe_scraper
 from src.crawler import pipe_scraper_acquisition
 from src.crawler import pipe_scraper_constants
-from dev.tests._pipe_scraper_fakes import _FakeCrawler, _camoufox_meta
+from dev.tests._pipe_scraper_fakes import _FakeCrawler, _camoufox_meta, _install_fake_pacing
 
 
 def test_camoufox_concurrency_default_is_conservative():
@@ -87,6 +87,7 @@ async def test_scrape_all_camoufox_default_block_images_is_false(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_scrape_all_camoufox_engine_resolves_own_concurrency_default(tmp_path, monkeypatch):
+    clock = _install_fake_pacing(monkeypatch)
     log_file = tmp_path / "pipe_scrape_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
 
@@ -104,7 +105,8 @@ async def test_scrape_all_camoufox_engine_resolves_own_concurrency_default(tmp_p
     assert len(records) == 3
     timestamps = [datetime.fromisoformat(r["ts"].replace("Z", "+00:00")) for r in records]
     spread_s = (max(timestamps) - min(timestamps)).total_seconds()
-    assert spread_s > 0.05, f"records did not serialize (spread={spread_s}s) — concurrency default was not 1"
+    assert clock.sleeps == pytest.approx([0.05, 0.05])
+    assert spread_s == pytest.approx(0.1, abs=0.002), f"records did not serialize (spread={spread_s}s) — concurrency default was not 1"
 
 
 @pytest.mark.asyncio
