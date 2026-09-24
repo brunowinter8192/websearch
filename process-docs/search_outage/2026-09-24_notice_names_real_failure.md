@@ -42,3 +42,16 @@ cannot be reproduced on demand; its notice is shown by the test output.
 
 Tool hooks in this environment reject piping a CLI into another command and reading back a redirected
 CLI output with `cat` in the same call. Redirect in one call, read with Read in the next.
+
+## Process notes (recap)
+
+- Old tests failed to express the new gate: fixtures with ERROR_BROWSER and no drop_reason no longer
+  produce a repair line by design. The three tests that asserted the repair line (techniker, bramfelder,
+  prepend) had to be rebuilt on real drop_reasons. The `_stats` helper takes an optional third
+  element (drop_reason) so the old status-only fixtures still work.
+- The 2026-09-21 fixture uses port 9256 (record 08:41:49) for the exact-string test and 9296
+  (record 08:40:45) for the techniker test. Ports differ per record; the notice keeps the port.
+- Files touched: `src/search/search_web.py`, `dev/tests/test_search_web_degraded_notice.py`,
+  `src/search/DOCS.md`, this file. DOCS.md LOC (409) matches `wc -l`.
+- Not done: no live reproduction of the 2026-09-24 shape (cannot be forced); a live 09-21 repro
+  (moving the chromium revision aside) was not repeated, the fixture comes from the real record.
