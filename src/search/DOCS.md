@@ -8,7 +8,7 @@ Parallel web-search pipeline behind the search and drilldown subcommands of cli.
 
 `__init__.py` is empty; modules are imported by path.
 
-- search_web.py: the search workflow entry used by cli.py, plus a sync wrapper for dev scripts.
+- search_web.py: the search workflow entry used by cli.py.
 - cache.py: cache key, cache read and pool formatting for the drilldown subcommand.
 - query_logger.py: query log writer, also called by cli.py for drilldown records.
 - browser.py: the at-exit browser cleanup registered by cli.py.
@@ -19,7 +19,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 
 ## Modules
 
-### search_web.py (355 LOC)
+### search_web.py (334 LOC)
 
 **Purpose:** Search orchestrator: engine selection, concurrent fan-out with status classification, pool building, breakdown formatting, cache write and query logging.
 **Reads:** the query and parameters; engine registry data.
