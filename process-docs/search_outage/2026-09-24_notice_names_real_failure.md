@@ -55,3 +55,9 @@ CLI output with `cat` in the same call. Redirect in one call, read with Read in 
   `src/search/DOCS.md`, this file. DOCS.md LOC (409) matches `wc -l`.
 - Not done: no live reproduction of the 2026-09-24 shape (cannot be forced); a live 09-21 repro
   (moving the chromium revision aside) was not repeated, the fixture comes from the real record.
+
+## Recap: notice moved to its own module (2026-09-24)
+
+`src/search/search_web.py` crossed the 400 LOC ceiling (409) after the notice work. The degraded-notice concern moved unchanged into `src/search/degraded_notice.py` (61 LOC, INFRASTRUCTURE and FUNCTIONS sections): `_prepend_degraded_notice`, `_format_degraded_notice`, `_failing_engines`, `_format_failing_line`, `_shorten_drop_reason`, `_is_browser_never_started` and the constants only they use (ratio, repair command, never-started prefix, drop-reason cap, navigation-URL pattern, failure-status set). `search_web.py` (355 LOC) imports only `_prepend_degraded_notice`, which its orchestrator calls, and lost its now-unused `re` import. `test_search_web_degraded_notice.py` imports from the new module; `src/search/DOCS.md` has the new entry and `dev/tests/DOCS.md` names the new module.
+
+Verification: suite 541 passed before and after, size scan of `src/` and `cli.py` (modules at 400 LOC or more, functions at 50 LOC or more) prints nothing, and a real `cli.py search_web "python asyncio tutorial"` run printed the ordinary breakdown with no notice on a healthy network. Zero behavior change: the notice text is pinned by the exact-string tests for both real shapes.
