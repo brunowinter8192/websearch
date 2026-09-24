@@ -92,23 +92,10 @@ async def run_probe() -> None:
             section, summary = await _run_one_query(query, selected)
             query_sections.append(section)
             summaries.append(summary)
-            rsk = summary["rate_skip_engines"]
-            print(
-                f"  google_count={summary['google_count']}  pool={summary['pool_size']}"
-                f"  skipped={summary['skipped']}"
-                f"  RATE_SKIP={summary['rate_skip_count']} ({','.join(rsk) or 'none'})"
-                f"  C1={summary['c1_ms']}ms  C2={summary['c2_ms']}ms"
-                f"  C3={summary['c3_ms']}ms  C4={summary['c4_ms']}ms",
-                file=sys.stderr,
-            )
+            _print_query_summary(summary)
             # Cascade guard: >1 RATE_SKIP on same query → bee-fix regression, stop immediately
             if summary["rate_skip_count"] > 1:
-                print(
-                    f"\nSTOP: RATE_SKIP cascade on query [{qi+1}] '{query}'\n"
-                    f"  RATE_SKIP engines: {rsk}\n"
-                    f"  Aborting. Check rate-limiter state (bee-fix regression?). Report not written.",
-                    file=sys.stderr,
-                )
+                _print_cascade_stop(qi, query, summary["rate_skip_engines"])
                 return
     finally:
         await close_browser()
@@ -126,6 +113,27 @@ async def run_probe() -> None:
 
 
 # FUNCTIONS
+
+def _print_query_summary(summary: dict) -> None:
+    rsk = summary["rate_skip_engines"]
+    print(
+        f"  google_count={summary['google_count']}  pool={summary['pool_size']}"
+        f"  skipped={summary['skipped']}"
+        f"  RATE_SKIP={summary['rate_skip_count']} ({','.join(rsk) or 'none'})"
+        f"  C1={summary['c1_ms']}ms  C2={summary['c2_ms']}ms"
+        f"  C3={summary['c3_ms']}ms  C4={summary['c4_ms']}ms",
+        file=sys.stderr,
+    )
+
+
+def _print_cascade_stop(qi: int, query: str, rsk: list) -> None:
+    print(
+        f"\nSTOP: RATE_SKIP cascade on query [{qi+1}] '{query}'\n"
+        f"  RATE_SKIP engines: {rsk}\n"
+        f"  Aborting. Check rate-limiter state (bee-fix regression?). Report not written.",
+        file=sys.stderr,
+    )
+
 
 # Capped pool: filter raw results to position <= google_count per engine, then dedup
 def _build_capped_pool(raw_results: list, google_count: int) -> list[dict]:
@@ -178,21 +186,11 @@ async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
     google_count      = engine_stats.get("google", {}).get("result_count", 0)
 
     if google_count == 0:
-        return _build_skipped_section(query, engine_stats, fetch_ms), {
-            "query": query, "category": QUERY_CATEGORIES.get(query, "unknown"),
-            "skipped": True, "google_count": 0, "pool_size": 0,
-            "rate_skip_count": len(rate_skip_engines), "rate_skip_engines": rate_skip_engines,
-            "fetch_ms": fetch_ms, "c1_ms": 0, "c2_ms": 0, "c3_ms": 0, "c4_ms": 0,
-            "c1_urls": [], "c2_urls": [], "c3_urls": [], "c4_urls": [],
-        }
+        return _build_skipped_section(query, engine_stats, fetch_ms), _skipped_summary(query, rate_skip_engines, fetch_ms)
 
     pool = _build_capped_pool(raw_results, google_count)
 
-    # Pre-filter empty docs for C3/C4 API calls (reranker returns 400 on empty documents)
-    raw_texts   = [_doc_repr(m, BM25_REPR) for m in pool]
-    valid_pairs = [(m, t) for m, t in zip(pool, raw_texts) if t.strip()]
-    pool_v      = [m for m, _ in valid_pairs]
-    texts_v     = [t for _, t in valid_pairs]
+    pool_v, texts_v = _valid_docs(pool)
 
     t0 = time.perf_counter()
     c1_top = _rank_c1_overlap(pool, google_count)
@@ -225,6 +223,25 @@ async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
         "c4_urls": [m["url"] for m in c4_top],
     }
     return section, summary
+
+
+def _skipped_summary(query: str, rate_skip_engines: list, fetch_ms: int) -> dict:
+    return {
+        "query": query, "category": QUERY_CATEGORIES.get(query, "unknown"),
+        "skipped": True, "google_count": 0, "pool_size": 0,
+        "rate_skip_count": len(rate_skip_engines), "rate_skip_engines": rate_skip_engines,
+        "fetch_ms": fetch_ms, "c1_ms": 0, "c2_ms": 0, "c3_ms": 0, "c4_ms": 0,
+        "c1_urls": [], "c2_urls": [], "c3_urls": [], "c4_urls": [],
+    }
+
+
+def _valid_docs(pool: list[dict]) -> tuple[list[dict], list[str]]:
+    # Pre-filter empty docs for C3/C4 API calls (reranker returns 400 on empty documents)
+    raw_texts   = [_doc_repr(m, BM25_REPR) for m in pool]
+    valid_pairs = [(m, t) for m, t in zip(pool, raw_texts) if t.strip()]
+    pool_v      = [m for m, _ in valid_pairs]
+    texts_v     = [t for _, t in valid_pairs]
+    return pool_v, texts_v
 
 
 # Markdown section for google_count==0 queries
@@ -313,7 +330,15 @@ def _write_report(
     skipped = [s for s in summaries if s["skipped"]]
     rsk_total = sum(s["rate_skip_count"] for s in summaries)
 
-    hdr = [
+    hdr = _header_lines(ts, summaries, valid, skipped, total_ms, rsk_total)
+    hdr += _summary_rows(summaries)
+    hdr += _muell_aggregate_lines()
+
+    path.write_text("\n\n---\n\n".join(["\n".join(hdr)] + sections), encoding="utf-8")
+
+
+def _header_lines(ts: str, summaries: list[dict], valid: list[dict], skipped: list[dict], total_ms: int, rsk_total: int) -> list[str]:
+    return [
         "# Pooling Strategy Comparison — Capped Pool (bead searxng-g82)",
         "",
         f"**Date:** {ts}  ",
@@ -329,15 +354,22 @@ def _write_report(
         "| # | Query | Cat | google_count | pool | RATE_SKIP | C1_ms | C2_ms | C3_ms | C4_ms |",
         "|---|-------|-----|--------------|------|-----------|-------|-------|-------|-------|",
     ]
+
+
+def _summary_rows(summaries: list[dict]) -> list[str]:
+    rows = []
     for i, s in enumerate(summaries, 1):
         flag = " ⚠SKIPPED" if s["skipped"] else ""
-        hdr.append(
+        rows.append(
             f"| {i} | {s['query'][:38]}{flag} | {s['category'][:10]} | {s['google_count']} "
             f"| {s['pool_size']} | {s['rate_skip_count']} "
             f"| {s['c1_ms']} | {s['c2_ms']} | {s['c3_ms']} | {s['c4_ms']} |"
         )
+    return rows
 
-    hdr += [
+
+def _muell_aggregate_lines() -> list[str]:
+    return [
         "",
         "## Müll-Eyeball Aggregate (fill post-run)",
         "",
@@ -355,8 +387,6 @@ def _write_report(
         "*(fill post-run — queries where ranking strategy choice visibly changes result quality)*",
         "",
     ]
-
-    path.write_text("\n\n---\n\n".join(["\n".join(hdr)] + sections), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -171,7 +171,6 @@ def _run_one_pair(
     return {f"m{i}_ms": data[f"m{i}_ms"] for i in range(1, 13)}
 
 
-# Run every method on the filtered pool; return method keys in output-file order
 def _run_methods(
     pool: list[dict], pool_full: list[dict], query: str,
     reranker_url: str, splade_url: str, generator_url: str,

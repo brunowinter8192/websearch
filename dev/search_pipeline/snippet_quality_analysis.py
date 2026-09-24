@@ -74,6 +74,11 @@ def _usefulness(text: str) -> float:
 
 # Compute aggregate stats per snippet source across all records
 def compute_source_stats(records: list[dict]) -> dict:
+    texts_by, total_by, empty_by = _collect_source_texts(records)
+    return {src: _source_stat(src, texts_by, total_by, empty_by) for src in ALL_SOURCES}
+
+
+def _collect_source_texts(records: list[dict]) -> tuple[dict, dict, dict]:
     texts_by: dict[str, list[str]] = {s: [] for s in ALL_SOURCES}
     total_by: dict[str, int]       = defaultdict(int)
     empty_by: dict[str, int]       = defaultdict(int)
@@ -105,33 +110,32 @@ def compute_source_stats(records: list[dict]) -> dict:
                 texts_by[src].append(val)
             else:
                 empty_by[src] += 1
+    return texts_by, total_by, empty_by
 
-    stats = {}
-    for src in ALL_SOURCES:
-        txts = texts_by[src]
-        n_samples = len(txts)
-        if not txts:
-            stats[src] = dict(
-                n_total=total_by[src], n_empty=empty_by[src], n_samples=0,
-                mean_len=0.0, median_len=0.0, pct_bloated=0.0,
-                mean_clean_len=0.0, lexical_density=0.0, usefulness_score=0.0,
-            )
-            continue
-        lengths    = [len(t) for t in txts]
-        bloated    = [bool(detect_bloat(t)) for t in txts]
-        clean_lens = [len(strip_bloat(t)) for t in txts]
-        lex        = [lexical_density(t) for t in txts]
-        m_clean    = mean(clean_lens)
-        m_lex      = mean(lex)
-        stats[src] = dict(
-            n_total=total_by[src], n_empty=empty_by[src], n_samples=n_samples,
-            mean_len=mean(lengths), median_len=stat_median(lengths),
-            pct_bloated=100.0 * sum(bloated) / n_samples,
-            mean_clean_len=m_clean,
-            lexical_density=m_lex,
-            usefulness_score=m_clean * m_lex,
+
+def _source_stat(src: str, texts_by: dict, total_by: dict, empty_by: dict) -> dict:
+    txts = texts_by[src]
+    n_samples = len(txts)
+    if not txts:
+        return dict(
+            n_total=total_by[src], n_empty=empty_by[src], n_samples=0,
+            mean_len=0.0, median_len=0.0, pct_bloated=0.0,
+            mean_clean_len=0.0, lexical_density=0.0, usefulness_score=0.0,
         )
-    return stats
+    lengths    = [len(t) for t in txts]
+    bloated    = [bool(detect_bloat(t)) for t in txts]
+    clean_lens = [len(strip_bloat(t)) for t in txts]
+    lex        = [lexical_density(t) for t in txts]
+    m_clean    = mean(clean_lens)
+    m_lex      = mean(lex)
+    return dict(
+        n_total=total_by[src], n_empty=empty_by[src], n_samples=n_samples,
+        mean_len=mean(lengths), median_len=stat_median(lengths),
+        pct_bloated=100.0 * sum(bloated) / n_samples,
+        mean_clean_len=m_clean,
+        lexical_density=m_lex,
+        usefulness_score=m_clean * m_lex,
+    )
 
 
 # 8×8 engine co-occurrence: count (URL, query) pairs found by both engines

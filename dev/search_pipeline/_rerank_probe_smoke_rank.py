@@ -21,7 +21,6 @@ SEARCH_PAGE_RE = re.compile(
 
 # FUNCTIONS
 
-# Filter out search-results-page URLs; return (filtered results, filtered count, removed-pattern histogram)
 def _filter_search_pages(raw_results: list) -> tuple[list, int, Counter]:
     removed_urls    = [r.url for r in raw_results if is_search_results_url(r.url)]
     filtered_raw    = [r     for r in raw_results if not is_search_results_url(r.url)]
@@ -40,7 +39,6 @@ def _filter_search_pages(raw_results: list) -> tuple[list, int, Counter]:
     return filtered_raw, filtered_count, pattern_hist
 
 
-# Config 2: BM25-only top-N over the filtered pool; return (top items, ms)
 def _run_bm25_only(pool: list[dict], query: str) -> tuple[list[dict], int]:
     t0 = time.perf_counter()
     bm25_pairs   = _bm25_score(pool, query, TOP_N)
@@ -49,7 +47,6 @@ def _run_bm25_only(pool: list[dict], query: str) -> tuple[list[dict], int]:
     return bm25_top, bm25_ms
 
 
-# Configs 3 and 4 input: BM25 retrieve top-RETRIEVE_N, drop empty texts; return (candidates, ms, docs, texts)
 def _retrieve_candidates(pool: list[dict], query: str) -> tuple[list, int, list[dict], list[str]]:
     t0 = time.perf_counter()
     bm25_candidates = _bm25_score(pool, query, RETRIEVE_N)
@@ -64,7 +61,6 @@ def _retrieve_candidates(pool: list[dict], query: str) -> tuple[list, int, list[
     return bm25_candidates, retrieve_ms, cand_docs, cand_texts
 
 
-# Config 3: embedding-cosine rerank of the candidates; return (top items, ms)
 def _run_embed_rerank(query: str, cand_docs: list[dict], cand_texts: list[str]) -> tuple[list[dict], int]:
     t0 = time.perf_counter()
     if cand_texts:
@@ -84,7 +80,6 @@ def _run_embed_rerank(query: str, cand_docs: list[dict], cand_texts: list[str]) 
     return embed_top, embed_ms
 
 
-# Config 4: cross-encoder rerank of the candidates; return (top items, ms)
 def _run_ce_rerank(query: str, cand_docs: list[dict], cand_texts: list[str]) -> tuple[list[dict], int]:
     t0 = time.perf_counter()
     if cand_texts:
@@ -100,7 +95,6 @@ def _run_ce_rerank(query: str, cand_docs: list[dict], cand_texts: list[str]) -> 
     return ce_top, rerank_ms
 
 
-# Config 5: BM25 over the google-count-capped pool; return (K, capped pool, top items, ms)
 def _run_capped(raw_results: list, engine_stats: dict, query: str) -> tuple[int, list[dict], list[dict], int]:
     K           = _compute_K(engine_stats)
     capped_raw  = [r for r in raw_results if r.position <= K]

@@ -73,7 +73,21 @@ async def run_classify() -> None:
 
 # Probe one query: SO site then cross-site, return record dict
 async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> dict:
-    record = {
+    record = _new_record(smoke_row, query)
+
+    if await _probe_stackoverflow(client, query, record):
+        return record
+
+    await asyncio.sleep(1.0)
+
+    await _probe_cross_site(client, query, record)
+
+    record["classification"] = _classify(record)
+    return record
+
+
+def _new_record(smoke_row: int, query: str) -> dict:
+    return {
         "smoke_row": smoke_row,
         "query": query,
         "so_http": None,
@@ -88,6 +102,8 @@ async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> 
         "notes": "",
     }
 
+
+async def _probe_stackoverflow(client: httpx.AsyncClient, query: str, record: dict) -> bool:
     # --- stackoverflow probe ---
     so_params = {**BASE_PARAMS, "q": query, "site": "stackoverflow"}
     try:
@@ -96,7 +112,7 @@ async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> 
         if resp.status_code in (429, 403):
             record["classification"] = "RATE_LIMITED"
             record["notes"] = f"SO returned HTTP {resp.status_code}"
-            return record
+            return True
         if resp.status_code == 200:
             data = resp.json()
             record["so_total"] = data.get("total", 0)
@@ -105,10 +121,11 @@ async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> 
             record["quota_remaining"] = data.get("quota_remaining")
     except Exception as e:
         record["notes"] = f"SO request error: {e}"
-        return record
+        return True
+    return False
 
-    await asyncio.sleep(1.0)
 
+async def _probe_cross_site(client: httpx.AsyncClient, query: str, record: dict) -> None:
     # --- cross-site (stackexchange network) probe ---
     xs_params = {**BASE_PARAMS, "q": query, "site": "stackexchange"}
     try:
@@ -123,9 +140,6 @@ async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> 
                 record["quota_remaining"] = data["quota_remaining"]
     except Exception as e:
         record["notes"] += f" | XS request error: {e}"
-
-    record["classification"] = _classify(record)
-    return record
 
 
 # Classify one record based on HTTP status and item counts

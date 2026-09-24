@@ -50,7 +50,19 @@ def _build_inspection_section(inspection) -> list[str]:
     if inspection.error:
         lines += [f"Error: {inspection.error}", ""]
         return lines
-    lines += [
+    lines += _inspection_facts(inspection)
+    if inspection.config_diffs:
+        lines += [f"- {d}" for d in inspection.config_diffs]
+    else:
+        lines.append("- none observed against the documented default set")
+    lines += _inspection_markup(inspection)
+    lines += _build_event_table(inspection.events)
+    lines.append("")
+    return lines
+
+
+def _inspection_facts(inspection) -> list[str]:
+    return [
         f"Widget found: {inspection.widget_found}",
         f"Page title at capture: {inspection.page_title}",
         f"Widget state (getState()): {inspection.state}",
@@ -76,11 +88,10 @@ def _build_inspection_section(inspection) -> list[str]:
         "### Deviations from ALTCHA's documented defaults",
         "",
     ]
-    if inspection.config_diffs:
-        lines += [f"- {d}" for d in inspection.config_diffs]
-    else:
-        lines.append("- none observed against the documented default set")
-    lines += [
+
+
+def _inspection_markup(inspection) -> list[str]:
+    return [
         "",
         "### Surrounding form markup",
         "",
@@ -97,9 +108,6 @@ def _build_inspection_section(inspection) -> list[str]:
         "### Events observed during passive load (no trigger fired)",
         "",
     ]
-    lines += _build_event_table(inspection.events)
-    lines.append("")
-    return lines
 
 
 def _build_trigger_section(result) -> list[str]:
@@ -148,6 +156,14 @@ def _build_trigger_section(result) -> list[str]:
 def _build_methodology_section(
     result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
 ) -> list[str]:
+    return (
+        _methodology_setup()
+        + _methodology_click_delivery()
+        + _methodology_page_outcome(result_link_selector, block_marker_text, in_flight_marker_text, settle_timeout_s)
+    )
+
+
+def _methodology_setup() -> list[str]:
     return [
         "## Methodology",
         "",
@@ -178,6 +194,11 @@ def _build_methodology_section(
         "attribute. Widget events are bridged out to Python via an exposed binding call, a genuine "
         "push event, not a poll.",
         "",
+    ]
+
+
+def _methodology_click_delivery() -> list[str]:
+    return [
         "The interactive element used for the `real_click` trigger is located via a raw CDP "
         "`DOM.describeNode(pierce=true)` call, which reports the widget's actual shadow-root mode "
         "and can resolve into the shadow tree regardless of whether that mode is `open` or `closed` "
@@ -214,6 +235,13 @@ def _build_methodology_section(
         "trigger completion (`verified`/`error`/`expired` observed) are both awaited event- or "
         "poll-driven with a bounded timeout, never a single fixed sleep before one check.",
         "",
+    ]
+
+
+def _methodology_page_outcome(
+    result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
+) -> list[str]:
+    return [
         "Page outcome is read from the live DOM as one of three states, checked in this order: "
         f"RESULTS (real result links matching `{result_link_selector}`, verified live on "
         "2026-05-03 — see `process-docs/engine_expansion/`); IN_FLIGHT (the literal, "

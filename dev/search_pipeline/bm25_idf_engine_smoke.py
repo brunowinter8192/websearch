@@ -213,30 +213,35 @@ def _build_query_section(
     ]
 
     for ct in config_tops:
-        t = ct["cfg"]["type"]
-        if t == "hardslot":
-            label = "Hard-Slot baseline (12 General / 6 Academic / 2 QA)"
-        elif t == "uniform":
-            label = f"BM25Uniform — k1={BM25_K1}, b={BM25_B}, sw=on, repr={BM25_REPR} [no IDF]"
-        elif t == "okapi":
-            label = f"BM25Okapi   — k1={BM25_K1}, b={BM25_B}, sw=on, repr={BM25_REPR} [per-pool IDF]"
-        elif t == "uniform_wt":
-            label = f"BM25Uniform × engine-inv-wt — k1={BM25_K1}, b={BM25_B}, sw=on [no IDF + wt]"
-        elif t == "okapi_wt":
-            label = f"BM25Okapi   × engine-inv-wt — k1={BM25_K1}, b={BM25_B}, sw=on [IDF + wt]"
-
-        lines += [
-            f"#### {ct['name']} — {label}",
-            "",
-            "| # | Score | Engines | URL |",
-            "|---|-------|---------|-----|",
-        ]
-        for i, item in enumerate(ct["top10"], 1):
-            score_str = f"{item['score']:.5f}" if item["score"] is not None else "—"
-            lines.append(f"| {i} | {score_str} | {', '.join(item['engines'])} | {item['url'][:90]} |")
-        lines.append("")
+        lines += _render_config_table(ct)
 
     return "\n".join(lines)
+
+
+def _render_config_table(ct: dict) -> list[str]:
+    t = ct["cfg"]["type"]
+    if t == "hardslot":
+        label = "Hard-Slot baseline (12 General / 6 Academic / 2 QA)"
+    elif t == "uniform":
+        label = f"BM25Uniform — k1={BM25_K1}, b={BM25_B}, sw=on, repr={BM25_REPR} [no IDF]"
+    elif t == "okapi":
+        label = f"BM25Okapi   — k1={BM25_K1}, b={BM25_B}, sw=on, repr={BM25_REPR} [per-pool IDF]"
+    elif t == "uniform_wt":
+        label = f"BM25Uniform × engine-inv-wt — k1={BM25_K1}, b={BM25_B}, sw=on [no IDF + wt]"
+    elif t == "okapi_wt":
+        label = f"BM25Okapi   × engine-inv-wt — k1={BM25_K1}, b={BM25_B}, sw=on [IDF + wt]"
+
+    lines = [
+        f"#### {ct['name']} — {label}",
+        "",
+        "| # | Score | Engines | URL |",
+        "|---|-------|---------|-----|",
+    ]
+    for i, item in enumerate(ct["top10"], 1):
+        score_str = f"{item['score']:.5f}" if item["score"] is not None else "—"
+        lines.append(f"| {i} | {score_str} | {', '.join(item['engines'])} | {item['url'][:90]} |")
+    lines.append("")
+    return lines
 
 
 # Write report: header + per-query sections

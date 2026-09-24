@@ -147,19 +147,18 @@ def _compute_engine_rows(v2_dir: Path, v3_dir: Path) -> list[dict]:
 # Write pool_diff_v2_vs_v3.md
 def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
     ok_rows  = [r for r in rows if "error" not in r]
-    overlaps = [r["overlap_pct"] for r in ok_rows]
-    mean_ovl = round(sum(overlaps) / len(overlaps), 1) if overlaps else 0.0
-    n_above80 = sum(1 for o in overlaps if o > 80)
-    n_below50 = sum(1 for o in overlaps if o < 50)
 
-    best   = max(ok_rows, key=lambda r: r["overlap_pct"]) if ok_rows else None
-    worst  = min(ok_rows, key=lambda r: r["overlap_pct"]) if ok_rows else None
-    google_recovered = max(
-        (r for r in ok_rows if r["v3_gc"] > r["v2_gc"]),
-        key=lambda r: r["v3_gc"] - r["v2_gc"],
-        default=None
-    )
+    lines = _render_pair_overlap(rows, v3_dir)
+    lines += _render_aggregate_stats(ok_rows)
+    lines += _render_engine_reliability(eng_rows)
+    lines += _render_highlights(ok_rows)
 
+    lines.append("")
+    out = REPORT_DIR / "pool_diff_v2_vs_v3.md"
+    out.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _render_pair_overlap(rows: list[dict], v3_dir: Path) -> list[str]:
     lines = [
         "# Pool Diff — v2 vs v3",
         "",
@@ -180,8 +179,16 @@ def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
                 f" | {r['overlap_pct']}% | {r['new_count']} | {r['removed']}"
                 f" | {r['v2_gc']} | {r['v3_gc']} |"
             )
+    return lines
 
-    lines += [
+
+def _render_aggregate_stats(ok_rows: list[dict]) -> list[str]:
+    overlaps = [r["overlap_pct"] for r in ok_rows]
+    mean_ovl = round(sum(overlaps) / len(overlaps), 1) if overlaps else 0.0
+    n_above80 = sum(1 for o in overlaps if o > 80)
+    n_below50 = sum(1 for o in overlaps if o < 50)
+
+    return [
         "",
         "## Aggregate Stats",
         "",
@@ -189,6 +196,11 @@ def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
         f"- **Pairs with overlap > 80%:** {n_above80} / {len(ok_rows)}",
         f"- **Pairs with overlap < 50%:** {n_below50} / {len(ok_rows)}",
         "",
+    ]
+
+
+def _render_engine_reliability(eng_rows: list[dict]) -> list[str]:
+    lines = [
         "## Per-Engine Reliability (v2 vs v3)",
         "",
         "| Engine | v2 OK | v2 n | v2 OK% | v3 OK | v3 n | v3 OK% |",
@@ -199,8 +211,19 @@ def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
             f"| {e['engine']} | {e['v2_ok']} | {e['v2_n']} | {e['v2_pct']}"
             f" | {e['v3_ok']} | {e['v3_n']} | {e['v3_pct']} |"
         )
+    return lines
 
-    lines += ["", "## Highlighted Examples", ""]
+
+def _render_highlights(ok_rows: list[dict]) -> list[str]:
+    best   = max(ok_rows, key=lambda r: r["overlap_pct"]) if ok_rows else None
+    worst  = min(ok_rows, key=lambda r: r["overlap_pct"]) if ok_rows else None
+    google_recovered = max(
+        (r for r in ok_rows if r["v3_gc"] > r["v2_gc"]),
+        key=lambda r: r["v3_gc"] - r["v2_gc"],
+        default=None
+    )
+
+    lines = ["", "## Highlighted Examples", ""]
     if best:
         lines += [
             f"**Best overlap:** `{best['mode']} × {best['slug']}`"
@@ -220,10 +243,7 @@ def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
         ]
     elif not any(r.get("v3_gc", 0) > r.get("v2_gc", 0) for r in ok_rows):
         lines += ["**Most Google-recovered:** none — Google CAPTCHA'd in v3 as well (google_count=0 all pairs)"]
-
-    lines.append("")
-    out = REPORT_DIR / "pool_diff_v2_vs_v3.md"
-    out.write_text("\n".join(lines), encoding="utf-8")
+    return lines
 
 
 if __name__ == "__main__":

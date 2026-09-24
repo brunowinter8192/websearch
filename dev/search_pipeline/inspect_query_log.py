@@ -32,11 +32,7 @@ def _resolve_log_path(arg: str | None) -> Path:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Inspect query_log.jsonl")
-    ap.add_argument("--tail", type=int, default=None, help="Only consider last N records (after type filter)")
-    ap.add_argument("--log-path", default=None, help="Path to JSONL log file (overrides env var and default)")
-    ap.add_argument("--all-types", action="store_true", help="Include engine_run records in output (default: skip)")
-    args = ap.parse_args()
+    args = _parse_args()
 
     log_path = _resolve_log_path(args.log_path)
     if not log_path.exists():
@@ -62,6 +58,20 @@ def main() -> None:
         print("No records to display (try --all-types for a probe log).")
         return
 
+    _print_timing_summary(records)
+    _print_status_hits(records)
+    _print_last_record(records)
+
+
+def _parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="Inspect query_log.jsonl")
+    ap.add_argument("--tail", type=int, default=None, help="Only consider last N records (after type filter)")
+    ap.add_argument("--log-path", default=None, help="Path to JSONL log file (overrides env var and default)")
+    ap.add_argument("--all-types", action="store_true", help="Include engine_run records in output (default: skip)")
+    return ap.parse_args()
+
+
+def _print_timing_summary(records: list[dict]) -> None:
     # Timing summary (only meaningful for workflow_summary / old records)
     summary_records = [r for r in records if r.get("record_type", "workflow_summary") != "engine_run"]
     if summary_records:
@@ -71,6 +81,8 @@ def main() -> None:
         print(f"Wall ms      : min={min(total_wall)}  mean={sum(total_wall)//len(total_wall)}  max={max(total_wall)}")
         print(f"Bottlenecks  : {dict(bottlenecks.most_common(5))}")
 
+
+def _print_status_hits(records: list[dict]) -> None:
     # TIMEOUT / RATE_SKIP counts across selected records
     timeouts: Counter = Counter()
     rate_skips: Counter = Counter()
@@ -83,6 +95,8 @@ def main() -> None:
     print(f"TIMEOUT hits : {dict(timeouts.most_common(5))}")
     print(f"RATE_SKIP    : {dict(rate_skips.most_common(5))}")
 
+
+def _print_last_record(records: list[dict]) -> None:
     # Last record detail
     prev = records[-1]
     rtype = prev.get("record_type", "old-style")

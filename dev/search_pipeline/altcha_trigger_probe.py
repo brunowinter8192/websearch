@@ -348,43 +348,47 @@ async def run_trigger_attempt(trigger: str) -> TriggerResult:
                 verify_is_function=readiness["verify_is_function"],
                 error="altcha-widget not found in DOM within the ready timeout",
             )
-        click_target = None
-        if trigger == "verify_call":
-            await _fire_verify_call(session)
-        elif trigger == "real_click":
-            click_target = await _fire_real_click(session)
-        await _wait_for_event(
-            session,
-            lambda r: r["event"] == "verified" or _extract_state(r) in ("verified", "error", "expired"),
-            EVENT_WAIT_TIMEOUT_S,
-        )
-        facts = await _wait_for_page_settle(session.page)
-        page_outcome = _classify_page_outcome(facts)
-        states = [s for s in (_extract_state(r) for r in session.events) if s]
-        computation_started = "verifying" in states
-        verified_fired = any(r["event"] == "verified" for r in session.events)
-        final_state = states[-1] if states else None
-        verdict = _classify_verdict(computation_started, verified_fired, page_outcome)
-        click_delivered = None
-        if trigger == "real_click":
-            click_delivered = any(r["event"] in ("mousedown", "mouseup", "click") for r in session.events)
-        return TriggerResult(
-            trigger=trigger, events=list(session.events),
-            element_found=True,
-            load_event_observed=readiness["load_event_observed"],
-            verify_is_function=readiness["verify_is_function"],
-            computation_started=computation_started,
-            verified_fired=verified_fired,
-            final_state=final_state,
-            page_outcome=page_outcome,
-            page_outcome_detail=facts,
-            click_target=click_target,
-            click_delivered=click_delivered,
-            verdict=verdict,
-            error=None,
-        )
+        return await _fire_and_observe(session, trigger, readiness)
     finally:
         await _close_probe_session(session)
+
+
+async def _fire_and_observe(session: ProbeSession, trigger: str, readiness: dict) -> TriggerResult:
+    click_target = None
+    if trigger == "verify_call":
+        await _fire_verify_call(session)
+    elif trigger == "real_click":
+        click_target = await _fire_real_click(session)
+    await _wait_for_event(
+        session,
+        lambda r: r["event"] == "verified" or _extract_state(r) in ("verified", "error", "expired"),
+        EVENT_WAIT_TIMEOUT_S,
+    )
+    facts = await _wait_for_page_settle(session.page)
+    page_outcome = _classify_page_outcome(facts)
+    states = [s for s in (_extract_state(r) for r in session.events) if s]
+    computation_started = "verifying" in states
+    verified_fired = any(r["event"] == "verified" for r in session.events)
+    final_state = states[-1] if states else None
+    verdict = _classify_verdict(computation_started, verified_fired, page_outcome)
+    click_delivered = None
+    if trigger == "real_click":
+        click_delivered = any(r["event"] in ("mousedown", "mouseup", "click") for r in session.events)
+    return TriggerResult(
+        trigger=trigger, events=list(session.events),
+        element_found=True,
+        load_event_observed=readiness["load_event_observed"],
+        verify_is_function=readiness["verify_is_function"],
+        computation_started=computation_started,
+        verified_fired=verified_fired,
+        final_state=final_state,
+        page_outcome=page_outcome,
+        page_outcome_detail=facts,
+        click_target=click_target,
+        click_delivered=click_delivered,
+        verdict=verdict,
+        error=None,
+    )
 
 
 if __name__ == "__main__":
