@@ -41,3 +41,8 @@ Baseline before any change: `venv/bin/python -m pytest dev/tests` = 541 passed i
 
 - Timing thresholds in the brave/mojeek probe tests (`>= 0.9 * budget`, `< budget`) are kept as they were; no flake was observed in the runs above.
 - F15, F16, F17 rejected by Main, not touched.
+
+## Merge with Phase 5 (2026-09-24)
+
+- Conflicts in `DOCS.md`, `test_camoufox_scrape_output.py`, `test_pipe_scraper.py`: took the integration test for the unwritable log path (raises `OSError`, already blocker-file based); kept the captured `_real_resolve_system_locale` in the locale tests and added `platform = darwin` to the new empty-output test so it stays host-independent.
+- Two failures appeared only under the parallel runner and are fixed: (1) the conftest tempdir lived at `tmp_path/systmp`, which broke `test_sidecar_is_written_atomically_without_leftover_tmp` (asserts the exact content of `tmp_path`); it now uses `tmp_path_factory.mktemp("systmp")`. (2) `test_engine_with_timing_timeout*` (both) classify TIMEOUT_WATCHDOG vs TIMEOUT_NONCOOP by real elapsed ms (`< timeout*1.2`, i.e. 60 ms) and flipped to NONCOOP under CPU load (observed 2 of 10 repeats with 6 busy loops). Fixed by patching `search_web.time.perf_counter` to a 1 ms tick counter; 10 of 10 repeats pass under the same load.
