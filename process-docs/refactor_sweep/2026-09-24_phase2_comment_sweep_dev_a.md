@@ -325,8 +325,7 @@ Owner decisions (relayed by the orchestrator): remove all rows classified B-remo
 
 - Removed with no replacement handler: `_extract_value` x7 and `_diagnose` x7 (google, bing, brave,
   duckduckgo, mojeek, startpage, yandex), brave `_poll_state` and `_click_challenge_button`,
-  `cache.cache_read`, `document_status.start_document_status_capture` (16 handlers; 18 with
-  `_poll_state`/`_click`... counted as: 7 + 7 + 2 + 1 + 1 = 18).
+  `cache.cache_read`, `document_status.start_document_status_capture`: 18 handlers (7 + 7 + 2 + 1 + 1).
 - `document_status.py` lost its now-unused `logging` import and `logger`.
 - Reclassified: `query_logger.log_query` B (weak B-remove) -> D best-effort telemetry, kept as is.
 - `_prewarm_browser` kept; WARNING now reads "browser engines are expected to fail individually,
@@ -370,8 +369,10 @@ never seen in production, so a clean run cannot prove them harmless.
 
 ## Recap (Phase 4 step 2, 2026-09-24)
 
-- Inventory against `integration` (`git diff integration --name-only --`): 15 files: this file, 4
-  new/changed test files (`test_search_control_flow_removals.py` new, `test_document_status.py`), 2
-  DOCS.md files, and 8 source files (`cache.py`, `document_status.py`, `search_web.py`, 7 engines
-  counted with `brave.py` two handlers; see git for exact list), plus the search_pipeline entry.
-- Correction to the bullet above: the removed-handler count is 18 (7 + 7 + 2 + 1 + 1), not 16.
+- Inventory against `integration` (`git diff integration --name-only --`): 16 files: 12 under
+  `src/` (10 modules: `cache.py`, `document_status.py`, `search_web.py`, the 7 engines; plus the two
+  `DOCS.md` files), 2 under `dev/tests/` (`test_search_control_flow_removals.py` new,
+  `test_document_status.py` changed) and 2 under `process-docs/` (this file and the
+  `search_pipeline` entry of the same date).
+- DOCS.md: `src/search/DOCS.md` and `src/search/engines/DOCS.md` updated in the step-2 commit; LOC
+  headings match `wc -l` for every documented module (the two empty `__init__.py` files have no entry).
