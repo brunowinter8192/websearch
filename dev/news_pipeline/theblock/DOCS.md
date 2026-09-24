@@ -1,7 +1,7 @@
 # dev/news_pipeline/theblock/
 
 ## Role
-Discovery and proxy-pool infrastructure for scraping theblock.co past Cloudflare: proxy source aggregation, liveness and CF-pass checking, sitemap discovery, and per-source quality tracking. `acquire_pipe/` (own DOCS.md) is the fetch pipeline built on top; `jhao104/` is a vendored comparison baseline, not documented here.
+Discovery and proxy-pool infrastructure for scraping theblock.co past Cloudflare: proxy source aggregation, liveness and CF-pass checking, sitemap discovery, and per-source quality tracking. `acquire_pipe/` (own DOCS.md) is the fetch pipeline built on top; `jhao104/` is a vendored comparison baseline; only its `patches/helper/` overlay has a DOCS.md.
 
 ## Public Interface
 No `__init__.py` — not a package. The probe scripts and the pipe script are CLI entry points run via `./venv/bin/python`; underscore modules are helpers imported by flat name.
