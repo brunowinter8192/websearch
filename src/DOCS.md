@@ -28,7 +28,7 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 **Reads:** the log-path environment variable, only when it must log an intervention.
 **Writes:** one line to the CLI log, only when it actually kills or removes something.
 **Called by:** src/search/browser.py, src/scraper/chromium_scrape.py, src/scraper/chromium_process.py.
-**Calls out:** psutil; no project-internal imports on purpose.
+**Calls out:** psutil.
 
 ## State
 

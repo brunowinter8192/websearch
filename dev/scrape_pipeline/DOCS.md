@@ -27,7 +27,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 **Reads:** URL list via the common module.
 **Writes:** nothing directly.
 **Called by:** CLI only.
-**Calls out:** `p1_pipe_scraper.py`, the common and three phase modules.
+**Calls out:** none.
 
 ---
 
@@ -47,7 +47,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 **Reads:** nothing directly; takes a loaded URL list.
 **Writes:** `md/07_concurrency_sweep_<ts>.md`.
 **Called by:** `07_pipe_scrape_eval.py`.
-**Calls out:** `p1_pipe_scraper.py`, the common module.
+**Calls out:** none.
 
 ---
 
@@ -57,7 +57,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 **Reads:** nothing directly; takes a loaded URL list.
 **Writes:** `md/07_delay_sweep_<ts>.md`.
 **Called by:** `07_pipe_scrape_eval.py`.
-**Calls out:** `p1_pipe_scraper.py`, the common module.
+**Calls out:** none.
 
 ---
 
@@ -67,7 +67,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 **Reads:** nothing directly; takes a loaded URL list.
 **Writes:** `md/07_full_run_<ts>.md`; raw markdown corpus under `07_pipe_scrape_eval_data/`.
 **Called by:** `07_pipe_scrape_eval.py`.
-**Calls out:** `p1_pipe_scraper.py`, the common module.
+**Calls out:** none.
 
 ---
 

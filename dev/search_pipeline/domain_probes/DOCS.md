@@ -7,7 +7,7 @@ Empirical domain-inventory probes for the `--books` and `--docs` whitelist and h
 No `__init__.py`. Entry scripts `19_books_probe.py` and `20_docs_probe.py` run as `./venv/bin/python dev/search_pipeline/domain_probes/<script>.py`.
 
 ## Flow
-Twelve broad queries plus `book` or `documentation` run against Google and DuckDuckGo; the URL pool is tallied by domain (and, for docs, scored against heuristics H1-H13) and written to `../md/`.
+Twelve broad queries plus `book` or `documentation` run against Google and DuckDuckGo; the URL pool is tallied by domain (and, for docs, scored against heuristics H1-H13) and written to `../md/`. The probes call the production engines and browser layer in `src/search/`.
 
 ## Modules
 
@@ -17,7 +17,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Reads:** hardcoded 12-query set.
 **Writes:** `../md/books_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.{google,duckduckgo}`, `src.search.browser`.
+**Calls out:** none.
 
 ### 20_docs_probe.py (85 LOC)
 
@@ -25,7 +25,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Reads:** hardcoded query set via the config sibling.
 **Writes:** `../md/docs_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.{google,duckduckgo}`, `src.search.browser`, config and report siblings.
+**Calls out:** none.
 
 ### _docs_probe_config.py (19 LOC)
 
@@ -41,7 +41,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Reads:** none (arguments only).
 **Writes:** `<report_dir>/docs_probe_<ts>.md`.
 **Called by:** `20_docs_probe.py`.
-**Calls out:** config sibling.
+**Calls out:** none.
 
 ---
 

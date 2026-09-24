@@ -15,7 +15,7 @@ Third scrape engine: browser plus rotating proxies, built to get past CoinDesk's
 
 ## Flow
 
-The entry builds the URL queue, loads and filters the proxy pool and creates the cooldown manager; the runner starts several browsers, many slot tasks and one watchdog. Each slot rides URLs on a proxy until burned, racing open URLs at the tail. Ok pages are written as raw HTML on first arrival; the report and manifest are derived from the final state.
+The entry builds the URL queue, loads and filters the proxy pool and creates the cooldown manager; the runner starts several browsers, many slot tasks and one watchdog. Each slot rides URLs on a proxy until burned, racing open URLs at the tail. Ok pages are written as raw HTML on first arrival; the report and manifest are derived from the final state. Riding reuses `src/news/engine/proxy_pool/` for proxy keys and pool loaders.
 
 ## Modules
 
@@ -24,8 +24,8 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Purpose:** Riding-specific proxy cooldown manager with two per-run policies, isolated from the shared pool cooldown.
 **Reads:** in-memory burn and eligibility maps.
 **Writes:** the same maps when a proxy is burned.
-**Called by:** rider.py, scrape.py, reporter.py.
-**Calls out:** src/news/engine/proxy_pool/proxy_key.py.
+**Called by:** rider.py, scrape.py, state.py.
+**Calls out:** none.
 
 ### state.py (87 LOC)
 
@@ -33,7 +33,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** none.
 **Writes:** none.
 **Called by:** rider.py, fetch.py, abort.py, reporter.py, metrics.py, scrape.py; dev tests.
-**Calls out:** cooldown.py (type hint only).
+**Calls out:** none.
 
 ### fetch.py (101 LOC)
 
@@ -49,7 +49,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** the rider state.
 **Writes:** the job report and plots when the reporter succeeds.
 **Called by:** rider.py.
-**Calls out:** reporter.py (late import).
+**Calls out:** none.
 
 ### rider.py (349 LOC)
 
@@ -57,7 +57,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** the URL queue, proxy pool and shared cooldown state.
 **Writes:** raw HTML via fetch.py; triggers report writes on abort.
 **Called by:** scrape.py.
-**Calls out:** crawl4ai, state.py, fetch.py, abort.py.
+**Calls out:** crawl4ai.
 
 ### reporter.py (200 LOC)
 
@@ -65,7 +65,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** the rider state and job start time.
 **Writes:** the job summary in the job directory; plots via plots.py.
 **Called by:** src/news/pipeline.py, abort.py.
-**Calls out:** state.py, metrics.py, plots.py.
+**Calls out:** none.
 
 ### metrics.py (152 LOC)
 
@@ -73,7 +73,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** the rider state and job start time.
 **Writes:** none; returns a stats mapping.
 **Called by:** reporter.py.
-**Calls out:** statistics, state.py.
+**Calls out:** none.
 
 ### plots.py (74 LOC)
 
@@ -89,7 +89,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Reads:** the entry list, the riding configuration and the proxy pool (network).
 **Writes:** nothing directly; the runner writes raw HTML.
 **Called by:** src/news/pipeline.py.
-**Calls out:** src/news/engine/proxy_pool/pool_loaders.py, cooldown.py, rider.py, state.py.
+**Calls out:** none.
 
 ## State
 

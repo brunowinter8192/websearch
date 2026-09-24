@@ -17,7 +17,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing; hardcoded queries, live navigations.
 **Writes:** `md/brave_pydoll_probe_<ts>.md`; temporary Chrome profiles.
 **Called by:** CLI only.
-**Calls out:** the `_brave_probe_*` siblings.
+**Calls out:** none.
 
 ### _brave_probe_launch.py (234 LOC)
 
@@ -33,7 +33,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** Live DOM and browser cookie store via CDP.
 **Writes:** nothing; returns a measurement.
 **Called by:** `brave_pydoll_probe.py`, `verify_brave_pydoll_core.py`.
-**Calls out:** `pydoll`, the core, js, and launch siblings.
+**Calls out:** `pydoll`.
 
 ### _brave_probe_core.py (169 LOC)
 
@@ -57,7 +57,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing.
 **Writes:** `md/brave_pydoll_probe_<ts>.md`.
 **Called by:** `brave_pydoll_probe.py`, `verify_brave_pydoll_core.py`.
-**Calls out:** `_brave_probe_core.py`.
+**Calls out:** none.
 
 ### verify_brave_pydoll_core.py (381 LOC)
 
@@ -65,7 +65,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** `fixtures/*.html`.
 **Writes:** A fixture report under the pytest tmp path.
 **Called by:** pytest by explicit path only (verification, never collected by the default run).
-**Calls out:** `pydoll` via the siblings, stdlib `http.server`.
+**Calls out:** `pydoll`.
 
 ### _brave_pure_checks.py (172 LOC)
 
@@ -73,7 +73,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing.
 **Writes:** stdout.
 **Called by:** `verify_brave_pydoll_core.py`.
-**Calls out:** `_brave_probe_core.py`.
+**Calls out:** none.
 
 ### _brave_probe_check_result.py (5 LOC)
 

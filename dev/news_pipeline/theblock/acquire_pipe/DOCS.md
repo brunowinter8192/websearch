@@ -7,7 +7,7 @@ Production-candidate acquire pipeline for theblock.co: fetches a set of URLs thr
 No `__init__.py` — not a package. `acquire_pipe.py` is the CLI entry point; the other modules are helpers imported by flat name, with the parent directory's modules put on the import path.
 
 ## Flow
-Job orchestrator loads the backfill proxy pool and builds the sitemap target -> takes the global job lock -> sustained rotation loop fetches with cooldown and buffer management, streaming events to a log -> janitor derives a persistent job record and wipes transient artifacts.
+Job orchestrator loads the backfill proxy pool and builds the sitemap target -> takes the global job lock -> sustained rotation loop fetches with cooldown and buffer management, streaming events to a log -> janitor derives a persistent job record and wipes transient artifacts. Proxy history and curated sources come from the parent `theblock/` directory.
 
 ## Modules
 
@@ -25,7 +25,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** nothing.
 **Writes:** nothing.
 **Called by:** `p3_target.py`, `p4_loop.py`, `p6_buffer.py`, `acquire_pipe.py`.
-**Calls out:** `../proxy_status_log.py`.
+**Calls out:** none.
 
 ### p3_target.py (53 LOC)
 
@@ -33,7 +33,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** The theblock sitemap index.
 **Writes:** Returns the sub-sitemap URL list.
 **Called by:** `acquire_pipe.py`.
-**Calls out:** `httpx`, `p1_fetch.py`, `p2_cooldown.py`.
+**Calls out:** `httpx`.
 
 ### p4_loop.py (309 LOC)
 
@@ -41,7 +41,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** A pool provider callback and the target URL list.
 **Writes:** Delegates state to the logger and cooldown manager; returns done, dead, and gap lists.
 **Called by:** `acquire_pipe.py`.
-**Calls out:** `p1_fetch.py`, `p2_cooldown.py`, `p5_logger.py`, `p6_buffer.py`.
+**Calls out:** none.
 
 ### p4_race.py (119 LOC)
 
@@ -49,7 +49,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** Caller-supplied proxy pool and URL list.
 **Writes:** Returns done and gap lists.
 **Called by:** none. DEAD CODE, not wired into the orchestrator.
-**Calls out:** `p1_fetch.py`, `p5_logger.py`, `p6_buffer.py`.
+**Calls out:** none.
 
 ### p5_logger.py (41 LOC)
 
@@ -57,7 +57,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** Events pushed by the loops.
 **Writes:** `acquire_pipe_logs/` event stream.
 **Called by:** `p4_loop.py`, `p4_race.py`, `acquire_pipe.py`.
-**Calls out:** `../proxy_status_log.py`.
+**Calls out:** none.
 
 ### box_lock.py (94 LOC)
 
@@ -73,7 +73,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** Proxy pool and cooldown eligibility.
 **Writes:** Returns new buffer lists.
 **Called by:** `p4_loop.py`, `p4_race.py`, `acquire_pipe.py`.
-**Calls out:** `p2_cooldown.py`, `../proxy_status_log.py`.
+**Calls out:** none.
 
 ### p7_janitor.py (140 LOC)
 
@@ -89,7 +89,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Reads:** The backfill pool and the theblock sitemap index.
 **Writes:** `acquire_pipe_output/` raw sub-sitemaps and the article URL list; job record via the janitor.
 **Called by:** CLI only.
-**Calls out:** `box_lock.py`, `p2_cooldown.py` to `p7_janitor.py`, `../curated_sources.py`.
+**Calls out:** none.
 
 ---
 

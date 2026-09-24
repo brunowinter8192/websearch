@@ -8,7 +8,7 @@ No `__init__.py` — not a package. The two numbered probes are the entry points
 
 ## Flow
 DOM path: `queries.json` -> browser helper opens a tab -> DOM helper navigates, handles consent, classifies the landed page -> report helper writes markdown; raw HTML and diagnostics land under `html/`.
-WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; raw bodies under `wml/`.
+WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; raw bodies under `wml/`. The browser helper uses the shared launcher in `dev/_lib/`.
 
 ## Modules
 
@@ -18,7 +18,7 @@ WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; ra
 **Reads:** nothing.
 **Writes:** Returns a pydoll tab; spawns and kills the backgrounded Chrome process.
 **Called by:** `01_google_dom_probe.py`.
-**Calls out:** `pydoll`, `dev/_lib/browser_launch.py`.
+**Calls out:** `pydoll`.
 
 ---
 
@@ -48,7 +48,7 @@ WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; ra
 **Reads:** `queries.json`.
 **Writes:** `md/google_dom_probe_<ts>.md`; raw HTML and diagnostic JSON under `html/`.
 **Called by:** CLI only.
-**Calls out:** `_browser.py`, `_dom.py`, `_report.py`.
+**Calls out:** none.
 
 ---
 

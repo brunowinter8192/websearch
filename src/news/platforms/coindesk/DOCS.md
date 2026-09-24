@@ -10,7 +10,7 @@ CoinDesk platform implementation using the proxy-riding scrape engine and raw HT
 
 ## Flow
 
-Discovery warms a real Chrome session under HAR capture to obtain the timeline API request, then pages backwards through the timeline by cursor, writing per-year shard files crash-safely. Scrape-only mode reloads the shards filtered by year, date range and limit and hands them to the riding engine.
+Discovery warms a real Chrome session under HAR capture to obtain the timeline API request, then pages backwards through the timeline by cursor, writing per-year shard files crash-safely. Scrape-only mode reloads the shards filtered by year, date range and limit and hands them to the riding engine. The package `__init__.py` composes config, discover, shards and cleanup and registers with `src/news/registry.py`.
 
 ## Modules
 
@@ -36,7 +36,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Reads:** the timeline API (network); existing shards for the dedup seed.
 **Writes:** per-year shard files via shards.py.
 **Called by:** __init__.py.
-**Calls out:** httpx, browser.py, timeline.py, shards.py.
+**Calls out:** httpx.
 
 ### timeline.py (73 LOC)
 
@@ -44,7 +44,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Reads:** the timeline API and feed page (network).
 **Writes:** none.
 **Called by:** discover.py.
-**Calls out:** httpx, browser.py.
+**Calls out:** httpx.
 
 ### shards.py (63 LOC)
 
@@ -59,7 +59,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Purpose:** Strips CoinDesk page chrome from raw markdown to leave the article body.
 **Reads:** raw markdown text handed in.
 **Writes:** none; returns text.
-**Called by:** nothing on an active pipeline path (DEAD CODE in the pipeline; kept for a future cleanup step).
+**Called by:** `__init__.py`, which wraps it as the platform's cleanup method. The only call site, src/news/clean_pass.py, runs on the proxy-pool path only, so no coindesk run reaches it.
 **Calls out:** none (stdlib only).
 
 ### __init__.py (41 LOC)
@@ -68,7 +68,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Reads:** none of its own.
 **Writes:** the registry entry.
 **Called by:** src/news/__main__.py (side-effect import), src/news/pipeline.py.
-**Calls out:** config.py, discover.py, shards.py, cleanup.py, src/news/registry.py.
+**Calls out:** none.
 
 ## State
 

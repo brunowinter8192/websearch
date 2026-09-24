@@ -7,7 +7,7 @@ Per-domain news scraping pipeline for the trading-bot data layer: CoinDesk artic
 No `__init__.py` — not a package. `run_pipeline.py` is the daily entry point; each numbered stage script is also runnable alone via `./venv/bin/python`.
 
 ## Flow
-Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window) -> dedup against the collection directory -> fresh-context scrape -> cleanup of navigation and footer noise -> publish to the RAG collection and index.
+Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window) -> dedup against the collection directory -> fresh-context scrape -> cleanup of navigation and footer noise -> publish to the RAG collection and index. The scrape stage runs `src/crawler/pipe_scraper.py`.
 
 ## Modules
 
@@ -17,7 +17,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Reads:** Preconditions: internet reachability and rag-cli collection listing.
 **Writes:** Daily pipeline log and last-run marker in the src logs folder.
 **Called by:** CLI only.
-**Calls out:** the stage scripts, `rag-cli`.
+**Calls out:** `rag-cli`.
 
 ### 01_coindesk_discover.py (354 LOC)
 
@@ -73,7 +73,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Reads:** A discover-filtered JSON.
 **Writes:** `smoke_output/` raw files and regwall review (gitignored).
 **Called by:** CLI only.
-**Calls out:** `src/crawler/pipe_scraper.py`.
+**Calls out:** none.
 
 ### scrape_isolation_smoke.py (249 LOC)
 

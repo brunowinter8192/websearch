@@ -28,7 +28,7 @@ Fixture: source lists of page paths -> generated routes on a local threaded HTTP
 **Reads:** nothing on disk.
 **Writes:** nothing; in-memory HTTP responses only.
 **Called by:** `02_fixture_site_server.py`, `dev/tests/test_discovery.py`, `dev/tests/test_seed_feeders.py`.
-**Calls out:** `_fixture_site_content.py`.
+**Calls out:** none.
 
 ### _fixture_site_content.py (226 LOC)
 
@@ -44,7 +44,7 @@ Fixture: source lists of page paths -> generated routes on a local threaded HTTP
 **Reads:** nothing.
 **Writes:** Startup banner to stdout.
 **Called by:** CLI only.
-**Calls out:** `_fixture_site.py`.
+**Calls out:** none.
 
 ---
 

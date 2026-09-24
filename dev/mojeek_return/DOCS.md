@@ -17,7 +17,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** One live navigation against mojeek.com.
 **Writes:** `md/mojeek_challenge_capture_<ts>.md`; temporary Chrome profile.
 **Called by:** CLI only.
-**Calls out:** the launch and query siblings.
+**Calls out:** none.
 
 ### mojeek_pydoll_probe.py (182 LOC)
 
@@ -25,7 +25,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing; hardcoded queries, live navigations.
 **Writes:** `md/mojeek_pydoll_probe_<ts>.md`; two temporary Chrome profiles.
 **Called by:** CLI only.
-**Calls out:** the `_mojeek_pydoll_probe_*` siblings.
+**Calls out:** none.
 
 ### _mojeek_pydoll_probe_launch.py (213 LOC)
 
@@ -41,7 +41,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** Live DOM and browser cookie store via CDP.
 **Writes:** nothing; returns a measurement.
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
-**Calls out:** `pydoll`, the core, js, and launch siblings.
+**Calls out:** `pydoll`.
 
 ### _mojeek_pydoll_probe_core.py (202 LOC)
 
@@ -65,7 +65,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing.
 **Writes:** `md/mojeek_pydoll_probe_<ts>.md`.
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
-**Calls out:** `_mojeek_pydoll_probe_core.py`.
+**Calls out:** none.
 
 ### verify_mojeek_pydoll_core.py (338 LOC)
 
@@ -73,7 +73,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** `fixtures/*.html`.
 **Writes:** A fixture report under the pytest tmp path.
 **Called by:** pytest by explicit path only (verification, never collected by the default run).
-**Calls out:** `pydoll` via the siblings, stdlib `http.server`.
+**Calls out:** `pydoll`.
 
 ### _mojeek_pydoll_pure_checks.py (155 LOC)
 
@@ -81,7 +81,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing.
 **Writes:** stdout.
 **Called by:** `verify_mojeek_pydoll_core.py`.
-**Calls out:** `_mojeek_pydoll_probe_core.py`.
+**Calls out:** none.
 
 ### _mojeek_pydoll_check_result.py (5 LOC)
 

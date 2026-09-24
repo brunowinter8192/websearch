@@ -17,7 +17,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### run_strands.sh (39 LOC)
 
-**Purpose:** Runs one fail-fast pytest per test file in parallel, each with its own base temp directory and log under /tmp; skips browser-only modules, fails on exit 5.
+**Purpose:** Runs one fail-fast pytest per test file in parallel with separate temp directories and logs; skips browser-only modules, fails on exit 5.
 
 ### test_conftest_guards.py (22 LOC)
 
@@ -301,7 +301,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### test_search_control_flow_removals.py (116 LOC)
 
-**Purpose:** Removed swallow handlers: engine value extraction, diagnosis, brave polling, and cache read now raise on corrupt input; a parse failure surfaces as a parse-error status; the prewarm failure log makes no retry claim.
+**Purpose:** Removed swallow handlers: engine extraction, diagnosis, brave polling and cache read raise on corrupt input; parse failures surface as a parse-error status.
 
 ### test_platform_optional_attributes.py (58 LOC)
 

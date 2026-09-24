@@ -17,7 +17,7 @@ Upstream validator chain calls the registered validators per proxy -> format che
 **Reads:** proxy candidates from the upstream pool; live theblock.co sitemap index.
 **Writes:** nothing; returns booleans to the upstream chain.
 **Called by:** upstream proxy_pool, after `jhao104/setup.sh` overlays it.
-**Calls out:** `requests`, `curl_cffi`, upstream proxy_pool modules.
+**Calls out:** `requests`, `curl_cffi`.
 
 ---
 

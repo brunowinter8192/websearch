@@ -10,7 +10,7 @@ Per-engine search implementations. Each module except base.py holds one engine s
 
 ## Flow
 
-Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. Each module registers a rate limiter at import; the fan-out in src/search acquires a token before calling the engine.
+Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. Each module registers a rate limiter at import; the fan-out in src/search acquires a token before calling the engine. Engines use `src/search/browser.py`, `document_status.py` and `selector_hits.py`, and return `src/search/result.py` types.
 
 ## Modules
 
@@ -20,7 +20,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none.
 **Writes:** none.
 **Called by:** every engine module (subclassed).
-**Calls out:** src/search/result.py (type only).
+**Calls out:** none.
 
 ### google.py (284 LOC)
 
@@ -28,7 +28,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** pydoll, curl_cffi, src/search/browser.py, src/search/document_status.py, src/search/selector_hits.py.
+**Calls out:** pydoll, curl_cffi.
 
 ### duckduckgo.py (163 LOC)
 
@@ -36,7 +36,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py.
+**Calls out:** none.
 
 ### startpage.py (152 LOC)
 
@@ -44,7 +44,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py.
+**Calls out:** none.
 
 ### brave.py (238 LOC)
 
@@ -52,7 +52,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py, src/search/selector_hits.py.
+**Calls out:** none.
 
 ### bing.py (182 LOC)
 
@@ -60,7 +60,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py, src/search/selector_hits.py.
+**Calls out:** none.
 
 ### yandex.py (161 LOC)
 
@@ -68,7 +68,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py, src/search/selector_hits.py.
+**Calls out:** none.
 
 ### mojeek.py (204 LOC)
 
@@ -76,7 +76,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.
-**Calls out:** src/search/browser.py, src/search/document_status.py.
+**Calls out:** none.
 
 ### openalex.py (123 LOC)
 

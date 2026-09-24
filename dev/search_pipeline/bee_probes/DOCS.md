@@ -7,7 +7,7 @@ Three investigation probes for rate-limiter and event-loop behaviour under engin
 No `__init__.py`. The three entry scripts run via `./venv/bin/python3`; each imports its own `_<probe>_*` siblings by flat name.
 
 ## Flow
-Query set from `../queries.txt` runs through the instrumented production pipeline -> siblings reduce events to per-query records -> a timestamped report and a fixed-path findings file are written under `../md/`.
+Query set from `../queries.txt` runs through the instrumented production pipeline -> siblings reduce events to per-query records -> a timestamped report and a fixed-path findings file are written under `../md/`. The instrumentation wraps the `src/search/` browser layer, search workflow and rate limiter.
 
 ## Modules
 
@@ -17,7 +17,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** `../queries.txt`.
 **Writes:** Timestamped report and the fixed-path findings file in `../md/`.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`, `src.search.search_web`, the `_cdp_starvation_probe_*` siblings.
+**Calls out:** none.
 
 ### _cdp_starvation_probe_canary.py (92 LOC)
 
@@ -33,7 +33,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; takes records and the report path.
 **Writes:** Findings file in `../md/`.
 **Called by:** `cdp_starvation_probe.py`.
-**Calls out:** instrument, canary, and report siblings.
+**Calls out:** none.
 
 ### _cdp_starvation_probe_instrument.py (40 LOC)
 
@@ -49,7 +49,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; arguments only.
 **Writes:** Report in `../md/`.
 **Called by:** `cdp_starvation_probe.py`, findings sibling.
-**Calls out:** instrument and canary siblings.
+**Calls out:** none.
 
 ### acquire_probe.py (144 LOC)
 
@@ -57,7 +57,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; live instrumented run.
 **Writes:** Timestamped report and findings file in `../md/`; smoke mode writes nothing.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`, `src.search.search_web`, the `_acquire_probe_*` siblings.
+**Calls out:** none.
 
 ### _acquire_probe_analysis.py (89 LOC)
 
@@ -65,7 +65,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** The query file path passed in.
 **Writes:** stderr smoke dump.
 **Called by:** `acquire_probe.py`, report and findings siblings.
-**Calls out:** canary sibling.
+**Calls out:** none.
 
 ### _acquire_probe_canary.py (71 LOC)
 
@@ -81,7 +81,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; arguments only.
 **Writes:** Findings file in `../md/`.
 **Called by:** `acquire_probe.py`.
-**Calls out:** canary, analysis, and report siblings.
+**Calls out:** none.
 
 ### _acquire_probe_instrument.py (70 LOC)
 
@@ -89,7 +89,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; patches the production rate limiter.
 **Writes:** Its own event list.
 **Called by:** `acquire_probe.py`, report sibling.
-**Calls out:** `src.search.rate_limiter`.
+**Calls out:** none.
 
 ### _acquire_probe_report.py (155 LOC)
 
@@ -97,7 +97,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; arguments only.
 **Writes:** Report in `../md/`.
 **Called by:** `acquire_probe.py`, findings sibling.
-**Calls out:** instrument, canary, and analysis siblings.
+**Calls out:** none.
 
 ### branch_probe.py (164 LOC)
 
@@ -105,7 +105,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; live instrumented run.
 **Writes:** Timestamped report and findings file in `../md/`; smoke mode writes nothing.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`, `src.search.search_web`, the `_branch_probe_*` siblings.
+**Calls out:** none.
 
 ### _branch_probe_analysis.py (104 LOC)
 
@@ -113,7 +113,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** The query file path passed in; limiter state via the instrument sibling.
 **Writes:** stderr smoke dump.
 **Called by:** `branch_probe.py`.
-**Calls out:** instrument sibling.
+**Calls out:** none.
 
 ### _branch_probe_canary.py (75 LOC)
 
@@ -129,7 +129,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; arguments only.
 **Writes:** Findings file in `../md/`.
 **Called by:** `branch_probe.py`.
-**Calls out:** canary and report siblings.
+**Calls out:** none.
 
 ### _branch_probe_instrument.py (58 LOC)
 
@@ -137,7 +137,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; patches the production rate limiter.
 **Writes:** Its own event and snapshot lists.
 **Called by:** `branch_probe.py`, analysis and report siblings.
-**Calls out:** `src.search.rate_limiter`.
+**Calls out:** none.
 
 ### _branch_probe_report.py (207 LOC)
 
@@ -145,7 +145,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Reads:** nothing; arguments only.
 **Writes:** Report in `../md/`.
 **Called by:** `branch_probe.py`, findings sibling.
-**Calls out:** canary and instrument siblings.
+**Calls out:** none.
 
 ---
 

@@ -15,7 +15,7 @@ Parallel web-search pipeline behind the search and drilldown subcommands of cli.
 
 ## Flow
 
-Query in, engines selected, the shared Chrome prewarmed outside any watchdog, then engines run concurrently under a rate limiter and per-engine watchdog. Results are grouped by URL into per-engine pools, capped, formatted as a breakdown table, prefixed with a degraded-run notice when needed, cached and logged. Drilldown reads the cache and lists one engine's URLs.
+Query in, engines selected, the shared Chrome prewarmed outside any watchdog, then engines run concurrently under a rate limiter and per-engine watchdog. Results are grouped by URL into per-engine pools, capped, formatted as a breakdown table, prefixed with a degraded-run notice when needed, cached and logged. Drilldown reads the cache and lists one engine's URLs. Browser lifecycle uses `browser_lock.py` and `src/death_pipe.py`; log pruning goes through `src/log_janitor.py`.
 
 ## Modules
 
@@ -25,7 +25,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** the query and parameters; engine registry data.
 **Writes:** the disk cache via cache.py; query log via query_logger.py.
 **Called by:** cli.py; dev scripts.
-**Calls out:** httpx, pydoll and websocket exceptions, mcp types, engines/, browser.py, cache.py, rate_limiter.py, merge.py, result.py, status modules, query_logger.py, degraded_notice.py.
+**Calls out:** httpx, pydoll and websocket exceptions, mcp types.
 
 ### degraded_notice.py (61 LOC)
 
@@ -33,7 +33,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** per-engine statistics handed in.
 **Writes:** none; returns text.
 **Called by:** search_web.py; a dev test.
-**Calls out:** status_error.py, status_timeout.py.
+**Calls out:** none.
 
 ### merge.py (34 LOC)
 
@@ -41,7 +41,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** the flat result list of the fan-out.
 **Writes:** none.
 **Called by:** search_web.py.
-**Calls out:** result.py.
+**Calls out:** none.
 
 ### cache.py (112 LOC)
 
@@ -49,7 +49,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** cache files under the user cache directory.
 **Writes:** cache files under the user cache directory.
 **Called by:** cli.py, search_web.py.
-**Calls out:** result.py, snippet.py.
+**Calls out:** none.
 
 ### snippet.py (57 LOC)
 
@@ -65,7 +65,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** the query-log path environment variable.
 **Writes:** the query log under src/logs.
 **Called by:** search_web.py, cli.py.
-**Calls out:** src/log_janitor.py.
+**Calls out:** none.
 
 ### browser.py (313 LOC)
 
@@ -73,7 +73,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Reads:** nothing until first access.
 **Writes:** a per-run profile directory; the cross-process lock file and its sidecar.
 **Called by:** cli.py, search_web.py, engines/, many dev probes.
-**Calls out:** pydoll, patchright, psutil, browser_lock.py, src/death_pipe.py, macOS open, pgrep and osascript.
+**Calls out:** pydoll, patchright, psutil, macOS open, pgrep and osascript.
 
 ### browser_lock.py (80 LOC)
 

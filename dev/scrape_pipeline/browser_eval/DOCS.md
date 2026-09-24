@@ -7,7 +7,7 @@ Regression baseline and browser-config tuning for the production scraper. Snapsh
 No `__init__.py` — not a package. All three scripts are CLI entry points run via `./venv/bin/python`.
 
 ## Flow
-Test domains -> production scrape saved as numbered iterations -> regression diff of the last two iterations. Browser script: URL -> several browser configs -> content yield comparison.
+Test domains -> production scrape saved as numbered iterations -> regression diff of the last two iterations. Browser script: URL -> several browser configs -> content yield comparison. The production scrape under evaluation is `src/scraper/chromium_scrape.py`.
 
 ## Modules
 
@@ -17,7 +17,7 @@ Test domains -> production scrape saved as numbered iterations -> regression dif
 **Reads:** `domains.txt` in the parent directory.
 **Writes:** `01_baselines/<domain>/` markdown and metadata.
 **Called by:** CLI only.
-**Calls out:** `src/scraper/chromium_scrape.py`.
+**Calls out:** none.
 
 ### 02_regression.py (169 LOC)
 

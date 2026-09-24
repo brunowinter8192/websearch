@@ -20,7 +20,7 @@ Arguments in via argparse, after file logging is configured and before any src i
 **Reads:** CLI arguments, the disk cache of search pools (drilldown path).
 **Writes:** the rotating CLI log under src/logs, stdout, and the URL file of the discovery subcommand.
 **Called by:** invoked directly as the CLI entry point; no importer.
-**Calls out:** src/search (workflow, browser cleanup, cache), src/scraper (chromium scrape, index scrapes), src/crawler (discovery), src/log_janitor.py.
+**Calls out:** none.
 
 ## State
 
