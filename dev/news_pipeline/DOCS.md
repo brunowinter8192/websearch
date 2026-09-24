@@ -15,7 +15,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 
 **Purpose:** Single-command orchestrator chaining preconditions, discover, dedup, scrape, cleanup, and publish, clearing stage data at start.
 **Reads:** Preconditions: internet reachability and rag-cli collection listing.
-**Writes:** Daily pipeline log and last-run marker under `src/logs/`.
+**Writes:** Daily pipeline log and last-run marker in the src logs folder.
 **Called by:** CLI only.
 **Calls out:** the stage scripts, `rag-cli`.
 
