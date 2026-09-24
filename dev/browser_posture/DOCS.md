@@ -1,62 +1,62 @@
 # dev/browser_posture/
 
 ## Role
-Milestone probes measuring headed-vs-headless browser posture for two lanes: pydoll-driven DOM search engines (`01`-`03`) and the patchright/crawl4ai ad-hoc chromium scrape lane (`04`-`05`). Touch this dir to add a new posture measurement; do not touch it for block/CAPTCHA-rate work — that lives in `process-docs/engine_expansion/`. Backs `process-docs/browser_posture/`.
+Milestone probes measuring headed-versus-headless browser posture for two lanes: pydoll-driven DOM search engines (probes 01 to 03) and the patchright/crawl4ai chromium scrape lane (probes 04 and 05). Touch it to add a posture measurement, not for block or CAPTCHA-rate work.
 
 ## Public Interface
-No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp_headed_probe.py` are the five entry points, run directly via `./venv/bin/python`. `_lib.py` and the seven `_*.py` helper modules are area-local helpers, imported only via a bare `from _module import name` (relies on the script's own directory landing on `sys.path`).
+No `__init__.py` — not a package. The five numbered probes are the entry points, run directly via `./venv/bin/python`. `_lib.py` and the underscore helpers are imported via bare imports from the script's own directory.
 
 ## Flow
-`01`-`03` (pydoll lane): `_lib.py` launches a headed/headless Chrome via CDP -> the probe measures latency/collision/fingerprint-patch behavior against a local page or a live detection-test site -> each script's own `write_report` emits `md/<script>_<ts>.md`.
-`04`-`05` (crawl4ai/patchright lane): a real `BrowserConfig`/`AsyncWebCrawler` launch (`04`) or a macOS `open -g` self-launch + `cdp_url` connect (`05`) against a local throwaway page -> psutil/frontmost-app polling captures process identity and focus behavior -> each script's own `_*_report.write_report` emits `md/<script>_<ts>.md`.
+Pydoll lane (01 to 03): shared launch helper starts Chrome -> probe measures latency, collision, or fingerprint-patch behaviour on a local page or live detection site -> report helper writes `md/`.
+Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on a local throwaway page -> process and focus polling -> report helper writes `md/`.
 
 ## Modules
 
 ### _lib.py (252 LOC)
 
-**Purpose:** Shared launch/teardown/measurement primitives for the pydoll-lane probes (`01`-`03`) — profile isolation, the `open -g` process creator, a throwaway local HTTP server, stats helpers, CDP injection, settle-poll.
-**Reads:** nothing (pure infra; makes its own subprocess/CDP calls).
-**Writes:** nothing directly — returns data to callers; spawns/kills Chrome processes as a side effect.
-**Called by:** `01_launch_latency_probe.py`, `02_parallel_chrome_probe.py`, `03_fingerprint_patch_probe.py`.
-**Calls out:** `pydoll` (`Chrome`, `ChromiumOptions`, `BrowserProcessManager`, `PageCommands`).
+**Purpose:** Shared launch, teardown, and measurement primitives for the pydoll-lane probes.
+**Reads:** nothing.
+**Writes:** nothing directly; spawns and kills Chrome processes.
+**Called by:** `01_launch_latency_probe.py`, `02_parallel_chrome_probe.py`, `03_fingerprint_patch_probe.py`, `04_headed_chromium_probe.py`, `05_cdp_headed_probe.py`, `_headed_chromium_report.py`.
+**Calls out:** `pydoll`.
 
 ---
 
 ### 01_launch_latency_probe.py (257 LOC)
 
-**Purpose:** Measures launch/navigation latency and background-timer-throttling drift across 4 headed/headless x backgrounding-flag configs.
-**Reads:** nothing (self-contained; serves its own local HTTP target).
-**Writes:** MD report to `md/01_launch_latency_probe_<ts>.md`. Progress to stderr.
-**Called by:** CLI only. Run: `./venv/bin/python dev/browser_posture/01_launch_latency_probe.py`.
-**Calls out:** `pydoll` (via `_lib`).
+**Purpose:** Measures launch and navigation latency and timer-throttling drift across headed and headless flag configurations.
+**Reads:** nothing; serves its own local target.
+**Writes:** `md/01_launch_latency_probe_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** `pydoll` via `_lib.py`.
 
 ---
 
 ### 02_parallel_chrome_probe.py (194 LOC)
 
-**Purpose:** Determines what happens when a headed-backgrounded launch targets the real production shared profile while a simulated already-running Chrome instance holds a separate profile.
+**Purpose:** Determines what a backgrounded headed launch on the production shared profile does while another Chrome instance is running.
 **Reads:** nothing.
-**Writes:** MD report to `md/02_parallel_chrome_probe_<ts>.md`. Progress to stderr.
-**Called by:** CLI only. Run: `./venv/bin/python dev/browser_posture/02_parallel_chrome_probe.py`.
-**Calls out:** `pydoll` (via `_lib`), `osascript`/`open`/`pgrep`/`pkill` (macOS process + focus control).
+**Writes:** `md/02_parallel_chrome_probe_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** `pydoll` via `_lib.py`, macOS process tools.
 
 ---
 
 ### 03_fingerprint_patch_probe.py (180 LOC)
 
-**Purpose:** Per-block KEEP/DROP evidence for `src/search/browser.py`'s (since-removed) `JS_FINGERPRINT_PATCHES` under headed — 4 patch variants + 1 headless reference.
-**Reads:** nothing (self-contained; serves its own local artifact page via `_lib`).
-**Writes:** MD report via `_fingerprint_report.write_report` to `md/03_fingerprint_patch_probe_<ts>.md`. Progress to stderr.
-**Called by:** CLI only. Run: `./venv/bin/python dev/browser_posture/03_fingerprint_patch_probe.py`.
-**Calls out:** `pydoll` (via `_lib`); live HTTP to `bot.sannysoft.com` and `abrahamjuliot.github.io/creepjs`; `_fingerprint_report.py` (this directory).
+**Purpose:** Per-block keep or drop evidence for the since-removed fingerprint patches under headed mode.
+**Reads:** nothing; serves its own local page.
+**Writes:** `md/03_fingerprint_patch_probe_<ts>.md` via the report helper.
+**Called by:** CLI only.
+**Calls out:** `pydoll` via `_lib.py`, live detection-test sites, `_fingerprint_report.py`.
 
 ---
 
 ### _fingerprint_report.py (256 LOC)
 
-**Purpose:** Markdown report assembly for `03` — ActiveText verdict computation plus one section-builder helper per report section.
-**Reads:** nothing — takes `03`'s result dicts as arguments.
-**Writes:** `md/03_fingerprint_patch_probe_<ts>.md` (path built from the `report_dir` argument).
+**Purpose:** Markdown report assembly for probe 03, including its verdict computation.
+**Reads:** nothing; takes result dicts.
+**Writes:** `md/03_fingerprint_patch_probe_<ts>.md`.
 **Called by:** `03_fingerprint_patch_probe.py`.
 **Calls out:** none.
 
@@ -64,87 +64,83 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ### 04_headed_chromium_probe.py (146 LOC)
 
-**Purpose:** Milestone 1 of the ad-hoc chromium lane's headed switch — binary identity, `LSUIElement` viability, and backgrounding-flag provenance through the real crawl4ai/patchright launch path.
-**Reads:** nothing (self-contained; serves its own local throwaway HTTP page via `_lib`).
-**Writes:** MD report via `_headed_chromium_report.write_report`. Progress to stderr. Mutates (and restores byte-exact) the chromium-1228 bundle's `Info.plist` during Run C only.
-**Called by:** CLI only. Run: `./venv/bin/python dev/browser_posture/04_headed_chromium_probe.py`.
-**Calls out:** `crawl4ai`/`patchright` (real launch path, not `_lib`/pydoll), `psutil`; `_chromium_bundle.py`, `_chromium_teardown.py`, `_headed_chromium_report.py` (this directory).
+**Purpose:** Measures binary identity, LSUIElement viability, and backgrounding-flag provenance through the real crawl4ai/patchright launch path.
+**Reads:** nothing; serves its own local page.
+**Writes:** Markdown report via the report helper; edits and restores the chromium bundle's plist during one run.
+**Called by:** CLI only.
+**Calls out:** `crawl4ai`, `patchright`, `psutil`, `_chromium_bundle.py`, `_chromium_teardown.py`, `_headed_chromium_report.py`.
 
 ---
 
 ### _chromium_bundle.py (49 LOC)
 
-**Purpose:** Resolve `04`'s headed exe to its `.app` bundle and read/write/verify its `Info.plist` `LSUIElement` key and codesign status.
-**Reads:** the chromium-1228 bundle's `Info.plist` and codesign metadata on disk.
-**Writes:** `Info.plist`, when `set_lsuielement` is called by the caller.
+**Purpose:** Resolves the headed executable to its app bundle and reads, writes, and verifies plist and codesign state.
+**Reads:** The chromium bundle's plist and codesign metadata.
+**Writes:** The plist, when the caller sets the key.
 **Called by:** `04_headed_chromium_probe.py`.
-**Calls out:** none (stdlib `plistlib`, `subprocess`).
+**Calls out:** none.
 
 ---
 
 ### _chromium_teardown.py (49 LOC)
 
-**Purpose:** Multi-round Chrome-for-Testing process + launchd-supervision-job cleanup for `04`, against an observed launchd auto-relaunch race after a crash.
-**Reads:** nothing — inspects live processes/launchd state itself.
-**Writes:** nothing — kills processes and removes launchd jobs as a side effect.
+**Purpose:** Multi-round Chrome process and launchd-job cleanup for probe 04 against an observed auto-relaunch race.
+**Reads:** nothing; inspects live processes.
+**Writes:** nothing; kills processes and removes launchd jobs.
 **Called by:** `04_headed_chromium_probe.py`.
-**Calls out:** `psutil`, `launchctl`/`pgrep` (macOS).
+**Calls out:** `psutil`, macOS process tools.
 
 ---
 
 ### _headed_chromium_report.py (201 LOC)
 
-**Purpose:** Markdown report assembly for `04` — one section-builder helper per report section (executable resolution, backgrounding flags, `LSUIElement`, teardown).
-**Reads:** nothing — takes `04`'s run dicts as arguments.
-**Writes:** `md/04_headed_chromium_probe_<ts>.md` (path built from the `report_dir` argument).
+**Purpose:** Markdown report assembly for probe 04, one section per finding area.
+**Reads:** nothing; takes run dicts.
+**Writes:** `md/04_headed_chromium_probe_<ts>.md`.
 **Called by:** `04_headed_chromium_probe.py`.
-**Calls out:** `_lib.py` (`BACKGROUNDING_FLAGS`).
+**Calls out:** `_lib.py`.
 
 ---
 
 ### 05_cdp_headed_probe.py (201 LOC)
 
-**Purpose:** Milestone 1b — the `cdp_url` self-launch-then-connect route for the ad-hoc chromium lane after `04` killed `LSUIElement`, with a stage-labeled frontmost-app poll split route-under-test vs. `reference_launch`.
-**Reads:** nothing (self-contained; serves its own local throwaway HTTP page via `_lib`).
-**Writes:** MD report via `_cdp_report.write_report`. Progress to stderr. No plist edits.
-**Called by:** CLI only. Run: `./venv/bin/python dev/browser_posture/05_cdp_headed_probe.py`.
-**Calls out:** `crawl4ai`/`patchright` (both the `connect_over_cdp` path and the direct-launch reference path), `psutil`; `_cdp_launch.py`, `_cdp_teardown.py`, `_cdp_report.py` (this directory).
+**Purpose:** Measures the self-launch-then-connect route for the chromium lane with a stage-labelled frontmost-app poll.
+**Reads:** nothing; serves its own local page.
+**Writes:** Markdown report via the report helper; no plist edits.
+**Called by:** CLI only.
+**Calls out:** `crawl4ai`, `patchright`, `psutil`, `_cdp_launch.py`, `_cdp_teardown.py`, `_cdp_report.py`.
 
 ---
 
 ### _cdp_launch.py (68 LOC)
 
-**Purpose:** Bundle resolution, self-launch (`open -g -n -a`), `DevToolsActivePort` wait, and CDP-HTTP-readiness check for `05`'s self-launched Chrome.
-**Reads:** the chromium-1228 bundle path on disk; the self-launched process's `DevToolsActivePort` file.
-**Writes:** nothing directly — launches a Chrome process as a side effect.
+**Purpose:** Bundle resolution, self-launch, DevTools port wait, and CDP readiness check for probe 05.
+**Reads:** The chromium bundle path and the launched process's DevTools port file.
+**Writes:** nothing directly; launches a Chrome process.
 **Called by:** `05_cdp_headed_probe.py`.
-**Calls out:** none (stdlib `subprocess`, `urllib`).
+**Calls out:** none.
 
 ---
 
 ### _cdp_teardown.py (44 LOC)
 
-**Purpose:** Single-pass Chrome-by-profile kill plus a defensive ms-playwright/launchd sweep for `05`, on a route where no crash is expected.
-**Reads:** nothing — inspects live processes/launchd state itself.
-**Writes:** nothing — kills processes and removes launchd jobs as a side effect.
+**Purpose:** Single-pass Chrome kill by profile plus a defensive launchd sweep for probe 05.
+**Reads:** nothing; inspects live processes.
+**Writes:** nothing; kills processes and removes launchd jobs.
 **Called by:** `05_cdp_headed_probe.py`.
-**Calls out:** `psutil`, `pkill`/`launchctl`/`pgrep` (macOS).
+**Calls out:** `psutil`, macOS process tools.
 
 ---
 
 ### _cdp_report.py (172 LOC)
 
-**Purpose:** Markdown report assembly for `05` — stage-focus breakdown, cmdline diff, and one section-builder helper per report section.
-**Reads:** nothing — takes `05`'s run dicts and focus samples as arguments.
-**Writes:** `md/05_cdp_headed_probe_<ts>.md` (path built from the `report_dir` argument).
+**Purpose:** Markdown report assembly for probe 05: stage-focus breakdown, command-line diff, and section builders.
+**Reads:** nothing; takes run dicts and focus samples.
+**Writes:** `md/05_cdp_headed_probe_<ts>.md`.
 **Called by:** `05_cdp_headed_probe.py`.
 **Calls out:** none.
 
 ---
 
 ## State
-No cross-call module state. Every probe script holds its own run state in local dicts/lists passed explicitly between its own functions; `_lib.py` and the seven split-out helper modules are pure functions over their arguments, with no shared mutable globals.
-
-## Gotchas
-- The probes never import `src/`: the browser, patch and launch shapes they measure are copies as of their write date (August-September 2026) and do not follow later changes in `src/`. A probe result describes the copy, not current production.
-- Only `02_parallel_chrome_probe.py` addresses the real production `SESSION_DIR`; every other probe works under its own throwaway profile root. Details and the Playwright issue references behind the flag set: `process-docs/refactor_sweep/`.
+No cross-call module state. Each probe keeps its own run state in local structures; the helpers are pure over their arguments.

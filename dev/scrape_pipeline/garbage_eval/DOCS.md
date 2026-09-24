@@ -1,23 +1,31 @@
 # dev/scrape_pipeline/garbage_eval/
 
 ## Role
-Investigation and validation suite for `is_garbage_content()` garbage detection. Workflow: 07 discovers available `CrawlResult` metadata, 09 prototypes and validates fixes before production code changes. The former 08 (edge-case tests of `is_garbage_content()`) was deleted because that function was retired 2026-09-09.
+Investigation and validation of garbage-content detection ideas for the scraper: discover which crawl-result metadata is reliable, then prototype fixes before touching production code.
+
+## Public Interface
+No `__init__.py` — not a package. Both scripts are CLI entry points run via `./venv/bin/python`.
+
+## Flow
+Probe URLs -> Crawl4AI scrape -> inspection or prototype validation -> markdown report in `md/`.
 
 ## Modules
 
 ### 07_result_inspect.py (103 LOC)
 
-**Purpose:** Inspects the full Crawl4AI `CrawlResult` object to discover available metadata fields. Scrapes 3 URLs (normal, 404, consent-heavy) and enumerates all result attributes with types and values. Key finding: `result.status_code` is available and reliable (404 for error pages, 200 for good pages); `result.success` is always True and unreliable.
-**Reads:** hardcoded 3-URL probe set.
-**Writes:** `md/07_result_inspect_<timestamp>.md`.
+**Purpose:** Enumerates all metadata fields of a crawl result across normal, 404, and consent-heavy pages.
+**Reads:** Hardcoded 3-URL probe set.
+**Writes:** `md/07_result_inspect_<ts>.md`.
 **Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 09_garbage_fix_prototype.py (202 LOC)
 
-**Purpose:** Prototypes and validates garbage detection improvements — status_code based 404 detection, consent prefix stripping. Validates against edge case and baseline URLs to confirm no false positives.
-**Reads:** hardcoded edge-case + baseline URL set.
-**Writes:** `md/09_garbage_fix_prototype_<timestamp>.md`.
+**Purpose:** Prototypes status-code 404 detection and consent-prefix stripping and validates against edge-case and baseline URLs.
+**Reads:** Hardcoded edge-case and baseline URL set.
+**Writes:** `md/09_garbage_fix_prototype_<ts>.md`.
 **Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
-## Historical data
-`md/08_garbage_edge_cases_20260331_193034.md` is the output of the deleted `08_garbage_edge_cases.py`; kept as a historical record, nothing reads it.
+## State
+`md/` holds historical reports, including the output of a deleted edge-case script. Nothing reads them.

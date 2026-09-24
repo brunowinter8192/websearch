@@ -1,19 +1,23 @@
 # dev/scrape_pipeline/05_paper_mode/
 
 ## Role
-Standalone direct-PDF-download prototype — no prod imports, no Crawl4AI. Evaluates plain `requests`-based PDF acquisition as a baseline. PDF download is not a production feature — `scrape_url_chromium` rejects `.pdf` URLs and delegates download to the user (see root `DOCS.md` gotcha).
+Standalone direct-PDF-download prototype with no production imports, evaluating plain HTTP PDF acquisition as a baseline. PDF download is not a production feature; the scraper rejects PDF URLs.
+
+## Public Interface
+No `__init__.py` — not a package. The script is a CLI entry point run via `./venv/bin/python`.
+
+## Flow
+PDF URLs (arguments or parsed from a search smoke report) -> streamed download with content-type check -> files in the user's Downloads folder, status table to stdout.
 
 ## Modules
 
 ### download.py (151 LOC)
 
-**Purpose:** Takes `.pdf` URLs via positional args or `--input <smoke.md>` (parses all `.pdf` URLs across all queries). Downloads each via `requests.get(stream=True)` with Content-Type check. Filename resolution: Content-Disposition → URL basename → `download_<ts>.pdf`.
-**Reads:** `--input <path-to-search-md>` or direct URL args.
-**Writes:** `~/Downloads/` — downloaded PDFs; per-URL status table to stdout.
-**Called by:** CLI only. `--overwrite` to re-download existing files.
+**Purpose:** Downloads PDF URLs with a content-type check and resolves filenames from headers or the URL.
+**Reads:** URL arguments or a search smoke report via `--input`.
+**Writes:** PDFs in `~/Downloads/`; status table to stdout.
+**Called by:** CLI only.
+**Calls out:** `requests`.
 
 ## State
-`pdf_test_urls.md` — 12-URL test inventory extracted from a `pipeline_smoke_20260506_003915.md` run. Columns: Q-Nr, URL, Status (hand-filled after test run). Hand-written input inventory, not script-generated.
-
-## Gotchas
-Observed failures (12-URL test run 2026-05-06): Springer (paywall → HTML redirect, not PDF); Academia.edu (HTTP 403). 10/12 ok.
+`pdf_test_urls.md` is a hand-maintained 12-URL test inventory. Observed failures: process-docs area scrape_pipeline.

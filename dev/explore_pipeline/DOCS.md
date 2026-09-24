@@ -1,54 +1,65 @@
 # dev/explore_pipeline/
 
 ## Role
-URL discovery and traversal testing for Crawl4AI's BFS deep crawl strategy — recall benchmarks against gold-standard URL sets, filter comparison, and strategy tuning (prefetch, render mode, agentic nav-tree extraction).
+URL discovery and traversal testing for Crawl4AI's BFS deep crawl: recall benchmarks against gold-standard URL sets, filter comparison, and strategy tuning. Touch it for discovery-recall experiments, not for production crawling.
+
+## Public Interface
+No `__init__.py` — not a package. Each numbered script is its own CLI entry point, run via `./venv/bin/python`.
+
+## Flow
+Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree discovery variant -> recall and metric computation -> markdown or JSON report in `md/`; the nextdata probe also writes its URL set to `txt/`.
 
 ## Modules
 
 ### 01_discovery.py (162 LOC)
 
-**Purpose:** Crawls a website using BFS strategy with domain filtering. Reports URL discovery metrics: total fetched, unique URLs, duplicates removed, content presence, character counts. `--all` crawls all domains from `domains.txt` in parallel (asyncio.gather, no semaphore — each domain gets its own browser context with independent BFS state).
-**Reads:** `domains.txt` (seed URLs, format `label|url|depth|max_pages`) when `--all`; else CLI URL arg.
-**Writes:** `md/01_<label>_<timestamp>.json` — JSON with summary (total fetched, unique URLs, duplicates, content/empty counts, total chars) and per-URL content status + char counts. Consumed by `dev/scrape_pipeline/filter_eval/06_content_source.py`.
-**Called by:** CLI only. `./venv/bin/python dev/explore_pipeline/01_discovery.py <url> --depth 2 --max-pages 50` or `--all`.
+**Purpose:** BFS crawl of one or all seed domains with domain filtering, reporting discovery metrics.
+**Reads:** `domains.txt` or a CLI URL.
+**Writes:** `md/01_<label>_<ts>.json`, consumed by `dev/scrape_pipeline/filter_eval/06_content_source.py`.
+**Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 02_url_filters.py (156 LOC)
 
-**Purpose:** Compares crawl results with and without URL filters — baseline crawl (no filters) vs filtered crawl (`--exclude-patterns`), reports which URLs were removed. ContentTypeFilter (text/html) always active in both runs.
-**Reads:** CLI URL arg, `--exclude-patterns`.
-**Writes:** `md/02_<label>_<timestamp>.md` — summary table, removed URLs list, full baseline URL list with `[REMOVED]` markers.
-**Called by:** CLI only. `./venv/bin/python dev/explore_pipeline/02_url_filters.py <url> --exclude-patterns "/genindex*,/py-modindex*"`.
+**Purpose:** Compares a baseline crawl against a filtered crawl and lists the URLs removed by the filters.
+**Reads:** CLI URL and exclude patterns.
+**Writes:** `md/02_<label>_<ts>.md`.
+**Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 03_strategies.py (175 LOC)
 
-**Purpose:** Benchmarks explore_site crawl strategies — baseline (domcontentloaded + DefaultMarkdownGenerator), prefetch + domcontentloaded, prefetch without wait_until. Measures time per strategy, pages discovered, per-page latency, speedup vs baseline. Default test URL: docs.crawl4ai.com.
-**Reads:** CLI URL arg (optional, defaults to docs.crawl4ai.com), `--depth`, `--max-pages`.
-**Writes:** `md/03_explore_strategies_<domain>_<timestamp>.md` — strategy comparison table (pages, time, per-page ms, duplicates), speedup calc, depth distribution per strategy.
+**Purpose:** Benchmarks crawl strategies (baseline versus prefetch variants) on time, pages discovered, and speedup.
+**Reads:** Optional CLI URL.
+**Writes:** `md/03_explore_strategies_<domain>_<ts>.md`.
 **Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 04_render_recall.py (292 LOC)
 
-**Purpose:** Measures URL discovery recall on docs.github.com/de/rest against a 305-URL gold standard. Compares three BFS strategies (prefetch+dCL baseline, prefetch+NI, full-render NI) to isolate JS-rendering effect on discovered URL count. CLI flags: `--gold PATH`, `--max-pages INT`, `--depth INT`, `--no-regression`, `--strategies COMMA_LIST`, `--delay INT`.
-**Reads:** `goldstandard/docs_github_rest.txt` (305 URLs, github/docs content/rest repo tree).
-**Writes:** `md/04_docs_github_rest_<YYYYMMDD>.md`.
-**Called by:** CLI only. Strategy C (prefetch=False) resilient to GitHub WAF rate-limiting; other strategies need `--delay`.
+**Purpose:** Measures HTTP-BFS discovery recall against the gold standard across three strategies to isolate the JS-rendering effect.
+**Reads:** `goldstandard/docs_github_rest.txt`.
+**Writes:** `md/04_docs_github_rest_<date>.md`.
+**Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 05_playwright_bfs.py (378 LOC)
 
-**Purpose:** Manual Playwright-per-page BFS — renders each page via `AsyncWebCrawler.arun()` (real browser, post-JS DOM), extracts `result.links.internal`, follows matching `--include-pattern` URLs. Measures recall vs goldstandard. Contrasts with `04_render_recall.py` (HTTP BFS). CLI flags: `--gold PATH`, `--seed URL`, `--include-pattern STR`, `--max-pages INT`, `--max-depth INT`, `--delay N.N`, `--page-timeout INT`, `--concurrency {1,2,3}`, `--stealth`.
+**Purpose:** Manual per-page browser BFS with pattern-matched link following, measuring recall against the gold standard.
 **Reads:** `goldstandard/docs_github_rest.txt`.
-**Writes:** `md/05_docs_github_rest_<YYYYMMDD>.md` — recall table (found/matched/missing/noise/latency/fetch failures), baseline comparison, sample missing URLs, and a Failed Fetches list. A fetch that raises is recorded with its error, counted in the failure stats and never added to the found set.
+**Writes:** `md/05_docs_github_rest_<date>.md`, including a failed-fetch list.
 **Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
 ### 06_nextdata_probe.py (343 LOC)
 
-**Purpose:** Agentic discovery via `__NEXT_DATA__` nav-tree extraction — fetches seed HTML via plain HTTP (no browser), parses `sidebarTree` from the Next.js SSR blob, detects all versions via `allVersions`, fetches each version's REST root page, unions all sidebar trees normalized to canonical `/de/rest/…` form. Scores recall vs goldstandard. Generic to any Next.js SSR doc site. CLI flags: `--gold PATH`, `--no-ghec`, `--no-ghes`.
+**Purpose:** Agentic discovery via nav-tree extraction from Next.js SSR data over plain HTTP, scored against the gold standard.
 **Reads:** `goldstandard/docs_github_rest.txt`.
-**Writes:** `md/06_gh_live_discovery_<date>_<time>.md` — recall table (found per version/net additions/matched/noise), baseline comparison, per-step discovery log. Discovered URL set → `txt/06_discovered_urls.txt`.
-**Called by:** CLI only.
+**Writes:** `md/06_gh_live_discovery_<ts>.md`; discovered URL set to `txt/06_discovered_urls.txt`.
+**Called by:** `dev/scrape_pipeline/_pipe_scrape_eval_common.py` (reads the URL set).
+**Calls out:** none (stdlib urllib).
+
+---
 
 ## State
-`domains.txt` — batch-crawl seed list, hand-maintained, one domain per HTML generator/content type for broad test coverage. `goldstandard/docs_github_rest.txt` — 305-URL recall reference for scripts 04-06. `txt/06_discovered_urls.txt` — last discovered URL set from `06_nextdata_probe.py`, overwritten per run. All `md/*` reports are historical run outputs, not maintained.
-
-## Gotchas
-`BFSDeepCrawlStrategy` (used by `04_render_recall.py`) uses HTTP for link extraction regardless of `wait_until` — changing to `networkidle` has no recall effect (finding as of 2026-05-29 run, Strategy C 205/305=67.2%). Playwright-per-page BFS (`05_playwright_bfs.py`) reached 248/305=81.3% (2026-05-29) — ceiling is structural, GHEC/deprecated pages unlinked from any FPT sidebar page. `06_nextdata_probe.py` reached 305/305=100% recall in 1.6s (2026-05-31) via nav-tree union — no crawling needed for Next.js SSR doc sites with `__NEXT_DATA__`.
+`domains.txt` is the hand-maintained batch seed list. `goldstandard/` holds the recall reference for scripts 04 to 06. `txt/` holds the last discovered URL set, overwritten per run. `md/` reports are historical run outputs. Results and structural ceilings: process-docs area explore_pipeline.

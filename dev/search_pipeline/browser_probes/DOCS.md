@@ -49,7 +49,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/brave_headed_lane_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll` (`BrowserProcessManager` override), macOS `open`, `_brave_headed_lane_probe_report.py`.
+**Calls out:** `pydoll`, macOS `open`, `_brave_headed_lane_probe_report.py`.
 
 ### _brave_headed_lane_probe_report.py (152 LOC)
 
@@ -145,7 +145,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none.
 **Writes:** none (string builders).
 **Called by:** `altcha_trigger_probe.py`.
-**Calls out:** stdlib (`json`).
+**Calls out:** stdlib.
 
 ### _altcha_trigger_probe_launch.py (95 LOC)
 
@@ -159,11 +159,11 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 
 **Purpose:** Markdown report assembly for the ALTCHA probe: summary, inspection, per-trigger sections, methodology.
 **Reads:** none (dataclass instances passed in).
-**Writes:** `../md/altcha_trigger_probe_<ts>.md` via `write_report`.
+**Writes:** `../md/altcha_trigger_probe_<ts>.md` .
 **Called by:** `altcha_trigger_probe.py`.
 **Calls out:** stdlib only.
 
 ---
 
 ## State
-`31_date_availability_probe` state (`_browser`) lives in `_date_availability_probe_browser.py`; every other probe keeps its session state inside its entry script.
+`31_date_availability_probe` session state lives in `_date_availability_probe_browser.py`; every other probe keeps its session state inside its entry script.

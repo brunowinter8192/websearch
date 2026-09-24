@@ -1,30 +1,39 @@
 # dev/scrape_pipeline/browser_eval/
 
 ## Role
-Regression baseline + browser-config tuning for the production scraper (`scrape_url_chromium_workflow`). Baseline/regression workflow: run 01 to snapshot, run 02 to diff against the previous iteration. 03 is a standalone browser-config comparison for JS-heavy sites failing under default settings.
+Regression baseline and browser-config tuning for the production scraper. Snapshot with the baseline script, diff with the regression script; the browser script is a standalone config comparison for JS-heavy sites.
+
+## Public Interface
+No `__init__.py` — not a package. All three scripts are CLI entry points run via `./venv/bin/python`.
+
+## Flow
+Test domains -> production scrape saved as numbered iterations -> regression diff of the last two iterations. Browser script: URL -> several browser configs -> content yield comparison.
 
 ## Modules
 
 ### 01_baseline.py (129 LOC)
 
-**Purpose:** Scrapes all test domains using the production `scrape_url_chromium_workflow` and saves results as numbered iterations with metadata (char count, word count, timestamp).
-**Reads:** `domains.txt` (pipeline root).
-**Writes:** `01_baselines/<domain>/iteration_<N>.md` + `metadata_<N>.json`.
+**Purpose:** Scrapes all test domains with the production scraper and saves numbered iterations with metadata.
+**Reads:** `domains.txt` in the parent directory.
+**Writes:** `01_baselines/<domain>/` markdown and metadata.
 **Called by:** CLI only.
+**Calls out:** `src/scraper/chromium_scrape.py`.
 
 ### 02_regression.py (169 LOC)
 
-**Purpose:** Compares the last two iterations per domain to detect regressions. Generates unified diffs and classifies changes by magnitude (IDENTICAL, MINOR_CHANGE, MODERATE_CHANGE, MAJOR_CHANGE).
+**Purpose:** Diffs the last two iterations per domain and classifies changes by magnitude.
 **Reads:** `01_baselines/`.
-**Writes:** `md/02_diff_report_<timestamp>.txt`.
-**Called by:** CLI only. Run after `01_baseline.py` has produced ≥2 iterations.
+**Writes:** `md/02_diff_report_<ts>.txt`.
+**Called by:** CLI only.
+**Calls out:** none.
 
 ### 03_browser.py (121 LOC)
 
-**Purpose:** Tests multiple Crawl4AI browser configurations for JS-heavy sites that fail with default settings. Compares content yield (char count, word count) across configs with different wait strategies: domcontentloaded baseline, networkidle, extended delay, CSS selector wait, full page scan.
-**Reads:** hardcoded domain set or a URL CLI arg.
+**Purpose:** Compares content yield across browser wait-strategy configurations for JS-heavy sites.
+**Reads:** Hardcoded domain set or a CLI URL.
 **Writes:** `md/03_<domain>_<slug>_<config>.md`.
 **Called by:** CLI only.
+**Calls out:** `crawl4ai`.
 
-## Gotchas
-`01_baselines/` is gitignored raw eval data — present on disk locally, never tracked. `md/` reports are tracked (mirrors `garbage_eval/md/`).
+## State
+`01_baselines/` is gitignored raw eval data; `md/` reports are tracked.
