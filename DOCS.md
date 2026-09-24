@@ -2,26 +2,26 @@
 
 ## Role
 
-CLI-driven web research toolkit for Claude Code. `cli.py` is the sole root-level `.py` file — a thin argparse dispatcher wiring the search, drilldown, scrape, discovery, and indexing workflows into 5 CLI subcommands. Touch this file when adding/removing a CLI subcommand or changing global logging setup; workflow logic itself lives in `src/search/`, `src/scraper/`, and `src/crawler/`.
+CLI-driven web research toolkit for Claude Code. cli.py is the only root-level Python file, a thin argparse dispatcher wiring search, drilldown, scrape, discovery and indexing into five subcommands. Touch it to add or remove a subcommand or change global logging; workflow logic lives in src/search, src/scraper and src/crawler.
+
+## Public Interface
+
+No package init at this level. Entry path is `python cli.py <subcommand>`; nothing imports cli.py.
+
+## Flow
+
+Arguments in via argparse, after file logging is configured and before any src import. The chosen subcommand calls one workflow from src/search, src/scraper or src/crawler. Results leave as text on stdout; the discovery subcommand additionally writes a URL file on success. Logs go to a rotating file, never stderr.
 
 ## Modules
 
 ### cli.py (219 LOC)
 
-**Purpose:** CLI entry-point. Configures daily-rotating file logging (no stderr handler) before any `src.*` import, then dispatches 5 argparse subcommands: `search_web` (query → `search_web_workflow`), `search_engine_drilldown` (query + required `--engine` → cache-read-or-rerun, then `format_engine_pool`), `scrape_url_chromium` (url → `scrape_url_chromium_workflow`, the crawl4ai/chromium lane; rejects `.pdf` paths, tells the user to download manually), `discover_urls` (seed_url + `--url-file` → `discover_urls_workflow`, then `_write_discovery_output` — see Gotchas for its file-vs-exit-status contract on failure), `index_scrapes` (collection + one-or-more URLs → `index_scrapes_workflow`, then `_dispatch_index_scrapes` prints one terse outcome line per URL — see `src/scraper/DOCS.md` for the workflow itself).
-**Reads:** CLI args (argparse), disk cache via `cache_read` (drilldown cache-miss path).
-**Writes:** `src/logs/cli.log` (rotating log), stdout (result text/summary), and — `discover_urls` only, on success — the `--url-file` path (one URL per line, `pipe_scraper.py`'s own `--url-file` contract).
-**Called by:** invoked directly as the CLI entry-point (`python cli.py <subcommand>`), not imported elsewhere.
-**Calls out:** `src.search.search_web.search_web_workflow`, `src.search.browser.kill_own_chrome_atexit`, `src.search.cache.{cache_key,cache_read,format_engine_pool}`, `src.scraper.chromium_scrape.scrape_url_chromium_workflow`, `src.scraper.index_scrapes.index_scrapes_workflow`, `src.crawler.discovery.discover_urls_workflow`, `src.log_janitor.get_retention_days`.
+**Purpose:** CLI entry point: sets up rotating file logging, then dispatches the five subcommands to their workflows in src/search, src/scraper and src/crawler.
+**Reads:** CLI arguments, the disk cache of search pools (drilldown path).
+**Writes:** the rotating CLI log under src/logs, stdout, and the URL file of the discovery subcommand.
+**Called by:** invoked directly as the CLI entry point; no importer.
+**Calls out:** src/search (workflow, browser cleanup, cache), src/scraper (chromium scrape, index scrapes), src/crawler (discovery), src/log_janitor.py.
 
-## Gotchas
+## State
 
-- 5 subcommands exist (`search_web`, `search_engine_drilldown`, `scrape_url_chromium`, `discover_urls`, `index_scrapes`); the scrape subcommand rejects `.pdf` URLs — PDF download is delegated to the user. There is exactly ONE ad-hoc acquisition lane, so there is no lane choice, no auto-selection and no fallback on this path.
-- **`discover_urls` writes NO file at all and exits 1 when `DiscoveryResult.ok` is `False` (e.g. an unusable `seed_url`) — deliberately, not an oversight.** A caller/script must never be handed a file that looks like a valid, if empty, result and silently have `pipe_scraper` "successfully" scrape zero pages — the exact silent-loss failure mode the whole `url_discovery` area exists to prevent, arriving one step later in the pipeline. A degraded-but-`ok=True` run (a failed feeder) is NOT treated as an error and DOES write the file — `ok`/`failed_feeders` print first, unconditionally, even at zero/empty, specifically so a thin result cannot be mistaken for a complete one just because that fact would otherwise sit below the fold. The tooling reports the facts; the agent judges whether the run looks trustworthy.
-- **`discover_urls` has no `--max-pages`/`--max-depth` flags, and no fetch-confirmation concept on its output.** `discover_urls_workflow` runs the three feeders and merges their output with the literal seed URL — it never fetches a page itself (a prior version additionally traversed the resulting URL set with a headless browser purely to read its links; removed as a duplicate fetch of every page in the run, see `src/crawler/DOCS.md`'s Gotchas), so there is no page budget to override and no fetched/failed/alias status left to report. `--url-file` is simply every `DiscoveredURL.url` from the result, one per line.
-- **`scrape_url_camoufox` was REMOVED here on 2026-08-27 — do not re-add it as a "missing" subcommand.** The Camoufox module, its calibrated config and its tests are all still present and untouched, which makes the absent subcommand look like an oversight; it is a decision (see `process-docs/lane_choice/`). Reactivation means re-adding the import plus the subparser/dispatch branch, and nothing else. The batch pipeline's own `--engine camoufox` (`src/crawler/`) is a different consumer and was never part of this removal.
-- `cli.py` inserts its own directory at the front of `sys.path` as its first statement so `src.*` imports resolve regardless of the working directory the CLI is invoked from.
-- Logging setup MUST run before any `src.*` import — module-load-time log calls from those imports would otherwise route to Python's default stderr `lastResort` handler instead of the file handler.
-- `atexit.register(kill_own_chrome_atexit)` — PID-scoped last-resort backstop (never a profile-pattern kill) for interpreter exit paths that skip `search_web_workflow`'s own `finally: kill_own_chrome()` (e.g. an uncaught exception before that point).
-- Help/usage output is deliberately disabled. `main()` uses a `NoHelpParser(argparse.ArgumentParser)` subclass overriding `error()` and `print_help()`; both print a fixed sentence naming all three websearch skills (`websearch-web-research`, `websearch-capture-and-index`, `websearch-pdf`) and exit 2, never argparse's usage/flag listing. `add_subparsers()` propagates `parser_class=type(self)` automatically, so all subcommands (and any future one) inherit the same behavior with no per-subcommand wiring.
-- **`index_scrapes` (M2, 2026-09-20) reuses `src.crawler.pipe_scraper_acquisition._url_to_filename` for the collection filename convention — confirmed against the real `websearch-reference` collection directory to match on ~40 sampled files, with one known exception, not fixed.** `api_semanticscholar_org_graph_v1_swagger.md` (source `https://api.semanticscholar.org/graph/v1/swagger.json`) is the one real file whose name does NOT match what `_url_to_filename` actually produces for that URL (`..._swagger_json.md` — the `.json` in the path becomes `_json`, not dropped). That file predates this milestone and was not produced by this function; every other sampled file (all `api.stackexchange.com/docs/...` URLs with no extension in the path) matches `_url_to_filename`'s output exactly. `index_scrapes` follows the function as written, not the one outlier — see `src/scraper/DOCS.md`'s own Gotcha on this module for the full reasoning.
+None. Each invocation is a fresh process; persistence lives in the packages it calls.

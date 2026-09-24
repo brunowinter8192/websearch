@@ -2,12 +2,20 @@
 
 ## Role
 
-Namespace package holding one subdirectory per news source, each implementing the `Platform` Protocol (defined in `src/news/platform.py`). No logic lives directly at this level — this directory only groups platform packages. Touch this level only when adding a brand-new platform directory; touch the platform subdirectory itself to change that platform's discovery/cleanup behavior.
+Namespace package holding one subdirectory per news source, each implementing the platform protocol from src/news. No logic lives at this level. Touch it only to add a new platform directory; change discovery or cleanup inside the platform's own subdirectory.
 
 ## Public Interface
 
-`__init__.py` is empty (0 LOC). Entry is via `src.news.platforms.<name>` — each platform subpackage's own `__init__.py` registers its `Platform` implementation into the registry as a side effect of being imported by `src/news/__main__.py`.
+`__init__.py` is empty. Each platform subpackage registers its implementation as a side effect of being imported by src/news/__main__.py.
 
 ## Flow
 
-`__main__.py` imports a platform subpackage for its registration side-effect → subpackage's `__init__.py` instantiates its `Platform` class and calls `register(instance)` → `src/news/pipeline.py` looks up the platform by `--source` name via the registry and drives discover → dedup → scrape → (clean-pass, if `proxy_pool` engine) → publish.
+The news entry point imports a platform subpackage, which instantiates and registers its implementation. The pipeline then looks the platform up by source name and drives discover, dedup, scrape and, for the proxy-pool engine, clean pass.
+
+## Modules
+
+This directory contains no modules of its own; see coindesk/ and theblock/.
+
+## State
+
+None.
