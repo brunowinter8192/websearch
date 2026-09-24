@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""Parallel-Chrome collision probe (macOS) — Milestone 1, second risk.
-
-Determines what happens when a headed-backgrounded launch (`open -g -n -a "Google Chrome"`) is
-attempted against the REAL production shared profile (src/search/browser.py's SESSION_DIR) while
-the user's own Chrome is already running. This is an everyday situation for this user and must not
-first surface in production.
-
-Safety: the "already-running user Chrome" is SIMULATED via a throwaway profile — NOT the user's
-actual default-profile Chrome, and NEVER foregrounded (`spawn_plain_chrome` in `_lib.py` uses `open
--g`, same as the production launch mechanism itself) — this runs on a shared machine with concurrent
-real sessions, and a dev probe has no license to steal focus from anything, real user Chrome or not.
-macOS Chrome's singleton/`open -a` behavior is a property of the APP BUNDLE, not of the profile, so a
-backgrounded Chrome on any profile reproduces the exact same collision surface without opening the
-user's real windows, touching their session, risking a session-restore prompt, or stealing focus.
-Only the TARGET profile for our own launch attempt is the real SESSION_DIR (the one dev-script
-duplication of a src/ constant deliberately made here, precisely because the real path is the thing
-under test).
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import subprocess
@@ -27,17 +8,16 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import (  # noqa: E402
+from _lib import (
     profile_dir, kill_by_profile, count_processes_for, spawn_plain_chrome,
     build_options, open_background_process_creator, get_frontmost_app,
 )
-from pydoll.browser import Chrome  # noqa: E402
-from pydoll.browser.managers import BrowserProcessManager  # noqa: E402
+from pydoll.browser import Chrome
+from pydoll.browser.managers import BrowserProcessManager
 
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# Real production shared profile (src/search/browser.py SESSION_DIR) — the actual collision target
 SESSION_DIR = str(Path.home() / ".websearch" / "browser-session")
 SIMULATED_USER_PROFILE = profile_dir("simulated-user-chrome")
 
@@ -74,7 +54,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# True if any Google Chrome process (any profile) is currently running
 def any_chrome_running() -> bool:
     result = subprocess.run(
         ["pgrep", "-f", "Google Chrome.app/Contents/MacOS/Google Chrome"],
@@ -83,8 +62,6 @@ def any_chrome_running() -> bool:
     return len([line for line in result.stdout.splitlines() if line.strip()]) > 0
 
 
-# Launch headed-backgrounded Chrome against SESSION_DIR while sim-user Chrome is running; return
-# connection success, timing, drivability, and process-collision evidence
 async def attempt_backgrounded_launch() -> dict:
     kill_by_profile(SESSION_DIR)
     time.sleep(0.3)
@@ -111,9 +88,6 @@ async def attempt_backgrounded_launch() -> dict:
     return result
 
 
-# Focus-steal read: baseline is frontmost_before_sim, captured before either spawn — both the
-# simulated user Chrome AND our own launch attempt use `-g`, so neither should ever move
-# frontmost to Google Chrome relative to this baseline
 def _compute_focus_steal(record: dict) -> tuple[bool, bool, bool]:
     baseline = record.get("frontmost_before_sim")
     sim_focus_stolen = baseline != "Google Chrome" and record.get("frontmost_after_sim") == "Google Chrome"
@@ -193,7 +167,6 @@ def _build_reading_section(record: dict, focus_stolen: bool, sim_focus_stolen: b
     return lines
 
 
-# Write markdown report and return its path
 def write_report(record: dict) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"02_parallel_chrome_probe_{ts}.md"

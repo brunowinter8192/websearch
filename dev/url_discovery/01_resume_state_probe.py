@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""Runs `crawl4ai.deep_crawling.BFSDeepCrawlStrategy` for real against books.toscrape.com (a
-static, stable scraping-practice site) to verify — by executing, not by reading the source — the
-one assumption the whole link-graph-traversal redesign rests on: that `resume_state` can
-pre-populate the BFS frontier with an arbitrary URL set instead of a single `start_url`.
-
-Four small, real runs, each capped to a handful of requests:
-  1. existence + start_url fate — does resume_state's "pending" set actually get crawled, and
-     what happens to start_url when resume_state is also supplied?
-  2. resume_state dict shape — minimal correct shape, a wrong key name, and an empty dict.
-  3. depth bookkeeping — does an explicit "depths" entry gate max_depth for an injected URL the
-     same way it would for a discovered link, and what depth does an UNSTAMPED injected URL get
-     by default?
-  4. FilterChain bypass — does an injected seed skip the filter chain the way a depth-0 start_url
-     does, while a link discovered FROM that seed (to the same host) still gets filtered?
-
-Every run cancels itself (via on_state_change + strategy.cancel()) right after the single seed's
-first level is processed, so depth/filter experiments never actually fetch the discovered
-next-level URLs — only their PRESENCE in the captured state is inspected.
-"""
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -38,7 +19,6 @@ PHILOSOPHY_URL = "https://books.toscrape.com/catalogue/category/books/philosophy
 
 # ORCHESTRATOR
 
-# Run all four resume_state experiments against one crawler instance, then write the md report
 async def url_discovery_probe_workflow() -> None:
     browser_config = BrowserConfig(headless=True, verbose=False)
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -57,7 +37,6 @@ async def url_discovery_probe_workflow() -> None:
 
 # FUNCTIONS
 
-# Standard CrawlerRunConfig wiring a given strategy into batch (non-streaming) mode
 def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
     return CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
@@ -68,7 +47,6 @@ def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
     )
 
 
-# Flatten a CrawlResult list into plain dicts (url, success, status_code, depth) for the report
 def _result_rows(results) -> list:
     rows = []
     for r in results:
@@ -81,8 +59,6 @@ def _result_rows(results) -> list:
     return rows
 
 
-# on_state_change callback that captures the post-link-discovery state, then cancels the
-# strategy so the next BFS level (the discovered children) is never actually fetched
 def _capture_and_stop_callback(holder: dict):
     async def callback(state: dict) -> None:
         holder["state"] = state
@@ -90,7 +66,6 @@ def _capture_and_stop_callback(holder: dict):
     return callback
 
 
-# Q1 + Q3: does resume_state's "pending" set get crawled, and is start_url crawled/ignored/collided?
 async def run_experiment_1_existence_and_start_url(crawler: AsyncWebCrawler) -> dict:
     pending_urls = [TRAVEL_URL, MYSTERY_URL, PHILOSOPHY_URL]
     resume_state = {"pending": [{"url": u, "parent_url": None} for u in pending_urls]}
@@ -108,24 +83,19 @@ async def run_experiment_1_existence_and_start_url(crawler: AsyncWebCrawler) -> 
     }
 
 
-# Q2: exact required resume_state shape — minimal-correct, wrong-key, and empty-dict subtests
 async def run_experiment_2_dict_shape(crawler: AsyncWebCrawler) -> dict:
-    # 2a: minimal correct shape — only "pending", no "visited"/"depths"/"pages_crawled"
     strategy_a = BFSDeepCrawlStrategy(
         max_depth=0,
         resume_state={"pending": [{"url": TRAVEL_URL, "parent_url": None}]},
     )
     results_a = await crawler.arun(url=HOMEPAGE, config=_run_config(strategy_a))
 
-    # 2b: wrong key name ("seed_urls" instead of "pending") — dict is truthy, so resume mode
-    # is entered, but .get("pending", []) finds nothing
     strategy_b = BFSDeepCrawlStrategy(
         max_depth=0,
         resume_state={"seed_urls": [TRAVEL_URL]},
     )
     results_b = await crawler.arun(url=HOMEPAGE, config=_run_config(strategy_b))
 
-    # 2c: empty dict — falsy in Python, so `if self._resume_state:` takes the FALSE branch
     strategy_c = BFSDeepCrawlStrategy(max_depth=0, resume_state={})
     results_c = await crawler.arun(url=HOMEPAGE, config=_run_config(strategy_c))
 
@@ -138,10 +108,7 @@ async def run_experiment_2_dict_shape(crawler: AsyncWebCrawler) -> dict:
     }
 
 
-# Q4: does an explicit "depths" entry gate max_depth for an injected URL, and what depth does an
-# unstamped injected URL default to?
 async def run_experiment_3_depth_bookkeeping(crawler: AsyncWebCrawler) -> dict:
-    # Variant A: seeded at depth=2, max_depth=2 -> next_depth (3) > max_depth -> no children
     holder_a: dict = {}
     strategy_a = BFSDeepCrawlStrategy(
         max_depth=2,
@@ -155,7 +122,6 @@ async def run_experiment_3_depth_bookkeeping(crawler: AsyncWebCrawler) -> dict:
     results_a = await crawler.arun(url=HOMEPAGE, config=_run_config(strategy_a))
     pending_a = holder_a.get("state", {}).get("pending", [])
 
-    # Variant B: no "depths" entry -> defaults to 0, max_depth=2 -> next_depth (1) <= max_depth -> children discovered
     holder_b: dict = {}
     strategy_b = BFSDeepCrawlStrategy(
         max_depth=2,
@@ -184,8 +150,6 @@ async def run_experiment_3_depth_bookkeeping(crawler: AsyncWebCrawler) -> dict:
     }
 
 
-# Q5: does an injected seed bypass the FilterChain the way a depth-0 start_url does, while a
-# link discovered FROM it (to the same URL, via the sidebar's self-link) still gets filtered?
 async def run_experiment_4_filter_chain_bypass(crawler: AsyncWebCrawler) -> dict:
     holder: dict = {}
     filter_chain = FilterChain([URLPatternFilter(patterns="*philosophy_7*", reverse=True)])
@@ -214,7 +178,6 @@ async def run_experiment_4_filter_chain_bypass(crawler: AsyncWebCrawler) -> dict
     }
 
 
-# Render every experiment's measured numbers plus the five answers into one timestamped md report
 def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

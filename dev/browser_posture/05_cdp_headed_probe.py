@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-"""cdp_url route probe for a headed-backgrounded chromium ad-hoc lane — Milestone 1b.
-
-Follow-up to probe 04, which killed the `LSUIElement` lever (crashes the chromium-1228 bundle's
-launch). This probe measures the documented field workaround (playwright#35836): launch Chrome
-ourselves via macOS `open -g -n -a` (the mechanism proven in `src/search/browser.py` / probe 02,
-never steals focus) with our own `--remote-debugging-port` + throwaway `--user-data-dir`, then have
-crawl4ai/patchright CONNECT over `cdp_url` rather than launch. Measures, end to end, through the
-real crawl4ai `AsyncWebCrawler`:
-
-1. Self-launch success + CDP endpoint coming up.
-2. Focus behavior across the WHOLE sequence (self-launch, CDP connect, page creation, navigation,
-   teardown) — page creation is the flagged risk per playwright#42343.
-3. cmdline delta vs. a freshly-captured patchright-driven headed reference launch (probe 04 Run B
-   shape) — the anti-detection surface this route would make us own, not fixed here, only measured.
-4. Clean teardown: no crash is expected on this route (no plist edit anywhere), so no launchd
-   supervision job should appear either — verified as a regression check against probe 04's finding.
-
-Local throwaway page only. No src/ import, no `_lib.py`/pydoll dependency beyond the three generic
-(pydoll-free) helpers reused below — same self-contained convention as probe 04.
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import shutil
@@ -33,13 +12,13 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import start_probe_server, stop_probe_server, get_frontmost_app  # noqa: E402
-from _cdp_launch import (  # noqa: E402
+from _lib import start_probe_server, stop_probe_server, get_frontmost_app
+from _cdp_launch import (
     resolve_chromium_1228_bundle, self_launch_chrome, wait_for_devtools_port,
     check_cdp_http_ready, find_pid_by_profile,
 )
-from _cdp_teardown import kill_by_profile, kill_survivors, check_orphans  # noqa: E402
-from _cdp_report import write_report, diff_cmdlines  # noqa: E402
+from _cdp_teardown import kill_by_profile, kill_survivors, check_orphans
+from _cdp_report import write_report, diff_cmdlines
 
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -55,7 +34,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     bundle_path = resolve_chromium_1228_bundle()
 
-    focus_samples: list[tuple[str, str]] = []  # (stage, app) — stage attribution is the point
+    focus_samples: list[tuple[str, str]] = []
     stage = {"name": "reference_launch"}
     stop_event = asyncio.Event()
     poll_task = asyncio.create_task(focus_poll_loop(focus_samples, stage, stop_event))
@@ -88,10 +67,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Continuous frontmost-app sample, whole-sequence duration (probe 04's method, reused via _lib) —
-# each sample carries the CURRENT stage label (mutated by the orchestrator via the shared `stage`
-# dict) so a frontmost hit can be attributed to WHICH step caused it, not just that one occurred
-# somewhere in the run
 async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         app = await asyncio.to_thread(get_frontmost_app)
@@ -99,9 +74,6 @@ async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_even
         await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
 
 
-# First descendant of this process whose resolved executable lives under ms-playwright's cache —
-# valid for the reference launch (patchright launches it as our own child); NOT valid for the
-# self-launch (open forks — see find_pid_by_profile for that case, same lesson as probe 04)
 def find_chrome_descendant() -> psutil.Process | None:
     try:
         children = psutil.Process().children(recursive=True)
@@ -117,9 +89,6 @@ def find_chrome_descendant() -> psutil.Process | None:
     return None
 
 
-# One real patchright-driven headed launch (probe 04's Run B shape, no plist involved) against a
-# local throwaway page — captures a FRESH real cmdline as the diff baseline, rather than relying on
-# probe 04's saved report text
 async def capture_reference_cmdline() -> dict:
     server, thread, port = start_probe_server()
     url = f"http://127.0.0.1:{port}/"
@@ -161,12 +130,6 @@ async def capture_reference_cmdline() -> dict:
     return {"pid": info["pid"], "exe": info["exe"], "cmdline": info["cmdline"], "error": error}
 
 
-# Real crawl4ai connect-over-cdp_url scrape against the local throwaway page — the actual config
-# shape this route requires, built off reading browser_manager.py's cdp branch directly. Stage
-# label set to "cdp_connect_page_navigate" for the whole arun() call — connect/get_page (the
-# page-creation-over-CDP moment)/goto are bundled in one high-level call; splitting them further
-# would require hooking crawl4ai internals, out of scope for this probe. Still isolates this whole
-# bundle from self_launch/cdp_port_wait/teardown, the primary attribution this milestone needs.
 async def scrape_over_cdp(port: int, stage: dict) -> dict:
     server, thread, http_port = start_probe_server()
     url = f"http://127.0.0.1:{http_port}/"

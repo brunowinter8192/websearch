@@ -4,13 +4,11 @@ from urllib.parse import urljoin
 
 DEFAULT_HOST = "127.0.0.1"
 
-# --- Navtree: 3 versions of one doc tree, current = the literal seed_url ---
 CURRENT_VERSION = "current"
 ALL_VERSIONS = ("current", "v2", "v1")
 SEED_PATH = "/docs/guide"
-SEED_CONTENT_PATH = "/guide"  # currentPathWithoutLanguage: seed_path with the "/docs" lang prefix stripped
+SEED_CONTENT_PATH = "/guide"
 
-# root, intro, configuration, configuration/advanced, api — present in every version
 NAVTREE_CANONICAL_PAGES = (
     "/docs/guide",
     "/docs/guide/intro",
@@ -18,52 +16,41 @@ NAVTREE_CANONICAL_PAGES = (
     "/docs/guide/configuration/advanced",
     "/docs/guide/api",
 )
-# present ONLY in the v1 tree — the version-exclusive case
 NAVTREE_V1_ONLY_PAGES = (
     "/docs/guide/legacy-plugin-api",
     "/docs/guide/legacy-theme-format",
 )
 
-# --- App Router RSC-stream demo island: isolated, never linked, not part of ground_truth() ---
 RSC_DEMO_ROOT = "/rsc-demo"
 RSC_DEMO_CHILDREN = ("/rsc-demo/alpha", "/rsc-demo/beta")
 
-# --- Sitemap: two-level nested sitemapindex ---
 SITEMAP_INDEX_PATH = "/sitemap_index.xml"
-SITEMAP_GROUP_PATH = "/sitemap-docs-group.xml"  # the SECOND nesting level (itself an index)
+SITEMAP_GROUP_PATH = "/sitemap-docs-group.xml"
 SITEMAP_BLOG_LEAF_PATH = "/sitemap-blog.xml"
 SITEMAP_LEGAL_LEAF_PATH = "/sitemap-legal.xml"
 SITEMAP_BLOG_PAGES = ("/blog/post-1", "/blog/post-2", "/blog/post-3")
 SITEMAP_LEGAL_PAGES = ("/legal/privacy", "/legal/terms")
 
-# --- robots.txt: Allow/Disallow paths, collected as seeds regardless of what they permit ---
 ROBOTS_DISALLOW_PATHS = ("/internal/admin", "/internal/staging-notes")
 ROBOTS_ALLOW_PATHS = ("/internal/public-notice",)
 ROBOTS_REAL_PATHS = ("/internal/admin", "/internal/public-notice")
-ROBOTS_EMPTY_404_PATHS = ("/internal/staging-notes",)  # genuine empty-body 404 -> real fetch failure
+ROBOTS_EMPTY_404_PATHS = ("/internal/staging-notes",)
 
-THIN_BODY_HTML = '<html><body><div id="app"></div></body></html>'  # ~50 bytes: 0 visible chars,
-# 0 content elements -> 2 structural anti-bot signals, same shape as the real 168-byte case
-# recorded in src/crawler/DOCS.md's Gotchas.
+THIN_BODY_HTML = '<html><body><div id="app"></div></body></html>'
 
 
 # FUNCTIONS
 
-# Absolute seed_url for a fixture server bound to the given port
 def seed_url(port: int, host: str = DEFAULT_HOST) -> str:
     return f"http://{host}:{port}{SEED_PATH}"
 
 
-# path -> its version-prefixed form (e.g. "/docs/guide/intro" + "v1" -> "/docs/v1/guide/intro"),
-# or path unchanged for CURRENT_VERSION (the default version carries no URL prefix at all)
 def _version_path(path: str, version: str) -> str:
     if version == CURRENT_VERSION:
         return path
     return path.replace("/docs/", f"/docs/{version}/", 1)
 
 
-# Build a __NEXT_DATA__-shaped sidebarTree: root + intro + configuration(+nested advanced) + api,
-# plus any further hrefs appended as flat extra children (the v1-only pages)
 def _sidebar_tree(hrefs: tuple) -> dict:
     root, intro, configuration, configuration_advanced, api, *extra = hrefs
     children = [
@@ -75,9 +62,6 @@ def _sidebar_tree(hrefs: tuple) -> dict:
     return {"href": root, "childPages": children}
 
 
-# A __NEXT_DATA__ page: sidebarTree always present; version metadata (allVersions/currentVersion/
-# currentPathWithoutLanguage) only on the DEFAULT version's own page — the only one
-# resolve_navigation_tree ever reads those fields from
 def _next_data_page_html(tree: dict, title: str, with_version_meta: bool = False,
                          extra_links: tuple = ()) -> str:
     main_context = {"sidebarTree": tree}
@@ -100,7 +84,6 @@ def _next_data_page_html(tree: dict, title: str, with_version_meta: bool = False
     )
 
 
-# A plain leaf content page — real visible text, optional outbound <a> links
 def _leaf_page_html(title: str, links: tuple = ()) -> str:
     links_html = "".join(f'<p><a href="{href}">{href}</a></p>' for href in links)
     return (
@@ -113,8 +96,6 @@ def _leaf_page_html(title: str, links: tuple = ()) -> str:
     )
 
 
-# The isolated RSC (self.__next_f.push) demo page — a genuine structured tree, App Router shape,
-# never linked from the main site graph
 def _rsc_demo_html() -> str:
     tree = {"type": "root", "name": "RSC Demo", "children": [
         {"type": "page", "name": "Alpha", "url": RSC_DEMO_CHILDREN[0]},
@@ -133,8 +114,6 @@ def _rsc_demo_html() -> str:
     )
 
 
-# robots.txt text: 2 Disallow + 1 Allow (collected as seeds regardless — the deliberate behavior
-# this fixture must let be observed) + a Sitemap: line pointing at the top of the nested index
 def _robots_txt(base_url: str) -> str:
     lines = ["User-agent: *"]
     lines += [f"Disallow: {p}" for p in ROBOTS_DISALLOW_PATHS]
@@ -143,23 +122,18 @@ def _robots_txt(base_url: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-# <sitemapindex> listing absolute <loc> URLs for each sub_path (index entries MUST be absolute —
-# scope_and_dedup drops a relative <loc>'s empty host as "foreign")
 def _sitemapindex_xml(base_url: str, sub_paths: tuple) -> str:
     entries = "".join(f"<sitemap><loc>{urljoin(base_url, p)}</loc></sitemap>" for p in sub_paths)
     return (f'<?xml version="1.0" encoding="UTF-8"?>'
             f'<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</sitemapindex>')
 
 
-# <urlset> listing absolute <loc> URLs for each page path
 def _urlset_xml(base_url: str, paths: tuple) -> str:
     entries = "".join(f"<url><loc>{urljoin(base_url, p)}</loc></url>" for p in paths)
     return (f'<?xml version="1.0" encoding="UTF-8"?>'
             f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</urlset>')
 
 
-# Homepage: plain human-readable description, deliberately linked from nowhere — never appears in
-# any discovery run regardless of content, kept purely for a human/agent curling the base URL
 def _homepage_html() -> str:
     return (
         "<html><head><title>url_discovery fixture site</title></head><body>"
@@ -171,9 +145,6 @@ def _homepage_html() -> str:
     )
 
 
-# Build every route this site serves, as {path: (status, content_type, body_bytes)} — everything
-# generated from the module's own source lists, called once per server start once base_url (which
-# needs the real bound port for absolute sitemap <loc> URLs) is known
 def _build_routes(base_url: str) -> dict:
     routes = {}
 
@@ -218,10 +189,6 @@ def _build_routes(base_url: str) -> dict:
     return routes
 
 
-# The exact seed set discover_urls_workflow's own _assemble_seeds builds: literal seed first, then
-# robots/sitemap/navtree in that fixed order, first-write-wins — mirrors discovery.py's own merge
-# priority so a URL present in two lists (the navtree root == the literal seed) is counted once,
-# under "seed".
 def _expected_seeds() -> list:
     order = []
     seen = set()
@@ -239,10 +206,6 @@ def _expected_seeds() -> list:
     return order
 
 
-# The fixture's stated ground truth, computed from the same source lists that generate the served
-# pages — never hand-typed. total_urls/by_source are what a real discover_urls_workflow(seed_url
-# (port)) run is expected to report; discover_urls_workflow never fetches a page itself, so there
-# is no fetched/failed/stop_reason concept left to state here.
 def ground_truth() -> dict:
     seeds = _expected_seeds()
     by_source = {}

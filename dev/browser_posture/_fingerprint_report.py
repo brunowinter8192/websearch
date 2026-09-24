@@ -228,7 +228,6 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-# Write markdown report and return its path
 def write_report(results: dict, orphans: list[str], report_dir: Path, variants: list, hardcoded_props: dict) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"03_fingerprint_patch_probe_{ts}.md"

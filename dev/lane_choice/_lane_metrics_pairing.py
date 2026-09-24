@@ -2,9 +2,6 @@
 import json
 from pathlib import Path
 
-# The MAIN repo's canonical production log — never a worktree copy (worktrees have their own,
-# separate, gitignored src/logs/ tree), same hardcoded-absolute-path convention as
-# 01_backfill_pairs.py's own PROD_SCRAPE_LOG_PATH.
 PROD_SCRAPE_LOG_PATH = Path(
     "/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch/src/logs/scrape_log.jsonl"
 )
@@ -12,14 +9,6 @@ PROD_SCRAPE_LOG_PATH = Path(
 
 # FUNCTIONS
 
-# The freshest ok+content_path record per (url, engine) in the production log — the log
-# accumulates across sessions, so a later scrape supersedes an earlier one of the same pair.
-# "ok" is no longer a field the log computes (see src/scraper/DOCS.md's Gotchas): a record newer
-# than that removal has no "outcome" key at all, so the old `!= "ok"` check would silently exclude
-# every one of them. Reconstructed here off the two facts that replaced it — no acquisition_error,
-# and real bytes actually came back — a historical pre-removal record with a genuine
-# `"outcome": "ok"` also has `acquisition_error` absent (falsy via .get) and a real byte count, so
-# this reads identically on old and new records alike.
 def _latest_ok_records_by_url_engine(log_path: Path) -> dict[tuple[str, str], dict]:
     latest: dict[tuple[str, str], dict] = {}
     with open(log_path, encoding="utf-8") as f:
@@ -38,12 +27,10 @@ def _latest_ok_records_by_url_engine(log_path: Path) -> dict[tuple[str, str], di
     return latest
 
 
-# A record's sidecar content file, relative to the log file's own directory (scrape_logger.py's convention)
 def _resolve_content_path(log_path: Path, record: dict) -> Path:
     return log_path.parent / record["content_path"]
 
 
-# Every URL with a freshest-ok record on BOTH lanes, first-seen order in the log
 def collect_pairs_from_scrape_log() -> list[dict]:
     latest = _latest_ok_records_by_url_engine(PROD_SCRAPE_LOG_PATH)
 

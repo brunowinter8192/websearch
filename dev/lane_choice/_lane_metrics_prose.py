@@ -5,17 +5,11 @@ from pathlib import Path
 from _lane_metrics_blocks import read_blocks
 from _lane_metrics_classify import apply_heading_rule, classify_blocks
 
-# The PROSE length cap is this percentile of the corpus's own chromium block-word-count
-# distribution (see process-docs/lane_choice/ for the measured distribution and the reasoning for
-# picking a percentile at all) — chromium output is post-PruningContentFilter, the best available
-# proxy in this project for what a real prose block looks like.
 PROSE_PERCENTILE = 99
 
 
 # FUNCTIONS
 
-# Derive the PROSE cap (PROSE_PERCENTILE of the pooled chromium block-word-count distribution)
-# plus the distribution itself, for the report
 def compute_prose_cap(chromium_block_lists: list[list[dict]]) -> tuple[int, dict]:
     word_counts = sorted(b["num_words"] for blocks in chromium_block_lists for b in blocks)
     quantiles = statistics.quantiles(word_counts, n=100, method="inclusive")
@@ -33,13 +27,10 @@ def compute_prose_cap(chromium_block_lists: list[list[dict]]) -> tuple[int, dict
     return cap, distribution
 
 
-# CONTENT, at or under the corpus-derived length cap, and containing a sentence-ending mark
 def is_prose_block(classification: str, block: dict, cap: int) -> bool:
     return classification == "CONTENT" and block["num_words"] <= cap and block["has_sentence_end"]
 
 
-# blocks_total/content, words_total/content(+pct), overall link density, longest content block,
-# PROSE blocks/words, and blocks/words the cap excludes (CONTENT + sentence-ending, over cap)
 def aggregate_file_metrics(blocks: list[dict], classifications: list[str], cap: int) -> dict:
     blocks_total = len(blocks)
     blocks_content = sum(1 for c in classifications if c == "CONTENT")
@@ -77,14 +68,12 @@ def aggregate_file_metrics(blocks: list[dict], classifications: list[str], cap: 
     }
 
 
-# Classify (tree + heading rule) + aggregate an already-read block list
 def compute_metrics_from_blocks(blocks: list[dict], cap: int) -> dict:
     tree_classifications = classify_blocks(blocks)
     final_classifications = apply_heading_rule(blocks, tree_classifications)
     return aggregate_file_metrics(blocks, final_classifications, cap)
 
 
-# Full metric set for one file: read blocks once, classify, aggregate
 def compute_file_metrics(path: Path, cap: int) -> dict:
     blocks = read_blocks(path)
     return compute_metrics_from_blocks(blocks, cap)

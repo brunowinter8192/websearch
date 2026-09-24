@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""Runs `01_backfill_pairs.py` as a subprocess under a live macOS frontmost-app poll — the
-focus-steal verification gate for the lane-choice backfill: any sample where a browser engine is
-the frontmost REGULAR app instead of the app that was frontmost when this script started is a
-steal (chromium's steal class — proven-effective for a regular, non-accessory app).
-
-REMOVED 2026-08-27: a second, LSUIElement/accessory-process-scoped window-activation instrument,
-added because Camoufox never registers as "frontmost" in this poll's sense. Live human-judged runs
-(both on `example.com` and, decisively, against 5 real URLs sequentially under sustained load — the
-original complaint's own workload shape) found that signal fires constantly with ZERO perceived
-focus loss, with or without a reclaim mechanism reacting to it — a phantom signal, not a real steal.
-See `process-docs/camoufox_lane/` for the exact mechanism name and the live-verification writeup.
-"""
 # INFRASTRUCTURE
 import argparse
 import subprocess
@@ -30,7 +18,6 @@ FOCUS_POLL_INTERVAL_S = 0.25
 
 # ORCHESTRATOR
 
-# Launch the backfill subprocess, poll the focus-steal instrument concurrently until it exits, report
 def focus_poll_smoke_workflow(limit: int | None) -> None:
     baseline_app = get_frontmost_app()
     print(f"Baseline frontmost app (expected throughout): {baseline_app}", file=sys.stderr)
@@ -56,7 +43,6 @@ def focus_poll_smoke_workflow(limit: int | None) -> None:
 
 # FUNCTIONS
 
-# Frontmost macOS application name (same primitive as dev/browser_posture/_lib.py's get_frontmost_app)
 def get_frontmost_app() -> str:
     result = subprocess.run(
         [
@@ -68,7 +54,6 @@ def get_frontmost_app() -> str:
     return result.stdout.strip()
 
 
-# Background-thread loop: append (elapsed_s, app_name) samples until stop_event fires
 def poll_frontmost_loop(samples: list[tuple[float, str]], stop_event: threading.Event) -> None:
     t0 = time.perf_counter()
     while not stop_event.is_set():
@@ -77,7 +62,6 @@ def poll_frontmost_loop(samples: list[tuple[float, str]], stop_event: threading.
         time.sleep(FOCUS_POLL_INTERVAL_S)
 
 
-# Write the funnel + the instrument's tally + any-violation-sample report
 def write_report(
     baseline_app: str, frontmost_samples: list[tuple[float, str]], returncode: int, wall_s: float,
 ) -> Path:

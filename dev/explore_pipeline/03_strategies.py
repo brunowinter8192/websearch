@@ -32,7 +32,6 @@ STRATEGIES = {
 }
 
 
-# Run all strategies and produce comparison report
 async def main(url: str, depth: int, max_pages: int):
     domain = urlparse(url).netloc
     results = {}
@@ -58,7 +57,6 @@ async def main(url: str, depth: int, max_pages: int):
     print(f"\n{report}")
 
 
-# Run a single crawl strategy
 async def run_strategy(url: str, domain: str, depth: int, max_pages: int, strategy_config: dict) -> list:
     filter_chain = FilterChain([
         DomainFilter(allowed_domains=[domain]),
@@ -99,7 +97,6 @@ async def run_strategy(url: str, domain: str, depth: int, max_pages: int, strate
     return results
 
 
-# Build stats from crawl results
 def build_stats(results: list, is_prefetch: bool) -> dict:
     seen = set()
     depth_counts = defaultdict(int)
@@ -120,7 +117,6 @@ def build_stats(results: list, is_prefetch: bool) -> dict:
     }
 
 
-# Format comparison report as Markdown
 def format_report(url: str, depth: int, max_pages: int, results: dict) -> str:
     lines = [
         f"# Explore Strategy Comparison",
@@ -160,7 +156,6 @@ def format_report(url: str, depth: int, max_pages: int, results: dict) -> str:
     return "\n".join(lines)
 
 
-# Save report as Markdown
 def save_report(report: str, domain: str):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

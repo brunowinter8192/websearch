@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""Headed-launch feasibility probe for the chromium (patchright) ad-hoc scrape lane.
-
-Milestone 1 of the headed-adhoc chromium switch (`src/scraper/chromium_scrape.py`'s `try_scrape`).
-Measures, through the REAL production launch shape (`BrowserConfig` + `UndetectedAdapter` +
-`AsyncPlaywrightCrawlerStrategy`, patchright's `use_undetected` path):
-
-1. Executable resolution — which binary actually runs under headless=True vs headless=False,
-   read off the real launched process (psutil), not registry metadata.
-2. LSUIElement viability — launch success + continuous frontmost-app poll, with and without
-   `LSUIElement=true` set on the resolved `Google Chrome for Testing.app` (chromium-1228) bundle.
-3. Backgrounding flags — whether the three Playwright-default flags are present on the real
-   launched cmdline, and for each, whether crawl4ai's own `_build_browser_args()` put it there or
-   patchright's internal driver injected it (crawl4ai's arg list is read directly off the
-   installed package this session, not assumed).
-
-Local throwaway page only (never a third-party site). No src/ import (dev-script isolation,
-matching `_lib.py`'s own convention) — LSUIElement plist helpers are duplicated from
-`src/scraper/camoufox_scrape.py`'s `_find_app_bundle`/`_ensure_no_focus_steal` shape, not imported.
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -30,10 +10,10 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import start_probe_server, stop_probe_server, get_frontmost_app  # noqa: E402
-from _chromium_bundle import resolve_and_verify_bundle, read_lsuielement, set_lsuielement, read_codesign_status  # noqa: E402
-from _chromium_teardown import kill_survivors, check_orphans  # noqa: E402
-from _headed_chromium_report import write_report  # noqa: E402
+from _lib import start_probe_server, stop_probe_server, get_frontmost_app
+from _chromium_bundle import resolve_and_verify_bundle, read_lsuielement, set_lsuielement, read_codesign_status
+from _chromium_teardown import kill_survivors, check_orphans
+from _headed_chromium_report import write_report
 
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -57,7 +37,7 @@ async def run_probe() -> None:
 
     bundle_path = resolve_and_verify_bundle(run_b["exe"])
     plist_path = bundle_path / "Contents" / "Info.plist"
-    original_bytes = plist_path.read_bytes()  # byte-exact backup — revert restores THIS, not a plistlib round-trip
+    original_bytes = plist_path.read_bytes()
     original_lsuielement = read_lsuielement(plist_path)
     codesign_before = read_codesign_status(bundle_path)
 
@@ -85,9 +65,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# First descendant of this process whose resolved executable path lives under ms-playwright's
-# cache (covers both chromium-*/Chrome-for-Testing.app and chromium_headless_shell-*) — restricted
-# to OUR process tree so it can never pick up an unrelated Chrome on this machine
 def find_chrome_descendant() -> psutil.Process | None:
     try:
         children = psutil.Process().children(recursive=True)
@@ -136,9 +113,6 @@ async def _run_crawl4ai_once(headless: bool, dwell_s: float, url: str) -> tuple[
         return False, f"{type(e).__name__}: {e}"
 
 
-# One real try_scrape-shaped launch against a local throwaway page; concurrently polls for the
-# launched browser process (exe/cmdline, captured once) and, if poll_focus, the frontmost app
-# (sampled continuously for the full launch-to-close duration)
 async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
     server, thread, port = start_probe_server()
     url = f"http://127.0.0.1:{port}/"

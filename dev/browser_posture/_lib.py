@@ -1,10 +1,4 @@
 # INFRASTRUCTURE
-"""Shared helpers for the browser-posture latency/flag probes (01, 02).
-
-Self-contained: does NOT import src/ (dev-script isolation) — profile-dir constants and the
-`open -g` process_creator mechanism are duplicated from src/search/browser.py's shape and
-dev/search_pipeline/27_brave_headed_lane_probe.py's proven launch technique, not shared imports.
-"""
 import asyncio
 import http.server
 import json
@@ -21,25 +15,16 @@ from pydoll.commands import PageCommands
 
 logger = logging.getLogger(__name__)
 
-# Dedicated probe-only profile root — NOT src/search/browser.py's shared SESSION_DIR (that dir is
-# addressed explicitly and only by 02_parallel_chrome_probe.py, which tests the real collision case)
 PROBE_PROFILE_ROOT = Path.home() / ".websearch" / "browser-posture-probe"
 
-# Playwright's own Chromium launch defaults (microsoft/playwright#33515, #37199, #29399, #34031,
-# #36360) — the three flags this milestone measures
 BACKGROUNDING_FLAGS = [
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
 ]
 
-# Identical geometry for the automation window and the occluder window so the occluder fully
-# covers it (occlusion is a property of screen coverage, not focus)
 WINDOW_ARGS = ["--window-position=200,200", "--window-size=900,700"]
 
-# Timer-drift harness page: setInterval every 100ms, 40 ticks (4s nominal). Chromium's documented
-# background-page timer throttling clamps to ~1/sec, so throttled vs unthrottled differ by an
-# order of magnitude in tick count over the same wall-clock window — unambiguous when present.
 PROBE_HTML = """<!doctype html>
 <html><head><title>browser-posture-probe</title></head>
 <body>
@@ -58,11 +43,6 @@ window.__ticks = [];
 </body></html>
 """
 
-# System-color artifact test page (Milestone 2): a plain, unstyled link as contrast, plus elements
-# with explicit CSS system-color declarations. The patch in src/search/browser.py targets CSS
-# ActiveText specifically (a link in its ACTIVE state) — NOT a resting link's default color, which
-# is just the ordinary link color in headless and headed alike. LinkText/VisitedText are included
-# to tell an ActiveText-specific divergence apart from a broader system-color divergence.
 ARTIFACT_HTML = """<!doctype html>
 <html><head><title>artifact-test</title></head>
 <body>
@@ -76,7 +56,6 @@ ARTIFACT_HTML = """<!doctype html>
 
 # FUNCTIONS
 
-# Serve PROBE_HTML at "/" (timer-drift harness) or ARTIFACT_HTML at "/artifact" (system-color test)
 class _ProbeHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = (ARTIFACT_HTML if self.path.startswith("/artifact") else PROBE_HTML).encode("utf-8")
@@ -90,7 +69,6 @@ class _ProbeHandler(http.server.BaseHTTPRequestHandler):
         pass
 
 
-# Start a throwaway localhost HTTP server on an OS-assigned free port; returns (server, thread, port)
 def start_probe_server() -> tuple[http.server.ThreadingHTTPServer, threading.Thread, int]:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ProbeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -98,30 +76,24 @@ def start_probe_server() -> tuple[http.server.ThreadingHTTPServer, threading.Thr
     return server, thread, server.server_address[1]
 
 
-# Shut down the probe HTTP server and its thread
 def stop_probe_server(server: http.server.ThreadingHTTPServer, thread: threading.Thread) -> None:
     server.shutdown()
     thread.join(timeout=5)
 
 
-# Resolve a named probe profile dir under PROBE_PROFILE_ROOT
 def profile_dir(name: str) -> str:
     return str(PROBE_PROFILE_ROOT / name)
 
 
-# Kill any Chrome process pinned to the given --user-data-dir (probe profile OR the real
-# production SESSION_DIR when 02_parallel_chrome_probe.py passes it explicitly)
 def kill_by_profile(profile: str) -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={profile}"], capture_output=True)
 
 
-# Count live processes pinned to the given --user-data-dir (teardown / collision verification)
 def count_processes_for(profile: str) -> int:
     result = subprocess.run(["pgrep", "-f", f"user-data-dir={profile}"], capture_output=True, text=True)
     return len([line for line in result.stdout.splitlines() if line.strip()])
 
 
-# Build ChromiumOptions for one probe configuration
 def build_options(profile: str, headless: bool, extra_flags: list[str], window_args: bool) -> ChromiumOptions:
     options = ChromiumOptions()
     options.headless = headless
@@ -136,16 +108,12 @@ def build_options(profile: str, headless: bool, extra_flags: list[str], window_a
     return options
 
 
-# Launch the system Google Chrome headed-but-backgrounded via macOS `open -g` (proven mechanism,
-# dev/search_pipeline/27_brave_headed_lane_probe.py) — drops the resolved binary_location (unused;
-# `open -a` targets the app bundle directly)
 def open_background_process_creator(command: list[str]) -> subprocess.Popen:
     args = command[1:]
     open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
     return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-# Start one Chrome instance for a probe config; returns (browser, tab, start_to_tab_s, start_to_drivable_s)
 async def launch_chrome(
     profile: str, headless: bool, extra_flags: list[str], backgrounded: bool
 ) -> tuple[Chrome, object, float, float]:
@@ -163,9 +131,6 @@ async def launch_chrome(
     return browser, tab, t_tab, t_drivable
 
 
-# Stop a probe browser: CDP Browser.close, then unconditional pkill safety net (mirrors
-# src/search/browser.py's kill_tab/kill_stale_chrome pattern; mandatory when backgrounded via
-# `open -g`, since that Popen is the short-lived `open` wrapper, not Chrome itself)
 async def stop_chrome(browser, profile: str) -> None:
     if browser is not None:
         try:
@@ -175,10 +140,6 @@ async def stop_chrome(browser, profile: str) -> None:
     kill_by_profile(profile)
 
 
-# Spawn a plain, BACKGROUNDED (`-g`, no focus steal) Chrome window on a throwaway profile — used
-# both as the timer-drift occluder (configs 2/3) and as the simulated already-running user Chrome
-# (02_parallel_chrome_probe.py). Never forgrounds: this runs on a shared machine with concurrent
-# real sessions, and a dev probe has no license to steal focus regardless of what it simulates.
 def spawn_plain_chrome(profile: str, window_args: list[str] | None = None) -> None:
     kill_by_profile(profile)
     time.sleep(0.3)
@@ -188,7 +149,6 @@ def spawn_plain_chrome(profile: str, window_args: list[str] | None = None) -> No
     subprocess.run(args)
 
 
-# Extract primitive value from CDP execute_script result dict
 def extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -196,8 +156,6 @@ def extract_value(result):
         return None
 
 
-# Read document.visibilityState/hidden — ground truth for whether Chromium currently considers
-# this tab occluded/backgrounded, independent of any assumption about window stacking
 async def read_visibility_state(tab) -> dict:
     raw = await tab.execute_script(
         "return JSON.stringify({visibilityState: document.visibilityState, hidden: document.hidden})"
@@ -206,7 +164,6 @@ async def read_visibility_state(tab) -> dict:
     return json.loads(value) if value else {"visibilityState": None, "hidden": None}
 
 
-# Read back window.__ticks from the probe page and compute drift stats
 async def read_tick_stats(tab) -> dict:
     raw = await tab.execute_script("return JSON.stringify(window.__ticks || [])")
     value = extract_value(raw)
@@ -221,7 +178,6 @@ async def read_tick_stats(tab) -> dict:
     }
 
 
-# Compute min/median/max (ms, rounded) over a list of second-valued floats
 def stats_ms(values: list[float]) -> dict:
     ms = sorted(round(v * 1000) for v in values)
     n = len(ms)
@@ -231,9 +187,6 @@ def stats_ms(values: list[float]) -> dict:
     return {"n": n, "min": ms[0], "median": median, "max": ms[-1]}
 
 
-# Inject a script to run on every future top-level navigation in this tab, BEFORE first navigation
-# — same CDP call as src/search/browser.py's apply_fingerprint_patches (add_script_to_evaluate_on_
-# new_document, run_immediately=True). No-op for an empty/falsy source (the "no patches" variant).
 async def inject_before_navigation(tab, source: str) -> None:
     if not source:
         return
@@ -242,9 +195,6 @@ async def inject_before_navigation(tab, source: str) -> None:
     )
 
 
-# Read computed color for a plain link (contrast datapoint) and the three CSS system colors used
-# by src/search/browser.py's getComputedStyle patch target (ActiveText) plus two more (LinkText,
-# VisitedText) to tell an ActiveText-specific divergence apart from a broader one
 async def read_system_colors(tab) -> dict:
     raw = await tab.execute_script(
         "return JSON.stringify({"
@@ -258,7 +208,6 @@ async def read_system_colors(tab) -> dict:
     return json.loads(value) if value else {}
 
 
-# Read the real screen/window properties src/search/browser.py's screen-override patch hardcodes
 async def read_screen_window_props(tab) -> dict:
     raw = await tab.execute_script(
         "return JSON.stringify({"
@@ -274,9 +223,6 @@ async def read_screen_window_props(tab) -> dict:
     return json.loads(value) if value else {}
 
 
-# Poll a JS expression until two consecutive reads match (settled) or max_wait elapses; returns
-# (last_value, settled). Used for heavy client-side pages (CreepJS) where a fixed sleep risks
-# reading a half-rendered result.
 async def wait_for_stable_content(tab, js_expr: str, interval: float = 2.0, max_wait: float = 25.0, stable_reads: int = 2) -> tuple:
     start = time.monotonic()
     prev = None
@@ -295,7 +241,6 @@ async def wait_for_stable_content(tab, js_expr: str, interval: float = 2.0, max_
     return prev, False
 
 
-# Frontmost macOS application name (focus-steal check)
 def get_frontmost_app() -> str:
     result = subprocess.run(
         [

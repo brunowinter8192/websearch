@@ -56,12 +56,6 @@ _JS_INLINE_CONSENT_CHECK = (
     "return body.indexOf('Before you continue') !== -1 || body.indexOf('cookies and data') !== -1;"
 )
 
-# Diagnostic pass — NOT part of google.py today. Runs whenever div.MjjYud containers are found,
-# regardless of whether the current parse succeeds, and reports the structural evidence this
-# milestone needs: does h3/.LC20lb still exist inside a container, how many http anchors sit
-# inside it, what are its own immediate child tags, and a truncated outerHTML sample — enough for
-# a later agent to read the saved raw HTML and pinpoint the replacement selector without
-# re-running a browser.
 _JS_DIAGNOSTIC = """
 var _cs = document.querySelectorAll('div.MjjYud');
 var _samples = [];

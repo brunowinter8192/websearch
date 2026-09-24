@@ -22,7 +22,7 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ---
 
-### _dom.py (190 LOC)
+### _dom.py (184 LOC)
 
 **Purpose:** Google results-page interaction — consent detection/handling, result wait/parse, the /sorry/ block check, and the structural diagnostic JS pass.
 **Reads:** nothing — executes JS against the `tab` object passed by the caller.
@@ -42,7 +42,7 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ---
 
-### 01_google_dom_probe.py (192 LOC)
+### 01_google_dom_probe.py (148 LOC)
 
 **Purpose:** Path A probe entry point — two navigations per query (num=100, num=10) through a real browser, classified into OK/EMPTY_PARSED/NO_CONTAINERS/BLOCKED/ERROR.
 **Reads:** `queries.json`.
@@ -52,7 +52,7 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ---
 
-### 02_google_wml_probe.py (327 LOC)
+### 02_google_wml_probe.py (289 LOC)
 
 **Purpose:** Path B probe entry point — browserless WML-route fetch (Nokia UA + curl_cffi `chrome99_android` impersonation) per query, classified into the same four-state outcome model.
 **Reads:** `queries.json`.
@@ -64,3 +64,6 @@ No `__init__.py` — not a package. `01_google_dom_probe.py` and `02_google_wml_
 
 ## State
 `_browser.py` owns a single module-level `_handle` (a `BackgroundedBrowser` from `dev._lib.browser_launch`) for the whole probe run — set by `new_tab()` on first call, read by `kill_tab()`, cleared by `close_browser()`. Not shared with `_dom.py`, `_report.py`, or `02_google_wml_probe.py`.
+
+## Gotchas
+- `_dom.py`'s parse JS is a frozen copy of `src/search/engines/google.py`'s selectors from 2026-09-15 (`a[href^="http"]`). Google's organic hrefs are same-origin `/goto?url=` redirectors, so `01` classifies pages with results as EMPTY_PARSED by construction; the diagnostic evidence, not the outcome label, is what the probe still yields. Background: `process-docs/access_recovery/`.

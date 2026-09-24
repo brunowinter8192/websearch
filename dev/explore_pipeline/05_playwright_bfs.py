@@ -1,18 +1,3 @@
-"""
-Playwright-per-page BFS URL discovery probe.
-Renders each page via crawler.arun() (real browser, post-JS DOM) and extracts links from
-result.links.internal. Measures recall against a 305-URL gold standard for docs.github.com/de/rest.
-
-Contrasts with 04_render_recall.py (HTTP BFS via BFSDeepCrawlStrategy, ~67% recall).
-Target: ~100% recall including /de/rest/agent-tasks/agent-tasks (client-rendered sidebar).
-
-Usage:
-    ./venv/bin/python dev/explore_pipeline/05_playwright_bfs.py
-    ./venv/bin/python dev/explore_pipeline/05_playwright_bfs.py --max-pages 400 --concurrency 1
-    ./venv/bin/python dev/explore_pipeline/05_playwright_bfs.py --stealth
-    ./venv/bin/python dev/explore_pipeline/05_playwright_bfs.py --gold dev/explore_pipeline/goldstandard/docs_github_rest.txt
-"""
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -70,13 +55,11 @@ async def playwright_bfs_workflow(seed: str, gold_path: Path, include_pattern: s
 
 # FUNCTIONS
 
-# Load gold URLs from file, normalize, return as frozenset
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
         return frozenset(normalize_url(ln.strip()) for ln in f if ln.strip())
 
 
-# Strip query/fragment, @version path segments, trailing slash
 def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
@@ -84,7 +67,6 @@ def normalize_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
-# Build BrowserConfig, CrawlerRunConfig, and optional crawler_strategy for stealth
 def make_configs(delay_s: float, page_timeout_ms: int, stealth: bool) -> tuple:
     if stealth:
         browser_cfg = BrowserConfig(headless=True, verbose=False, enable_stealth=True)
@@ -105,7 +87,6 @@ def make_configs(delay_s: float, page_timeout_ms: int, stealth: bool) -> tuple:
     return browser_cfg, run_cfg, crawler_strategy
 
 
-# Manual BFS: render each page, extract links.internal, filter by domain + pattern
 async def bfs_crawl(seed: str, include_pattern: str, max_pages: int, max_depth: int,
                     concurrency: int, browser_cfg: BrowserConfig, run_cfg: CrawlerRunConfig,
                     crawler_strategy) -> tuple[list[str], dict]:
@@ -147,7 +128,6 @@ async def bfs_crawl(seed: str, include_pattern: str, max_pages: int, max_depth: 
     return found, stats
 
 
-# Build batch of up to `concurrency` depth-valid items
 def _build_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[str, int]]:
     batch: list[tuple[str, int]] = []
     while frontier and len(batch) < concurrency:
@@ -157,14 +137,12 @@ def _build_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tupl
     return batch
 
 
-# Fetch batch (sequential when concurrency=1)
 async def _fetch_batch(crawler: AsyncWebCrawler, batch: list[tuple[str, int]],
                        run_cfg: CrawlerRunConfig) -> list:
     tasks = [fetch_page(crawler, url, run_cfg) for url, _ in batch]
     return await asyncio.gather(*tasks)
 
 
-# 429 batch accounting — back off once, stop on second consecutive batch
 async def _handle_429_batch(batch: list[tuple[str, int]], results: list,
                             four_two_nine_count: int, consecutive_batches_429: int) -> tuple:
     stop_reason: str | None = None
@@ -185,7 +163,6 @@ async def _handle_429_batch(batch: list[tuple[str, int]], results: list,
     return four_two_nine_count, consecutive_batches_429, stop_reason
 
 
-# Per-page: record latency, add to found, enqueue new links
 def _process_batch_results(batch: list[tuple[str, int]], results: list, found: list[str],
                            page_latencies: list[int], visited: set[str], frontier: deque,
                            max_depth: int, seed_netloc: str, include_pattern: str) -> None:
@@ -225,7 +202,6 @@ def _build_bfs_stats(page_latencies: list[int], four_two_nine_count: int, stop_r
     }
 
 
-# Fetch one page; return (status_code | None, internal_links, latency_ms)
 async def fetch_page(crawler: AsyncWebCrawler, url: str,
                      run_cfg: CrawlerRunConfig) -> tuple:
     t0 = time.time()
@@ -241,7 +217,6 @@ async def fetch_page(crawler: AsyncWebCrawler, url: str,
         return None, [], latency_ms
 
 
-# Compute recall, noise, missing vs gold
 def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
     found_set = set(found_urls)
     matched = found_set & gold
@@ -259,7 +234,6 @@ def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
     }
 
 
-# Build markdown report
 def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
                   elapsed: float, concurrency: int, stealth: bool,
                   delay_s: float, page_timeout_ms: int) -> str:
@@ -343,7 +317,6 @@ def _format_early_stop(bfs_stats: dict) -> list:
     return lines
 
 
-# Save report to md/05_docs_github_rest_YYYYMMDD.md, return path
 def save_report(report: str) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"05_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"
