@@ -287,3 +287,62 @@ Lessons for a successor:
 - Facts worth keeping in these dev scripts sit in a few places: site-chrome patterns in
   `agentic_discovery`, pattern-discovery URLs in `03_cleanup/clean.py`, and the mirrors of production
   constants in the probes. Read the "Facts moved here" section above before touching them.
+
+# Phase 4 dev mirror removal (2026-09-24, issue #47 Phase 4)
+
+Owner decision: the only Phase 4 action is the drifted dev mirror; all other except-handlers in
+`dev/` and `src/` stay as they are.
+
+## What drifted
+
+`dev/logging/p1_log_janitor.py` mirrored `src/log_janitor.py` and had drifted twice: it kept the
+`try/except (ValueError, TypeError): return 14` retention fallback (removed from `src` 2026-09-09,
+`src` now raises `ValueError` on a malformed value and defaults to 90), and it read
+`SEARXNG_LOG_RETENTION_DAYS` where `src` reads `WEBSEARCH_LOG_RETENTION_DAYS`.
+`dev/logging/01_prune_test.py` imported the mirror, so it passed (`all assertions PASSED` on the
+day of this task) while asserting against code production no longer matches. A hook refuses `src/`
+imports in `dev/` outside `dev/tests/`, so the script could not simply be repointed.
+
+## Coverage table (before the change)
+
+`dev/tests/test_log_janitor.py` had two tests, both on `get_retention_days` only. No other test
+under `dev/tests/` referenced prune, `.lastprune`, `log_janitor` or the retention variable.
+
+| Behavior of `01_prune_test.py` | Covered against `src` before | Action |
+|---|---|---|
+| No marker: `maybe_prune_jsonl` keeps the 3 recent lines, drops the 2 old ones | No | ported |
+| No marker: `maybe_prune_sidecars` deletes the 2 old `*.md` files, keeps the recent one | No | ported |
+| Both `.lastprune` markers (`<log>.lastprune`, `<dir>/.lastprune`) exist after a prune | No | ported (asserted inside the two prune tests) |
+| Marker under 3600 s old: prune returns early, an appended old line survives | No | ported |
+| Marker aged 3700 s: slow path re-runs, the appended old line is pruned | No | ported |
+| Removed `(ValueError, TypeError) -> 14` fallback | `src` already tests the opposite (`ValueError`) | not ported, per owner |
+
+Not asserted by the deleted script and not ported: dropping unparseable JSONL lines and the
+sidecar unlink-failure warning.
+
+## Change
+
+- `dev/tests/test_log_janitor.py` grew from 14 to 92 LOC: 6 tests (2 existing, 4 new; the
+  no-marker prune of JSONL and of sidecars each also assert their marker). The environment variable
+  is set through `monkeypatch` to `WEBSEARCH_LOG_RETENTION_DAYS=14`, so the 20-day/2-day fixtures
+  keep their meaning.
+- `dev/logging/p1_log_janitor.py` and `dev/logging/01_prune_test.py` deleted. `dev/logging/` still
+  holds `01_audit.py`, so its `DOCS.md` stays: the two module entries and the "mirrors
+  `src/log_janitor.py`" clause were removed and the Role now points to `dev/tests/test_log_janitor.py`.
+- `dev/tests/DOCS.md`: `test_log_janitor.py` entry updated (92 LOC, new Purpose).
+- Test suite: 488 passed before, 492 passed after (four new tests).
+- Older process-docs still cite the deleted files (`logging/logging.md` names
+  `dev/log_janitor/01_prune_test.py`, a stale path even before this change). They were not edited.
+
+## Recap, Phase 4 (2026-09-24)
+
+Files changed versus `integration` for this task: `dev/tests/test_log_janitor.py`,
+`dev/tests/DOCS.md`, `dev/logging/DOCS.md`, deletion of the two `dev/logging` scripts, this file.
+DOCS.md LOC headings in `dev/tests/DOCS.md` and `dev/logging/DOCS.md` were re-checked against
+`wc -l`: no mismatch.
+
+Lessons for a successor:
+- A dev script that "tests" a copy of production code keeps passing after the copy drifts; the
+  only reliable fix is a test under `dev/tests/` that imports the production module.
+- When retargeting such a test at `src`, set the retention variable through `monkeypatch` with the
+  production name, and keep fixtures relative to the retention value (20 days old vs 2 days old at 14).
