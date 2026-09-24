@@ -31,12 +31,13 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
+
+from _brave_probe_report import write_report
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
@@ -123,7 +124,7 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records)
+    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
     ok_count = sum(1 for r in records if r["status"] == "OK")
     pow_count = sum(1 for r in records if r["pow_triggered"])
     under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
@@ -266,112 +267,6 @@ async def run_query(query: str, axis: str) -> dict:
     finally:
         await _kill_tab(tab)
     return record
-
-
-# Compute latency distribution (min/median/max) across all queries
-def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
-    ms = sorted(r["elapsed_ms"] for r in records)
-    n = len(ms)
-    median = ms[n // 2] if n % 2 else (ms[n // 2 - 1] + ms[n // 2]) // 2
-    return ms[0], median, ms[-1]
-
-
-# Write markdown data report and return path
-def write_report(records: list[dict]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"brave_probe_{ts}.md"
-
-    ok_count = sum(1 for r in records if r["status"] == "OK")
-    pow_count = sum(1 for r in records if r["pow_triggered"])
-    error_count = sum(1 for r in records if r["status"] == "ERROR")
-    under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
-    lo, med, hi = _latency_stats(records) if records else (0, 0, 0)
-
-    verdict = (
-        "CANDIDATE — real results, no PoW, all queries <= 5s"
-        if pow_count == 0 and under_gate == len(records) and ok_count == len(records)
-        else "DROP — " + (
-            f"PoW/CAPTCHA triggered on {pow_count}/{len(records)} queries" if pow_count > 0
-            else f"latency gate failed on {len(records) - under_gate}/{len(records)} queries"
-        )
-    )
-
-    lines = [
-        f"# Brave Search Go/No-Go Probe — {ts}",
-        "",
-        "Dev-only probe: real result rows + no PoW/CAPTCHA + per-query wall latency <= 5s, "
-        "run one query at a time (no gather-special-casing) via the pydoll stealth stack "
-        "(src/search/browser.py shape, self-contained here).",
-        "",
-        "## Verdict",
-        "",
-        f"**{verdict}**",
-        "",
-        "## Headline",
-        "",
-        f"- **Queries:** {len(records)}",
-        f"- **OK (results returned):** {ok_count}",
-        f"- **PoW/CAPTCHA triggered:** {pow_count}",
-        f"- **ERROR:** {error_count}",
-        f"- **Latency <= {LATENCY_GATE_S}s:** {under_gate}/{len(records)}",
-        f"- **Latency distribution (ms):** min={lo}, median={med}, max={hi}",
-        "",
-        "## Stack + Selectors",
-        "",
-        "- Stack used for this run: pydoll stealth stack (`src/search/browser.py` fingerprint "
-        "patches — disable-blink-features=AutomationControlled, real Chrome UA, webrtc-leak-protection), "
-        "headless, per-query fresh tab via new_tab()/kill_tab().",
-        "- Also tried (see module docstring): Patchright with a real Chrome binary (`channel=\"chrome\"`, "
-        "headless) — triggered a slider CAPTCHA (title `Captcha - Brave Search`, `Schieberegler ziehen` / "
-        "link to `/help/pow-captcha`) on the very first query. The SAME real-Chrome binary succeeded "
-        "headed (no CAPTCHA) — headless-ness itself, not the Chromium-vs-real-Chrome binary identity, "
-        "is what triggers Brave's PoW for the Patchright stack. Headed is not viable in production "
-        "(server pipeline, no display), so that angle is closed.",
-        "- Search URL: `https://search.brave.com/search?q=<q>` (spaces as `+`), plain GET, no consent/cookie step observed.",
-        "- Result container: `div[data-type=\"web\"]`. Title: `.search-snippet-title` inside the result anchor. "
-        "URL: `a[href^=\"http\"]` (direct destination, no redirect wrapper). Snippet: `.snippet-content .content` "
-        "(falls back to `.generic-snippet .content`).",
-        "- Block/CAPTCHA detection: `document.title` containing 'captcha', or body text containing "
-        "'schieberegler ziehen'/'drag the slider'/'proof of work', or presence of `a[href*=\"pow-captcha\"]`.",
-        "",
-        "## Per-Query Results",
-        "",
-        "| # | Query | Axis | Status | Count | PoW | Elapsed ms | <= 5s? |",
-        "|---|-------|------|--------|-------|-----|------------|--------|",
-    ]
-    for i, r in enumerate(records, 1):
-        query = r["query"][:45].replace("|", "\\|")
-        gate = "yes" if r["elapsed_ms"] <= LATENCY_GATE_S * 1000 else "NO"
-        lines.append(
-            f"| {i} | {query} | {r['axis']} | {r['status']} | {r['count']} | "
-            f"{r['pow_triggered']} | {r['elapsed_ms']} | {gate} |"
-        )
-
-    lines += ["", "## Sample Results (quality eyeball)", ""]
-    for i, r in enumerate(records, 1):
-        if not r["samples"]:
-            continue
-        lines.append(f"### [{i}] {r['query']} ({r['axis']}) — {r['count']} results")
-        lines.append("")
-        for s in r["samples"]:
-            lines.append(f"- **{s['title']}** — {s['url']}")
-            lines.append(f"  - {s['snippet']}")
-        lines.append("")
-
-    non_ok = [r for r in records if r["status"] != "OK"]
-    if non_ok:
-        lines += ["## Non-OK Details", ""]
-        for r in non_ok:
-            lines.append(f"### [{r['status']}] {r['query']} ({r['axis']})")
-            lines.append("")
-            if r.get("error"):
-                lines.append(f"- **Error:** {r['error']}")
-            if r.get("diag"):
-                lines.append(f"- **Diagnosis:** `{json.dumps(r['diag'])}`")
-            lines.append("")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

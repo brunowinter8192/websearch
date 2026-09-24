@@ -183,7 +183,21 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
     idx_b = make_index(records_b)
     eng_names = [n for n, _ in ENGINES]
 
-    lines = [
+    lines = _render_config_overview(ts)
+    lines += _render_wall_clock(records_a, records_b)
+    lines += _render_per_call_detail(eng_names, idx_a, idx_b)
+    lines += _render_mean_latency(eng_names, records_a, records_b)
+    jaccard_rows, jaccard_by_engine = _render_jaccard_pairs(eng_names, idx_a, idx_b)
+    lines += jaccard_rows
+    lines += _render_jaccard_summary(eng_names, jaccard_by_engine)
+    lines += _render_bottom_line(records_a, records_b, jaccard_by_engine)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _render_config_overview(ts: str) -> list[str]:
+    return [
         f"# Timing Ablation A vs B — {ts}",
         "",
         "## Config Overview",
@@ -206,6 +220,10 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
         "| Query | A (ms) | B (ms) | Δ ms | Δ% |",
         "|-------|--------|--------|------|-----|",
     ]
+
+
+def _render_wall_clock(records_a: list[dict], records_b: list[dict]) -> list[str]:
+    lines = []
     for q in QUERIES:
         wa = next((r["wall_ms"] for r in records_a if r["query"] == q), None)
         wb = next((r["wall_ms"] for r in records_b if r["query"] == q), None)
@@ -213,8 +231,11 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
             d   = wb - wa
             pct = f"{d / wa * 100:+.1f}%" if wa else "n/a"
             lines.append(f"| {q} | {wa} | {wb} | {d:+d} | {pct} |")
+    return lines
 
-    lines += [
+
+def _render_per_call_detail(eng_names: list[str], idx_a: dict, idx_b: dict) -> list[str]:
+    lines = [
         "",
         "---",
         "",
@@ -235,8 +256,11 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
             a_stat = ra["status"] if ra else "—"
             b_stat = rb["status"] if rb else "—"
             lines.append(f"| {eng} | {q} | {a_ms} | {b_ms} | {d_str} | {a_stat} | {b_stat} |")
+    return lines
 
-    lines += [
+
+def _render_mean_latency(eng_names: list[str], records_a: list[dict], records_b: list[dict]) -> list[str]:
+    lines = [
         "",
         "### Mean Latency Per Engine (across 3 queries)",
         "",
@@ -252,8 +276,11 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
             d  = bm - am
             pct = f"{d / am * 100:+.1f}%" if am else "n/a"
             lines.append(f"| {eng} | {am} | {bm} | {d:+d} | {pct} |")
+    return lines
 
-    lines += [
+
+def _render_jaccard_pairs(eng_names: list[str], idx_a: dict, idx_b: dict) -> tuple[list[str], dict]:
+    lines = [
         "",
         "---",
         "",
@@ -277,8 +304,11 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
                 f"| {eng} | {q} | {len(ua)} | {len(ub)} | "
                 f"{len(ua & ub)} | {len(ua | ub)} | {j:.3f} |"
             )
+    return lines, jaccard_by_engine
 
-    lines += [
+
+def _render_jaccard_summary(eng_names: list[str], jaccard_by_engine: dict) -> list[str]:
+    lines = [
         "",
         "### Per-Engine Jaccard Summary",
         "",
@@ -289,45 +319,20 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
         jv = jaccard_by_engine[eng]
         if jv:
             lines.append(f"| {eng} | {mean(jv):.3f} | {min(jv):.3f} |")
+    return lines
 
+
+def _render_bottom_line(records_a: list[dict], records_b: list[dict], jaccard_by_engine: dict) -> list[str]:
     # Bottom line
     all_j  = [j for vals in jaccard_by_engine.values() for j in vals]
     mean_j = mean(all_j) if all_j else 0.0
     min_j  = min(all_j)  if all_j else 0.0
 
-    scholar_a = [r["latency_ms"] for r in records_a if r["engine"] == "google_scholar"]
-    scholar_b = [r["latency_ms"] for r in records_b if r["engine"] == "google_scholar"]
-    scholar_note = ""
-    if scholar_a and scholar_b:
-        sa = round(mean(scholar_a))
-        sb = round(mean(scholar_b))
-        scholar_note = f"Scholar mean latency: {sa}ms (A) → {sb}ms (B), Δ {sb-sa:+d}ms."
+    scholar_note = _scholar_note(records_a, records_b)
+    wall_note = _wall_note(records_a, records_b)
+    verdict = _verdict(min_j)
 
-    wall_a_vals = list(dict.fromkeys(r["wall_ms"] for r in records_a))
-    wall_b_vals = list(dict.fromkeys(r["wall_ms"] for r in records_b))
-    wall_note = ""
-    if wall_a_vals and wall_b_vals:
-        wa = round(mean(wall_a_vals))
-        wb = round(mean(wall_b_vals))
-        wall_note = f"Mean per-query wall-clock: {wa}ms (A) → {wb}ms (B), Δ {wb-wa:+d}ms."
-
-    if min_j >= 0.95:
-        verdict = (
-            "**EQUIVALENT** — URL sets stable across all engines (min Jaccard ≥ 0.95). "
-            "CONFIG B is safe to adopt. Scholar polling reduction carries no result loss."
-        )
-    elif min_j >= 0.80:
-        verdict = (
-            "**MOSTLY EQUIVALENT** — Minor divergence in at least one engine (min Jaccard < 0.95). "
-            "Investigate the engine(s) with lowest Jaccard before adopting B wholesale."
-        )
-    else:
-        verdict = (
-            "**NOT EQUIVALENT** — Significant URL divergence (min Jaccard < 0.80). "
-            "CONFIG B causes result loss. Do not adopt; investigate per-engine failure."
-        )
-
-    lines += [
+    return [
         "",
         "---",
         "",
@@ -340,8 +345,45 @@ def write_report(records_a: list[dict], records_b: list[dict]) -> Path:
         f"**Verdict:** {verdict}",
     ]
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+
+def _scholar_note(records_a: list[dict], records_b: list[dict]) -> str:
+    scholar_a = [r["latency_ms"] for r in records_a if r["engine"] == "google_scholar"]
+    scholar_b = [r["latency_ms"] for r in records_b if r["engine"] == "google_scholar"]
+    scholar_note = ""
+    if scholar_a and scholar_b:
+        sa = round(mean(scholar_a))
+        sb = round(mean(scholar_b))
+        scholar_note = f"Scholar mean latency: {sa}ms (A) → {sb}ms (B), Δ {sb-sa:+d}ms."
+    return scholar_note
+
+
+def _wall_note(records_a: list[dict], records_b: list[dict]) -> str:
+    wall_a_vals = list(dict.fromkeys(r["wall_ms"] for r in records_a))
+    wall_b_vals = list(dict.fromkeys(r["wall_ms"] for r in records_b))
+    wall_note = ""
+    if wall_a_vals and wall_b_vals:
+        wa = round(mean(wall_a_vals))
+        wb = round(mean(wall_b_vals))
+        wall_note = f"Mean per-query wall-clock: {wa}ms (A) → {wb}ms (B), Δ {wb-wa:+d}ms."
+    return wall_note
+
+
+def _verdict(min_j: float) -> str:
+    if min_j >= 0.95:
+        return (
+            "**EQUIVALENT** — URL sets stable across all engines (min Jaccard ≥ 0.95). "
+            "CONFIG B is safe to adopt. Scholar polling reduction carries no result loss."
+        )
+    elif min_j >= 0.80:
+        return (
+            "**MOSTLY EQUIVALENT** — Minor divergence in at least one engine (min Jaccard < 0.95). "
+            "Investigate the engine(s) with lowest Jaccard before adopting B wholesale."
+        )
+    else:
+        return (
+            "**NOT EQUIVALENT** — Significant URL divergence (min Jaccard < 0.80). "
+            "CONFIG B causes result loss. Do not adopt; investigate per-engine failure."
+        )
 
 
 if __name__ == "__main__":

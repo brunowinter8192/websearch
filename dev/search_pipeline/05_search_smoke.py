@@ -119,7 +119,18 @@ def _write_report(records: list[dict], engine_names: list[str]) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"search_smoke_{ts}.md"
 
-    lines = [
+    lines = _render_header(records, engine_names, ts)
+    lines += _render_summary_table(records, engine_names)
+    lines += ["", "---", ""]
+    for qi, r in enumerate(records, 1):
+        lines += _render_query_section(qi, r, engine_names)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _render_header(records: list[dict], engine_names: list[str], ts: str) -> list[str]:
+    return [
         f"# Multi-Engine Search Smoke — {ts}",
         "",
         f"**Engines:** {', '.join(engine_names)}  ",
@@ -130,10 +141,12 @@ def _write_report(records: list[dict], engine_names: list[str]) -> Path:
         "",
     ]
 
+
+def _render_summary_table(records: list[dict], engine_names: list[str]) -> list[str]:
     # Build column headers dynamically
     engine_cols = " | ".join(f"{e.capitalize()}" for e in engine_names)
     header_sep = " | ".join("---" for _ in engine_names)
-    lines += [
+    lines = [
         f"| # | Query | {engine_cols} | Both | Total URLs | Preview OK |",
         f"|---|-------|{header_sep}|------|------------|------------|",
     ]
@@ -143,59 +156,63 @@ def _write_report(records: list[dict], engine_names: list[str]) -> Path:
         lines.append(
             f"| {i} | {q} | {engine_counts} | {r['overlap']} | {r['total_urls']} | {r['preview_ok']} |"
         )
+    return lines
 
+
+def _render_query_section(qi: int, r: dict, engine_names: list[str]) -> list[str]:
     # Per-query detail sections
-    lines += ["", "---", ""]
-    for qi, r in enumerate(records, 1):
-        lines += [f"## Query {qi}: {r['query']}", ""]
+    lines = [f"## Query {qi}: {r['query']}", ""]
 
-        if not r["merged"]:
-            lines += ["*No results from any engine.*", ""]
-            continue
+    if not r["merged"]:
+        lines += ["*No results from any engine.*", ""]
+        return lines
 
-        # Mini stats table
-        lines += [
-            "| Metric | Value |",
-            "|--------|-------|",
-            f"| Total URLs | {r['total_urls']} |",
-        ]
-        for e in engine_names:
-            lines.append(f"| {e.capitalize()} results | {r['engine_counts'].get(e, 0)} |")
-        lines += [
-            f"| Found by both | {r['overlap']} |",
-            f"| Preview fetched | {r['preview_ok']}/{r['total_urls']} |",
-            "",
-            "---",
-            "",
-        ]
+    # Mini stats table
+    lines += [
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Total URLs | {r['total_urls']} |",
+    ]
+    for e in engine_names:
+        lines.append(f"| {e.capitalize()} results | {r['engine_counts'].get(e, 0)} |")
+    lines += [
+        f"| Found by both | {r['overlap']} |",
+        f"| Preview fetched | {r['preview_ok']}/{r['total_urls']} |",
+        "",
+        "---",
+        "",
+    ]
 
-        for idx, (url, data) in enumerate(r["merged"].items(), 1):
-            title = data["title"].replace("|", "\\|")
-            engine_badges = " ".join(f"`{e}`" for e in sorted(data["snippets"].keys()))
-            lines += [f"### [{idx}] {url}", f"**Title:** {title}  ", f"**Engines:** {engine_badges}", ""]
+    for idx, (url, data) in enumerate(r["merged"].items(), 1):
+        lines += _render_url_entry(idx, url, data, engine_names)
+    return lines
 
-            for e in engine_names:
-                if e in data["snippets"] and data["snippets"][e]:
-                    snip = data["snippets"][e][:400].replace("\n", " ")
-                    lines += [f"**Snippet [{e}]:**", snip, ""]
-                elif e in data["snippets"]:
-                    lines += [f"**Snippet [{e}]:** *(empty)*", ""]
 
-            if data["preview"]:
-                og = data["preview"].get("og")
-                meta = data["preview"].get("meta")
-                if og:
-                    lines += [f"**Preview (og):** {og}", ""]
-                if meta and meta != og:
-                    lines += [f"**Preview (meta):** {meta}", ""]
-            else:
-                lines += ["*(no preview)*", ""]
+def _render_url_entry(idx: int, url: str, data: dict, engine_names: list[str]) -> list[str]:
+    title = data["title"].replace("|", "\\|")
+    engine_badges = " ".join(f"`{e}`" for e in sorted(data["snippets"].keys()))
+    lines = [f"### [{idx}] {url}", f"**Title:** {title}  ", f"**Engines:** {engine_badges}", ""]
 
-            lines.append("---")
-            lines.append("")
+    for e in engine_names:
+        if e in data["snippets"] and data["snippets"][e]:
+            snip = data["snippets"][e][:400].replace("\n", " ")
+            lines += [f"**Snippet [{e}]:**", snip, ""]
+        elif e in data["snippets"]:
+            lines += [f"**Snippet [{e}]:** *(empty)*", ""]
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    if data["preview"]:
+        og = data["preview"].get("og")
+        meta = data["preview"].get("meta")
+        if og:
+            lines += [f"**Preview (og):** {og}", ""]
+        if meta and meta != og:
+            lines += [f"**Preview (meta):** {meta}", ""]
+    else:
+        lines += ["*(no preview)*", ""]
+
+    lines.append("---")
+    lines.append("")
+    return lines
 
 
 if __name__ == "__main__":

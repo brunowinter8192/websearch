@@ -31,13 +31,14 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
+
+from _bing_probe_report import write_report
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
@@ -124,7 +125,7 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records)
+    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
     ok_count = sum(1 for r in records if r["status"] == "OK")
     block_count = sum(1 for r in records if r["status"] == "BLOCKED")
     under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
@@ -287,113 +288,6 @@ async def run_query(query: str, axis: str) -> dict:
     finally:
         await _kill_tab(tab)
     return record
-
-
-# Compute latency distribution (min/median/max) across all queries
-def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
-    ms = sorted(r["elapsed_ms"] for r in records)
-    n = len(ms)
-    median = ms[n // 2] if n % 2 else (ms[n // 2 - 1] + ms[n // 2]) // 2
-    return ms[0], median, ms[-1]
-
-
-# Write markdown data report and return path
-def write_report(records: list[dict]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"bing_probe_{ts}.md"
-
-    ok_count = sum(1 for r in records if r["status"] == "OK")
-    blocked_count = sum(1 for r in records if r["status"] == "BLOCKED")
-    empty_count = sum(1 for r in records if r["status"] == "EMPTY")
-    error_count = sum(1 for r in records if r["status"] == "ERROR")
-    under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
-    lo, med, hi = _latency_stats(records) if records else (0, 0, 0)
-
-    verdict = (
-        "CANDIDATE — real results, no persistent block, usable latency"
-        if ok_count == len(records) and under_gate == len(records)
-        else "DROP — " + (
-            f"blocked on {blocked_count}/{len(records)} queries" if blocked_count > 0
-            else f"latency gate failed on {len(records) - under_gate}/{len(records)} queries"
-            if under_gate < len(records)
-            else f"only {ok_count}/{len(records)} returned results"
-        )
-    )
-
-    lines = [
-        f"# Bing Scrapeability Probe — {ts}",
-        "",
-        "Go/no-go data probe (dev-only) for bing.com as a second, independent access path to the "
-        "Bing web index (redundant to DuckDuckGo) — question is SCRAPEABILITY + LATENCY, not "
-        "coverage (overlap with DDG is expected and fine by design).",
-        "",
-        "## Verdict",
-        "",
-        f"**{verdict}**",
-        "",
-        "## Headline",
-        "",
-        f"- **Queries:** {len(records)}",
-        f"- **OK (results returned):** {ok_count}",
-        f"- **BLOCKED (explicit marker):** {blocked_count}",
-        f"- **EMPTY (no results, no marker):** {empty_count}",
-        f"- **ERROR:** {error_count}",
-        f"- **Latency <= {LATENCY_GATE_S}s:** {under_gate}/{len(records)}",
-        f"- **Latency distribution (ms):** min={lo}, median={med}, max={hi}",
-        "",
-        "## URL / Selector Findings",
-        "",
-        "- Search URL: `https://www.bing.com/search?q=<q>` (spaces as `+`), plain GET, no consent/form step required.",
-        "- Old selector `#b_results .b_algo` had NOT actually drifted structurally — "
-        "`li.b_algo` inside `#b_results` is still the live result container (10/page).",
-        "- Title + href: `h2 a` inside each `li.b_algo`. Snippet: `.b_caption p` (falls back to `.b_caption`).",
-        "- **New since the old evaluation:** every organic href is wrapped in a "
-        "`bing.com/ck/a?...&u=<prefixed-base64>&...` tracking redirect — unwrapped by parsing the "
-        "`u` query param, stripping its 2-char prefix (observed: `a1`), then base64url-decoding "
-        "(with padding) to recover the real destination URL.",
-        "- A Microsoft cookie/consent banner is present in the DOM (`Microsoft und unsere "
-        "Drittanbieter verwenden Cookies...`) but does NOT gate result rendering — `li.b_algo` "
-        "content is fully present in the DOM alongside it; no click/accept step needed for scraping.",
-        "- Block detection: title/body scan for EN + DE bot-check phrasing "
-        "(`captcha`, `unusual traffic`, `verify you are human`, `ungewöhnlichen datenverkehr`, etc.).",
-        "",
-        "## Per-Query Results",
-        "",
-        "| # | Query | Axis | Status | Count | Elapsed ms | <= 5s? |",
-        "|---|-------|------|--------|-------|------------|--------|",
-    ]
-    for i, r in enumerate(records, 1):
-        query = r["query"][:45].replace("|", "\\|")
-        gate = "yes" if r["elapsed_ms"] <= LATENCY_GATE_S * 1000 else "NO"
-        lines.append(
-            f"| {i} | {query} | {r['axis']} | {r['status']} | {r['count']} | {r['elapsed_ms']} | {gate} |"
-        )
-
-    lines += ["", "## Sample Results (quality eyeball)", ""]
-    for i, r in enumerate(records, 1):
-        if not r["samples"]:
-            continue
-        lines.append(f"### [{i}] {r['query']} ({r['axis']}) — {r['count']} results")
-        lines.append("")
-        for s in r["samples"]:
-            lines.append(f"- **{s['title']}** — {s['url']}")
-            lines.append(f"  - {s['snippet']}")
-        lines.append("")
-
-    non_ok = [r for r in records if r["status"] != "OK"]
-    if non_ok:
-        lines += ["## Non-OK Details", ""]
-        for r in non_ok:
-            lines.append(f"### [{r['status']}] {r['query']} ({r['axis']})")
-            lines.append("")
-            if r.get("error"):
-                lines.append(f"- **Error:** {r['error']}")
-            if r.get("diag"):
-                lines.append(f"- **Diagnosis:** `{json.dumps(r['diag'])}`")
-            lines.append("")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

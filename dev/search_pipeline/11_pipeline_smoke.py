@@ -64,29 +64,11 @@ async def run_pipeline_smoke(max_queries: int | None, language: str, engine_time
             )
             if qi in {4, 8, 12, 16, 20}:
                 elapsed = round(time.perf_counter() - t_run_start, 1)
-                seg_records = records[prev_qi:qi]
-                seg_s = elapsed - prev_elapsed
-                avg_per_q = round(seg_s / len(seg_records), 1)
-                ok_count = 0
-                rs_count = 0
-                for rec in seg_records:
-                    for info in (rec["timings"] or {}).get("engine_details", {}).values():
-                        st = info.get("status", "")
-                        if st == "OK":
-                            ok_count += 1
-                        elif st == "RATE_SKIP":
-                            rs_count += 1
-                cp = {
-                    "milestone": f"Q{qi}",
-                    "cumulative_s": elapsed,
-                    "avg_per_q_s": avg_per_q,
-                    "engines_ok": ok_count,
-                    "engines_rate_skip": rs_count,
-                }
+                cp = _build_checkpoint(records, prev_qi, qi, elapsed, prev_elapsed)
                 checkpoints.append(cp)
                 print(
-                    f"[CHECKPOINT Q{qi}] cumulative={elapsed}s avg/q={avg_per_q}s "
-                    f"ok={ok_count} rate_skip={rs_count}",
+                    f"[CHECKPOINT Q{qi}] cumulative={cp['cumulative_s']}s avg/q={cp['avg_per_q_s']}s "
+                    f"ok={cp['engines_ok']} rate_skip={cp['engines_rate_skip']}",
                     file=sys.stderr,
                 )
                 prev_qi = qi
@@ -107,6 +89,28 @@ def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     qs = [ln.strip() for ln in lines if ln.strip()]
     return qs[:max_queries] if max_queries else qs
+
+
+def _build_checkpoint(records: list[dict], prev_qi: int, qi: int, elapsed: float, prev_elapsed: float) -> dict:
+    seg_records = records[prev_qi:qi]
+    seg_s = elapsed - prev_elapsed
+    avg_per_q = round(seg_s / len(seg_records), 1)
+    ok_count = 0
+    rs_count = 0
+    for rec in seg_records:
+        for info in (rec["timings"] or {}).get("engine_details", {}).values():
+            st = info.get("status", "")
+            if st == "OK":
+                ok_count += 1
+            elif st == "RATE_SKIP":
+                rs_count += 1
+    return {
+        "milestone": f"Q{qi}",
+        "cumulative_s": elapsed,
+        "avg_per_q_s": avg_per_q,
+        "engines_ok": ok_count,
+        "engines_rate_skip": rs_count,
+    }
 
 
 # Build per-query record: total URL count, per-engine URL counts from pools, timings
@@ -229,6 +233,31 @@ def _render_timing_checkpoints(checkpoints: list[dict]) -> list[str]:
 
 # Per-engine reliability baseline: full status breakdown, mean/p95 search_ms for OK entries
 def _render_engine_reliability(records: list[dict]) -> list[str]:
+    engine_data = _collect_engine_data(records)
+    if not engine_data:
+        return []
+
+    L = _reliability_header()
+
+    for eng in sorted(engine_data):
+        d = engine_data[eng]
+        c = d["counts"]
+        n = sum(c.values())
+        if n == 0:
+            continue
+        L.append(_render_engine_row(eng, c, n, d["ok_ms"]))
+
+    top3_str = _top3_bottleneck(records)
+
+    L += [
+        "",
+        f"**Top-3 bottleneck engines** (most queries where this engine had highest search_ms): {top3_str}",
+        "",
+    ]
+    return L
+
+
+def _collect_engine_data(records: list[dict]) -> dict[str, dict[str, Any]]:
     # Collect per-engine: status counts, OK search_ms list. EMPTY_NO_RESULTS/EMPTY_NO_CONTAINER/
     # EMPTY_CONSENT/EMPTY_BLOCK/EMPTY_CONCURRENT_RACE were removed with the guessed-verdict
     # sub-statuses — every empty result now logs bare "EMPTY", tracked as its own key below so it
@@ -250,9 +279,10 @@ def _render_engine_reliability(records: list[dict]) -> list[str]:
             engine_data[eng]["counts"][key] += 1
             if st == "OK":
                 engine_data[eng]["ok_ms"].append(info.get("ms", 0))
-    if not engine_data:
-        return []
+    return engine_data
 
+
+def _reliability_header() -> list[str]:
     # Header
     cols = [
         "Engine", "n",
@@ -263,7 +293,7 @@ def _render_engine_reliability(records: list[dict]) -> list[str]:
     ]
     sep = "|" + "|".join(["---"] * len(cols)) + "|"
     header = "|" + "|".join(cols) + "|"
-    L: list[str] = [
+    return [
         "",
         "## Per-Engine Reliability Baseline",
         "",
@@ -274,36 +304,31 @@ def _render_engine_reliability(records: list[dict]) -> list[str]:
         sep,
     ]
 
+
+def _render_engine_row(eng: str, c: dict, n: int, ok_ms: list) -> str:
+    def pct(k: str) -> str:
+        v = c.get(k, 0)
+        return f"{round(v / n * 100)}" if v else "0"
+
+    if ok_ms:
+        mean_ms = round(statistics.mean(ok_ms))
+        p95_ms = round(statistics.quantiles(ok_ms, n=20)[18]) if len(ok_ms) >= 2 else ok_ms[0]
+    else:
+        mean_ms = "—"
+        p95_ms = "—"
+
+    return (
+        f"| {eng} | {n} "
+        f"| {pct('OK')} | {pct('EMPTY')} "
+        f"| {pct('TIMEOUT_WATCHDOG')} | {pct('TIMEOUT_NONCOOP')} | {pct('TIMEOUT_HTTPX')} "
+        f"| {pct('ERROR_BROWSER')} | {pct('ERROR_HTTP')} | {pct('ERROR_PARSE')} | {pct('ERROR_OTHER')} "
+        f"| {pct('RATE_SKIP')} | {mean_ms} | {p95_ms} |"
+    )
+
+
+def _top3_bottleneck(records: list[dict]) -> str:
     # Bottleneck tracking
     bottleneck_counts: dict[str, int] = {}
-
-    for eng in sorted(engine_data):
-        d = engine_data[eng]
-        c = d["counts"]
-        n = sum(c.values())
-        if n == 0:
-            continue
-
-        def pct(k: str) -> str:
-            v = c.get(k, 0)
-            return f"{round(v / n * 100)}" if v else "0"
-
-        ok_ms = d["ok_ms"]
-        if ok_ms:
-            mean_ms = round(statistics.mean(ok_ms))
-            p95_ms = round(statistics.quantiles(ok_ms, n=20)[18]) if len(ok_ms) >= 2 else ok_ms[0]
-        else:
-            mean_ms = "—"
-            p95_ms = "—"
-
-        L.append(
-            f"| {eng} | {n} "
-            f"| {pct('OK')} | {pct('EMPTY')} "
-            f"| {pct('TIMEOUT_WATCHDOG')} | {pct('TIMEOUT_NONCOOP')} | {pct('TIMEOUT_HTTPX')} "
-            f"| {pct('ERROR_BROWSER')} | {pct('ERROR_HTTP')} | {pct('ERROR_PARSE')} | {pct('ERROR_OTHER')} "
-            f"| {pct('RATE_SKIP')} | {mean_ms} | {p95_ms} |"
-        )
-
     # Top-3 bottleneck engines: which engine had highest search_ms most often per query
     for r in records:
         det = (r["timings"] or {}).get("engine_details", {})
@@ -312,14 +337,7 @@ def _render_engine_reliability(records: list[dict]) -> list[str]:
         slowest = max(det, key=lambda e: det[e].get("ms", 0))
         bottleneck_counts[slowest] = bottleneck_counts.get(slowest, 0) + 1
     top3 = sorted(bottleneck_counts, key=lambda e: bottleneck_counts[e], reverse=True)[:3]
-    top3_str = ", ".join(f"{e} ({bottleneck_counts[e]}×)" for e in top3) if top3 else "—"
-
-    L += [
-        "",
-        f"**Top-3 bottleneck engines** (most queries where this engine had highest search_ms): {top3_str}",
-        "",
-    ]
-    return L
+    return ", ".join(f"{e} ({bottleneck_counts[e]}×)" for e in top3) if top3 else "—"
 
 
 # Write markdown report to md/<prefix>_<ts>.md, return path

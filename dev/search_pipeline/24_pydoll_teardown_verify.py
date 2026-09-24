@@ -117,6 +117,28 @@ async def _test_kill_tab_hung(lines: list) -> dict:
     renderers_before = _count_renderers()
     lines.append(f"Renderer count before: {renderers_before}")
 
+    target_id_seen, timed_out, wall_ms = await _run_hung_op(lines)
+
+    tabs_open = _browser_mod._browser._tabs_opened if _browser_mod._browser else {}
+    registry_clean = (target_id_seen not in tabs_open) if target_id_seen else True
+
+    await asyncio.sleep(0.3)
+    renderers_after = _count_renderers()
+    renderers_delta = renderers_before - renderers_after
+
+    passed = timed_out and wall_ms < FAST_THRESHOLD_MS and registry_clean
+
+    lines.append(f"TimeoutError raised: {timed_out}")
+    lines.append(f"Wall time: **{wall_ms}ms** (vs old ~65000ms hang)")
+    lines.append(f"Registry clean (tab_id gone): {registry_clean}  (target_id={target_id_seen})")
+    lines.append(f"Renderer count after: {renderers_after} (delta={renderers_delta:+d})")
+    lines.append(f"**Result: {'PASS' if passed else 'FAIL'}**")
+    lines.append("")
+
+    return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
+
+
+async def _run_hung_op(lines: list) -> tuple:
     target_id_seen = None
     timed_out = False
 
@@ -145,24 +167,7 @@ async def _test_kill_tab_hung(lines: list) -> dict:
         lines.append(f"Unexpected exception: {type(e).__name__}: {e}")
 
     wall_ms = round((time.perf_counter() - t0) * 1000)
-
-    tabs_open = _browser_mod._browser._tabs_opened if _browser_mod._browser else {}
-    registry_clean = (target_id_seen not in tabs_open) if target_id_seen else True
-
-    await asyncio.sleep(0.3)
-    renderers_after = _count_renderers()
-    renderers_delta = renderers_before - renderers_after
-
-    passed = timed_out and wall_ms < FAST_THRESHOLD_MS and registry_clean
-
-    lines.append(f"TimeoutError raised: {timed_out}")
-    lines.append(f"Wall time: **{wall_ms}ms** (vs old ~65000ms hang)")
-    lines.append(f"Registry clean (tab_id gone): {registry_clean}  (target_id={target_id_seen})")
-    lines.append(f"Renderer count after: {renderers_after} (delta={renderers_delta:+d})")
-    lines.append(f"**Result: {'PASS' if passed else 'FAIL'}**")
-    lines.append("")
-
-    return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
+    return target_id_seen, timed_out, wall_ms
 
 
 # Baseline: normal tab, no hang — kill_tab should still work correctly
@@ -237,6 +242,34 @@ async def _test_batch_parallel_hung(lines: list) -> dict:
     cdp_baseline = await _count_cdp_targets()
     lines.append(f"CDP page-targets baseline: {cdp_baseline}")
 
+    collected_ids, all_timed_out, wall_ms = await _run_batch_hung(lines)
+
+    await asyncio.sleep(0.3)
+    cdp_after = await _count_cdp_targets()
+    cdp_targets_delta = cdp_after - cdp_baseline
+
+    tabs_open = _browser_mod._browser._tabs_opened if _browser_mod._browser else {}
+    orphaned_ids = [tid for tid in collected_ids if tid and tid in tabs_open]
+    registry_clean = len(orphaned_ids) == 0
+
+    passed = all_timed_out and wall_ms < FAST_THRESHOLD_MS and registry_clean and cdp_targets_delta == 0
+
+    lines.append(f"All {BATCH_N} tasks timed out (watchdog fired): {all_timed_out}")
+    lines.append(f"Wall time: **{wall_ms}ms** (vs old up to {BATCH_N}×65s={BATCH_N*65000}ms sequential hang)")
+    lines.append(f"CDP page-targets after: {cdp_after} (Δ={cdp_targets_delta:+d} vs baseline)")
+    lines.append(f"Registry clean (no orphaned tab IDs): {registry_clean}  orphaned={orphaned_ids}")
+    lines.append(f"**Result: {'PASS' if passed else 'FAIL'}**")
+    lines.append("")
+
+    return {
+        'pass': passed,
+        'wall_ms': wall_ms,
+        'registry_clean': registry_clean,
+        'cdp_targets_delta': cdp_targets_delta,
+    }
+
+
+async def _run_batch_hung(lines: list) -> tuple[list, bool, int]:
     collected_ids: list = []
     all_timed_out = True
 
@@ -272,30 +305,7 @@ async def _test_batch_parallel_hung(lines: list) -> dict:
     t0 = time.perf_counter()
     await asyncio.gather(*[_watchdog_wrapped(i) for i in range(BATCH_N)])
     wall_ms = round((time.perf_counter() - t0) * 1000)
-
-    await asyncio.sleep(0.3)
-    cdp_after = await _count_cdp_targets()
-    cdp_targets_delta = cdp_after - cdp_baseline
-
-    tabs_open = _browser_mod._browser._tabs_opened if _browser_mod._browser else {}
-    orphaned_ids = [tid for tid in collected_ids if tid and tid in tabs_open]
-    registry_clean = len(orphaned_ids) == 0
-
-    passed = all_timed_out and wall_ms < FAST_THRESHOLD_MS and registry_clean and cdp_targets_delta == 0
-
-    lines.append(f"All {BATCH_N} tasks timed out (watchdog fired): {all_timed_out}")
-    lines.append(f"Wall time: **{wall_ms}ms** (vs old up to {BATCH_N}×65s={BATCH_N*65000}ms sequential hang)")
-    lines.append(f"CDP page-targets after: {cdp_after} (Δ={cdp_targets_delta:+d} vs baseline)")
-    lines.append(f"Registry clean (no orphaned tab IDs): {registry_clean}  orphaned={orphaned_ids}")
-    lines.append(f"**Result: {'PASS' if passed else 'FAIL'}**")
-    lines.append("")
-
-    return {
-        'pass': passed,
-        'wall_ms': wall_ms,
-        'registry_clean': registry_clean,
-        'cdp_targets_delta': cdp_targets_delta,
-    }
+    return collected_ids, all_timed_out, wall_ms
 
 
 if __name__ == "__main__":
