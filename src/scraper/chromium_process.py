@@ -21,6 +21,8 @@ FOCUS_STEAL_POLL_INTERVAL_S = 0.25
 
 TOTAL_SCRAPE_BUDGET_S = 242.8
 
+_osascript_warned: set[str] = set()
+
 
 # FUNCTIONS
 
@@ -50,6 +52,13 @@ def _build_self_launch_flags(browser_config: BrowserConfig) -> list[str]:
     return flags
 
 
+def _warn_osascript_once(what: str, detail: str) -> None:
+    if what in _osascript_warned:
+        return
+    _osascript_warned.add(what)
+    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
+
+
 def _get_frontmost_app() -> str:
     result = subprocess.run(
         [
@@ -58,17 +67,22 @@ def _get_frontmost_app() -> str:
         ],
         capture_output=True, text=True,
     )
-    return result.stdout.strip()
+    name = result.stdout.strip()
+    if result.returncode != 0 or not name:
+        _warn_osascript_once("get_frontmost", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
+    return name
 
 
 def _activate_app(app_name: str) -> None:
-    subprocess.run(
+    result = subprocess.run(
         [
             "osascript", "-e",
             f'tell application "System Events" to set frontmost of process "{app_name}" to true',
         ],
         capture_output=True, text=True,
     )
+    if result.returncode != 0:
+        _warn_osascript_once("activate", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
 
 
 async def _focus_steal_watchdog(app_name: str) -> None:

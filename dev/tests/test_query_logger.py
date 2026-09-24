@@ -90,18 +90,15 @@ def test_log_query_appends(tmp_path, monkeypatch):
     assert json.loads(lines[1])["query"] == "b"
 
 
-def test_log_query_fail_soft(tmp_path, caplog, monkeypatch):
+def test_log_query_unwritable_path_raises(tmp_path, monkeypatch):
     import src.search.query_logger as ql
 
     blocker = tmp_path / "blocked"
     blocker.write_text("i am a file")
-    bad_path = blocker / "nested" / "query_log.jsonl"
-    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(bad_path))
+    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(blocker / "nested" / "query_log.jsonl"))
 
-    with caplog.at_level(logging.WARNING, logger="src.search.query_logger"):
-        ql.log_query({"query": "should not crash"})
-
-    assert any("query_log write failed" in m for m in caplog.messages)
+    with pytest.raises(OSError):
+        ql.log_query({"query": "must not be swallowed"})
 
 
 @pytest.mark.asyncio
@@ -124,8 +121,13 @@ async def test_engine_with_timing_ok():
 
 
 @pytest.mark.asyncio
-async def test_engine_with_timing_timeout():
+async def test_engine_with_timing_timeout(monkeypatch):
+    from types import SimpleNamespace
+    from src.search import search_web
     from src.search.search_web import _engine_with_timing
+
+    ticks = iter(range(1, 100))
+    monkeypatch.setattr(search_web, "time", SimpleNamespace(perf_counter=lambda: next(ticks) * 0.001))
 
     slow = _make_mock_engine_with_reason("slow_eng", [], delay=5.0)
 
@@ -142,8 +144,13 @@ async def test_engine_with_timing_timeout():
 
 
 @pytest.mark.asyncio
-async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation():
+async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation(monkeypatch):
+    from types import SimpleNamespace
+    from src.search import search_web
     from src.search.search_web import _engine_with_timing
+
+    ticks = iter(range(1, 100))
+    monkeypatch.setattr(search_web, "time", SimpleNamespace(perf_counter=lambda: next(ticks) * 0.001))
 
     slow = _make_mock_engine_with_reason(
         "slow_eng", [], delay=5.0,
@@ -231,7 +238,7 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
 
     assert rec["bottleneck_engine"] in ("google", "duckduckgo")
     assert "search_key" in rec
-    assert rec["engines_excluded"] == {}
+    assert "engines_excluded" not in rec
 
 
 @pytest.mark.asyncio

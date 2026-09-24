@@ -273,3 +273,33 @@ async def test_navtree_feeder_workflow_malformed_next_data_is_failed_with_error(
     result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.error
+
+
+def _versioned_payload():
+    return {"props": {"pageProps": {"mainContext": {
+        "sidebarTree": {"href": "/de/guide", "childPages": [{"href": "/de/guide/intro", "childPages": []}]},
+        "allVersions": {"v1": {"version": "v1"}, "v2": {"version": "v2"}},
+        "currentVersion": "v1",
+        "currentPathWithoutLanguage": "/guide",
+    }}}}
+
+
+@pytest.mark.asyncio
+async def test_resolve_navigation_tree_absent_version_page_is_logged_and_skipped(caplog):
+    routes = {"https://docs.example.com/de/guide": _FakeResponse(200, text=_next_data_html(_versioned_payload()))}
+    client = _FakeAsyncClient(routes)
+    with caplog.at_level("WARNING", logger="src.crawler.seed_feeders_navtree"):
+        urls, _, _ = await resolve_navigation_tree(client, "https://docs.example.com/de/guide")
+    assert "https://docs.example.com/de/guide/intro" in urls
+    assert any("https://docs.example.com/de/v2/guide" in m for m in caplog.messages)
+
+
+@pytest.mark.asyncio
+async def test_resolve_navigation_tree_version_page_server_error_raises():
+    routes = {
+        "https://docs.example.com/de/guide": _FakeResponse(200, text=_next_data_html(_versioned_payload())),
+        "https://docs.example.com/de/v2/guide": _FakeResponse(503),
+    }
+    client = _FakeAsyncClient(routes)
+    with pytest.raises(RuntimeError, match="503"):
+        await resolve_navigation_tree(client, "https://docs.example.com/de/guide")

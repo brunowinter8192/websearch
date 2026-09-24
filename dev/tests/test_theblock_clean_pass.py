@@ -114,3 +114,10 @@ def test_bodyless_urls_union_merged(dirs):
     assert BODYLESS_URL in lines
     assert extra_url in lines
     assert lines == sorted(lines), "bodyless_urls.txt must be sorted"
+
+
+def test_missing_raw_file_raises(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    with pytest.raises(FileNotFoundError):
+        _run_clean_pass(_PLATFORM, _entries(), raw_dir, tmp_path / "collection", _LOG)

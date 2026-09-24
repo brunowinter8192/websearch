@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from src.search.browser import new_tab, kill_tab
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
+from src.search.selector_hits import collect_selector_hits
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
@@ -27,12 +28,19 @@ var _out = [];
 for (var _i = 0; _i < _cs.length; _i++) {
     var _c = _cs[_i];
     var _a = _c.querySelector('a.OrganicTitle-Link');
-    var _snip = _c.querySelector('.OrganicText .OrganicTextContentSpan') || _c.querySelector('.OrganicText');
+    var _sel = {};
+    var _snip = _c.querySelector('.OrganicText .OrganicTextContentSpan');
+    if (_snip) { _sel.snippet = 0; }
+    else {
+        _snip = _c.querySelector('.OrganicText');
+        if (_snip) { _sel.snippet = 1; }
+    }
     if (!_a || !_a.href) continue;
     _out.push({
         url: _a.href,
         title: _a.textContent.trim(),
-        snippet: _snip ? _snip.textContent.trim() : ''
+        snippet: _snip ? _snip.textContent.trim() : '',
+        sel: _sel
     });
 }
 return JSON.stringify(_out);
@@ -76,9 +84,9 @@ class YandexEngine(BaseEngine):
                 diag["containers_found"] = False
                 _log_empty_result(query, current_url)
                 return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
+            results, selector_hits = await _parse_results(tab, max_results)
             if results:
-                return results, None, attach_document_status({}, status_chain)
+                return results, None, attach_document_status({"selector_hits": selector_hits}, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
             return results, None, attach_document_status(diag, status_chain)
@@ -135,13 +143,13 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     return results
 
 
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
     if not value:
-        return []
+        return [], {}
     items = json.loads(value)
-    return _build_results(items, max_results)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 async def _diagnose(tab) -> dict:

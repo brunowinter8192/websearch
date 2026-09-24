@@ -1,5 +1,8 @@
 # INFRASTRUCTURE
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 _RE_MORE_FOR_YOU     = re.compile(r'^More For You\s*$')
 _RE_MORE_FOR_YOU_H2  = re.compile(r'^## More For You')
@@ -30,9 +33,12 @@ def cleanup(raw_markdown: str, entry: dict) -> str:
 
     start_idx = find_start_anchor(body_lines)
     if start_idx is None:
-        return raw_markdown.strip()
+        logger.warning("coindesk cleanup: no H1 start anchor, body-less: %s", entry.get("url"))
+        return ""
 
-    end_idx, _ = find_end_anchor(body_lines, start_idx)
+    end_idx, end_anchor = find_end_anchor(body_lines, start_idx)
+    if end_anchor == "NONE":
+        logger.warning("coindesk cleanup: no end anchor, kept tail to end of page: %s", entry.get("url"))
     extracted = body_lines[start_idx:end_idx]
     cleaned_lines, _, _, _ = clean_body(extracted)
     return "\n".join(cleaned_lines)

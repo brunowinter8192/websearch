@@ -166,3 +166,49 @@ def test_live_scrape_profile_dirs_skips_already_dead_pid(monkeypatch):
     monkeypatch.setattr(chromium_process.psutil, "Process", raise_no_such_process)
 
     assert chromium_process._live_scrape_profile_dirs() == set()
+
+
+def _osascript_result(returncode, stdout="", stderr=""):
+    class _R:
+        pass
+    r = _R()
+    r.returncode, r.stdout, r.stderr = returncode, stdout, stderr
+    return r
+
+
+def test_get_frontmost_app_warns_once_on_empty_output(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(chromium_process, "_osascript_warned", set())
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _osascript_result(0, ""))
+    with caplog.at_level(logging.WARNING, logger="src.scraper.chromium_process"):
+        assert chromium_process._get_frontmost_app() == ""
+        assert chromium_process._get_frontmost_app() == ""
+    assert len([m for m in caplog.messages if "get_frontmost" in m]) == 1
+
+
+def test_get_frontmost_app_warns_on_nonzero_exit(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(chromium_process, "_osascript_warned", set())
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _osascript_result(1, "", "not allowed"))
+    with caplog.at_level(logging.WARNING, logger="src.scraper.chromium_process"):
+        chromium_process._get_frontmost_app()
+    assert any("not allowed" in m for m in caplog.messages)
+
+
+def test_get_frontmost_app_silent_on_success(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(chromium_process, "_osascript_warned", set())
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _osascript_result(0, "Ghostty\n"))
+    with caplog.at_level(logging.WARNING, logger="src.scraper.chromium_process"):
+        assert chromium_process._get_frontmost_app() == "Ghostty"
+    assert caplog.messages == []
+
+
+def test_activate_app_warns_once_on_nonzero_exit(monkeypatch, caplog):
+    import logging
+    monkeypatch.setattr(chromium_process, "_osascript_warned", set())
+    monkeypatch.setattr(chromium_process.subprocess, "run", lambda *a, **kw: _osascript_result(1, "", "denied"))
+    with caplog.at_level(logging.WARNING, logger="src.scraper.chromium_process"):
+        chromium_process._activate_app("Ghostty")
+        chromium_process._activate_app("Ghostty")
+    assert len(caplog.messages) == 1

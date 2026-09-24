@@ -16,6 +16,7 @@ def test_non_osascript_subprocess_passes_through():
     assert result.stdout.strip() == "ok"
 
 
-def test_mkdtemp_lands_under_the_per_test_tmp_path(tmp_path):
+def test_mkdtemp_lands_under_the_isolated_tempdir(tmp_path_factory):
     created = Path(tempfile.mkdtemp(prefix="guard-"))
-    assert tmp_path in created.parents
+    assert created.parent == Path(tempfile.gettempdir())
+    assert tmp_path_factory.getbasetemp() in created.parents

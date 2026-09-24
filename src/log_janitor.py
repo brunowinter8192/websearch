@@ -58,7 +58,8 @@ def _prune_jsonl(log_path: Path, marker: Path) -> None:
                 if parsed_ts >= cutoff:
                     kept.append(stripped)
             except Exception:
-                logger.warning("log_janitor: dropping unparseable line in %s", log_path)
+                logger.warning("log_janitor: keeping unparseable line in %s", log_path)
+                kept.append(stripped)
     tmp = Path(str(log_path) + ".tmp")
     tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
     os.replace(tmp, log_path)

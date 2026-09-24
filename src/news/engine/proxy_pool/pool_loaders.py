@@ -169,8 +169,8 @@ def _try_source(url: str, fn, entries: list, sources: list) -> None:
         result = fn()
         entries.extend(result)
         sources.append({"url": url, "ok": True, "count": len(result)})
-    except Exception:
-        sources.append({"url": url, "ok": False, "count": 0})
+    except Exception as exc:
+        sources.append({"url": url, "ok": False, "count": 0, "error": type(exc).__name__})
 
 
 def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:

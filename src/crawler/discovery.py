@@ -25,6 +25,7 @@ class DiscoveryResult:
     ok: bool = True
     wall_s: float = 0.0
     failed_feeders: dict = field(default_factory=dict)
+    dropped: int = 0
     error: str | None = None
 
 
@@ -40,7 +41,9 @@ async def discover_urls_workflow(seed_url: str) -> DiscoveryResult:
     feeder_results = await _run_feeders(seed_url)
     seeds, failed_feeders = _assemble_seeds(seed_url, feeder_results)
     urls = [DiscoveredURL(url=url, source=source) for url, source in seeds.items()]
-    return DiscoveryResult(urls=urls, ok=True, wall_s=time.time() - t0, failed_feeders=failed_feeders)
+    dropped = _total_dropped(feeder_results)
+    return DiscoveryResult(urls=urls, ok=True, wall_s=time.time() - t0,
+                           failed_feeders=failed_feeders, dropped=dropped)
 
 
 # FUNCTIONS
@@ -61,3 +64,7 @@ def _assemble_seeds(seed_url: str, feeder_results: dict) -> tuple:
             if url not in seeds:
                 seeds[url] = result.source
     return seeds, failed_feeders
+
+
+def _total_dropped(feeder_results: dict) -> int:
+    return sum(result.dropped for result in feeder_results.values() if result.ok)

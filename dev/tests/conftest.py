@@ -31,9 +31,8 @@ def _no_real_browser_launch(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _isolated_tempdir(monkeypatch, tmp_path):
-    isolated = tmp_path / "systmp"
-    isolated.mkdir()
+def _isolated_tempdir(monkeypatch, tmp_path_factory):
+    isolated = tmp_path_factory.mktemp("systmp")
     monkeypatch.setattr(tempfile, "tempdir", str(isolated))
 
 

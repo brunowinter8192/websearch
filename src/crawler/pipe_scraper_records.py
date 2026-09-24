@@ -7,6 +7,7 @@ def _log_pipe_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, diagnosis: dict,
     landed_url: str | None = None,
+    error: str | None = None,
 ) -> None:
     log_pipe_scrape({
         "ts": ts, "run_id": run_ctx["run_id"], "url": url, "domain": domain,
@@ -18,6 +19,7 @@ def _log_pipe_record(
         "crawl4ai_resolved_by": diagnosis.get("crawl4ai_resolved_by"),
         "crawl4ai_fallback_fetch_used": diagnosis.get("crawl4ai_fallback_fetch_used"),
         "landed_url": landed_url,
+        "error": error,
         "config_hash": run_ctx["config_hash"], "config": run_ctx["config"],
     })
 

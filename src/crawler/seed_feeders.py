@@ -19,7 +19,8 @@ async def robots_feeder_workflow(seed_url: str) -> FeederResult:
         async with httpx.AsyncClient() as client:
             text = await fetch_robots_txt(client, base_url)
         paths = parse_robots_directives(text, base_url)["paths"] if text else []
-        return FeederResult(urls=scope_and_dedup(paths, seed_host), ok=True, source="robots")
+        urls, dropped = scope_and_dedup(paths, seed_host)
+        return FeederResult(urls=urls, ok=True, source="robots", dropped=dropped)
     except Exception as exc:
         return FeederResult(urls=[], ok=False, error=str(exc))
 
@@ -32,8 +33,10 @@ async def sitemap_feeder_workflow(seed_url: str) -> FeederResult:
             text = await fetch_robots_txt(client, base_url)
             declared_sitemaps = parse_robots_directives(text, base_url)["sitemaps"] if text else []
             sitemap_urls = declared_sitemaps or [urljoin(base_url, p) for p in CONVENTIONAL_SITEMAP_PATHS]
+            source = "sitemap_declared" if declared_sitemaps else "sitemap_conventional"
             loc_urls = await resolve_sitemap_urls(client, sitemap_urls)
-        return FeederResult(urls=scope_and_dedup(loc_urls, seed_host), ok=True, source="sitemap")
+        urls, dropped = scope_and_dedup(loc_urls, seed_host)
+        return FeederResult(urls=urls, ok=True, source=source, dropped=dropped)
     except Exception as exc:
         return FeederResult(urls=[], ok=False, error=str(exc))
 
@@ -43,8 +46,9 @@ async def navtree_feeder_workflow(seed_url: str) -> FeederResult:
         seed_host = require_host(seed_url)
         async with httpx.AsyncClient() as client:
             raw_urls, tier, version_keys = await resolve_navigation_tree(client, seed_url)
-        return FeederResult(urls=scope_and_dedup(raw_urls, seed_host), ok=True,
-                            source=f"navtree_{tier}", version_keys=version_keys)
+        urls, dropped = scope_and_dedup(raw_urls, seed_host)
+        return FeederResult(urls=urls, ok=True, source=f"navtree_{tier}",
+                            version_keys=version_keys, dropped=dropped)
     except Exception as exc:
         return FeederResult(urls=[], ok=False, error=str(exc))
 

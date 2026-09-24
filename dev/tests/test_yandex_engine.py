@@ -200,7 +200,8 @@ async def test_marker_word_in_own_query_no_longer_discards_real_results(monkeypa
     assert reason is None
     assert len(results) == 2
     assert {r.url for r in results} == {"https://example.org/one", "https://example.org/two"}
-    assert diagnosis == {"document_status_chain": [200], "http_status": 200}
+    assert diagnosis == {"document_status_chain": [200], "http_status": 200,
+                         "selector_hits": {"snippet": {"1": 2}}}
 
 
 @pytest.mark.browser

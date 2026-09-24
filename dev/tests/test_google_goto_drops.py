@@ -114,14 +114,11 @@ async def test_search_with_reason_attaches_goto_resolution_to_diagnosis(monkeypa
     async def noop(*args, **kwargs):
         return None
 
-    async def no_consent(tab):
-        return False
-
     async def wait_ok(*args, **kwargs):
         return True
 
     async def parse(tab, max_results):
-        return [_result(), _result()]
+        return [_result(), _result()], {"anchor": {"0": 2}}
 
     async def resolve(results):
         return [], {"found": 2, "resolved": 0, "dropped": 2, "reasons": {"timeout": 2}}
@@ -136,7 +133,6 @@ async def test_search_with_reason_attaches_goto_resolution_to_diagnosis(monkeypa
     monkeypatch.setattr(google_mod, "kill_tab", noop)
     monkeypatch.setattr(google_mod, "_inject_socs_cookie", noop)
     monkeypatch.setattr(google_mod, "start_document_status_capture", capture)
-    monkeypatch.setattr(google_mod, "_has_inline_consent", no_consent)
     monkeypatch.setattr(google_mod, "_wait_for_results", wait_ok)
     monkeypatch.setattr(google_mod, "_parse_results", parse)
     monkeypatch.setattr(google_mod, "_resolve_urls", resolve)

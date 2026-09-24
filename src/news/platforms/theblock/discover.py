@@ -1,4 +1,5 @@
 # INFRASTRUCTURE
+import logging
 import re
 import sys
 from datetime import datetime, timezone
@@ -8,6 +9,8 @@ import httpx
 from src.news.engine.proxy_pool.fetch import fetch_url
 from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
 from src.news.platforms.theblock.config import SITEMAP_INDEX, DIRECT_TIMEOUT
+
+logger = logging.getLogger(__name__)
 
 _INDEX_LOC_RE = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 _URL_BLOCK_RE = re.compile(rb"<url>(.*?)</url>", re.DOTALL)
@@ -19,10 +22,10 @@ XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 
 # ORCHESTRATOR
 
-async def discover(timeframe: str = "delta", logger=None) -> list[dict]:
+async def discover(timeframe: str = "delta", acquire_logger=None) -> list[dict]:
     pool_cache: list = []
 
-    index_content = _fetch_xml(SITEMAP_INDEX, pool_cache, logger)
+    index_content = _fetch_xml(SITEMAP_INDEX, pool_cache, acquire_logger)
     if index_content is None:
         raise RuntimeError("theblock sitemap index fetch failed (direct + proxy exhausted)")
     post_subs = _parse_post_sub_urls(index_content)
@@ -35,10 +38,9 @@ async def discover(timeframe: str = "delta", logger=None) -> list[dict]:
 
     entries = []
     for sub_url in target_subs:
-        content = _fetch_xml(sub_url, pool_cache, logger)
+        content = _fetch_xml(sub_url, pool_cache, acquire_logger)
         if content is None:
-            print(f"[theblock] Sub-sitemap failed, skipping: {sub_url.split('/')[-1]}", file=sys.stderr)
-            continue
+            raise RuntimeError(f"theblock sub-sitemap fetch failed (direct + proxy exhausted): {sub_url}")
         for url, lastmod in _parse_url_blocks(content):
             entries.append({"url": url, "lastmod": lastmod.isoformat()})
 
@@ -78,19 +80,21 @@ def _resolve_target_subs(timeframe: str, post_subs: list[str]) -> list[str]:
     )
 
 
-def _fetch_xml(url: str, pool_cache: list, logger=None) -> bytes | None:
+def _fetch_xml(url: str, pool_cache: list, acquire_logger=None) -> bytes | None:
     content = _fetch_direct(url)
     if content is not None:
+        logger.info("theblock sitemap served direct: %s", url)
         return content
     if not pool_cache:
         print("[theblock] Loading proxy pool for sitemap fallback …", file=sys.stderr)
         pool, _ = load_backfill_pool()
         pool_cache.extend(pool)
     for proto, hp in pool_cache:
-        status, content = fetch_url(proto, hp, url, "xml")
-        if logger is not None:
-            logger.record_attempt(proto, hp, url, status == "ok")
+        status, content, reason = fetch_url(proto, hp, url, "xml")
+        if acquire_logger is not None:
+            acquire_logger.record_attempt(proto, hp, url, status == "ok", reason)
         if status == "ok":
+            logger.info("theblock sitemap served via proxy %s://%s: %s", proto, hp.split("@")[-1], url)
             return content
     return None
 
@@ -100,6 +104,8 @@ def _fetch_direct(url: str) -> bytes | None:
     head = r.content[:500]
     if r.status_code == 200 and any(m in head for m in XML_MARKERS):
         return r.content
+    logger.warning("theblock direct sitemap fetch failed: status=%s xml_marker=%s url=%s",
+                   r.status_code, any(m in head for m in XML_MARKERS), url)
     return None
 
 

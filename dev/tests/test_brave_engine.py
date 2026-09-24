@@ -169,6 +169,7 @@ async def test_marker_word_from_own_query_no_longer_discards_real_results(monkey
     assert len(results) == 2
     assert {r.url for r in results} == {"https://example.org/one", "https://example.org/two"}
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 1, '1': 1}, 'title': {'0': 2}},
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }
@@ -189,6 +190,7 @@ async def test_marker_word_in_unrelated_organic_snippet_no_longer_discards_real_
     assert reason is None
     assert len(results) == 2
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 1, '1': 1}, 'title': {'0': 2}},
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }
@@ -239,6 +241,7 @@ async def test_unrelated_button_before_containers_never_leaks_into_success_diagn
     assert len(results) == 1
     assert results[0].url == "https://example.org/one"
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 1}, 'title': {'0': 1}},
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }
@@ -273,6 +276,7 @@ async def test_light_dom_challenge_button_is_solved_and_returns_real_results(mon
     assert results[0].title == "Result One"
     assert results[0].snippet == "snippet one"
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 1}, 'title': {'0': 1}},
         "challenge_triggered": True,
         "document_status_chain": [200], "http_status": 200,
     }
@@ -334,6 +338,7 @@ async def test_pow_link_with_clickable_button_solves_challenge_instead_of_giving
     assert len(results) == 1
     assert results[0].url == "https://example.org/one"
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 1}, 'title': {'0': 1}},
         "challenge_triggered": True,
         "document_status_chain": [200], "http_status": 200,
     }
@@ -354,6 +359,7 @@ async def test_real_no_challenge_fixture_never_attempts_a_click(monkeypatch):
     assert reason is None
     assert len(results) == 3
     assert diagnosis == {
+        "selector_hits": {'snippet': {'0': 2, '1': 1}, 'title': {'0': 3}},
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }

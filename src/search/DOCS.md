@@ -59,7 +59,7 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 **Called by:** `cache.py` (format_engine_pool).
 **Calls out:** none (stdlib `html`, `re`).
 
-### query_logger.py (25 LOC)
+### query_logger.py (19 LOC)
 
 **Purpose:** Append-only JSONL query log (`log_query(record)`) — three record types (`engine_run`, `workflow_summary`, `drilldown`), correlated via a shared `search_key`.
 **Reads:** `WEBSEARCH_QUERY_LOG_PATH` env (fallback `src/logs/query_log.jsonl`).
@@ -67,7 +67,7 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 **Called by:** `search_web.py` (engine_run, workflow_summary); `cli.py` (drilldown, as of 2026-08-05).
 **Calls out:** `src/log_janitor.py` (maybe_prune_jsonl).
 
-### browser.py (301 LOC)
+### browser.py (313 LOC)
 
 **Purpose:** pydoll Chrome lifecycle — one shared, headed, backgrounded Chrome self-launched via a dynamically resolved bundle, one fresh profile directory per run, one tab per engine.
 **Reads:** nothing (singleton browser on first access).
@@ -75,7 +75,7 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 **Called by:** `cli.py` (kill_own_chrome_atexit, atexit); `search_web.py` (get_tab via `_prewarm_browser`, kill_own_chrome); `engines/` (new_tab, kill_tab — google, duckduckgo, mojeek, yandex, bing, brave, startpage); 40+ `dev/search_pipeline/*.py` probes (new_tab, close_browser — direct callers, bypass search_web.py's lock/prewarm entirely).
 **Calls out:** `pydoll` (Chrome, ChromiumOptions, BrowserProcessManager, TargetCommands); `patchright.async_api` (async_playwright, bundle-path resolution only); `psutil` (own-PID terminate/kill); `browser_lock` (acquire); `death_pipe` (spawn_watchdog); `open`/`pgrep`/`osascript` (macOS process control and frontmost-app/window control).
 
-### browser_lock.py (65 LOC)
+### browser_lock.py (80 LOC)
 
 **Purpose:** Generic, domain-agnostic blocking cross-process file lock (`fcntl.flock`-based) with a stale-takeover escape hatch — no Chrome/SESSION_DIR knowledge, takes an `on_stale` callback so the caller decides what "break it" means. Polls a non-blocking `flock`; a JSON sidecar (`{pid, started_at}`) older than `hard_budget_s` is presumed a stuck (not just slow) holder — `on_stale()` runs, then a fresh inode is opened at the same path (flock is inode-bound, so this bypasses the old holder's still-technically-held lock) and acquire retries.
 **Reads:** the lock file + its `.json` sidecar.
@@ -112,6 +112,12 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 **Purpose:** The `ERROR_*` prefix cluster split out of `status.py` (pure relocation, same values): `ERROR_BROWSER`, `ERROR_HTTP`, `ERROR_PARSE`, `ERROR_OTHER`.
 **Called by:** `search_web.py` (imported as `status_error as SE`, used in `_classify_engine_exception`); `dev/search_pipeline/no_google_burst_smoke.py` (same alias).
+**Calls out:** none.
+
+### selector_hits.py (13 LOC)
+
+**Purpose:** Aggregates the per-item `sel` selector indexes returned by the engine parse scripts into `{field: {index: count}}` for the diagnosis.
+**Called by:** `engines/google.py`, `engines/bing.py`, `engines/brave.py`, `engines/yandex.py` (`_parse_results`).
 **Calls out:** none.
 
 ### document_status.py (43 LOC)
@@ -159,3 +165,4 @@ Two module-owned states. `rate_limiter._limiters` — the per-engine token-bucke
 - **REMOVED 2026-09-24 (Phase 4 control-flow review, owner decision): `cache.cache_read`'s `except Exception -> None` and `document_status.start_document_status_capture`'s `except Exception -> warning`.** A corrupt cache file now raises `json.JSONDecodeError` out of `cache_read` (the drilldown command fails visibly instead of telling the user to rerun `search_web`; writes are atomic via `os.replace`, and `Cache read error` was never logged in the retained `cli.log` files 2026-08-31..2026-09-24). A CDP failure while arming the status listener now fails that engine with a recorded status instead of silently yielding an empty `document_status_chain`; `document-status capture setup failed` was never logged either. The engine-level handlers removed in the same review are in `engines/DOCS.md`. Guard: `dev/tests/test_search_control_flow_removals.py`, `dev/tests/test_document_status.py`.
 - **`query_logger.log_query`'s `except Exception` stays, classified as best-effort telemetry (Phase 4 class D, owner decision 2026-09-24).** It logs a WARNING (`query_log write failed`) and drops the record; losing a log line does not change search results, and the posture is deliberate. Never observed in the retained logs.
 - **`_prewarm_browser`'s handler stays (fallback observed 6 times on 2026-09-21: `DevToolsActivePort did not appear ... within 10.0s`), but its WARNING no longer claims the engines retry.** In all 6 observed cases the browser engines then failed individually (`Engine browser error: Failed to get browser ws address`, status `ERROR_BROWSER`) and only non-browser engines returned results, so the message now reads that browser engines are expected to fail individually and non-browser engines still run. The failure stays traceable through that WARNING plus the per-engine statuses and the degraded-run notice.
+- 2026-09-24 Phase 5: `_select_engines` raises `ValueError` on an unknown engine name and returns only the selected dict; the always-empty `engines_excluded` field was removed from the `workflow_summary` query-log record. `browser_lock.acquire` logs a warning (holder pid, age, budget) before breaking a stale lock, an unreadable or corrupt sidecar raises (only a missing sidecar means "not stale"), and the sidecar is written atomically (tmp + `os.replace`). `browser._get_frontmost_pid`/`_activate_pid` log a warning once per process on a failing osascript. `query_logger.log_query` no longer catches write failures. New module `selector_hits.py` (aggregation of the per-item selector index).

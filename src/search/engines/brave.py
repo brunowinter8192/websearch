@@ -7,6 +7,7 @@ import time
 from src.search.browser import new_tab, kill_tab
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
+from src.search.selector_hits import collect_selector_hits
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
@@ -73,12 +74,20 @@ for (var _i = 0; _i < _cs.length; _i++) {
     var _c = _cs[_i];
     var _a = _c.querySelector('a[href^="http"]');
     var _title = _c.querySelector('.search-snippet-title');
-    var _snip = _c.querySelector('.snippet-content .content') || _c.querySelector('.generic-snippet .content');
+    var _sel = {};
+    _sel.title = _title ? 0 : 1;
+    var _snip = _c.querySelector('.snippet-content .content');
+    if (_snip) { _sel.snippet = 0; }
+    else {
+        _snip = _c.querySelector('.generic-snippet .content');
+        if (_snip) { _sel.snippet = 1; }
+    }
     if (!_a || !_a.href) continue;
     _out.push({
         url: _a.href,
         title: _title ? _title.textContent.trim() : (_a.textContent || '').trim(),
-        snippet: _snip ? _snip.textContent.trim() : ''
+        snippet: _snip ? _snip.textContent.trim() : '',
+        sel: _sel
     });
 }
 return JSON.stringify(_out);
@@ -125,9 +134,9 @@ class BraveEngine(BaseEngine):
                 diag["button_present"] = button_present
                 _log_empty_result(query, diag)
                 return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
+            results, selector_hits = await _parse_results(tab, max_results)
             if results:
-                diag = {"challenge_triggered": challenge_triggered}
+                diag = {"challenge_triggered": challenge_triggered, "selector_hits": selector_hits}
                 return results, None, attach_document_status(diag, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
@@ -207,13 +216,13 @@ def _log_empty_result(query: str, diag: dict) -> None:
         logger.debug("Brave empty for: %s", query)
 
 
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
     if not value:
-        return []
+        return [], {}
     items = json.loads(value)
-    return _build_results(items, max_results)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:

@@ -11,7 +11,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ## Modules
 
-### conftest.py (55 LOC)
+### conftest.py (54 LOC)
 
 **Purpose:** Suite-wide autouse tripwire: every real browser-launch primitive is replaced by a failing stand-in, so an unmocked launch fails the test by name.
 **Calls out:** src.search.browser, src.scraper.chromium_scrape, src.scraper.camoufox_scrape, src.crawler.pipe_scraper.
@@ -20,7 +20,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Runs one `pytest -x` per test file in parallel, each with its own basetemp and log under `/tmp/websearch_strands/`; a failing strand stops itself while the others finish. Not collected by pytest.
 
-### test_conftest_guards.py (21 LOC)
+### test_conftest_guards.py (22 LOC)
 
 **Purpose:** Provokes the `conftest.py` guards: osascript trap, subprocess pass-through, per-test tempdir.
 
@@ -53,7 +53,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Shared FakeChrome and state-reset helper for the browser lifecycle tests. Not collected by pytest.
 **Called by:** test_browser.py, test_browser_get_tab.py.
 
-### test_browser.py (360 LOC)
+### test_browser.py (363 LOC)
 
 **Purpose:** src/search/browser.py: PID snapshot/kill mechanics, session-dir cleanup, watchdog cancellation, kill_own_chrome teardown, focus-steal watchdog branches.
 
@@ -77,7 +77,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/bing.py: _clean_url redirect unwrap, _build_results, _parse_results error propagation.
 
-### test_brave_engine.py (386 LOC)
+### test_brave_engine.py (392 LOC)
 
 **Purpose:** src/search/engines/brave.py: fixture-driven regression tests (marker reflection, challenge solving, partial facts on cancellation) against a real headless pydoll Chrome on loopback.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -98,7 +98,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/startpage.py: _build_results.
 
-### test_yandex_engine.py (222 LOC)
+### test_yandex_engine.py (223 LOC)
 
 **Purpose:** src/search/engines/yandex.py: self-link filter, block-URL detection, _build_results, two fixture-driven regression tests.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -107,7 +107,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/google.py: _build_results, source-level guard for the snippet selector, _resolve_urls against a loopback fixture server.
 
-### test_google_goto_drops.py (147 LOC)
+### test_google_goto_drops.py (143 LOC)
 
 **Purpose:** src/search/engines/google.py redirect resolution: drop-reason counting, timeout/request-error classification, diagnosis attachment.
 **Calls out:** dev.search_pipeline._google_fixture.
@@ -128,11 +128,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/degraded_notice.py: real recorded engine_run fixtures, threshold, drop_reason display, repair-line gate.
 
-### test_query_logger.py (340 LOC)
+### test_query_logger.py (347 LOC)
 
 **Purpose:** src/search/query_logger.py, _engine_with_timing, search_web_workflow log shape, and cli.py _log_drilldown via an isolated subprocess.
 
-### test_scrape_logger.py (37 LOC)
+### test_scrape_logger.py (55 LOC)
 
 **Purpose:** src/scraper/scrape_logger.py write_sidecar header content.
 
@@ -149,11 +149,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/camoufox_scrape.py try_scrape_camoufox: acquisition-error states, urlsplit regression, markdown-conversion failure, document-status chain.
 
-### test_camoufox_scrape_output.py (190 LOC)
+### test_camoufox_scrape_output.py (200 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py: calibration kwargs and config stamp, scrape_url_camoufox_workflow logging, output format.
 
-### test_camoufox_scrape_focus.py (75 LOC)
+### test_camoufox_scrape_focus.py (87 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py no-focus-steal launch: LSUIElement plist patch and ignore_default_args.
 
@@ -178,7 +178,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/chromium_scrape.py before_goto document-status listener through the real acquisition machinery.
 
-### test_chromium_process.py (168 LOC)
+### test_chromium_process.py (214 LOC)
 
 **Purpose:** src/scraper/chromium_process.py: self-launch mechanics, live crawl4ai flag-parity guard, profile pid parsing, orphan reaping.
 
@@ -187,19 +187,19 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Shared fake httpx client and XML/HTML payload builders. Not collected by pytest.
 **Called by:** test_seed_feeders_robots.py, test_seed_feeders_sitemap.py, test_seed_feeders_navtree.py.
 
-### test_seed_feeders_scope.py (93 LOC)
+### test_seed_feeders_scope.py (104 LOC)
 
 **Purpose:** src/crawler/seed_feeders_scope.py: normalize_url merge-vs-keep-distinct boundary and scope_and_dedup.
 
-### test_seed_feeders_robots.py (110 LOC)
+### test_seed_feeders_robots.py (123 LOC)
 
 **Purpose:** src/crawler/seed_feeders_robots.py: directive parsing, fetch with a fake client, feeder workflow.
 
-### test_seed_feeders_sitemap.py (216 LOC)
+### test_seed_feeders_sitemap.py (261 LOC)
 
 **Purpose:** src/crawler/seed_feeders_sitemap.py: sitemap parsing, nested index resolution, cycle guard, feeder workflow.
 
-### test_seed_feeders_navtree.py (275 LOC)
+### test_seed_feeders_navtree.py (305 LOC)
 
 **Purpose:** src/crawler/seed_feeders_navtree.py: payload detection, tree finding tiers, version union, feeder workflow.
 
@@ -208,7 +208,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Fixture-backed checks of the three seed feeders against the local fixture site.
 **Calls out:** dev.url_discovery._fixture_site.
 
-### test_discovery.py (105 LOC)
+### test_discovery.py (115 LOC)
 
 **Purpose:** src/crawler/discovery.py: seed assembly and merge priority (pure), plus one shared fixture-backed discovery run checked against ground truth.
 **Calls out:** dev.url_discovery._fixture_site.
@@ -222,7 +222,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/crawler/pipe_scraper_config.py: config stamp, live crawl4ai stealth wiring guard, fixed anti-bot posture, headed flag effect.
 
-### test_pipe_scraper.py (235 LOC)
+### test_pipe_scraper.py (250 LOC)
 
 **Purpose:** src/crawler/pipe_scraper*.py: per-URL JSONL log, run_id sharing, request-start timing, exception tripwire record, landed_url.
 
@@ -243,11 +243,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/engine/proxy_pool/janitor.py: window stats and job.md counters.
 
-### test_proxy_pool_retry.py (92 LOC)
+### test_proxy_pool_retry.py (117 LOC)
 
 **Purpose:** src/news/engine/proxy_pool: fetch_with_retry backoff and load_backfill_pool per-source isolation.
 
-### test_proxy_pool_sources.py (136 LOC)
+### test_proxy_pool_sources.py (150 LOC)
 
 **Purpose:** src/news/engine/proxy_pool: pool-source logging, grouping, job.md source section.
 
@@ -263,23 +263,51 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/engine/dedup.py filter_new_entries exclude_urls precedence and pub_date_str fallback.
 
-### test_theblock_clean_pass.py (116 LOC)
+### test_theblock_clean_pass.py (123 LOC)
 
 **Purpose:** src/news/clean_pass.py _run_clean_pass: clean file write, bodyless URL union, raw files read-only.
 
-### test_theblock_discover.py (171 LOC)
+### test_theblock_discover.py (213 LOC)
 
 **Purpose:** src/news/platforms/theblock/discover.py: sub:A-B range selection and dispatch error paths.
 
-### test_coindesk_timeline.py (14 LOC)
+### test_coindesk_timeline.py (50 LOC)
 
-**Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [].
+**Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [], recorded shape parsed, missing required key raises, alternative date keys not accepted.
+
+### test_coindesk_cleanup_and_shards.py (44 LOC)
+
+**Purpose:** coindesk cleanup (no H1 returns empty and logs, missing end anchor logs) and load_discover_filtered (missing directory / year shard raise).
+
+### test_proxy_pool_fetch.py (48 LOC)
+
+**Purpose:** proxy_pool fetch_url: transport errors become fail with the exception class name, non-transport exceptions propagate, status reasons.
+
+### test_selector_hits.py (69 LOC)
+
+**Purpose:** collect_selector_hits aggregation; `sel` never reaches SearchResult; `_parse_results` returns (results, hits) for google/bing/brave/yandex; google consent branch removed.
+
+### test_search_web_select_engines.py (16 LOC)
+
+**Purpose:** `_select_engines` default set, case-insensitive names, unknown name raises.
+
+### test_browser_lock_tripwires.py (46 LOC)
+
+**Purpose:** browser_lock stale-takeover warning, unreadable sidecar raises, atomic sidecar write.
+
+### test_browser_osascript.py (43 LOC)
+
+**Purpose:** browser focus helpers log a warning once on failing osascript.
+
+### test_death_pipe_tripwires.py (47 LOC)
+
+**Purpose:** death_pipe intervention-log write failure raises, `removed_dir` reflects the real outcome.
 
 ### test_coindesk_stop_date.py (41 LOC)
 
 **Purpose:** src/news/platforms/coindesk/discover.py _parse_stop_date: full, explicit delta, integer days, unparseable value raises.
 
-### test_log_janitor.py (92 LOC)
+### test_log_janitor.py (108 LOC)
 
 **Purpose:** src/log_janitor.py get_retention_days: default and malformed-value behavior.
 

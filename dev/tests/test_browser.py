@@ -10,6 +10,9 @@ from dev.tests._browser_fakes import FakeChrome, _reset_state
 
 
 class FakeCompletedProcess:
+    returncode = 0
+    stderr = ""
+
     def __init__(self, stdout):
         self.stdout = stdout
 

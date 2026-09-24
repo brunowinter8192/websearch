@@ -19,6 +19,14 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.google`, `src.search.browser`.
 
+### selector_js_equivalence_check.py (113 LOC)
+
+**Purpose:** Runs the pre-change (git rev) and current `_JS_PARSE` of google/bing/brave/yandex in headless Chrome on synthetic HTML covering every selector alternative and verifies identical items apart from the new `sel` key.
+**Reads:** `git show <BASE_REV>:src/search/engines/<engine>.py`, current engine modules.
+**Writes:** `md/selector_js_equivalence_check_<timestamp>.md`; prints `VERDICT PASS|FAIL`.
+**Called by:** manual run.
+**Calls out:** `pydoll`.
+
 ### 02_burst_smoke.py (270 LOC)
 
 **Purpose:** Burst smoke against the production CLI: one `cli.py search_batch` subprocess per query batch.

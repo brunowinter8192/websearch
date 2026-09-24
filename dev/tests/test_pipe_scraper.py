@@ -37,16 +37,15 @@ def test_log_pipe_scrape_appends(tmp_path, monkeypatch):
     assert len(log_file.read_text(encoding="utf-8").splitlines()) == 3
 
 
-def test_log_pipe_scrape_fail_soft(tmp_path, monkeypatch, caplog):
-    blocker = tmp_path / "blocker"
-    blocker.write_text("x")
-    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(blocker / "x" / "pipe_scrape_log.jsonl"))
+def test_log_pipe_scrape_unwritable_path_raises(tmp_path, monkeypatch):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("i am a file")
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(blocker / "nested" / "pipe_scrape_log.jsonl"))
 
-    with caplog.at_level("WARNING", logger="src.crawler.pipe_scrape_logger"):
+    with pytest.raises(OSError):
         log_pipe_scrape({"ts": _now_ts(), "run_id": "r", "url": "https://x.test", "domain": "x.test",
                           "http_status": 200, "bytes": 1, "wall_ms": 1,
                           "config_hash": "h", "config": {}})
-    assert any("pipe_scrape_log write failed" in m for m in caplog.messages)
 
 
 @pytest.mark.asyncio
@@ -139,6 +138,22 @@ async def test_scrape_one_exception_becomes_tripwire_record(tmp_path, monkeypatc
     assert fail_record["bytes"] == 0
     assert "pipe_fallback_used" not in fail_record
     assert "pipe_fallback_resolved" not in fail_record
+    assert fail_record["error"] == "Exception: simulated network failure"
+    assert by_url_record["https://x.test/a"]["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_scrape_all_camoufox_executor_exception_propagates(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(tmp_path / "log.jsonl"))
+
+    async def _boom(url, block_images=False):
+        raise RuntimeError("executor bug")
+    monkeypatch.setattr(pipe_scraper_acquisition, "try_scrape_camoufox", _boom)
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    with pytest.raises(RuntimeError, match="executor bug"):
+        await pipe_scraper._scrape_all(["https://x.test/a"], output_dir, download_delay=0.01,
+                                        concurrency_per_domain=1, engine="camoufox")
 
 
 @pytest.mark.asyncio

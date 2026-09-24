@@ -1,3 +1,5 @@
+import pytest
+
 import src.scraper.scrape_logger as scrape_logger
 
 
@@ -35,3 +37,19 @@ def test_write_sidecar_header_reflects_camoufox_engine(tmp_path, monkeypatch):
 def test_write_sidecar_returns_none_on_empty_content(tmp_path, monkeypatch):
     monkeypatch.setenv("WEBSEARCH_SCRAPE_LOG_PATH", str(tmp_path / "scrape_log.jsonl"))
     assert scrape_logger.write_sidecar("https://x.test", "2026-08-25T12:00:00.000Z", "", "filtered", "chromium") is None
+
+
+def test_write_sidecar_unwritable_dir_raises_instead_of_returning_none(tmp_path, monkeypatch):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("i am a file")
+    monkeypatch.setenv("WEBSEARCH_SCRAPE_LOG_PATH", str(blocker / "x" / "scrape_log.jsonl"))
+    with pytest.raises(OSError):
+        scrape_logger.write_sidecar("https://x.test", "2026-08-25T12:00:00.000Z", "content", "filtered", "chromium")
+
+
+def test_log_scrape_unwritable_path_raises(tmp_path, monkeypatch):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("i am a file")
+    monkeypatch.setenv("WEBSEARCH_SCRAPE_LOG_PATH", str(blocker / "x" / "scrape_log.jsonl"))
+    with pytest.raises(OSError):
+        scrape_logger.log_scrape({"url": "https://x.test"})

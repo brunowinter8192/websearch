@@ -1,12 +1,15 @@
 # INFRASTRUCTURE
 import asyncio
 import json
+import logging
 import re
 from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT, NAVTREE_FETCH_CONCURRENCY
+from src.crawler.seed_feeders_constants import ABSENT_STATUSES, HTTP_TIMEOUT_S, USER_AGENT, NAVTREE_FETCH_CONCURRENCY
+
+logger = logging.getLogger(__name__)
 
 _NEXT_DATA_RE = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.DOTALL)
 _RSC_PUSH_RE = re.compile(r'self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)')
@@ -208,14 +211,17 @@ def canonicalize_version_url(url: str, version_keys) -> str:
 async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
     response = await client.get(url, timeout=HTTP_TIMEOUT_S,
                                 headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    if response.status_code != 200:
+    if response.status_code in ABSENT_STATUSES:
         return None
+    if response.status_code != 200:
+        raise RuntimeError(f"unexpected status {response.status_code} for {url}")
     return response.text
 
 
 async def _resolve_one_version(client: httpx.AsyncClient, version_url: str, all_version_keys: list) -> list:
     html = await _fetch_html(client, version_url)
     if html is None:
+        logger.warning("navtree: version page absent, skipped: %s", version_url)
         return []
     hrefs, _tier, _source = find_navigation_tree(extract_payloads(html))
     absolute = (urljoin(version_url, href) for href in hrefs)

@@ -109,7 +109,7 @@ def _refresh_pool(
     pool, sources = pool_provider()
     logger.record_pool_refresh(len(pool))
     for s in sources:
-        logger.record_pool_source(s["url"], s["ok"], s["count"])
+        logger.record_pool_source(s["url"], s["ok"], s["count"], s.get("error"))
     buf = build_active_buffer(pool, cm, buffer_size)
     return pool, buf
 
@@ -235,9 +235,9 @@ def _execute_batch(
         }
         for fut in as_completed(futures):
             proto, hp, url = futures[fut]
-            status, content = fut.result()
+            status, content, reason = fut.result()
 
-            logger.record_attempt(proto, hp, url, status == "ok")
+            logger.record_attempt(proto, hp, url, status == "ok", reason)
 
             buf, last_progress = _apply_future_outcome(
                 proto, hp, url, status, content, content_handler, cm,

@@ -23,15 +23,11 @@ def parse_articles(body: bytes) -> list[dict]:
         return []
     result = []
     for a in articles:
-        ad = a.get("articleDates") or {}
         result.append({
-            "_id":        a.get("_id") or a.get("id"),
+            "_id":        a["_id"],
             "storyType":  a.get("storyType"),
-            "pathname":   a.get("pathname"),
-            "displayDate": (
-                ad.get("displayDate") or ad.get("publishedAt")
-                or a.get("displayDate") or a.get("publishedAt") or a.get("date")
-            ),
+            "pathname":   a["pathname"],
+            "displayDate": a["articleDates"]["displayDate"],
             "title": a.get("title") or "",
         })
     return result
