@@ -4,7 +4,7 @@
 The project's pytest suite: regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`, `src/news/`, and the log janitor. I/O boundaries are mocked per test and production logic runs for real. Touch it when coverage changes, not when production behavior changes without an assertion needing to change.
 
 ## Public Interface
-`__init__.py` is empty. Collected via `pytest` from the repo root (settings in `pytest.ini`). Real-browser tests carry the `browser` marker and run only with `-m browser`. Files named `_*_fakes.py` are shared helpers, not collected. `run_strands.sh` runs one fail-fast pytest per file in parallel.
+`__init__.py` is empty. Collected via `pytest` from the repo root (settings in `pytest.ini`). Real-browser tests carry the `browser` marker and run only with `-m browser`. Files named `_*_fakes.py` are shared helpers, not collected. `run_strands.sh` runs one fail-fast pytest per file in parallel, skips modules marked browser-only with a printed SKIP line, and counts any other nonzero exit (including 5, no tests collected) as a failure.
 
 ## Flow
 Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) go into the real function under test, and assertions read its real output. `tmp_path` and `monkeypatch` isolate filesystem and environment per test; `conftest.py` fails any test that reaches an unmocked real browser launch.
@@ -15,9 +15,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name.
 
-### run_strands.sh (33 LOC)
+### run_strands.sh (39 LOC)
 
-**Purpose:** Runs one fail-fast pytest per test file in parallel, each with its own base temp directory and log under /tmp. Not collected by pytest.
+**Purpose:** Runs one fail-fast pytest per test file in parallel, each with its own base temp directory and log under /tmp; skips browser-only modules, fails on exit 5.
 
 ### test_conftest_guards.py (22 LOC)
 

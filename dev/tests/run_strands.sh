@@ -11,8 +11,14 @@ mkdir -p "$OUT_DIR"
 
 pids=()
 names=()
+skipped=0
 for test_file in dev/tests/test_*.py; do
   name="$(basename "$test_file" .py)"
+  if grep -q '^pytestmark = pytest.mark.browser' "$test_file"; then
+    echo "SKIP $name (browser-only module)"
+    skipped=$((skipped + 1))
+    continue
+  fi
   "$PYTHON" -m pytest -x -q -p no:cacheprovider --basetemp="$OUT_DIR/$name.tmp" "$test_file" \
     "$@" > "$OUT_DIR/$name.log" 2>&1 &
   pids+=($!)
@@ -23,11 +29,11 @@ failed=0
 for i in "${!pids[@]}"; do
   wait "${pids[$i]}"
   code=$?
-  if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
+  if [ "$code" -ne 0 ]; then
     echo "FAIL ${names[$i]} (exit $code) -> $OUT_DIR/${names[$i]}.log"
     failed=$((failed + 1))
   fi
 done
 
-echo "strands=${#pids[@]} failed=$failed"
+echo "strands=${#pids[@]} skipped=$skipped failed=$failed"
 [ "$failed" -eq 0 ]

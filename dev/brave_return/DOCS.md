@@ -4,7 +4,7 @@
 Measurement tooling for whether Brave's proof-of-work button challenge can be solved unattended from code. Never imported by production code, but its live report is the evidence the production Brave engine's challenge handling was built from.
 
 ## Public Interface
-No `__init__.py` — not a package. Two entry points: the live probe script (spends requests against search.brave.com) and the pytest module (offline, loopback fixtures, one real headless Chrome per check).
+No `__init__.py` — not a package. Two entry points: the live probe script (spends requests against search.brave.com) and the verification module (loopback fixtures, one real headless Chrome per check; a verification, not a test, and never collected by the default pytest run).
 
 ## Flow
 Launch Chrome on a dedicated profile -> control-URL tripwire -> per query navigate, poll the DOM into a page state, fire the trigger, snapshot cookies -> four phases -> markdown report in `md/`.
@@ -24,7 +24,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Chrome launch, focus-steal watchdog, and teardown, an inline copy of the production browser shape.
 **Reads:** The profile's DevTools port file.
 **Writes:** nothing directly; spawns and kills Chrome processes.
-**Called by:** `brave_pydoll_probe.py`, `_brave_probe_query.py`, `test_brave_pydoll_core.py`.
+**Called by:** `brave_pydoll_probe.py`, `_brave_probe_query.py`, `verify_brave_pydoll_core.py`.
 **Calls out:** `patchright`, `pydoll`, `psutil`, macOS process tools.
 
 ### _brave_probe_query.py (183 LOC)
@@ -32,7 +32,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Drives and times one query on one tab, plus the control-URL tripwire.
 **Reads:** Live DOM and browser cookie store via CDP.
 **Writes:** nothing; returns a measurement.
-**Called by:** `brave_pydoll_probe.py`, `test_brave_pydoll_core.py`.
+**Called by:** `brave_pydoll_probe.py`, `verify_brave_pydoll_core.py`.
 **Calls out:** `pydoll`, the core, js, and launch siblings.
 
 ### _brave_probe_core.py (169 LOC)
@@ -40,7 +40,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Decidable core: page-state classifier, verdicts, cookie fingerprinting and diffing, duration maths.
 **Reads:** nothing.
 **Writes:** nothing.
-**Called by:** `_brave_probe_query.py`, `_brave_probe_report.py`, `_brave_pure_checks.py`, `test_brave_pydoll_core.py`.
+**Called by:** `_brave_probe_query.py`, `_brave_probe_report.py`, `_brave_pure_checks.py`, `verify_brave_pydoll_core.py`.
 **Calls out:** none.
 
 ### _brave_probe_js.py (119 LOC)
@@ -56,15 +56,15 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Assembles the markdown report, one section per question plus methodology.
 **Reads:** nothing.
 **Writes:** `md/brave_pydoll_probe_<ts>.md`.
-**Called by:** `brave_pydoll_probe.py`, `test_brave_pydoll_core.py`.
+**Called by:** `brave_pydoll_probe.py`, `verify_brave_pydoll_core.py`.
 **Calls out:** `_brave_probe_core.py`.
 
-### test_brave_pydoll_core.py (381 LOC)
+### verify_brave_pydoll_core.py (381 LOC)
 
-**Purpose:** Pytest module with one test per check, each on its own loopback fixture server, Chrome, and profile.
+**Purpose:** Verification of the probe checks against a real headless Chrome, one check per fixture server and profile; run by explicit path.
 **Reads:** `fixtures/*.html`.
 **Writes:** A fixture report under the pytest tmp path.
-**Called by:** pytest (verification, not part of the default run).
+**Called by:** pytest by explicit path only (verification, never collected by the default run).
 **Calls out:** `pydoll` via the siblings, stdlib `http.server`.
 
 ### _brave_pure_checks.py (172 LOC)
@@ -72,7 +72,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** The network-free checks of the test module: classifier, verdict, carry-over, cookie-diff, and stats.
 **Reads:** nothing.
 **Writes:** stdout.
-**Called by:** `test_brave_pydoll_core.py`.
+**Called by:** `verify_brave_pydoll_core.py`.
 **Calls out:** `_brave_probe_core.py`.
 
 ### _brave_probe_check_result.py (5 LOC)
@@ -80,7 +80,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Assertion helper that fails fast on a false condition.
 **Reads:** nothing.
 **Writes:** stdout.
-**Called by:** `test_brave_pydoll_core.py`, `_brave_pure_checks.py`.
+**Called by:** `verify_brave_pydoll_core.py`, `_brave_pure_checks.py`.
 **Calls out:** none.
 
 ---
