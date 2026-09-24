@@ -214,3 +214,14 @@ Gotchas of the two DOCS.md files; the rest of those docstrings was already in DO
 - The sweep was applied with a script run through Bash rather than hundreds of individual Edit calls,
   which deviates from the "use Edit for persistent files" tool rule; the AST-equality check above is
   what stands in for reviewing each edit.
+
+## Recap (2026-09-24)
+
+- Inventory of this branch against `integration` (`git diff integration --name-only --`): 42 files:
+  36 `.py` files in the five directories, the five `DOCS.md` files of those directories, and this file.
+- DOCS.md updates were already part of the sweep commit: all module LOC headings rewritten to the
+  post-sweep `wc -l` values (0 mismatches on re-check), one Gotchas section added to
+  `dev/browser_posture/DOCS.md` and one to `dev/access_recovery/DOCS.md`. `dev/lane_choice/`,
+  `dev/url_discovery/` and `dev/explore_pipeline/` DOCS.md needed only the LOC fix.
+- Review outcome: passed. Nothing in this sweep is left open except the two disclosed limits above
+  (block-level triage split; script-based editing).
