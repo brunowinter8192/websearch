@@ -786,6 +786,86 @@ Anchor: docstring at `_make_urls` (next def).
 - Files touched (`git diff integration --name-only --`): 52 `dev/tests/*.py` files swept, `dev/tests/test_brave_build_results.py` added, `dev/tests/test_brave_engine.py` reduced, `dev/tests/DOCS.md` rewritten (255 lines, LOC headings match `wc -l`), this file.
 - Not done: no investigation of the two intermittent brave tests; no manual review of every (b) decision.
 
+## Phase 4 control-flow triage, step 1: src/ (excluding src/search/) and cli.py (2026-09-24)
+
+Scope: 70 except handlers, 4 TRIPWIRE (`box_lock.py:50`, `box_lock.py:95`, `theblock/discover.py:62`, `theblock/discover.py:73`, all correct as they are) and 66 non-TRIPWIRE, which are classified below. `cli.py` has no except handler. Nothing was changed in code. Scan: the orchestrator scan copied to a private directory; classes are the coarse AST heuristic, the "class" column is my reading of the surrounding function.
+
+Evidence sources searched: `process-docs/**` in this worktree and the main checkout logs `src/logs/` (`query_log.jsonl`, `scrape_log.jsonl`, `pipe_scrape_log.jsonl`, `news_theblock_*.log`, `news_coindesk_*.log`, `cli.log*`). Feeder failures are returned as data and never logged, so the logs cannot show a feeder-level network failure either way; that absence is stated, not proof.
+
+Counts by class: A status/report 25, B fallback 9, C silent swallow 1, D cleanup 20, E input shape 11.
+Verdicts: keep 56, B-remove 8, B-keep-needs-logging 1, C remove 1.
+
+Trade-off shared by 5 B-remove rows (`navtree:215`, `robots:19`, `sitemap:17`, `sitemap:25`, `sitemap:44`): the feeder workflows already turn any exception into `FeederResult(ok=False, error=...)`, so removing the inner handler makes a network or parse failure a visible failed feeder instead of a clean-looking empty result. The cost: for `sitemap:17` one failing sub-sitemap fails the whole sitemap feeder instead of losing only that sub. Decision belongs to the orchestrator.
+
+| file:line | function | scan | class | verdict | evidence |
+|---|---|---|---|---|---|
+| src/crawler/discovery.py:37 | discover_urls_workflow | PRODUCES-OUTPUT | A | keep | invalid seed returns DiscoveryResult(ok=False, error=...); the CLI shows it |
+| src/crawler/pipe_scrape_logger.py:24 | log_pipe_scrape | LOG-ONLY | D | keep | JSONL log write is best-effort telemetry; warning logged; test asserts it never breaks a scrape |
+| src/crawler/pipe_scraper_acquisition.py:31 | _onward_link_identity | PRODUCES-OUTPUT | E | keep | hrefs come from third-party HTML; a malformed one (bad port, bare "[") is not a link, so it is excluded from onward links |
+| src/crawler/pipe_scraper_acquisition.py:78 | _scrape_one | PRODUCES-OUTPUT | A | keep | hard crawler exception logged as status=None/bytes=0 record and returned in the same dict shape (2026-09-09 tripwire replacing the curl_cffi rescue) |
+| src/crawler/seed_feeders.py:23 | robots_feeder_workflow | PRODUCES-OUTPUT | A | keep | FeederResult(ok=False, error=str(exc)); discovery lists it in failed_feeders |
+| src/crawler/seed_feeders.py:37 | sitemap_feeder_workflow | PRODUCES-OUTPUT | A | keep | FeederResult(ok=False, error=str(exc)); discovery lists it in failed_feeders |
+| src/crawler/seed_feeders.py:48 | navtree_feeder_workflow | PRODUCES-OUTPUT | A | keep | FeederResult(ok=False, error=str(exc)); discovery lists it in failed_feeders |
+| src/crawler/seed_feeders_navtree.py:30 | _extract_next_data_payloads | PRODUCES-OUTPUT | B | B-remove | malformed __NEXT_DATA__ JSON returns [] and looks like "page has no payload"; no observation in process-docs/logs; propagating gives ok=False + error via the feeder |
+| src/crawler/seed_feeders_navtree.py:47 | _extract_rsc_stream_payloads | SWALLOW-FLOW | E | keep | RSC stream rows are not all JSON (the suite already pins "I[...]" module-reference rows); a non-JSON row is a real row type, not a failure |
+| src/crawler/seed_feeders_navtree.py:215 | _fetch_html | PRODUCES-OUTPUT | B | B-remove | network error becomes None, the same as a 404; no observed network failure; propagating gives ok=False + error. Trade-off: one unreachable version root would fail the feeder instead of being skipped |
+| src/crawler/seed_feeders_robots.py:19 | fetch_robots_txt | PRODUCES-OUTPUT | B | B-remove | network error becomes None, the same as "no robots.txt"; only 404/empty robots.txt observed (docs.github.com); same trade-off as navtree _fetch_html |
+| src/crawler/seed_feeders_scope.py:52 | scope_and_dedup | SWALLOW-FLOW | E | keep | documented decision (url_discovery 2026-08-28): one malformed URL in untrusted sitemap/robots content is dropped; CPython 3.14 urlparse().port raises lazily, verified |
+| src/crawler/seed_feeders_sitemap.py:17 | fetch_sitemap | PRODUCES-OUTPUT | B | B-remove | network error becomes None, the same as a 404; unobserved. Trade-off: one failing sub-sitemap would fail the whole sitemap feeder (ok=False) instead of losing only that sub |
+| src/crawler/seed_feeders_sitemap.py:25 | fetch_sitemap | PRODUCES-OUTPUT | B | B-remove | corrupt .gz returns None as if the sitemap were absent; no observation |
+| src/crawler/seed_feeders_sitemap.py:44 | parse_sitemap_xml | PRODUCES-OUTPUT | B | B-remove | unparseable XML returns ("unknown", []); only a unit test pins it, no observed soft-404 HTML sitemap; plausible on SPA hosts, so flag as the riskiest removal (feeder would report ok=False + ParseError instead of a clean empty) |
+| src/death_pipe.py:45 | _terminate_then_kill | SWALLOW-FLOW | D | keep | process already gone between listing and terminate; goal (gone) achieved |
+| src/death_pipe.py:53 | _terminate_then_kill | SWALLOW-FLOW | D | keep | process already gone between wait_procs and kill |
+| src/death_pipe.py:64 | _log_intervention | LOG-ONLY | D | keep | intervention-log write is best-effort; warning logged on the logger |
+| src/log_janitor.py:26 | maybe_prune_jsonl | LOG-ONLY | D | keep | prune is housekeeping; failure logged as warning, appended record already written |
+| src/log_janitor.py:36 | maybe_prune_sidecars | LOG-ONLY | D | keep | same as maybe_prune_jsonl for sidecars |
+| src/log_janitor.py:43 | _is_recent | PRODUCES-OUTPUT | E | keep | no .lastprune marker is a real state (first run), means "not recent" |
+| src/log_janitor.py:60 | _prune_jsonl | LOG-ONLY | A | keep | unparseable/ts-less log line is dropped with one logged warning per line (documented in DOCS) |
+| src/log_janitor.py:76 | _prune_sidecars | LOG-ONLY | D | keep | single unlink failure logged with the file name; rest of the prune continues |
+| src/news/engine/proxy_pool/box_lock.py:27 | cleanup_stale | PRODUCES-OUTPUT | D | keep | sidecar is advisory metadata; flock is the real lock, unreadable sidecar just skips stale cleanup |
+| src/news/engine/proxy_pool/box_lock.py:34 | cleanup_stale | LOG-ONLY | D | keep | pid is dead, so the stale sidecar is unlinked |
+| src/news/engine/proxy_pool/box_lock.py:36 | cleanup_stale | PRODUCES-OUTPUT | E | keep | pid exists under another user, i.e. alive; real outcome of os.kill(pid, 0) |
+| src/news/engine/proxy_pool/box_lock.py:84 | _busy_message | PRODUCES-OUTPUT | A | keep | error message states "lock held, sidecar unreadable"; message text only, the lock behaviour is unaffected |
+| src/news/engine/proxy_pool/fetch.py:18 | fetch_url | PRODUCES-OUTPUT | A | keep | per-proxy attempt returns ("fail", b"") and record_attempt logs it; free proxies failing is the normal outcome |
+| src/news/engine/proxy_pool/pool_loaders.py:172 | _try_source | PRODUCES-OUTPUT | A | keep | sources list records ok=False,count=0 and job.md renders a source breakdown (D2) |
+| src/news/engine/proxy_pool/pool_retry.py:18 | fetch_with_retry | PRODUCES-OUTPUT | A | keep | retry with backoff then raise last_exc (scan mislabels it: the raise sits after the loop); retry is not a second output path |
+| src/news/engine/proxy_riding/abort.py:50 | _abort_write_report_and_exit | PRODUCES-OUTPUT | A | keep | WARN on stderr naming the exception, then os._exit anyway (stub job.md fallback removed 2026-09-09) |
+| src/news/engine/proxy_riding/fetch.py:51 | _fetch_one_url | PRODUCES-OUTPUT | A | keep | status="connect_fail" and err=str(exc) are returned and recorded per URL |
+| src/news/engine/proxy_riding/fetch.py:58 | _fetch_one_url | PRODUCES-OUTPUT | D | keep | kill_session teardown; warning printed |
+| src/news/engine/proxy_riding/rider.py:142 | _next_url_for_slot | PRODUCES-OUTPUT | E | keep | asyncio.QueueEmpty is the normal control-flow signal for an empty queue, not an error |
+| src/news/engine/proxy_riding/rider.py:343 | _teardown_pool | PRODUCES-OUTPUT | D | keep | remove_signal_handler at teardown; warning printed |
+| src/news/engine/scrape.py:106 | _fetch_one | PRODUCES-OUTPUT | A | keep | status="failed" and error=str(exc) in the manifest entry, plus stderr line |
+| src/news/engine/scrape_job.py:53 | _scrape_one_chunk | PRODUCES-OUTPUT | A | keep | RegwallGuardError logged at ERROR, chunk marked aborted, partial manifest persisted |
+| src/news/pipeline.py:343 | _run_pipeline_browser | PRODUCES-OUTPUT | A | keep | RegwallGuardError logged at ERROR, partial manifest persisted |
+| src/news/pipeline_support.py:44 | _check_internet | PRODUCES-OUTPUT | A | keep | logs [FAIL] Internet unreachable and returns False to the caller |
+| src/news/platforms/coindesk/browser.py:90 | browser_load_feed | PRODUCES-OUTPUT | D | keep | tab.close teardown, message printed |
+| src/news/platforms/coindesk/browser.py:95 | browser_load_feed | PRODUCES-OUTPUT | D | keep | chrome.close teardown, message printed |
+| src/news/platforms/coindesk/browser.py:132 | wait_for_ws_url | LOG-ONLY | E | keep | polling for Chrome readiness: connection refused while starting is the expected state; TimeoutError raised after the deadline |
+| src/news/platforms/coindesk/browser.py:144 | _extract_value | PRODUCES-OUTPUT | E | keep | only caller prints OK/miss for a click; a CDP result without a value is the "miss" outcome, display only |
+| src/news/platforms/coindesk/discover.py:61 | _parse_stop_date | PRODUCES-OUTPUT | B | B-keep-needs-logging | CLI default --timeframe is "delta" (src/news/__main__.py:76), which int() rejects, so "delta" and any typo silently become DEFAULT_DELTA_DAYS; observed (default invocation) but no log line and the --help text does not name it. Suggested fix: explicit "delta" branch, log the resolved stop_date (already printed at discover.py:31), let garbage raise |
+| src/news/platforms/coindesk/discover.py:244 | _close_year_files | PRODUCES-OUTPUT | D | keep | year shard close at teardown; message printed |
+| src/news/platforms/coindesk/timeline.py:49 | fetch_feedpage | PRODUCES-OUTPUT | A | keep | error printed, -1 returned and printed by every caller as the feedpage status |
+| src/news/platforms/theblock/cleanup.py:61 | _find_news_article | SWALLOW-FLOW | E | keep | a page carries several ld+json blocks; a malformed one is skipped, and if no NewsArticle is found cleanup prints "no JSON-LD NewsArticle found" and the URL lands in bodyless_urls |
+| src/news/platforms/theblock/discover.py:105 | _fetch_direct | PRODUCES-OUTPUT | B | B-remove | exception branch only: direct-fetch exceptions fall through to the proxy pool. Observed trigger is HTTP 403 without XML marker (news_pipeline 35, 15), which is the status path in the try body and stays. No observed direct-fetch exception; propagate it |
+| src/news/platforms/theblock/discover.py:158 | _parse_url_blocks | SWALLOW-FLOW | C | remove | sitemap entry with an unparseable lastmod is dropped silently, so discovery loses URLs with no trace; no observed bad lastmod (all observed values ISO) |
+| src/scraper/camoufox_scrape.py:89 | _ensure_no_focus_steal | LOG-ONLY | A | keep | warning "no-focus-steal not applied" names the consequence; scrape continues |
+| src/scraper/camoufox_scrape.py:103 | _resolve_system_locale | SWALLOW-PASS | B | B-remove | failed `defaults read -g AppleLocale` falls back to locale.getlocale() then en-US; the process-docs record only that the fallback exists, never a failure. Removal lets the error surface as acquisition_error=exception |
+| src/scraper/camoufox_scrape.py:135 | _on_response | PRODUCES-OUTPUT | E | keep | request.frame raises for requests whose frame does not exist yet (vendor docstring, cited in scrape_pipeline 2026-09-03); such a response is by definition not the main frame |
+| src/scraper/camoufox_scrape.py:194 | try_scrape_camoufox | PRODUCES-OUTPUT | A | keep | acquisition_error=budget_exhausted plus warning |
+| src/scraper/camoufox_scrape.py:197 | try_scrape_camoufox | PRODUCES-OUTPUT | A | keep | acquisition_error=browser_missing plus ERROR naming the repair command |
+| src/scraper/camoufox_scrape.py:203 | try_scrape_camoufox | PRODUCES-OUTPUT | A | keep | acquisition_error=exception plus warning |
+| src/scraper/camoufox_scrape.py:218 | _html_to_markdown | PRODUCES-OUTPUT | A | keep | returned as markdown_conversion_error and logged (raw-HTML fallback removed 2026-09-09) |
+| src/scraper/chromium_process.py:128 | _reap_orphaned_scrapes | SWALLOW-FLOW | D | keep | orphan candidate already exited |
+| src/scraper/chromium_process.py:156 | _live_scrape_profile_dirs | SWALLOW-FLOW | D | keep | candidate already exited while listing live profile dirs |
+| src/scraper/chromium_scrape.py:136 | try_scrape | PRODUCES-OUTPUT | A | keep | acquisition_error=budget_exhausted plus warning |
+| src/scraper/chromium_scrape.py:139 | try_scrape | PRODUCES-OUTPUT | A | keep | acquisition_error=browser_missing (ERROR) or exception (warning) |
+| src/scraper/chromium_scrape.py:180 | _acquire_cdp_headed | SWALLOW-PASS | D | keep | awaiting the cancelled watchdog task in finally |
+| src/scraper/chromium_scrape.py:202 | _on_response | PRODUCES-OUTPUT | E | keep | same as camoufox_scrape.py:135 |
+| src/scraper/chromium_scrape.py:214 | _close_popup_page | LOG-ONLY | D | keep | popup page close, debug-logged |
+| src/scraper/index_scrapes.py:65 | _index_one | PRODUCES-OUTPUT | A | keep | IndexOutcome status "failed" with the exception text, reported per URL |
+| src/scraper/scrape_logger.py:47 | write_sidecar | PRODUCES-OUTPUT | D | keep | sidecar write is best-effort; warning logged; the log record carries sidecar_path None |
+| src/scraper/scrape_logger.py:60 | log_scrape | LOG-ONLY | D | keep | JSONL log write is best-effort telemetry; warning logged |
+
 ## Appendix: previous `dev/tests/DOCS.md` (601 lines), verbatim
 
 The DOCS.md rewrite cut per-module detail that repeated code. The full previous text follows so nothing is lost.
