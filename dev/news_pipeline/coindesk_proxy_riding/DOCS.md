@@ -18,8 +18,8 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Purpose:** Core riding pool orchestrator — B `AsyncWebCrawler` instances, N rider tasks round-robin across browsers, per-URL proxy context with burn/fail rotation.
 **Reads:** proxy pool (via `p0_pool`), URL queue.
 **Writes:** `raw/<12-char-sha256-hash>.html` per ok URL (via `_p2_fetch.py`); on stall, `remaining_urls.txt` (via `_p2_watchdog.py`).
-**Called by:** `run_coindesk_riding.py`, `smoke_stage1.py`, `test_watchdog.py`, `test_tail_race.py`, `p4_reporter.py`.
-**Exports:** `run_riding_pool(n_browsers=1, stall_timeout_s=3600)`, `RiderState`, `RideRecord`, `JobRecord`, `FAIL_THRESHOLD`, `_watchdog`, `_abort_stall` — the last four are re-exports from `_p2_state.py`/`_p2_watchdog.py`, kept resolvable from `p2_browser_rider` for `p4_reporter.py` and `test_watchdog.py`.
+**Called by:** `run_coindesk_riding.py`, `smoke_stage1.py`, `p4_reporter.py`, `dev/tests/test_riding_*.py`.
+**Exports:** `run_riding_pool(n_browsers=1, stall_timeout_s=3600)`, `RiderState`, `RideRecord`, `JobRecord`, `FAIL_THRESHOLD`, `_watchdog`, `_abort_stall` — the last four are re-exports from `_p2_state.py`/`_p2_watchdog.py`, kept resolvable from `p2_browser_rider` for `p4_reporter.py`.
 **Calls out:** `_p2_state.py`, `_p2_fetch.py`, `_p2_watchdog.py` (this directory).
 
 ### _p2_state.py (77 LOC)
@@ -43,7 +43,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Purpose:** Stall detection and abort-report writing — `_watchdog` polls for progress staleness; `_abort_stall` drains the queue, writes `remaining_urls.txt`, writes `job.md` (via a late import of `p4_reporter` to avoid a module-level cycle, on a reporter error only a WARN line goes to stderr and no `job.md` is written), then `os._exit(1)`.
 **Reads:** nothing.
 **Writes:** `remaining_urls.txt`, `job.md` (on stall).
-**Called by:** `p2_browser_rider.py`, `test_watchdog.py` (via `p2_browser_rider`'s re-export).
+**Called by:** `p2_browser_rider.py`.
 **Calls out:** `p4_reporter.py` (this directory, lazy import inside `_write_stall_job_md`).
 
 ### p3_url_sampler.py (115 LOC)
@@ -93,49 +93,12 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Writes:** `png/raw_write_times_<YYYYMMDD>[_since<stamp>].png`. Stdout: filter summary, files, span, mean/median rate, longest gap.
 **Called by:** CLI only. `--bin-minutes` (default 1), `--rolling` (default 5), `--since 'YYYY-MM-DD HH:MM'`.
 
-### test_cooldown_policy.py (210 LOC)
+### smoke_stage1.py (118 LOC)
 
-**Purpose:** Deterministic tests for `RidingCooldownManager` (both `fixed` and `exp` policies). No browser or proxy infrastructure needed. `src/` imports lazy (worktree-root `sys.path` insert). 8 tests: fixed 60min eligibility boundary, fixed-default equivalence, exp unproductive-burn backoff bounds, exp cap at 3600s, exp reset on productive ride, exp eligible-after-backoff, exp `cooldown_count()` gate (A/B correctness gate for watchdog pool_samples), fixed `cooldown_count()` mirror check.
-**Reads:** none (in-memory state construction).
-**Writes:** stdout PASS/FAIL, exit code.
-**Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_cooldown_policy.py`.
-
-### smoke_stage1.py (245 LOC)
-
-**Purpose:** Stage 1 smoke validating the `src/news/engine/proxy_riding/` package — import check, deterministic watchdog test, and a mini live run (10 inventory URLs, 2 slots, 1 browser).
+**Purpose:** Stage 1 smoke validating the `src/news/engine/proxy_riding/` package — a mini live run only (10 inventory URLs, 2 slots, 1 browser); the deterministic cases moved to `dev/tests/test_riding_*.py`.
 **Reads:** `src/news/engine/proxy_riding/` package (import validation); 10 inventory URLs (live run).
 **Writes:** live-run raw `.html` files to a temp dir.
 **Called by:** CLI only, run from main checkout: `./venv/bin/python .claude/worktrees/<worktree>/dev/news_pipeline/coindesk_proxy_riding/smoke_stage1.py`.
-
-### test_sigint_report.py (208 LOC)
-
-**Purpose:** Deterministic SIGINT/SIGTERM report tests for `abort.py:_abort_interrupted` — asserts exit codes 130/143 and report writes, no browser or proxy infrastructure.
-**Reads:** none (constructed state).
-**Writes:** `job.md`, `cumulative.png` to a temp dir (assertion targets).
-**Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_sigint_report.py`.
-
-### test_tail_race.py (339 LOC)
-
-**Purpose:** Deterministic tail-race tests (5 cases, tests 1-5) for `rider.py:_run_slot` with `_fetch_one_url`/`_next_proxy` mocked — no browser or proxy infrastructure. Test 3 (`no_spurious_requeue`) has two sub-cases, each its own private helper (`_test_3_sub_a`/`_test_3_sub_b`) called from the one public `test_3_no_spurious_requeue` so the printed test name/count stay unchanged.
-**Reads:** none (mocked fetch/proxy).
-**Writes:** none beyond test assertions.
-**Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_tail_race.py`.
-**Calls out:** `_test_tail_race_watchdog.py` (this directory, tests 6-7).
-
-### _test_tail_race_watchdog.py (95 LOC)
-
-**Purpose:** Deterministic watchdog tests (tests 6-7) for `rider.py:_watchdog` — wedge-after-all-resolved (`os._exit(0)`) and pool-refresh-on-interval.
-**Reads:** none (mocked fetch/proxy).
-**Writes:** none beyond test assertions.
-**Called by:** `test_tail_race.py` only.
-**Calls out:** none.
-
-### test_watchdog.py (144 LOC)
-
-**Purpose:** Deterministic watchdog verification — no browser or proxy infrastructure needed. `test_watchdog_task_fires_and_writes_files`: constructs `RiderState` with `last_progress_mono` aged 200s past a 1s threshold + 2 queued + 1 in-flight URL; patches `os._exit` → `SystemExit(code)`; runs `_watchdog(poll_interval=0.1)`; asserts `os._exit(1)` called, `remaining_urls.txt` has both section headers + all 3 URLs, `job.md` exists with `stall`. `test_abort_stall_directly`: same assertions via direct `_abort_stall(idle_s=999.0)` call; also checks `"999"` in the header line.
-**Reads:** none (constructed state).
-**Writes:** `remaining_urls.txt`, `job.md` to a temp dir (assertion targets).
-**Called by:** CLI only. `./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_watchdog.py`.
 
 ## State
 `raw/` — one HTML per ok URL fetched (output-dir scoped, not committed). `png/` — historical throughput reconstruction plots (tracked).

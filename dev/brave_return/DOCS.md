@@ -5,7 +5,7 @@ Measurement tooling for the question of whether Brave's proof-of-work button cha
 
 ## Public Interface
 No `__init__.py`. Two entry points, both run directly and both relying on Python putting the script's own directory on `sys.path` for the sibling `_*` imports:
-`./venv/bin/python3 dev/brave_return/test_brave_pydoll_core.py` — offline, deterministic, no network.
+`./venv/bin/python -m pytest -o addopts="" dev/brave_return/test_brave_pydoll_core.py` — pytest module, one real headless Chrome per check on loopback fixtures, no network. Run per check in parallel with `-n auto`.
 `./venv/bin/python3 dev/brave_return/brave_pydoll_probe.py` — live, spends requests against search.brave.com.
 
 ## Flow
@@ -61,12 +61,12 @@ Resolve the Chromium bundle production launches -> launch Chrome on a dedicated 
 **Called by:** `brave_pydoll_probe.py`, `test_brave_pydoll_core.py`.
 **Calls out:** `_brave_probe_core.py`.
 
-### test_brave_pydoll_core.py (318 LOC)
+### test_brave_pydoll_core.py (381 LOC)
 
-**Purpose:** Offline test module — serves local fixtures over a loopback HTTP server and drives the real query runner against them, then builds a report from the result.
+**Purpose:** Pytest module — one test per check, each with its own loopback fixture server, Chrome and profile; drives the real query runner and builds a report from measured results.
 **Reads:** `fixtures/*.html`.
-**Writes:** a fixture report under the system temp directory; creates and deletes a temporary Chrome profile.
-**Called by:** CLI only. Exit code 1 on any failed check.
+**Writes:** a fixture report under pytest `tmp_path`; creates and deletes a temporary Chrome profile.
+**Called by:** pytest (module-level `browser` marker semantics: verification, not part of the default run).
 **Calls out:** `pydoll` via the launch/query siblings, stdlib `http.server`.
 
 ### _brave_pure_checks.py (172 LOC)
@@ -77,9 +77,9 @@ Resolve the Chromium bundle production launches -> launch Chrome on a dedicated 
 **Called by:** `test_brave_pydoll_core.py`.
 **Calls out:** `_brave_probe_core.py`.
 
-### _brave_probe_check_result.py (23 LOC)
+### _brave_probe_check_result.py (5 LOC)
 
-**Purpose:** Shared pass/fail accounting for both halves of the test module.
+**Purpose:** `check()` helper that raises AssertionError on a failed condition (fail-fast per test).
 **Reads:** nothing.
 **Writes:** stdout.
 **Called by:** `test_brave_pydoll_core.py`, `_brave_pure_checks.py`.

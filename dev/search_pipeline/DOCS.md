@@ -147,14 +147,6 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** imported historically by `no_google_burst_smoke.py` (import now unused).
 **Calls out:** `httpx`, `lxml.html`, `src.search.{rate_limiter,result,status}`.
 
-### test_snippet_truncate.py (26 LOC)
-
-**Purpose:** Standalone assertion script for `src.search.snippet._truncate` with four regression cases.
-**Reads:** none.
-**Writes:** stdout `OK` or `AssertionError`.
-**Called by:** CLI only.
-**Calls out:** `src.search.snippet`.
-
 ### with_google_decoupling_smoke.py (172 LOC)
 
 **Purpose:** Verifies Scholar is absent from the default engine set by inspecting the query log after five workflow runs.
