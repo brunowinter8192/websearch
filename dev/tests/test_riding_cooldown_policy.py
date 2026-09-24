@@ -1,56 +1,7 @@
-#!/usr/bin/env python3
-
-# INFRASTRUCTURE
-
-import sys
-import time
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-
-_WORKTREE = Path(__file__).parents[3]
-if str(_WORKTREE) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE))
 
 _PROTO = "http"
 _HP    = "proxy:8080"
-
-
-# ORCHESTRATOR
-
-def main() -> None:
-    results = [
-        _run("test_fixed_60min",               test_fixed_60min),
-        _run("test_fixed_default_equiv",        test_fixed_default_equiv),
-        _run("test_exp_unproductive_bounds",    test_exp_unproductive_bounds),
-        _run("test_exp_cap",                    test_exp_cap),
-        _run("test_exp_reset_on_productive",    test_exp_reset_on_productive),
-        _run("test_exp_eligible_after_backoff", test_exp_eligible_after_backoff),
-        _run("test_exp_cooldown_count",         test_exp_cooldown_count),
-        _run("test_fixed_cooldown_count",       test_fixed_cooldown_count),
-    ]
-    passed = sum(results)
-    print(f"\n{'='*55}")
-    print(f"Results: {passed}/{len(results)} passed")
-    if passed < len(results):
-        sys.exit(1)
-
-
-# FUNCTIONS
-
-def _run(name: str, fn) -> bool:
-    print(f"[test] {name} ...", end=" ", flush=True)
-    try:
-        fn()
-        print("PASS")
-        return True
-    except AssertionError as exc:
-        print(f"FAIL — {exc}")
-        return False
-    except Exception as exc:
-        import traceback
-        print(f"ERROR — {exc}")
-        traceback.print_exc()
-        return False
 
 
 def _burn_at_offset(mgr, proto, hp, offset_s: float, ride_ok: int = 0) -> None:
@@ -205,6 +156,3 @@ def test_fixed_cooldown_count() -> None:
     assert len(mgr.eligible_candidates(pool)) == 2, \
         f"expected 2 eligible after backdating two"
 
-
-if __name__ == "__main__":
-    main()

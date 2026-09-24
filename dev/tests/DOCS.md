@@ -4,17 +4,49 @@
 The project's pytest suite. Regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`, `src/news/` (proxy_pool, proxy_riding/abort, theblock, coindesk/timeline, dedup, clean_pass) and `src/log_janitor.py`. I/O boundaries are mocked per test and production logic runs for real; `conftest.py` fails any test that reaches a real browser launch unmocked. Exceptions: fixture-backed sections (loopback only) and the brave/yandex engine tests (headless Chrome on loopback). Touch when test coverage changes; not when production behavior changes without an assertion needing to change.
 
 ## Public Interface
-`__init__.py` is empty. Collected via `pytest` from the repo root (`pytest.ini`: `testpaths = dev/tests`, `pythonpath = .`). Files named `_*_fakes.py` and `_browser_fakes.py` are shared helpers, not collected.
+`__init__.py` is empty. Collected via `pytest` from the repo root (`pytest.ini`: `testpaths = dev/tests`, `pythonpath = .`, default `-m "not browser" --timeout=60`). Real-browser tests carry the `browser` marker and run only with `-m browser`. `run_strands.sh` runs one fail-fast pytest per test file in parallel. Files named `_*_fakes.py` and `_browser_fakes.py` are shared helpers, not collected.
 
 ## Flow
 Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) go into the real function under test, and assertions read its real output (parsed results, rendered markdown, JSONL records). `tmp_path` and `monkeypatch` isolate filesystem and environment per test.
 
 ## Modules
 
-### conftest.py (27 LOC)
+### conftest.py (54 LOC)
 
 **Purpose:** Suite-wide autouse tripwire: every real browser-launch primitive is replaced by a failing stand-in, so an unmocked launch fails the test by name.
 **Calls out:** src.search.browser, src.scraper.chromium_scrape, src.scraper.camoufox_scrape, src.crawler.pipe_scraper.
+
+### run_strands.sh (33 LOC)
+
+**Purpose:** Runs one `pytest -x` per test file in parallel, each with its own basetemp and log under `/tmp/websearch_strands/`; a failing strand stops itself while the others finish. Not collected by pytest.
+
+### test_conftest_guards.py (22 LOC)
+
+**Purpose:** Provokes the `conftest.py` guards: osascript trap, subprocess pass-through, per-test tempdir.
+
+### test_riding_cooldown_policy.py (158 LOC)
+
+**Purpose:** `RidingCooldownManager` fixed and exp policies (bounds, cap, reset, cooldown_count).
+
+### test_riding_imports.py (25 LOC)
+
+**Purpose:** `src/news/engine/proxy_riding` import check, config defaults, no `sys.path` hacks.
+
+### test_riding_sigint_report.py (164 LOC)
+
+**Purpose:** `abort.py:_abort_interrupted`: exit codes 130/143 and report writes.
+
+### test_riding_tail_race.py (281 LOC)
+
+**Purpose:** `rider.py:_run_slot` tail-race cases with `_fetch_one_url`/`_next_proxy` mocked.
+
+### test_riding_watchdog.py (91 LOC)
+
+**Purpose:** `rider.py:_watchdog`: wedge after all resolved and pool refresh.
+
+### test_snippet.py (40 LOC)
+
+**Purpose:** `src.search.snippet._truncate` cases and the dev copy `dev/search_pipeline/_lib/text.strip_bloat` cases.
 
 ### _browser_fakes.py (23 LOC)
 
@@ -29,11 +61,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/browser.py get_tab(): critical-section ordering, self-launch arguments, fresh profile per run, failure cleanup.
 
-### test_browser_lock.py (81 LOC)
+### test_browser_lock.py (92 LOC)
 
 **Purpose:** src/search/browser_lock.py against real flock: immediate acquire, blocking until release, stale takeover.
 
-### test_death_pipe.py (131 LOC)
+### test_death_pipe.py (141 LOC)
 
 **Purpose:** src/death_pipe.py: real spawned watchdog subprocess plus mocked terminate/kill logic.
 
@@ -45,7 +77,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/bing.py: _clean_url redirect unwrap, _build_results, _parse_results error propagation.
 
-### test_brave_engine.py (390 LOC)
+### test_brave_engine.py (392 LOC)
 
 **Purpose:** src/search/engines/brave.py: fixture-driven regression tests (marker reflection, challenge solving, partial facts on cancellation) against a real headless pydoll Chrome on loopback.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -66,7 +98,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/startpage.py: _build_results.
 
-### test_yandex_engine.py (221 LOC)
+### test_yandex_engine.py (223 LOC)
 
 **Purpose:** src/search/engines/yandex.py: self-link filter, block-URL detection, _build_results, two fixture-driven regression tests.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -96,7 +128,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/degraded_notice.py: real recorded engine_run fixtures, threshold, drop_reason display, repair-line gate.
 
-### test_query_logger.py (327 LOC)
+### test_query_logger.py (347 LOC)
 
 **Purpose:** src/search/query_logger.py, _engine_with_timing, search_web_workflow log shape, and cli.py _log_drilldown via an isolated subprocess.
 
@@ -117,7 +149,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/camoufox_scrape.py try_scrape_camoufox: acquisition-error states, urlsplit regression, markdown-conversion failure, document-status chain.
 
-### test_camoufox_scrape_output.py (197 LOC)
+### test_camoufox_scrape_output.py (200 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py: calibration kwargs and config stamp, scrape_url_camoufox_workflow logging, output format.
 
@@ -125,7 +157,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/camoufox_scrape.py no-focus-steal launch: LSUIElement plist patch and ignore_default_args.
 
-### _chromium_scrape_fakes.py (43 LOC)
+### _chromium_scrape_fakes.py (47 LOC)
 
 **Purpose:** Shared CDP launch-mechanics patch and fake result objects. Not collected by pytest.
 **Called by:** test_chromium_scrape.py, test_chromium_scrape_facts.py, test_chromium_scrape_output.py, test_chromium_scrape_document_status.py.
@@ -181,7 +213,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** src/crawler/discovery.py: seed assembly and merge priority (pure), plus one shared fixture-backed discovery run checked against ground truth.
 **Calls out:** dev.url_discovery._fixture_site.
 
-### _pipe_scraper_fakes.py (49 LOC)
+### _pipe_scraper_fakes.py (83 LOC)
 
 **Purpose:** Shared timestamp helper, fake crawler and camoufox meta builder. Not collected by pytest.
 **Called by:** test_pipe_scraper.py, test_pipe_scraper_camoufox_engine.py, test_pipe_scraper_onward_links.py.
@@ -190,11 +222,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/crawler/pipe_scraper_config.py: config stamp, live crawl4ai stealth wiring guard, fixed anti-bot posture, headed flag effect.
 
-### test_pipe_scraper.py (248 LOC)
+### test_pipe_scraper.py (250 LOC)
 
 **Purpose:** src/crawler/pipe_scraper*.py: per-URL JSONL log, run_id sharing, request-start timing, exception tripwire record, landed_url.
 
-### test_pipe_scraper_camoufox_engine.py (196 LOC)
+### test_pipe_scraper_camoufox_engine.py (198 LOC)
 
 **Purpose:** src/crawler/pipe_scraper*.py camoufox engine dispatch: defaults, record shape, acquisition_error and document-status-chain pass-through.
 
@@ -271,7 +303,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** death_pipe intervention-log write failure raises, `removed_dir` reflects the real outcome.
 
-### test_coindesk_stop_date.py (27 LOC)
+### test_coindesk_stop_date.py (41 LOC)
 
 **Purpose:** src/news/platforms/coindesk/discover.py _parse_stop_date: full, explicit delta, integer days, unparseable value raises.
 
@@ -280,8 +312,8 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** src/log_janitor.py get_retention_days: default and malformed-value behavior.
 
 ## State
-No module owns shared mutable state. `conftest.py` patches four browser-launch names per test through an autouse fixture; every other state (module globals of the code under test, environment variables, log paths) is reset per test through `monkeypatch` and `tmp_path`.
+No module owns shared mutable state. `conftest.py` patches four browser-launch names per test through an autouse fixture, redirects `tempfile.tempdir` to a per-test `tmp_path`, traps `osascript` calls and pins the camoufox system locale; every other state (module globals of the code under test, environment variables, log paths) is reset per test through `monkeypatch` and `tmp_path`.
 
 ## Gotchas
 - Any test that resolves the repo root through `Path(__file__).parent...` breaks silently when the directory moves.
-- `test_brave_engine.py` and `test_yandex_engine.py` run a real headless Chrome and patch `brave.py`/`yandex.py` `new_tab`/`kill_tab` directly, so `conftest.py`'s trap never fires for them. Two brave tests have failed intermittently in full-suite runs; details in `process-docs/refactor_sweep/`.
+- `test_brave_engine.py` and `test_yandex_engine.py` run a real headless Chrome and patch `brave.py`/`yandex.py` `new_tab`/`kill_tab` directly, so `conftest.py`'s trap never fires for them. They are marked `browser` and excluded from the default run. Two brave tests have failed intermittently in full-suite runs; details in `process-docs/refactor_sweep/`.

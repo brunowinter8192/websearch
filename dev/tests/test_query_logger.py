@@ -8,6 +8,29 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+class _NoopLimiter:
+    async def acquire(self):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limiting(monkeypatch):
+    from src.search import search_web
+    monkeypatch.setattr(search_web, "get_limiter", lambda name: _NoopLimiter())
+
+
+@pytest.fixture
+def cli_module(monkeypatch):
+    import importlib
+    import logging.handlers
+    import sys
+    monkeypatch.setattr(logging.handlers, "TimedRotatingFileHandler", lambda *a, **kw: logging.NullHandler())
+    monkeypatch.delitem(sys.modules, "cli", raising=False)
+    module = importlib.import_module("cli")
+    yield module
+    sys.modules.pop("cli", None)
+
+
 def _make_mock_engine_with_reason(
     name: str, results: list, delay: float = 0.0, empty_reason: str | None = None, diagnosis: dict | None = None,
     partial_facts: dict | None = None,
@@ -98,8 +121,13 @@ async def test_engine_with_timing_ok():
 
 
 @pytest.mark.asyncio
-async def test_engine_with_timing_timeout():
+async def test_engine_with_timing_timeout(monkeypatch):
+    from types import SimpleNamespace
+    from src.search import search_web
     from src.search.search_web import _engine_with_timing
+
+    ticks = iter(range(1, 100))
+    monkeypatch.setattr(search_web, "time", SimpleNamespace(perf_counter=lambda: next(ticks) * 0.001))
 
     slow = _make_mock_engine_with_reason("slow_eng", [], delay=5.0)
 
@@ -116,8 +144,13 @@ async def test_engine_with_timing_timeout():
 
 
 @pytest.mark.asyncio
-async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation():
+async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation(monkeypatch):
+    from types import SimpleNamespace
+    from src.search import search_web
     from src.search.search_web import _engine_with_timing
+
+    ticks = iter(range(1, 100))
+    monkeypatch.setattr(search_web, "time", SimpleNamespace(perf_counter=lambda: next(ticks) * 0.001))
 
     slow = _make_mock_engine_with_reason(
         "slow_eng", [], delay=5.0,
@@ -283,27 +316,14 @@ async def test_search_web_workflow_writes_search_key_matching_cache_key(tmp_path
     assert rec["search_key"] == expected_key
 
 
-def test_log_drilldown_all_cache_status_and_pool_combinations(tmp_path):
-    import os
-    import subprocess
-    import sys
-
+def test_log_drilldown_all_cache_status_and_pool_combinations(tmp_path, monkeypatch, cli_module):
     log_file = tmp_path / "query_log.jsonl"
-    repo_root = Path(__file__).parent.parent.parent
-    script = f"""
-import sys
-sys.path.insert(0, {str(repo_root)!r})
-import cli
-cli._log_drilldown("fritzbox 7510", "en", "google", "searchkey123", "hit", True,
-                    ["https://a.com", "https://b.com"])
-cli._log_drilldown("fritzbox 7510", "en", "obscure_engine", "searchkey123", "hit", False, [])
-cli._log_drilldown("never searched", "en", "google", "searchkey999",
-                    "miss_then_search_failed", False, [])
-"""
-    env = {**os.environ, "WEBSEARCH_QUERY_LOG_PATH": str(log_file)}
-    result = subprocess.run([sys.executable, "-c", script], cwd=repo_root, env=env,
-                             capture_output=True, text=True, timeout=60)
-    assert result.returncode == 0, f"stderr: {result.stderr}"
+    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
+    cli_module._log_drilldown("fritzbox 7510", "en", "google", "searchkey123", "hit", True,
+                              ["https://a.com", "https://b.com"])
+    cli_module._log_drilldown("fritzbox 7510", "en", "obscure_engine", "searchkey123", "hit", False, [])
+    cli_module._log_drilldown("never searched", "en", "google", "searchkey999",
+                              "miss_then_search_failed", False, [])
 
     lines = log_file.read_text().splitlines()
     assert len(lines) == 3

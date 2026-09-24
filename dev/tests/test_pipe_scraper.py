@@ -7,7 +7,7 @@ from src.crawler import pipe_scraper
 from src.crawler import pipe_scraper_config
 from src.crawler import pipe_scraper_acquisition
 from src.crawler.pipe_scrape_logger import log_pipe_scrape
-from dev.tests._pipe_scraper_fakes import _now_ts, _FakeResult, _FakeCrawler
+from dev.tests._pipe_scraper_fakes import _now_ts, _FakeResult, _FakeCrawler, _install_fake_pacing
 
 
 def test_log_pipe_scrape_writes_jsonl_record(tmp_path, monkeypatch):
@@ -158,6 +158,7 @@ async def test_scrape_all_camoufox_executor_exception_propagates(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_scrape_one_ts_reflects_request_start_not_queue_time(tmp_path, monkeypatch):
+    clock = _install_fake_pacing(monkeypatch)
     log_file = tmp_path / "pipe_scrape_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(log_file))
     monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
@@ -173,7 +174,8 @@ async def test_scrape_one_ts_reflects_request_start_not_queue_time(tmp_path, mon
     distinct = {t for t in timestamps}
     assert len(distinct) > 1, "all records share one ts — ts is being stamped at queue time, not request start"
     spread_s = (max(timestamps) - min(timestamps)).total_seconds()
-    assert spread_s > 0.1, f"ts spread too small ({spread_s}s) for a gated 6-URL/concurrency=1 run"
+    assert clock.sleeps == pytest.approx([0.05] * 5)
+    assert spread_s == pytest.approx(0.25, abs=0.002), f"ts spread wrong ({spread_s}s) for a gated 6-URL/concurrency=1 run"
 
 
 @pytest.mark.asyncio

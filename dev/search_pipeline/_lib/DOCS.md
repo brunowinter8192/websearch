@@ -27,15 +27,5 @@ A caller passes a smoke-report `Path` or raw snippet text in; the modules return
 **Called by:** `report_analysis/snippet_quality_analysis.py`, `report_analysis/snippet_selection_simulator.py`.
 **Calls out:** none beyond stdlib.
 
-### test_text.py (27 LOC)
-
-**Purpose:** Standalone assertion script for `strip_bloat` with six regression cases.
-**Reads:** none.
-**Writes:** stdout or `AssertionError`.
-**Called by:** CLI only (`./venv/bin/python dev/search_pipeline/_lib/test_text.py`).
-**Calls out:** `_lib.text`.
-
----
-
 ## State
 none.

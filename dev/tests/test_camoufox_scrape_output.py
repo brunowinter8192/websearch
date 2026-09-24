@@ -5,6 +5,8 @@ import pytest
 from src.scraper import camoufox_scrape
 from dev.tests._camoufox_scrape_fakes import _fake_launch_options, _make_fake_camoufox, _FakeAsyncWebCrawler
 
+_real_resolve_system_locale = camoufox_scrape._resolve_system_locale
+
 
 def test_build_camoufox_kwargs_reflects_block_images_param():
     off = camoufox_scrape._build_camoufox_kwargs(block_images=False)
@@ -176,7 +178,7 @@ def test_resolve_system_locale_command_failure_propagates(monkeypatch):
     monkeypatch.setattr(camoufox_scrape.sys, "platform", "darwin")
     monkeypatch.setattr(camoufox_scrape.subprocess, "run", _fail)
     with pytest.raises(subprocess.CalledProcessError):
-        camoufox_scrape._resolve_system_locale()
+        _real_resolve_system_locale()
 
 
 def test_resolve_system_locale_converts_apple_locale_to_bcp47(monkeypatch):
@@ -185,13 +187,14 @@ def test_resolve_system_locale_converts_apple_locale_to_bcp47(monkeypatch):
         camoufox_scrape.subprocess, "run",
         lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout="de_DE\n", stderr=""),
     )
-    assert camoufox_scrape._resolve_system_locale() == "de-DE"
+    assert _real_resolve_system_locale() == "de-DE"
 
 
 def test_resolve_system_locale_empty_output_raises(monkeypatch):
+    monkeypatch.setattr(camoufox_scrape.sys, "platform", "darwin")
     monkeypatch.setattr(
         camoufox_scrape.subprocess, "run",
         lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout="\n", stderr=""),
     )
     with pytest.raises(RuntimeError, match="empty"):
-        camoufox_scrape._resolve_system_locale()
+        _real_resolve_system_locale()

@@ -184,6 +184,7 @@ def _patch_yandex_tab_lifecycle(monkeypatch, browser: Chrome) -> None:
     monkeypatch.setattr(yandex_mod, "kill_tab", lambda tab: _fixture_kill_tab(browser, tab))
 
 
+@pytest.mark.browser
 @pytest.mark.asyncio
 async def test_marker_word_in_own_query_no_longer_discards_real_results(monkeypatch):
     server, base_url = _start_fixture_server()
@@ -203,6 +204,7 @@ async def test_marker_word_in_own_query_no_longer_discards_real_results(monkeypa
                          "selector_hits": {"snippet": {"1": 2}}}
 
 
+@pytest.mark.browser
 @pytest.mark.asyncio
 async def test_genuine_showcaptcha_redirect_still_yields_no_results(monkeypatch):
     server, base_url = _start_fixture_server()

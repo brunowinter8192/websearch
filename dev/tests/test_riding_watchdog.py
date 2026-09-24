@@ -1,12 +1,8 @@
-# INFRASTRUCTURE
-
 import asyncio
 import tempfile
 import unittest.mock
 from pathlib import Path
 
-
-# FUNCTIONS
 
 def test_6_watchdog_wedge_after_all_resolved() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod

@@ -1,50 +1,9 @@
-#!/usr/bin/env python3
-
-# INFRASTRUCTURE
-
 import asyncio
 import signal
-import sys
 import tempfile
 import time
 import unittest.mock
 from pathlib import Path
-
-_WORKTREE = Path(__file__).parents[3]
-if str(_WORKTREE) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE))
-
-
-# ORCHESTRATOR
-
-def main() -> None:
-    results = [
-        _run("test_abort_interrupted_sigint",  test_abort_interrupted_sigint),
-        _run("test_abort_interrupted_sigterm", test_abort_interrupted_sigterm),
-    ]
-    passed = sum(results)
-    print(f"\n{'='*55}")
-    print(f"Results: {passed}/{len(results)} passed")
-    if passed < len(results):
-        sys.exit(1)
-
-
-# FUNCTIONS
-
-def _run(name: str, fn) -> bool:
-    print(f"[test] {name} ...", end=" ", flush=True)
-    try:
-        fn()
-        print("PASS")
-        return True
-    except AssertionError as exc:
-        print(f"FAIL — {exc}")
-        return False
-    except Exception as exc:
-        import traceback
-        print(f"ERROR — {exc}")
-        traceback.print_exc()
-        return False
 
 
 def _build_job_records(t0, tmp_dir: Path) -> list:
@@ -203,6 +162,3 @@ def test_abort_interrupted_sigterm() -> None:
         md = (job_dir / "job.md").read_text()
         assert "interrupted" in md.lower(),      "termination=interrupted missing from job.md"
 
-
-if __name__ == "__main__":
-    main()

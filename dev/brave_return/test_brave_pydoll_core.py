@@ -1,15 +1,16 @@
 # INFRASTRUCTURE
-import asyncio
 import functools
 import http.server
-import logging
 import shutil
 import socket
 import tempfile
 import threading
 from pathlib import Path
 
-from _brave_probe_check_result import check, report_outcome
+import pytest
+import pytest_asyncio
+
+from _brave_probe_check_result import check
 from _brave_probe_core import (
     STATE_BLOCKED, STATE_BUTTON_PENDING, STATE_BUTTON_VERIFYING, STATE_POW_LINK_BLOCK,
     STATE_RESULTS, VERDICT_BLOCKED, VERDICT_BUTTON_UNRESOLVED, VERDICT_POW_LINK_BLOCKED,
@@ -34,7 +35,6 @@ STUCK_BUDGET_S = 5.0
 BLOCKED_BUDGET_S = 10.0
 FIXTURE_BUDGET_S = 15.0
 
-_fixture_measurements: dict = {}
 
 
 class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
@@ -52,32 +52,6 @@ class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         return
-
-
-# ORCHESTRATOR
-
-async def test_workflow() -> int:
-    run_pure_function_checks()
-    server, base_url = start_fixture_server()
-    profile_dir = tempfile.mkdtemp(prefix="brave-fixture-profile-")
-    bundle_path = await resolve_chromium_bundle_path()
-    handle = await launch_browser(profile_dir, bundle_path)
-    try:
-        await check_tripwire_aborts_on_dead_control(handle)
-        await check_tripwire_passes_on_live_control(handle, base_url)
-        await check_results_page_without_challenge(handle, base_url)
-        await check_button_challenge_success_path(handle, base_url)
-        await check_button_challenge_success_shadow_path(handle, base_url)
-        await check_stuck_challenge_is_not_blocked(handle, base_url)
-        await check_refused_challenge_is_blocked(handle, base_url)
-        await check_pow_link_block_with_no_button(handle, base_url)
-        await check_cookie_capture_and_diff(handle, base_url)
-        check_report_builds_from_fixture_measurements(profile_dir)
-    finally:
-        await teardown(handle)
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        server.shutdown()
-    return report_outcome()
 
 
 # FUNCTIONS
@@ -123,7 +97,6 @@ async def check_tripwire_passes_on_live_control(handle, base_url: str) -> None:
 
 async def check_results_page_without_challenge(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["results"] = m
     check(
         "an unchallenged results page is SUCCESS_UNCHALLENGED",
         m.verdict == VERDICT_SUCCESS_UNCHALLENGED and not m.challenge_served,
@@ -135,7 +108,6 @@ async def check_results_page_without_challenge(handle, base_url: str) -> None:
 
 async def check_button_challenge_success_path(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_button", f"{base_url}/button_challenge_success.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["button"] = m
     check(
         "the deep-query click reaches a light-DOM button",
         m.trigger_attempted and m.trigger_found_button and m.trigger_mechanism == "js_click",
@@ -164,7 +136,6 @@ async def check_button_challenge_success_path(handle, base_url: str) -> None:
 
 async def check_button_challenge_success_shadow_path(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_shadow", f"{base_url}/button_challenge_success_shadow.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["shadow"] = m
     check(
         "the deep-query click reaches a shadow-hosted button too",
         m.trigger_attempted and m.trigger_found_button and m.trigger_mechanism == "js_click",
@@ -187,7 +158,6 @@ def _marks_are_ordered(m) -> bool:
 
 async def check_stuck_challenge_is_not_blocked(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_stuck", f"{base_url}/button_challenge_stuck.html", STUCK_BUDGET_S)
-    _fixture_measurements["stuck"] = m
     check(
         "a spinner that never resolves is INCONCLUSIVE_STILL_VERIFYING, never BLOCKED",
         m.verdict == VERDICT_STILL_VERIFYING and m.final_state == STATE_BUTTON_VERIFYING,
@@ -202,7 +172,6 @@ async def check_stuck_challenge_is_not_blocked(handle, base_url: str) -> None:
 
 async def check_refused_challenge_is_blocked(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_refused", f"{base_url}/button_challenge_refused.html", BLOCKED_BUDGET_S)
-    _fixture_measurements["refused"] = m
     check(
         "a refusal after the in-flight marker clears is BLOCKED",
         m.verdict == VERDICT_BLOCKED and m.final_state == STATE_BLOCKED,
@@ -222,7 +191,6 @@ async def check_refused_challenge_is_blocked(handle, base_url: str) -> None:
 
 async def check_pow_link_block_with_no_button(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_powlink", f"{base_url}/pow_link_block.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["powlink"] = m
     check(
         "a pow-link page with no clickable candidate is POW_LINK_BLOCKED, and nothing is attempted",
         m.verdict == VERDICT_POW_LINK_BLOCKED and m.final_state == STATE_POW_LINK_BLOCK
@@ -279,16 +247,16 @@ async def check_cookies_are_visible_from_a_blank_tab(handle) -> None:
     )
 
 
-def check_report_builds_from_fixture_measurements(profile_dir: str) -> None:
+def check_report_builds_from_fixture_measurements(profile_dir: str, report_path: Path, measurements: dict) -> None:
     cold = Phase("A cold", "fixture phase", profile_dir, [
-        _fixture_measurements["button"], _fixture_measurements["results"],
+        measurements["button"], measurements["results"],
     ])
     warm = Phase("C warm after relaunch", "fixture phase", profile_dir, [
-        _fixture_measurements["results"],
+        measurements["results"],
     ])
     fresh = Phase("D fresh control", "fixture phase", profile_dir, [
-        _fixture_measurements["refused"], _fixture_measurements["stuck"],
-        _fixture_measurements["powlink"], _fixture_measurements["shadow"],
+        measurements["refused"], measurements["stuck"],
+        measurements["powlink"], measurements["shadow"],
     ])
     phases = [cold, warm, fresh]
     persistence = build_persistence_record(
@@ -297,7 +265,7 @@ def check_report_builds_from_fixture_measurements(profile_dir: str) -> None:
     report = build_report_md(
         phases, persistence, count_live_requests(phases), 20.0, 30.0, "fixture budget note", False,
     )
-    Path("/tmp/brave_pydoll_probe_fixture_report.md").write_text(report)
+    report_path.write_text(report)
     check("the report builder runs end to end on real measurement objects", len(report) > 2000)
     check(
         "the report carries the per-query table, all four question sections and the limits",
@@ -313,6 +281,101 @@ def check_report_builds_from_fixture_measurements(profile_dir: str) -> None:
     check("live request count is the number of Brave navigations", count_live_requests(phases) == 7)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    raise SystemExit(asyncio.run(test_workflow()))
+async def _collect_fixture_measurements(handle, base_url: str) -> dict:
+    return {
+        "results": await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S),
+        "button": await run_query(handle, "fixture_button", f"{base_url}/button_challenge_success.html", FIXTURE_BUDGET_S),
+        "shadow": await run_query(handle, "fixture_shadow", f"{base_url}/button_challenge_success_shadow.html", FIXTURE_BUDGET_S),
+        "stuck": await run_query(handle, "fixture_stuck", f"{base_url}/button_challenge_stuck.html", STUCK_BUDGET_S),
+        "refused": await run_query(handle, "fixture_refused", f"{base_url}/button_challenge_refused.html", BLOCKED_BUDGET_S),
+        "powlink": await run_query(handle, "fixture_powlink", f"{base_url}/pow_link_block.html", FIXTURE_BUDGET_S),
+    }
+
+
+@pytest_asyncio.fixture
+async def fixture_browser():
+    server, base_url = start_fixture_server()
+    profile_dir = tempfile.mkdtemp(prefix="brave-fixture-profile-")
+    bundle_path = await resolve_chromium_bundle_path()
+    handle = await launch_browser(profile_dir, bundle_path)
+    try:
+        yield handle, base_url, profile_dir
+    finally:
+        await teardown(handle)
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        server.shutdown()
+
+
+def test_pure_function_checks():
+    run_pure_function_checks()
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_aborts_on_dead_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_aborts_on_dead_control(handle)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_passes_on_live_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_passes_on_live_control(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_results_page_without_challenge(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_results_page_without_challenge(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_button_challenge_success_path(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_button_challenge_success_path(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_button_challenge_success_shadow_path(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_button_challenge_success_shadow_path(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_stuck_challenge_is_not_blocked(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_stuck_challenge_is_not_blocked(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_refused_challenge_is_blocked(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_refused_challenge_is_blocked(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_pow_link_block_with_no_button(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_pow_link_block_with_no_button(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_cookie_capture_and_diff(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_cookie_capture_and_diff(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_report_builds_from_fixture_measurements(fixture_browser, tmp_path):
+    handle, base_url, profile_dir = fixture_browser
+    measurements = await _collect_fixture_measurements(handle, base_url)
+    check_report_builds_from_fixture_measurements(profile_dir, tmp_path / "report.md", measurements)

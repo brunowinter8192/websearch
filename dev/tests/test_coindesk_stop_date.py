@@ -3,11 +3,25 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.news.platforms.coindesk.config import DEFAULT_DELTA_DAYS, FULL_MODE_FLOOR
+from src.news.platforms.coindesk import discover
 from src.news.platforms.coindesk.discover import _parse_stop_date
+
+FROZEN_NOW = datetime(2026, 9, 24, 23, 59, 59, tzinfo=timezone.utc)
+
+
+class _FrozenDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return FROZEN_NOW
+
+
+@pytest.fixture(autouse=True)
+def _frozen_now(monkeypatch):
+    monkeypatch.setattr(discover, "datetime", _FrozenDatetime)
 
 
 def _days_ago(n: int) -> str:
-    return (datetime.now(timezone.utc).date() - timedelta(days=n)).isoformat()
+    return (FROZEN_NOW.date() - timedelta(days=n)).isoformat()
 
 
 def test_parse_stop_date_full_returns_floor():

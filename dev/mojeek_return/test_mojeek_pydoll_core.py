@@ -1,15 +1,16 @@
 # INFRASTRUCTURE
-import asyncio
 import functools
 import http.server
-import logging
 import shutil
 import socket
 import tempfile
 import threading
 from pathlib import Path
 
-from _mojeek_pydoll_check_result import check, report_outcome
+import pytest
+import pytest_asyncio
+
+from _mojeek_pydoll_check_result import check
 from _mojeek_pydoll_probe_core import (
     STATE_BLOCKED, STATE_CHALLENGE_PENDING, STATE_IN_FLIGHT, STATE_RESULTS,
     VERDICT_BLOCKED, VERDICT_STILL_PENDING, VERDICT_SUCCESS_CHALLENGED,
@@ -33,7 +34,6 @@ STUCK_BUDGET_S = 5.0
 BLOCKED_BUDGET_S = 10.0
 FIXTURE_BUDGET_S = 15.0
 
-_fixture_measurements: dict = {}
 
 
 class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
@@ -51,29 +51,6 @@ class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         return
-
-
-# ORCHESTRATOR
-
-async def test_workflow() -> int:
-    run_pure_function_checks()
-    server, base_url = start_fixture_server()
-    profile_dir = tempfile.mkdtemp(prefix="mojeek-fixture-profile-")
-    handle = await launch_browser(profile_dir)
-    try:
-        await check_tripwire_aborts_on_dead_control(handle)
-        await check_tripwire_passes_on_live_control(handle, base_url)
-        await check_results_page_without_challenge(handle, base_url)
-        await check_challenge_success_path(handle, base_url)
-        await check_stuck_challenge_is_not_blocked(handle, base_url)
-        await check_genuine_block(handle, base_url)
-        await check_cookie_capture_and_diff(handle, base_url)
-        check_report_builds_from_fixture_measurements(profile_dir)
-    finally:
-        await teardown(handle)
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        server.shutdown()
-    return report_outcome()
 
 
 # FUNCTIONS
@@ -119,7 +96,6 @@ async def check_tripwire_passes_on_live_control(handle, base_url: str) -> None:
 
 async def check_results_page_without_challenge(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["results"] = m
     check(
         "an unchallenged results page is SUCCESS_UNCHALLENGED",
         m.verdict == VERDICT_SUCCESS_UNCHALLENGED and not m.challenge_served,
@@ -131,7 +107,6 @@ async def check_results_page_without_challenge(handle, base_url: str) -> None:
 
 async def check_challenge_success_path(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_challenge", f"{base_url}/challenge_success.html", FIXTURE_BUDGET_S)
-    _fixture_measurements["challenge"] = m
     check(
         "verify() fired through pydoll reaches a page-defined custom element method",
         m.verify_fired,
@@ -175,7 +150,6 @@ def _marks_are_ordered(m) -> bool:
 
 async def check_stuck_challenge_is_not_blocked(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_stuck", f"{base_url}/challenge_stuck.html", STUCK_BUDGET_S)
-    _fixture_measurements["stuck"] = m
     check(
         "a still-open server round trip is INCONCLUSIVE_STILL_PENDING, never BLOCKED",
         m.verdict == VERDICT_STILL_PENDING and m.final_state == STATE_IN_FLIGHT,
@@ -190,7 +164,6 @@ async def check_stuck_challenge_is_not_blocked(handle, base_url: str) -> None:
 
 async def check_genuine_block(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_blocked", f"{base_url}/challenge_blocked.html", BLOCKED_BUDGET_S)
-    _fixture_measurements["blocked"] = m
     check(
         "a refusal after the in-flight marker clears is BLOCKED",
         m.verdict == VERDICT_BLOCKED and m.final_state == STATE_BLOCKED,
@@ -251,22 +224,22 @@ async def check_cookies_are_visible_from_a_blank_tab(handle) -> None:
     )
 
 
-def check_report_builds_from_fixture_measurements(profile_dir: str) -> None:
+def check_report_builds_from_fixture_measurements(profile_dir: str, report_path: Path, measurements: dict) -> None:
     cold = Phase("A cold", "fixture phase", profile_dir, [
-        _fixture_measurements["challenge"], _fixture_measurements["results"],
+        measurements["challenge"], measurements["results"],
     ])
     warm = Phase("C warm after relaunch", "fixture phase", profile_dir, [
-        _fixture_measurements["results"],
+        measurements["results"],
     ])
     fresh = Phase("D fresh control", "fixture phase", profile_dir, [
-        _fixture_measurements["blocked"], _fixture_measurements["stuck"],
+        measurements["blocked"], measurements["stuck"],
     ])
     phases = [cold, warm, fresh]
     persistence = build_persistence_record(
         cold, warm, snapshot_cookie_store(profile_dir), snapshot_cookie_store(profile_dir)
     )
     report = build_report_md(phases, persistence, count_live_requests(phases), 20.0, 60.0)
-    Path("/tmp/mojeek_pydoll_probe_fixture_report.md").write_text(report)
+    report_path.write_text(report)
     check("the report builder runs end to end on real measurement objects", len(report) > 2000)
     check(
         "the report carries the per-query table, all three question sections and the limits",
@@ -282,6 +255,84 @@ def check_report_builds_from_fixture_measurements(profile_dir: str) -> None:
     check("live request count is the number of Mojeek navigations", count_live_requests(phases) == 5)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    raise SystemExit(asyncio.run(test_workflow()))
+async def _collect_fixture_measurements(handle, base_url: str) -> dict:
+    return {
+        "results": await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S),
+        "challenge": await run_query(handle, "fixture_challenge", f"{base_url}/challenge_success.html", FIXTURE_BUDGET_S),
+        "stuck": await run_query(handle, "fixture_stuck", f"{base_url}/challenge_stuck.html", STUCK_BUDGET_S),
+        "blocked": await run_query(handle, "fixture_blocked", f"{base_url}/challenge_blocked.html", BLOCKED_BUDGET_S),
+    }
+
+
+@pytest_asyncio.fixture
+async def fixture_browser():
+    server, base_url = start_fixture_server()
+    profile_dir = tempfile.mkdtemp(prefix="mojeek-fixture-profile-")
+    handle = await launch_browser(profile_dir)
+    try:
+        yield handle, base_url, profile_dir
+    finally:
+        await teardown(handle)
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        server.shutdown()
+
+
+def test_pure_function_checks():
+    run_pure_function_checks()
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_aborts_on_dead_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_aborts_on_dead_control(handle)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_passes_on_live_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_passes_on_live_control(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_results_page_without_challenge(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_results_page_without_challenge(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_challenge_success_path(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_challenge_success_path(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_stuck_challenge_is_not_blocked(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_stuck_challenge_is_not_blocked(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_genuine_block(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_genuine_block(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_cookie_capture_and_diff(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_cookie_capture_and_diff(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_report_builds_from_fixture_measurements(fixture_browser, tmp_path):
+    handle, base_url, profile_dir = fixture_browser
+    measurements = await _collect_fixture_measurements(handle, base_url)
+    check_report_builds_from_fixture_measurements(profile_dir, tmp_path / "report.md", measurements)
