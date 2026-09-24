@@ -651,7 +651,7 @@ SWALLOW-FLOW that remain are the A, D, E rows plus the two handlers described un
 - AST diff (`ast.unparse` old vs new per file, HEAD vs working tree): 15 files differ, and every changed line is one
   of the edits above; the other 63 files of the scope are byte-identical to HEAD. No file changed outside the
   listed rows (the survey diff also shows the changed signatures/call sites listed under its row).
-- `py_compile` of all 20 touched files: clean. The comment/docstring scan of the scope still prints nothing
+- `py_compile` of all 15 touched `.py` files (the commit has 20 files including the 5 DOCS.md): clean. The comment/docstring scan of the scope still prints nothing
   (78 files, 0 hits).
 - Full suite `./venv/bin/python -m pytest dev/tests/ -q`: 492 passed before, 492 after (none of the touched
   scripts is imported by `dev/tests/`).
