@@ -17,22 +17,12 @@
 import argparse
 import asyncio
 import random
-import re
 import sys
 import time
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from curl_cffi.requests import AsyncSession
-from curl_cffi.requests.exceptions import (
-    RequestException,
-    Timeout,
-    ProxyError,
-    SSLError,
-)
-from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
-from curl_cffi.const import CurlECode
 
 # Source lists + async fetcher imported from probe_pool_size — do not re-type the 68 URLs
 sys.path.insert(0, str(Path(__file__).parent))
@@ -44,23 +34,27 @@ from curated_sources import (  # noqa: E402
     load_databay_proxies, load_jetkai_proxies, load_roosterkid_proxies,
 )
 
+from _probe_liveness_classify import check_proxy
+from _probe_liveness_report import (
+    print_console_summary, append_sweep_log, write_unknown_log,
+)
+
 SCRIPT_DIR  = Path(__file__).parent
 FROZEN_DIR  = SCRIPT_DIR / "frozen_pool"
-LOG_DIR     = SCRIPT_DIR / "probe_liveness_logs"
-SWEEP_LOG   = LOG_DIR / "sweep_log.md"
 
-CHECK_URL   = "http://ipv4.icanhazip.com"
 SAMPLE_SEED = 42
-_IP_RE      = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-
-DEAD_BUCKETS = [
-    "connect_timeout", "read_timeout", "hard_timeout", "connection_refused",
-    "proxy_handshake_error", "resolve_error", "tls_error",
-    "http_non200", "bad_body", "unknown",
-]
 
 # Eval-only sources: no freshness filter, no record_run (proxy_status_log untouched)
 EVAL_ONLY_SOURCES = {"thespeedx", "databay", "jetkai", "roosterkid"}
+
+FILTERED_LOADERS = {"monosans": load_monosans_proxies, "curated": load_curated_proxies}
+
+EVAL_LOADERS = {
+    "thespeedx":  ("TheSpeedX",  load_thespeedx_proxies),
+    "databay":    ("databay",    load_databay_proxies),
+    "jetkai":     ("jetkai",     load_jetkai_proxies),
+    "roosterkid": ("roosterkid", load_roosterkid_proxies),
+}
 
 # ORCHESTRATOR
 
@@ -71,42 +65,7 @@ async def probe_liveness_workflow() -> None:
         await freeze_pool()
         return
 
-    if args.source == "monosans":
-        entries = load_monosans_proxies()
-        to_check, skipped_fresh = partition_fresh(entries, args.recheck_window)
-        print(f"Freshness filter: {len(to_check)} to check, {len(skipped_fresh)} skipped (last_seen < {args.recheck_window}s ago)")
-        entries = to_check
-        mode    = "monosans"
-    elif args.source == "curated":
-        entries = load_curated_proxies()
-        to_check, skipped_fresh = partition_fresh(entries, args.recheck_window)
-        print(f"Freshness filter: {len(to_check)} to check, {len(skipped_fresh)} skipped (last_seen < {args.recheck_window}s ago)")
-        entries = to_check
-        mode    = "curated"
-    elif args.source == "thespeedx":
-        entries = load_thespeedx_proxies()
-        print(f"TheSpeedX eval: {len(entries)} proxies (no freshness filter, no log write)")
-        mode    = "thespeedx"
-    elif args.source == "databay":
-        entries = load_databay_proxies()
-        print(f"databay eval: {len(entries)} proxies (no freshness filter, no log write)")
-        mode    = "databay"
-    elif args.source == "jetkai":
-        entries = load_jetkai_proxies()
-        print(f"jetkai eval: {len(entries)} proxies (no freshness filter, no log write)")
-        mode    = "jetkai"
-    elif args.source == "roosterkid":
-        entries = load_roosterkid_proxies()
-        print(f"roosterkid eval: {len(entries)} proxies (no freshness filter, no log write)")
-        mode    = "roosterkid"
-    else:
-        frozen_dir = Path(args.input)
-        entries    = load_frozen_pool(frozen_dir)
-        if args.sample:
-            entries = build_sample(entries, args.sample, args.seed)
-            mode    = "sample"
-        else:
-            mode    = "full"
+    entries, mode, skipped_count = load_entries(args)
 
     ts      = datetime.now(timezone.utc)
     t0_wall = time.monotonic()
@@ -119,7 +78,6 @@ async def probe_liveness_workflow() -> None:
     )
 
     elapsed       = time.monotonic() - t0_wall
-    skipped_count = len(skipped_fresh) if args.source in ("monosans", "curated") else 0
     print_console_summary(results, args.concurrency, elapsed)
     append_sweep_log(
         results, ts, mode, len(entries),
@@ -133,6 +91,34 @@ async def probe_liveness_workflow() -> None:
 
 
 # FUNCTIONS
+
+def load_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
+    if args.source in FILTERED_LOADERS:
+        return load_filtered_entries(args, FILTERED_LOADERS[args.source])
+    if args.source in EVAL_LOADERS:
+        return load_eval_entries(args.source, *EVAL_LOADERS[args.source])
+    return load_frozen_entries(args)
+
+
+def load_filtered_entries(args: argparse.Namespace, loader) -> tuple[list[tuple[str, str]], str, int]:
+    entries = loader()
+    to_check, skipped_fresh = partition_fresh(entries, args.recheck_window)
+    print(f"Freshness filter: {len(to_check)} to check, {len(skipped_fresh)} skipped (last_seen < {args.recheck_window}s ago)")
+    return to_check, args.source, len(skipped_fresh)
+
+
+def load_eval_entries(source: str, label: str, loader) -> tuple[list[tuple[str, str]], str, int]:
+    entries = loader()
+    print(f"{label} eval: {len(entries)} proxies (no freshness filter, no log write)")
+    return entries, source, 0
+
+
+def load_frozen_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
+    entries = load_frozen_pool(Path(args.input))
+    if args.sample:
+        return build_sample(entries, args.sample, args.seed), "sample", 0
+    return entries, "full", 0
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Proxy liveness checker + concurrency sweep")
@@ -218,192 +204,6 @@ async def run_checks(
         await asyncio.gather(*[_one(i, proto, hp) for i, (proto, hp) in enumerate(entries)])
 
     return results  # type: ignore[return-value]
-
-
-async def check_proxy(
-    session: AsyncSession,
-    sem: asyncio.Semaphore,
-    proto: str,
-    host_port: str,
-    connect_s: float,
-    read_s: float,
-) -> dict:
-    """GET CHECK_URL through one proxy; classify outcome into alive/dead bucket."""
-    # socks5h = remote DNS resolution through proxy (avoids local DNS load, more representative)
-    proxy_proto = "socks5h" if proto == "socks5" else proto
-    proxy_url   = f"{proxy_proto}://{host_port}"
-
-    async with sem:
-        t0      = time.monotonic()          # measure from semaphore-acquire, not queue-entry
-        elapsed = 0.0
-        try:
-            resp    = await asyncio.wait_for(
-                session.get(
-                    CHECK_URL,
-                    proxy=proxy_url,
-                    timeout=(connect_s, read_s),
-                    allow_redirects=False,
-                ),
-                timeout=connect_s + read_s + 2.0,   # hard Python deadline: curl timeout + 2s slack
-            )
-            elapsed = time.monotonic() - t0
-            body    = resp.text.strip() if resp.text else ""
-
-            if resp.status_code == 200 and _IP_RE.match(body):
-                return _res(proto, host_port, True,  "alive",       "",                   elapsed)
-            if resp.status_code == 200:
-                return _res(proto, host_port, False, "bad_body",    body[:80],            elapsed)
-            return     _res(proto, host_port, False, "http_non200", f"status={resp.status_code}", elapsed)
-
-        except asyncio.TimeoutError:
-            elapsed = time.monotonic() - t0
-            return _res(proto, host_port, False, "hard_timeout",
-                        f"asyncio.wait_for exceeded at {elapsed:.2f}s", elapsed)
-        except RequestException as e:
-            elapsed = time.monotonic() - t0
-            bucket, detail = classify_error(e, elapsed, connect_s, read_s)
-            return _res(proto, host_port, False, bucket, detail, elapsed)
-        except Exception as e:
-            elapsed = time.monotonic() - t0
-            return _res(proto, host_port, False, "unknown",
-                        f"{type(e).__name__}: {str(e)[:120]}", elapsed)
-
-
-def _res(proto: str, host_port: str, alive: bool, bucket: str, detail: str, elapsed: float) -> dict:
-    return {"proto": proto, "host_port": host_port,
-            "alive": alive, "bucket": bucket, "detail": detail, "elapsed": elapsed}
-
-
-def classify_error(
-    exc: RequestException, elapsed_s: float, connect_s: float, read_s: float
-) -> tuple[str, str]:
-    """Map RequestException → (reason_bucket, detail_string).
-
-    Timeout split: elapsed time is primary discriminator (robust across libcurl versions);
-    message text is secondary fallback; if NEITHER matches, bucket=unknown (version-drift signal).
-    ProxyError checked before CurlConnectionError because curl_cffi's code2error() re-maps
-    RECV_ERROR+"CONNECT" to ProxyError — catching that case as proxy_handshake_error, not connection_refused.
-    """
-    code    = getattr(exc, "code", 0)
-    msg     = str(exc)
-    total_s = connect_s + read_s
-
-    if isinstance(exc, Timeout):
-        slack = 0.5
-        if elapsed_s <= connect_s + slack:
-            return "connect_timeout", f"elapsed={elapsed_s:.2f}s"
-        if elapsed_s >= total_s - slack:
-            return "read_timeout", f"elapsed={elapsed_s:.2f}s"
-        # Fallback: libcurl message text (version-dependent)
-        if "Connection timed out" in msg:
-            return "connect_timeout", f"msg-text elapsed={elapsed_s:.2f}s"
-        if "Operation timed out" in msg:
-            return "read_timeout", f"msg-text elapsed={elapsed_s:.2f}s"
-        # Neither elapsed-time nor text matched — log as unknown for version-drift detection
-        return "unknown", (
-            f"Timeout unclassified elapsed={elapsed_s:.2f}s "
-            f"connect_limit={connect_s}s total_limit={total_s}s msg={msg!r}"
-        )
-
-    if int(code) in (CurlECode.COULDNT_RESOLVE_PROXY, CurlECode.COULDNT_RESOLVE_HOST):
-        return "resolve_error", f"code={int(code)} {msg[:80]}"
-
-    if isinstance(exc, ProxyError) or int(code) in (CurlECode.GOT_NOTHING, CurlECode.WEIRD_SERVER_REPLY):
-        return "proxy_handshake_error", f"code={int(code)} {msg[:80]}"
-
-    if isinstance(exc, CurlConnectionError):
-        return "connection_refused", f"code={int(code)} {msg[:80]}"
-
-    if isinstance(exc, SSLError):
-        return "tls_error", f"code={int(code)} {msg[:80]}"
-
-    return "unknown", f"code={int(code)} type={type(exc).__name__} {msg[:120]}"
-
-
-def print_console_summary(results: list[dict], concurrency: int, elapsed: float) -> None:
-    alive = sum(1 for r in results if r["alive"])
-    n     = len(results)
-    dead  = n - alive
-    tp    = n / elapsed if elapsed > 0 else 0
-
-    histogram: dict[str, int] = defaultdict(int)
-    for r in results:
-        if not r["alive"]:
-            histogram[r["bucket"]] += 1
-
-    print(f"\n--- concurrency={concurrency}  elapsed={elapsed:.1f}s  throughput={tp:.0f}/s ---")
-    print(f"  Alive: {alive:,}/{n:,}  ({100*alive/n:.1f}%)")
-    if dead:
-        print("  Dead reason histogram:")
-        for bucket in DEAD_BUCKETS:
-            count = histogram.get(bucket, 0)
-            if count:
-                print(f"    {bucket:<25} {count:>6,}  ({100*count/dead:.1f}% of dead)")
-
-
-def append_sweep_log(
-    results: list[dict],
-    ts: datetime,
-    mode: str,
-    n: int,
-    concurrency: int,
-    connect_s: float,
-    read_s: float,
-    elapsed: float,
-    skipped: int = 0,
-) -> None:
-    """Append one structured markdown entry to sweep_log.md (committed — comparable-over-time record)."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    alive     = sum(1 for r in results if r["alive"])
-    dead      = n - alive
-    tp        = n / elapsed if elapsed > 0 else 0
-    alive_pct = 100 * alive / n if n else 0
-
-    histogram: dict[str, int] = defaultdict(int)
-    for r in results:
-        if not r["alive"]:
-            histogram[r["bucket"]] += 1
-
-    skipped_part = f" | skipped_fresh={skipped:,}" if skipped else ""
-    lines = [
-        "---",
-        f"## {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} | {mode} | n={n:,}{skipped_part} | "
-        f"concurrency={concurrency} | timeout={connect_s}s/{read_s}s",
-        "",
-        "| Wall-clock | Throughput | Alive | Alive% | Dead |",
-        "|---|---|---|---|---|",
-        f"| {elapsed:.1f}s | {tp:.0f}/s | {alive:,} | {alive_pct:.1f}% | {dead:,} |",
-        "",
-        "### Dead Reason Histogram",
-        "",
-        "| Reason | Count | % of dead |",
-        "|---|---|---|",
-    ]
-    for bucket in DEAD_BUCKETS:
-        count = histogram.get(bucket, 0)
-        pct   = 100 * count / dead if dead else 0.0
-        lines.append(f"| {bucket} | {count:,} | {pct:.1f}% |")
-    lines.append("")
-
-    with SWEEP_LOG.open("a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    print(f"\nAppended sweep entry → {SWEEP_LOG}")
-
-
-def write_unknown_log(results: list[dict], ts: datetime) -> None:
-    """Write full detail of unknown-bucket results to a per-run gitignored log."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    path     = LOG_DIR / f"unknown_errors_{ts.strftime('%Y%m%dT%H%M%SZ')}.log"
-    unknowns = [r for r in results if r["bucket"] == "unknown"]
-    with path.open("w", encoding="utf-8") as f:
-        f.write(f"# Unknown errors — {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} — {len(unknowns)} entries\n\n")
-        for r in unknowns:
-            f.write(
-                f"proto={r['proto']}  {r['host_port']}  "
-                f"elapsed={r['elapsed']:.2f}s  {r['detail']}\n"
-            )
-    print(f"  Unknown log ({len(unknowns)} entries) → {path}")
 
 
 if __name__ == "__main__":

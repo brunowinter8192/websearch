@@ -15,6 +15,15 @@ from _brave_probe_core import (
 # FUNCTIONS
 
 def run_pure_function_checks() -> None:
+    run_classifier_checks()
+    run_verdict_checks()
+    run_cookie_diff_checks()
+    run_stats_checks()
+    run_carry_over_checks()
+    run_pow_link_rate_checks()
+
+
+def run_classifier_checks() -> None:
     check(
         "a button candidate keeps the state at BUTTON_PENDING, not BLOCKED",
         classify_page_state({
@@ -61,11 +70,6 @@ def run_pure_function_checks() -> None:
         "BUTTON_PENDING and BUTTON_VERIFYING are not terminal, RESULTS/POW_LINK_BLOCK/BLOCKED are",
         classify_page_state({"result_link_count": 0, "button_candidates": [{"tag": "button"}]}) == STATE_BUTTON_PENDING,
     )
-    run_verdict_checks()
-    run_cookie_diff_checks()
-    run_stats_checks()
-    run_carry_over_checks()
-    run_pow_link_rate_checks()
 
 
 def run_verdict_checks() -> None:

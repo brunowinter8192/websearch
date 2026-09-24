@@ -49,48 +49,7 @@ def acquire_pipe_workflow(
 
     try:
         with box_lock.acquire(job_id, target_desc):
-            janitor.start_job(job_id)
-
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            loc_urls: list[str] = []
-            logger = AcquireLogger(total_urls=len(target_urls), log_dir=LOG_DIR)
-
-            def content_handler(url: str, content: bytes) -> None:
-                fname = OUTPUT_DIR / _url_to_filename(url)
-                fname.write_bytes(b"<!-- source: " + url.encode() + b" -->\n" + content)
-                for m in _LOC_RE.finditer(content):
-                    loc_urls.append(m.group(1).decode().strip())
-
-            print(
-                f"[acquire_pipe] Starting sustained loop "
-                f"(concurrency={concurrency}, buffer={buffer_size})..."
-            )
-            _used = [False]
-            def _pool_provider():
-                if not _used[0]:
-                    _used[0] = True
-                    return initial_pool
-                return load_backfill_pool()
-
-            done, dead, gap = run_loop(
-                _pool_provider, target_urls, "xml", logger, cm,
-                concurrency=concurrency,
-                buffer_size=buffer_size,
-                content_handler=content_handler,
-            )
-            print(f"[acquire_pipe] Loop done: {len(done)} completed, {len(gap)} remaining")
-            print(f"[acquire_pipe] {len(dead)} URLs permanently dead (404/410)")
-
-            article_urls = list(dict.fromkeys(loc_urls))
-            ARTICLE_URLS_FILE.write_text("\n".join(article_urls) + "\n", encoding="utf-8")
-            print(f"[acquire_pipe] Article URLs: {len(article_urls)} unique → {ARTICLE_URLS_FILE}")
-
-            logger.close()
-            janitor.end_job(job_id, logger._jsonl_path, len(target_urls), len(done))
-            print(f"[acquire_pipe] Job report: acquire_pipe_jobs/{job_id}/")
-
-            if gap:
-                print(f"[acquire_pipe] {len(gap)} sub-sitemaps incomplete")
+            _run_job(job_id, target_urls, initial_pool, cm, concurrency, buffer_size)
 
     except box_lock.LockBusyError as e:
         print(e)
@@ -98,6 +57,72 @@ def acquire_pipe_workflow(
 
 
 # FUNCTIONS
+
+def _run_job(
+    job_id: str,
+    target_urls: list[str],
+    initial_pool: list[tuple[str, str]],
+    cm: PersistentCooldownManager,
+    concurrency: int,
+    buffer_size: int,
+) -> None:
+    janitor.start_job(job_id)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    loc_urls: list[str] = []
+    logger = AcquireLogger(total_urls=len(target_urls), log_dir=LOG_DIR)
+
+    content_handler = _make_content_handler(loc_urls)
+
+    print(
+        f"[acquire_pipe] Starting sustained loop "
+        f"(concurrency={concurrency}, buffer={buffer_size})..."
+    )
+    _pool_provider = _make_pool_provider(initial_pool)
+
+    done, dead, gap = run_loop(
+        _pool_provider, target_urls, "xml", logger, cm,
+        concurrency=concurrency,
+        buffer_size=buffer_size,
+        content_handler=content_handler,
+    )
+    print(f"[acquire_pipe] Loop done: {len(done)} completed, {len(gap)} remaining")
+    print(f"[acquire_pipe] {len(dead)} URLs permanently dead (404/410)")
+
+    _write_article_urls(loc_urls)
+
+    logger.close()
+    janitor.end_job(job_id, logger._jsonl_path, len(target_urls), len(done))
+    print(f"[acquire_pipe] Job report: acquire_pipe_jobs/{job_id}/")
+
+    if gap:
+        print(f"[acquire_pipe] {len(gap)} sub-sitemaps incomplete")
+
+
+def _make_content_handler(loc_urls: list[str]):
+    def content_handler(url: str, content: bytes) -> None:
+        fname = OUTPUT_DIR / _url_to_filename(url)
+        fname.write_bytes(b"<!-- source: " + url.encode() + b" -->\n" + content)
+        for m in _LOC_RE.finditer(content):
+            loc_urls.append(m.group(1).decode().strip())
+    return content_handler
+
+
+def _make_pool_provider(initial_pool: list[tuple[str, str]]):
+    _used = [False]
+    def _pool_provider():
+        if not _used[0]:
+            _used[0] = True
+            return initial_pool
+        return load_backfill_pool()
+    return _pool_provider
+
+
+def _write_article_urls(loc_urls: list[str]) -> None:
+    article_urls = list(dict.fromkeys(loc_urls))
+    ARTICLE_URLS_FILE.write_text("\n".join(article_urls) + "\n", encoding="utf-8")
+    print(f"[acquire_pipe] Article URLs: {len(article_urls)} unique → {ARTICLE_URLS_FILE}")
+
 
 # Slugify sub-sitemap URL into safe filename with .xml extension
 def _url_to_filename(url: str) -> str:

@@ -62,7 +62,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 **Called by:** `_mojeek_pydoll_probe_query.py`.
 **Calls out:** none beyond stdlib.
 
-### _mojeek_pydoll_probe_report.py (321 LOC)
+### _mojeek_pydoll_probe_report.py (340 LOC)
 
 **Purpose:** Assembles the markdown report, one section per question plus phases, cookies, limits and methodology.
 **Reads:** nothing (pure assembly over the objects passed in).
@@ -78,7 +78,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query: navig
 **Called by:** CLI only. Exit code 1 on any failed check.
 **Calls out:** `pydoll` via the launch/query siblings, stdlib `http.server`.
 
-### _mojeek_pydoll_pure_checks.py (147 LOC)
+### _mojeek_pydoll_pure_checks.py (155 LOC)
 
 **Purpose:** The network-free half of the test module — classifier, verdict, carry-over, cookie-diff and maths checks.
 **Reads:** nothing.

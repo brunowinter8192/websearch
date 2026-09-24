@@ -69,7 +69,7 @@ Resolve the Chromium bundle production launches -> launch Chrome on a dedicated 
 **Called by:** CLI only. Exit code 1 on any failed check.
 **Calls out:** `pydoll` via the launch/query siblings, stdlib `http.server`.
 
-### _brave_pure_checks.py (168 LOC)
+### _brave_pure_checks.py (172 LOC)
 
 **Purpose:** The network-free half of the test module — classifier, verdict, carry-over, cookie-diff, stats and pow-link-rate checks.
 **Reads:** nothing.
