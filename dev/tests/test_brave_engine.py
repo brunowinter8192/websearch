@@ -1,11 +1,3 @@
-"""Tests for src/search/engines/brave.py's pure result-parsing logic.
-
-No network, no browser — _build_results (JSON items, as if already parsed from the page, into
-SearchResult list) is the one seam factored out of the DOM-driven engine. _classify_diagnosis was
-removed (the guessed-verdict-removal milestone): its output was one of the EMPTY_* sub-statuses
-that no longer exist — the marker/pow_link/ready_state facts it classified are still available
-directly in the diagnosis snapshot.
-"""
 import asyncio
 import functools
 import http.server
@@ -20,42 +12,9 @@ from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
 
 from src.search.engines import brave as brave_mod
-from src.search.engines.brave import BraveEngine, _build_results
+from src.search.engines.brave import BraveEngine
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# _build_results
-# ---------------------------------------------------------------------------
-
-def test_build_results_maps_fields_and_position():
-    items = [
-        {"url": "https://realpython.com/async-io-python/", "title": "Asyncio Walkthrough", "snippet": "Explore how..."},
-        {"url": "https://docs.python.org/3/library/asyncio.html", "title": "asyncio docs", "snippet": "Reference."},
-    ]
-    results = _build_results(items, max_results=10)
-    assert len(results) == 2
-    assert results[0].url == "https://realpython.com/async-io-python/"
-    assert results[0].title == "Asyncio Walkthrough"
-    assert results[0].snippet == "Explore how..."
-    assert results[0].engine == "brave"
-    assert results[0].position == 1
-    assert results[1].position == 2
-
-
-def test_build_results_skips_items_without_url():
-    items = [{"url": "", "title": "no url", "snippet": ""}, {"url": "https://example.com", "title": "ok", "snippet": ""}]
-    results = _build_results(items, max_results=10)
-    assert len(results) == 1
-    assert results[0].url == "https://example.com"
-
-
-def test_build_results_respects_max_results_cap():
-    items = [{"url": f"https://example.com/{i}", "title": str(i), "snippet": ""} for i in range(20)]
-    results = _build_results(items, max_results=5)
-    assert len(results) == 5
-    assert [r.position for r in results] == [1, 2, 3, 4, 5]
 
 
 _OWN_QUERY = "cloudflare turnstile captcha widget verify programmatically"

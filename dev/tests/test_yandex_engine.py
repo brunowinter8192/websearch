@@ -1,15 +1,3 @@
-"""Tests for src/search/engines/yandex.py pure result-parsing / self-link-filter logic.
-
-No network, no browser — covers the seams factored out of the DOM-driven engine:
-- _is_self_referential: yandex.com/*.yandex.* domain detection (self-links, video-carousel cards)
-- _is_block_url: showcaptcha/checkcaptcha/captcha redirect detection — kept: it is also the early
-  short-circuit optimization inside search_with_reason, independent of the removed verdict
-- _build_results: JSON items -> SearchResult list, dropping self-referential URLs
-
-_classify_diagnosis was removed (the guessed-verdict-removal milestone): its output was one of the
-EMPTY_* sub-statuses that no longer exist — the marker/url/ready_state facts it classified are
-still available directly in the diagnosis snapshot.
-"""
 import asyncio
 import http.server
 import logging
@@ -26,10 +14,6 @@ from src.search.engines.yandex import YandexEngine, _build_results, _is_block_ur
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# _is_self_referential
-# ---------------------------------------------------------------------------
-
 def test_is_self_referential_matches_yandex_domain():
     assert _is_self_referential("https://yandex.com/video/preview/123?text=q") is True
 
@@ -45,10 +29,6 @@ def test_is_self_referential_does_not_match_lookalike_domain():
 def test_is_self_referential_does_not_match_real_external_domain():
     assert _is_self_referential("https://realpython.com/async-io-python/") is False
 
-
-# ---------------------------------------------------------------------------
-# _is_block_url
-# ---------------------------------------------------------------------------
 
 def test_is_block_url_detects_showcaptcha_redirect():
     assert _is_block_url("https://yandex.com/showcaptcha?cc=1&mt=abc") is True
@@ -67,10 +47,6 @@ def test_is_block_url_false_when_marker_word_only_in_query_string():
 def test_is_block_url_true_for_real_captcha_path_regardless_of_query_string():
     assert _is_block_url("https://yandex.com/showcaptcha?form-fb-hint=1.1&mt=abcdef") is True
 
-
-# ---------------------------------------------------------------------------
-# _build_results
-# ---------------------------------------------------------------------------
 
 def test_build_results_maps_fields_and_position():
     items = [

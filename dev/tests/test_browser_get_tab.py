@@ -34,10 +34,6 @@ def _patch_launch_mechanics(monkeypatch, resolve_bundle=_fake_resolve_bundle, ac
     monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: None)
 
 
-# get_tab: critical-section ordering — lock acquired, then reap, then self-launch (no .start(),
-# no initial tab — see src/search/DOCS.md for why), then own-pids recorded once the devtools port
-# confirms Chrome is actually up
-
 @pytest.mark.asyncio
 async def test_get_tab_orders_lock_reap_launch_anchor_record(monkeypatch):
     _reset_state(monkeypatch, browser)
@@ -140,8 +136,6 @@ async def test_get_tab_reuses_existing_browser_without_relocking(monkeypatch):
     await browser.get_tab()
     assert called == []
 
-
-# Fresh profile per run — the milestone this file's own tests exist to cover
 
 @pytest.mark.asyncio
 async def test_get_tab_uses_a_fresh_directory_each_run(monkeypatch):

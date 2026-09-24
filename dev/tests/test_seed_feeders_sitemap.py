@@ -6,10 +6,6 @@ from src.crawler import seed_feeders
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _xml
 
 
-# ---------------------------------------------------------------------------
-# parse_sitemap_xml / fetch_sitemap
-# ---------------------------------------------------------------------------
-
 def test_parse_sitemap_xml_urlset():
     content = _xml(
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -50,10 +46,6 @@ async def test_fetch_sitemap_404_returns_none_not_error():
     content = await fetch_sitemap(client, "https://example.com/sitemap.xml")
     assert content is None
 
-
-# ---------------------------------------------------------------------------
-# resolve_sitemap_urls — the nested-sitemapindex requirement
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_resolve_sitemap_urls_flattens_two_level_nesting():
@@ -98,7 +90,6 @@ async def test_resolve_sitemap_urls_one_404_sub_is_normal_not_fatal():
     client = _FakeAsyncClient({
         "https://example.com/top.xml": _FakeResponse(200, content=top),
         "https://example.com/ok.xml": _FakeResponse(200, content=ok_leaf),
-        # "missing.xml" intentionally absent from routes -> 404
     })
     urls = await resolve_sitemap_urls(client, ["https://example.com/top.xml"])
     assert urls == ["https://example.com/page1"]
@@ -113,7 +104,7 @@ async def test_resolve_sitemap_urls_cycle_guard_does_not_hang():
     )
     b = _xml(
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        "<sitemap><loc>https://example.com/a.xml</loc></sitemap>"  # points back to a.xml
+        "<sitemap><loc>https://example.com/a.xml</loc></sitemap>"
         "</sitemapindex>"
     )
     client = _FakeAsyncClient({
@@ -121,7 +112,7 @@ async def test_resolve_sitemap_urls_cycle_guard_does_not_hang():
         "https://example.com/b.xml": _FakeResponse(200, content=b),
     })
     urls = await resolve_sitemap_urls(client, ["https://example.com/a.xml"])
-    assert urls == []  # neither doc is a urlset, and the cycle terminates cleanly
+    assert urls == []
 
 
 @pytest.mark.asyncio
@@ -135,8 +126,6 @@ async def test_sitemap_feeder_workflow_prefers_robots_declared_sitemap(monkeypat
     routes = {
         "https://docs.example.com/robots.txt": _FakeResponse(200, text=robots_text),
         "https://docs.example.com/declared.xml": _FakeResponse(200, content=urlset),
-        # conventional paths deliberately NOT routed — if the feeder fell back to them
-        # instead of the robots-declared one, this test would see an empty result
     }
     monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
@@ -153,7 +142,6 @@ async def test_sitemap_feeder_workflow_falls_back_to_conventional_paths(monkeypa
         "</urlset>"
     )
     routes = {
-        # no robots.txt at all -> declares no sitemaps -> conventional fallback used
         "https://docs.example.com/sitemap.xml": _FakeResponse(200, content=urlset),
     }
     monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
@@ -165,8 +153,6 @@ async def test_sitemap_feeder_workflow_falls_back_to_conventional_paths(monkeypa
 
 @pytest.mark.asyncio
 async def test_sitemap_feeder_workflow_all_404_is_ok_empty_docs_github_shape(monkeypatch):
-    # Mirrors the docs.github.com reference case: robots.txt exists but declares no
-    # Sitemap:, and both conventional fallback paths 404.
     routes = {
         "https://docs.example.com/robots.txt": _FakeResponse(200, text="User-agent: *\nDisallow: /a\n"),
     }

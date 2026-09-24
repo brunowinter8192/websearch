@@ -1,13 +1,3 @@
-"""Tests for src/search/engines/bing.py pure result-parsing / URL-unwrap logic.
-
-No network, no browser — covers the two seams factored out of the DOM-driven engine:
-- _clean_url: bing.com/ck/a?...&u=<prefixed-base64> tracking redirect -> real destination URL
-- _build_results: JSON items (as if already parsed from the page) -> SearchResult list
-
-_classify_diagnosis was removed (the guessed-verdict-removal milestone): its output was one of
-the EMPTY_* sub-statuses that no longer exist — the marker/ready_state facts it classified are
-still available directly in the diagnosis snapshot.
-"""
 import json
 
 import pytest
@@ -15,13 +5,7 @@ import pytest
 from src.search.engines.bing import _build_results, _clean_url, _parse_results
 
 
-# ---------------------------------------------------------------------------
-# _clean_url
-# ---------------------------------------------------------------------------
-
 def test_clean_url_unwraps_ck_a_redirect_to_real_destination():
-    # Real sample captured live in dev/search_pipeline/28_bing_probe.py exploration —
-    # u=a1<base64url(https://docs.python.org/3/library/asyncio.html)>
     wrapped = (
         "https://www.bing.com/ck/a?!&&p=3433f59b1e520073dfadefacf80bd715cd2b9ad5a31edea67e9ae0212fa91585"
         "&ptn=3&ver=2&hsh=4&fclid=2775937b-2388-6e7b-1e71-844822246f08"
@@ -49,10 +33,6 @@ def test_clean_url_raises_when_decode_raises(monkeypatch):
     with pytest.raises(ValueError):
         _clean_url(wrapped)
 
-
-# ---------------------------------------------------------------------------
-# _build_results
-# ---------------------------------------------------------------------------
 
 def test_build_results_unwraps_url_and_maps_fields():
     items = [{
@@ -82,10 +62,6 @@ def test_build_results_respects_max_results_cap():
     assert [r.position for r in results] == [1, 2, 3, 4, 5]
 
 
-# ---------------------------------------------------------------------------
-# _parse_results
-# ---------------------------------------------------------------------------
-
 class _FakeTab:
     def __init__(self, raw_value):
         self._raw_value = raw_value
@@ -96,11 +72,6 @@ class _FakeTab:
 
 @pytest.mark.asyncio
 async def test_parse_results_raises_on_invalid_json():
-    """2026-09-09: the except (json.JSONDecodeError, TypeError): return [] handler was removed —
-    no supporting observation (handler dates from the first engine commit, 0 ERROR_PARSE in 4566
-    logged engine records, the value is always our own stringified JSON). A malformed value now
-    raises out of _parse_results, propagating into search_web's own _classify_engine_exception
-    (ERROR_PARSE) instead of masquerading as an empty page."""
     tab = _FakeTab("not valid json{")
     with pytest.raises(json.JSONDecodeError):
         await _parse_results(tab, max_results=10)

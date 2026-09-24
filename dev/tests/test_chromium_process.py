@@ -5,10 +5,6 @@ import pytest
 from src.scraper import chromium_process, chromium_scrape
 
 
-# ---------------------------------------------------------------------------
-# Self-launch mechanics — real functions, no mocking (subprocess/filesystem only)
-# ---------------------------------------------------------------------------
-
 def test_wait_for_devtools_port_reads_real_port_file(tmp_path):
     port_file = tmp_path / "DevToolsActivePort"
     port_file.write_text("54321\n/devtools/browser/fake-uuid\n")
@@ -32,16 +28,7 @@ def test_find_app_bundle_returns_none_when_no_app_ancestor():
     assert chromium_process._find_app_bundle("/usr/local/bin/chrome") is None
 
 
-# ---------------------------------------------------------------------------
-# Flag-parity mechanism — build_browser_flags() is called LIVE (never pinned), so its own
-# existence/signature is a hard, loud-failure guard: if crawl4ai ever renames/removes/reshapes it,
-# this test goes red instead of the self-launch silently losing its flag surface.
-# ---------------------------------------------------------------------------
-
 def test_build_browser_flags_symbol_resolves_and_is_callable():
-    """Guard against a silent posture change on a crawl4ai upgrade: if ManagedBrowser.
-    build_browser_flags disappears, gets renamed, or its signature changes incompatibly, THIS
-    test fails loudly — no try/except swallowing the import or the call."""
     from crawl4ai.browser_manager import ManagedBrowser
     import inspect
 
@@ -50,7 +37,6 @@ def test_build_browser_flags_symbol_resolves_and_is_callable():
     params = list(sig.parameters)
     assert params, "build_browser_flags must accept at least one parameter (the BrowserConfig)"
 
-    # Real call, real BrowserConfig — not mocked. Raises loudly if the signature is incompatible.
     flags = ManagedBrowser.build_browser_flags(chromium_scrape.BrowserConfig(enable_stealth=True))
     assert isinstance(flags, list)
     assert all(isinstance(f, str) for f in flags)
@@ -58,11 +44,6 @@ def test_build_browser_flags_symbol_resolves_and_is_callable():
 
 
 def test_build_self_launch_flags_keeps_gpu_on_under_stealth():
-    """enable_stealth=True must NOT carry --disable-gpu/--disable-gpu-compositing/
-    --disable-software-rasterizer — build_browser_flags() gates these behind `not enable_stealth`
-    (its own comment: keep WebGL working under stealth). Deliberate 3-flag deviation from literal
-    parity with the old direct-launch path's cmdline, confirmed here so it can't silently regress
-    back to disabling GPU."""
     flags = chromium_process._build_self_launch_flags(chromium_scrape.BrowserConfig(enable_stealth=True))
     assert "--disable-gpu" not in flags
     assert "--disable-gpu-compositing" not in flags
@@ -75,10 +56,6 @@ def test_build_self_launch_flags_includes_window_size_when_viewport_set():
     flags = chromium_process._build_self_launch_flags(config)
     assert "--window-size=1080,600" in flags
 
-
-# ---------------------------------------------------------------------------
-# _pids_on_profile — pgrep output parsing, shared by _kill_by_profile and the watchdog spawn
-# ---------------------------------------------------------------------------
 
 def test_pids_on_profile_parses_pgrep_output(monkeypatch):
     class _FakeCompleted:
@@ -112,11 +89,6 @@ def test_kill_by_profile_noop_when_no_pids(monkeypatch):
     assert calls == []
 
 
-# ---------------------------------------------------------------------------
-# Net 3 — _reap_orphaned_scrapes: kill only processes older than TOTAL_SCRAPE_BUDGET_S (parallel
-# scrapes under budget are legitimate, never killed), sweep dirs with zero live processes
-# ---------------------------------------------------------------------------
-
 def test_reap_orphaned_scrapes_kills_only_pids_older_than_budget(monkeypatch, tmp_path):
     now = time.time()
     young_pid, old_pid = 1001, 1002
@@ -145,7 +117,7 @@ def test_reap_orphaned_scrapes_never_kills_pid_under_budget_even_if_only_candida
 
     class _FakeProc:
         def create_time(self):
-            return now - 5.0  # well under TOTAL_SCRAPE_BUDGET_S — a legitimate in-flight scrape
+            return now - 5.0
 
     monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [2001])
     monkeypatch.setattr(chromium_process.psutil, "Process", lambda pid: _FakeProc())

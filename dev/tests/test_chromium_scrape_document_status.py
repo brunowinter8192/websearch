@@ -4,16 +4,6 @@ from src.scraper import chromium_process, chromium_scrape
 from dev.tests._chromium_scrape_fakes import _patch_cdp_launch_mechanics, _FakeResult, _meta
 
 
-# ---------------------------------------------------------------------------
-# document_status_chain — the before_goto hook (_make_document_status_listener) collects the
-# ordered chain of main-frame document response statuses; the LAST entry overrides meta["status_code"]
-# (the page whose content was actually captured), and an empty chain falls back to crawl4ai's own
-# result.status_code unchanged. Exercised through the real _acquire_cdp_headed/_acquire_scrape
-# machinery: the fake crawler invokes crawler_strategy.execute_hook("before_goto", ...) itself
-# (the same call crawl4ai's own async_crawler_strategy.py makes right before page.goto), against a
-# fake page whose .on("response", ...) registers the real listener, then fires fake response events.
-# ---------------------------------------------------------------------------
-
 class _FakeRequest:
     def __init__(self, resource_type, frame):
         self.resource_type = resource_type
@@ -51,10 +41,6 @@ class _FakePage:
 
 
 def _fake_crawler_with_document_responses(statuses, crawl4ai_status_code=403):
-    """Builds a fake AsyncWebCrawler class whose arun() invokes the real before_goto hook
-    registered on the crawler_strategy passed in, fires one fake main-frame document response per
-    status in `statuses` (in order), then returns a result carrying crawl4ai_status_code as its
-    OWN status_code (simulating crawl4ai's earliest-hop value, distinct from the chain's last)."""
     class _FakeCrawler:
         def __init__(self, *a, **kw):
             self.crawler_strategy = kw.get("crawler_strategy")
@@ -79,9 +65,6 @@ def _fake_crawler_with_document_responses(statuses, crawl4ai_status_code=403):
 
 @pytest.mark.asyncio
 async def test_acquire_cdp_headed_last_document_response_overrides_crawl4ai_status(monkeypatch):
-    """403 -> 302 -> 200 chain (self-resolving challenge shape): status_code becomes the LAST
-    response's status (200), the chain is recorded in full, and crawl4ai's own (earliest-hop) 403
-    is overridden — the page whose content was actually captured is the 200 one."""
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     monkeypatch.setattr(
         chromium_scrape, "AsyncWebCrawler",
@@ -96,8 +79,6 @@ async def test_acquire_cdp_headed_last_document_response_overrides_crawl4ai_stat
 
 @pytest.mark.asyncio
 async def test_acquire_cdp_headed_single_response_chain(monkeypatch):
-    """An ordinary page with no challenge/redirect: one main-frame document response, chain has
-    exactly one entry, status_code equals today's (unchanged) behavior."""
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     monkeypatch.setattr(
         chromium_scrape, "AsyncWebCrawler",
@@ -112,9 +93,6 @@ async def test_acquire_cdp_headed_single_response_chain(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_acquire_cdp_headed_falls_back_to_crawl4ai_status_when_listener_saw_nothing(monkeypatch):
-    """The listener sees no main-frame document response at all (e.g. a raw: input, or a
-    navigation that never fires one) — chain stays empty, status_code falls back to crawl4ai's own
-    result.status_code, never invented."""
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     monkeypatch.setattr(
         chromium_scrape, "AsyncWebCrawler",
@@ -129,8 +107,6 @@ async def test_acquire_cdp_headed_falls_back_to_crawl4ai_status_when_listener_sa
 
 @pytest.mark.asyncio
 async def test_document_status_listener_ignores_non_document_and_non_main_frame_responses(monkeypatch):
-    """A stylesheet/script response and a document response on a DIFFERENT frame (e.g. an iframe)
-    must not enter the chain — only main-frame document responses count."""
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
 
     class _FakeCrawler:
@@ -149,7 +125,7 @@ async def test_document_status_listener_ignores_non_document_and_non_main_frame_
                 "before_goto", page, context=None, url=url, config=config
             )
             page.fire_response(999, resource_type="stylesheet")
-            page.fire_response(500, resource_type="document", frame=object())  # iframe, not main
+            page.fire_response(500, resource_type="document", frame=object())
             page.fire_response(200, resource_type="document")
             return _FakeResult(raw_markdown="x" * 300, status_code=200)
 
@@ -162,8 +138,6 @@ async def test_document_status_listener_ignores_non_document_and_non_main_frame_
 
 @pytest.mark.asyncio
 async def test_try_scrape_document_status_chain_empty_on_launch_failure(monkeypatch):
-    """A path that never obtains a result object (browser_missing) carries an empty chain, same
-    treatment as every other acquisition-error field."""
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
 
     class _RaisingCrawler:
@@ -186,7 +160,6 @@ async def test_try_scrape_document_status_chain_empty_on_launch_failure(monkeypa
 
 @pytest.mark.asyncio
 async def test_scrape_url_chromium_workflow_logs_document_status_chain(monkeypatch):
-    """scrape_url_chromium_workflow's log_scrape record carries the new fact field."""
     captured = {}
 
     async def _fake_try_scrape(url):

@@ -1,4 +1,4 @@
-from src.search.engines.startpage import _build_results
+from src.search.engines.brave import _build_results
 
 
 def test_build_results_maps_fields_and_position():
@@ -11,7 +11,7 @@ def test_build_results_maps_fields_and_position():
     assert results[0].url == "https://realpython.com/async-io-python/"
     assert results[0].title == "Asyncio Walkthrough"
     assert results[0].snippet == "Explore how..."
-    assert results[0].engine == "startpage"
+    assert results[0].engine == "brave"
     assert results[0].position == 1
     assert results[1].position == 2
 

@@ -1,11 +1,3 @@
-"""Tests for _cap_pools in src/search/search_web.py.
-
-Guards the M1 fix: the pool cap used to anchor K to google's own pool size, falling back to 10
-only when google returned zero. Google now returns zero in the overwhelming majority of real
-queries, and on the rare query where it returns 1 or 2, K collapsed to 1 or 2 and cut every other
-engine's pool down with it, even ones that had returned 40+ results. The cap is now a fixed 10 for
-every engine, independent of what google (or any other engine) returned.
-"""
 from src.search.result import SearchResult
 from src.search.search_web import POOL_CAP, _cap_pools
 

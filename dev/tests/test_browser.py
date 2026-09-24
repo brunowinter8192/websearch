@@ -1,18 +1,3 @@
-"""Tests for browser.py's own-run-scoped Chrome lifecycle: PID snapshot/kill mechanics
-(_reap_session_profile/_record_own_pids/_terminate_then_kill) with subprocess+psutil mocked at the
-I/O boundary, get_tab()'s critical-section ordering (cross-process lock -> reap -> launch ->
-record-own-pids -> death_pipe watchdog -> PID-keyed focus watchdog), close_browser()'s watchdog
-cancellation, and kill_own_chrome()'s teardown (graceful close_browser -> PID-scoped safety-net
-kill -> session-dir removal -> lock release), including the no-op path for a run that never
-touched the browser.
-
-No real Chrome/flock involved here (browser_lock's own real-flock behavior is covered by
-test_browser_lock.py) — pydoll's Chrome and psutil/subprocess are faked per test, module globals
-reset via monkeypatch so tests don't leak state into each other. `_reap_session_profile`'s own
-directory-cleanup half (`_remove_orphaned_session_dirs`) uses real `tempfile.mkdtemp`/`shutil.rmtree`
-against the real filesystem, not mocked — the same precedent `test_chromium_scrape_facts.py`
-already established for the sibling scrape lane's identically-shaped per-run directory.
-"""
 import asyncio
 import shutil
 import tempfile
@@ -50,9 +35,6 @@ def test_open_background_process_creator_targets_resolved_bundle_path_not_bare_n
     assert cmd == ["open", "-g", "-n", "-a", str(bundle_path), "--args", "--user-data-dir=/x"]
     assert cmd[cmd.index("-a") + 1] != "Google Chrome"
 
-
-# _pids_matching_session_profiles / _remove_orphaned_session_dirs / _reap_session_profile /
-# _record_own_pids: pgrep output parsing, prefix-scoped directory cleanup, kill dispatch
 
 def test_pids_matching_session_profiles_parses_pgrep_output(monkeypatch):
     _reset_state(monkeypatch, browser)
@@ -111,8 +93,6 @@ def test_record_own_pids_sets_module_state(monkeypatch):
     assert browser._owned_pids == [333, 444]
 
 
-# _terminate_then_kill: terminate every resolvable pid, kill only what's still alive after wait_procs
-
 def test_terminate_then_kill_terminates_and_waits(monkeypatch):
     _reset_state(monkeypatch, browser)
     calls = {"terminated": [], "killed": [], "waited": None}
@@ -131,7 +111,7 @@ def test_terminate_then_kill_terminates_and_waits(monkeypatch):
 
     def fake_wait_procs(procs, timeout):
         calls["waited"] = (list(procs), timeout)
-        return procs, []  # everything exited gracefully
+        return procs, []
 
     monkeypatch.setattr(browser.psutil, "wait_procs", fake_wait_procs)
     browser._terminate_then_kill([1, 2], timeout_s=7.0)
@@ -173,8 +153,6 @@ def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
     assert waited == [[]]
 
 
-# _get_frontmost_pid / _activate_pid: osascript stdout parsing + pid embedded in the AppleScript call
-
 def test_get_frontmost_pid_parses_stdout(monkeypatch):
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("54620\n"))
@@ -194,8 +172,6 @@ def test_activate_pid_embeds_pid_in_applescript_command(monkeypatch):
     browser._activate_pid(1344)
     assert any("unix id is 1344" in arg for arg in commands[0])
 
-
-# _focus_steal_watchdog_by_pid: reclaims only OWNED pids, using an externally-supplied anchor
 
 @pytest.mark.asyncio
 async def test_focus_steal_watchdog_by_pid_ignores_non_owned_frontmost_pid(monkeypatch):
@@ -291,8 +267,6 @@ async def test_close_browser_noop_watchdog_cancel_when_never_started(monkeypatch
     assert browser._focus_watchdog_task is None
     assert browser._browser is None
 
-
-# kill_own_chrome: graceful close -> PID safety net -> lock release, no-op when nothing was touched
 
 @pytest.mark.asyncio
 async def test_kill_own_chrome_noop_when_browser_never_started(monkeypatch):

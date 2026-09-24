@@ -1,10 +1,3 @@
-"""Tests for src/search/engines/openalex.py (2026 API migration + pdf_url threading).
-
-No network — httpx.AsyncClient is monkeypatched with a fake client that records the request
-params and returns a canned response, following the pattern established in test_seed_feeders.py.
-Also covers the pdf_url chain through build_engine_pools (merge.py) and format_engine_pool
-(cache.py), the same two links date.py had to be threaded through.
-"""
 import pytest
 
 from src.search.cache import format_engine_pool
@@ -13,10 +6,6 @@ from src.search.merge import build_engine_pools
 from src.search.result import SearchResult
 import src.search.engines.openalex as openalex_mod
 
-
-# ---------------------------------------------------------------------------
-# Fakes
-# ---------------------------------------------------------------------------
 
 class _FakeResponse:
     def __init__(self, status_code: int, payload: dict | None = None):
@@ -32,7 +21,6 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
-    """Records the last GET's params; returns a fixed response regardless of URL."""
 
     def __init__(self, response: _FakeResponse, capture: dict, *a, **kw):
         self._response = response
@@ -74,10 +62,6 @@ def _work(title="A Study", oa_url="https://openalex.org/W1", pdf_url="__unset__"
     return work
 
 
-# ---------------------------------------------------------------------------
-# _extract_pdf_url / _parse_results
-# ---------------------------------------------------------------------------
-
 def test_extract_pdf_url_present():
     work = _work(pdf_url="https://mdpi.com/paper.pdf")
     assert _extract_pdf_url(work) == "https://mdpi.com/paper.pdf"
@@ -107,15 +91,8 @@ def test_parse_results_pdf_url_none_when_absent():
     assert results[0].pdf_url is None
 
 
-# ---------------------------------------------------------------------------
-# search_with_reason: 429 / api_key / mailto / per_page clamp
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_429_carries_http_status_but_reason_stays_none(monkeypatch):
-    """429 used to surface a guessed EMPTY_BLOCK verdict; that verdict carried no information the
-    observed HTTP status (already in diagnosis) did not already carry, so it is gone — reason is
-    now None like every other empty branch, and the real fact (429) lives in diagnosis alone."""
     _install_fake_client(monkeypatch, _FakeResponse(429))
     engine = OpenAlexEngine()
     results, reason, diagnosis = await engine.search_with_reason("noise sleep", max_results=10)
@@ -126,8 +103,6 @@ async def test_429_carries_http_status_but_reason_stays_none(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_403_stays_plain_empty_no_reason_but_carries_http_status(monkeypatch):
-    """403 keeps reason=None (unchanged status/reason semantics) but the diagnosis now carries the
-    real observed HTTP status — the exact fact a bare EMPTY verdict used to discard."""
     _install_fake_client(monkeypatch, _FakeResponse(403))
     engine = OpenAlexEngine()
     results, reason, diagnosis = await engine.search_with_reason("noise sleep", max_results=10)
@@ -138,7 +113,6 @@ async def test_403_stays_plain_empty_no_reason_but_carries_http_status(monkeypat
 
 @pytest.mark.asyncio
 async def test_success_with_results_has_no_diagnosis(monkeypatch):
-    """A 200 response with non-empty results is a success path — diagnosis-free, no diagnose call paid for."""
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": [_work()]}))
     engine = OpenAlexEngine()
     results, reason, diagnosis = await engine.search_with_reason("query", max_results=10)
@@ -149,8 +123,6 @@ async def test_success_with_results_has_no_diagnosis(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_success_with_zero_results_carries_http_status(monkeypatch):
-    """A 200 response that parses to zero results still returns WITHOUT results, so it carries the
-    observed HTTP status even though reason stays None (unchanged)."""
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
     engine = OpenAlexEngine()
     results, reason, diagnosis = await engine.search_with_reason("query", max_results=10)
@@ -220,19 +192,11 @@ class _RaisingAsyncClient:
 
 @pytest.mark.asyncio
 async def test_search_base_method_propagates_exception(monkeypatch):
-    """2026-09-09: search()'s own try/except that swallowed exceptions into [] was removed — a
-    code-standards violation (silently hiding an error affecting business logic). search() now
-    inherits BaseEngine's plain delegation to search_with_reason and lets an exception through
-    unchanged."""
     monkeypatch.setattr(openalex_mod.httpx, "AsyncClient", lambda *a, **kw: _RaisingAsyncClient())
     engine = OpenAlexEngine()
     with pytest.raises(RuntimeError):
         await engine.search("query", max_results=10)
 
-
-# ---------------------------------------------------------------------------
-# pdf_url chain: build_engine_pools (merge.py)
-# ---------------------------------------------------------------------------
 
 def test_build_engine_pools_preserves_pdf_url_on_winner():
     r = SearchResult(
@@ -249,10 +213,6 @@ def test_build_engine_pools_pdf_url_none_when_absent():
     assert pools["openalex"][0].pdf_url is None
 
 
-# ---------------------------------------------------------------------------
-# pdf_url chain: format_engine_pool (cache.py)
-# ---------------------------------------------------------------------------
-
 def test_format_engine_pool_renders_pdf_line_when_present():
     pool = [{"position": 1, "title": "T", "url": "https://doi.org/x", "pdf_url": "https://pub.com/x.pdf", "snippet": ""}]
     out = format_engine_pool(pool, "openalex", "q")
@@ -268,7 +228,6 @@ def test_format_engine_pool_no_pdf_line_when_pdf_url_none():
 
 
 def test_format_engine_pool_no_pdf_line_when_key_missing():
-    # Simulates a pre-change cache entry written before pdf_url existed
     pool = [{"position": 1, "title": "T", "url": "https://doi.org/x", "snippet": ""}]
     out = format_engine_pool(pool, "openalex", "q")
     assert "PDF:" not in out

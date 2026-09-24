@@ -1,10 +1,3 @@
-"""Tests for src/search/document_status.py — the CDP Network.responseReceived listener that backs
-the search lane's HTTP-status fact, and the pure merge that attaches it to a diagnosis snapshot.
-
-No real browser/CDP — a fake tab exposes just what start_document_status_capture touches
-(_target_id, enable_network_events, on) and lets the test fire synthetic CDP event dicts directly
-at the registered callback.
-"""
 import pytest
 
 from src.search.document_status import attach_document_status, start_document_status_capture
@@ -30,10 +23,6 @@ class _BrokenTab(_FakeTab):
     async def enable_network_events(self):
         raise RuntimeError("cdp boom")
 
-
-# ---------------------------------------------------------------------------
-# start_document_status_capture
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_collects_ordered_main_frame_document_statuses():
@@ -67,10 +56,6 @@ async def test_setup_failure_degrades_to_empty_list_not_an_exception():
     chain = await start_document_status_capture(tab)
     assert chain == []
 
-
-# ---------------------------------------------------------------------------
-# attach_document_status
-# ---------------------------------------------------------------------------
 
 def test_last_entry_of_chain_is_http_status_not_first_hop():
     diag = {"marker": None}
