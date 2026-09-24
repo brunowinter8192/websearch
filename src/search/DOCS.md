@@ -20,9 +20,9 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 ## Modules
 
-### search_web.py (387 LOC)
+### search_web.py (409 LOC)
 
-**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table (prefixed with a degraded-run notice once the error/timeout share of selected engines crosses a fixed threshold), and caches the result.
+**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table (prefixed with a degraded-run notice once the error/timeout share of selected engines crosses a fixed threshold; it names each failing engine's shortened drop_reason and prints a repair line only for the observed browser-never-started signature), and caches the result.
 **Reads:** query + params; per-engine caps in `ENGINE_MAX_RESULTS`; default set via `_DEFAULT_ENGINES`; `_BROWSER_ENGINES` (which of the 8 need `browser.py`'s Chrome).
 **Writes:** disk cache `~/.cache/websearch/<key>.json` (via cache_write); query log (via log_query).
 **Called by:** `cli.py` (search_web_workflow); dev scripts (fetch_search_results).
