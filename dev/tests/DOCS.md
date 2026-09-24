@@ -96,11 +96,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/degraded_notice.py: real recorded engine_run fixtures, threshold, drop_reason display, repair-line gate.
 
-### test_query_logger.py (330 LOC)
+### test_query_logger.py (327 LOC)
 
 **Purpose:** src/search/query_logger.py, _engine_with_timing, search_web_workflow log shape, and cli.py _log_drilldown via an isolated subprocess.
 
-### test_scrape_logger.py (37 LOC)
+### test_scrape_logger.py (55 LOC)
 
 **Purpose:** src/scraper/scrape_logger.py write_sidecar header content.
 
@@ -117,11 +117,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/camoufox_scrape.py try_scrape_camoufox: acquisition-error states, urlsplit regression, markdown-conversion failure, document-status chain.
 
-### test_camoufox_scrape_output.py (188 LOC)
+### test_camoufox_scrape_output.py (197 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py: calibration kwargs and config stamp, scrape_url_camoufox_workflow logging, output format.
 
-### test_camoufox_scrape_focus.py (75 LOC)
+### test_camoufox_scrape_focus.py (87 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py no-focus-steal launch: LSUIElement plist patch and ignore_default_args.
 
@@ -146,7 +146,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/chromium_scrape.py before_goto document-status listener through the real acquisition machinery.
 
-### test_chromium_process.py (168 LOC)
+### test_chromium_process.py (214 LOC)
 
 **Purpose:** src/scraper/chromium_process.py: self-launch mechanics, live crawl4ai flag-parity guard, profile pid parsing, orphan reaping.
 
@@ -190,7 +190,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/crawler/pipe_scraper_config.py: config stamp, live crawl4ai stealth wiring guard, fixed anti-bot posture, headed flag effect.
 
-### test_pipe_scraper.py (247 LOC)
+### test_pipe_scraper.py (248 LOC)
 
 **Purpose:** src/crawler/pipe_scraper*.py: per-URL JSONL log, run_id sharing, request-start timing, exception tripwire record, landed_url.
 

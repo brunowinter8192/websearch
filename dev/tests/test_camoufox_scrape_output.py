@@ -186,3 +186,12 @@ def test_resolve_system_locale_converts_apple_locale_to_bcp47(monkeypatch):
         lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout="de_DE\n", stderr=""),
     )
     assert camoufox_scrape._resolve_system_locale() == "de-DE"
+
+
+def test_resolve_system_locale_empty_output_raises(monkeypatch):
+    monkeypatch.setattr(
+        camoufox_scrape.subprocess, "run",
+        lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout="\n", stderr=""),
+    )
+    with pytest.raises(RuntimeError, match="empty"):
+        camoufox_scrape._resolve_system_locale()

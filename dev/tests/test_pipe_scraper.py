@@ -37,14 +37,15 @@ def test_log_pipe_scrape_appends(tmp_path, monkeypatch):
     assert len(log_file.read_text(encoding="utf-8").splitlines()) == 3
 
 
-def test_log_pipe_scrape_fail_soft(monkeypatch, caplog):
-    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", "/nonexistent-root-dir/x/pipe_scrape_log.jsonl")
+def test_log_pipe_scrape_unwritable_path_raises(tmp_path, monkeypatch):
+    blocker = tmp_path / "blocked"
+    blocker.write_text("i am a file")
+    monkeypatch.setenv("WEBSEARCH_PIPE_SCRAPE_LOG_PATH", str(blocker / "nested" / "pipe_scrape_log.jsonl"))
 
-    with caplog.at_level("WARNING", logger="src.crawler.pipe_scrape_logger"):
+    with pytest.raises(OSError):
         log_pipe_scrape({"ts": _now_ts(), "run_id": "r", "url": "https://x.test", "domain": "x.test",
                           "http_status": 200, "bytes": 1, "wall_ms": 1,
                           "config_hash": "h", "config": {}})
-    assert any("pipe_scrape_log write failed" in m for m in caplog.messages)
 
 
 @pytest.mark.asyncio
