@@ -100,7 +100,7 @@ async def test_eight_results_from_fixture_each_have_title_snippet_and_resolved_u
     try:
         items = _items_from_specs(HAPPY_SPECS, port)
         parsed = _build_results(items, max_results=10)
-        resolved = await _resolve_urls(parsed)
+        resolved, _ = await _resolve_urls(parsed)
     finally:
         stop_fixture_server(server, thread)
 
@@ -127,7 +127,7 @@ async def test_each_unhappy_goto_case_drops_only_its_own_result():
     try:
         items = _items_from_specs(specs, port)
         parsed = _build_results(items, max_results=10)
-        resolved = await _resolve_urls(parsed)
+        resolved, _ = await _resolve_urls(parsed)
     finally:
         stop_fixture_server(server, thread)
 
@@ -147,7 +147,7 @@ async def test_two_goto_blobs_resolving_to_same_destination_collapse_to_one():
     try:
         items = _items_from_specs(specs, port)
         parsed = _build_results(items, max_results=10)
-        resolved = await _resolve_urls(parsed)
+        resolved, _ = await _resolve_urls(parsed)
     finally:
         stop_fixture_server(server, thread)
 
@@ -168,7 +168,7 @@ async def test_all_results_failing_to_resolve_produces_clean_empty_not_exception
     try:
         items = _items_from_specs(specs, port)
         parsed = _build_results(items, max_results=10)
-        resolved = await _resolve_urls(parsed)
+        resolved, _ = await _resolve_urls(parsed)
     finally:
         stop_fixture_server(server, thread)
 
@@ -177,4 +177,6 @@ async def test_all_results_failing_to_resolve_produces_clean_empty_not_exception
 
 @pytest.mark.asyncio
 async def test_resolve_urls_on_empty_input_is_a_clean_noop():
-    assert await _resolve_urls([]) == []
+    resolved, stats = await _resolve_urls([])
+    assert resolved == []
+    assert stats == {"found": 0, "resolved": 0, "dropped": 0, "reasons": {}}

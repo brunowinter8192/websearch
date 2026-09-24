@@ -6,7 +6,7 @@ import time
 from urllib.parse import quote_plus, urlparse, parse_qs
 
 from curl_cffi.requests import AsyncSession
-from curl_cffi.requests.exceptions import RequestException
+from curl_cffi.requests.exceptions import RequestException, Timeout
 from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
 
@@ -117,12 +117,13 @@ class GoogleEngine(BaseEngine):
                 logger.debug("Google empty for: %s", query)
                 return [], None, attach_document_status(diag, status_chain)
             results = await _parse_results(tab, max_results)
+            results, resolution = await _resolve_urls(results)
+            _log_drops(resolution)
             if results:
-                results = await _resolve_urls(results)
-            if results:
-                return results, None, attach_document_status({}, status_chain)
+                return results, None, attach_document_status({"goto_resolution": resolution}, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
+            diag["goto_resolution"] = resolution
             return results, None, attach_document_status(diag, status_chain)
         finally:
             await kill_tab(tab)
@@ -211,38 +212,66 @@ def _clean_url(href: str) -> str:
     return href
 
 
-async def _resolve_urls(results: list[SearchResult]) -> list[SearchResult]:
+async def _resolve_urls(results: list[SearchResult]) -> tuple[list[SearchResult], dict]:
     async with AsyncSession(impersonate="chrome") as session:
-        resolved = await asyncio.gather(*[_resolve_one(session, r) for r in results])
+        outcomes = await asyncio.gather(*[_resolve_one(session, r) for r in results])
+    reasons = [reason for _, reason in outcomes if reason]
+    deduped, duplicates = _dedupe_resolved([r for r, _ in outcomes if r is not None])
+    reasons.extend(["duplicate_destination"] * duplicates)
+    return deduped, _build_resolution_stats(len(results), len(deduped), reasons)
+
+
+def _dedupe_resolved(resolved: list[SearchResult]) -> tuple[list[SearchResult], int]:
     seen: set[str] = set()
     deduped = []
     for r in resolved:
-        if r is None or r.url in seen:
+        if r.url in seen:
             continue
         seen.add(r.url)
         deduped.append(r)
     for i, r in enumerate(deduped):
         r.position = i + 1
-    return deduped
+    return deduped, len(resolved) - len(deduped)
 
 
-async def _resolve_one(session: AsyncSession, result: SearchResult) -> SearchResult | None:
+def _build_resolution_stats(found: int, resolved: int, reasons: list[str]) -> dict:
+    counts: dict[str, int] = {}
+    for reason in reasons:
+        counts[reason] = counts.get(reason, 0) + 1
+    return {"found": found, "resolved": resolved, "dropped": found - resolved, "reasons": counts}
+
+
+def _log_drops(resolution: dict) -> None:
+    if not resolution["dropped"]:
+        return
+    logger.warning(
+        "Google goto resolution dropped %d of %d results: %s",
+        resolution["dropped"], resolution["found"], resolution["reasons"],
+    )
+
+
+async def _resolve_one(session: AsyncSession, result: SearchResult) -> tuple[SearchResult | None, str | None]:
     try:
         resp = await session.get(
             result.url, allow_redirects=False, timeout=GOTO_RESOLVE_TIMEOUT_S,
         )
+    except Timeout as e:
+        logger.debug("Google goto resolution timed out for %s: %s", result.url, e)
+        return None, "timeout"
     except RequestException as e:
         logger.debug("Google goto resolution failed for %s: %s", result.url, e)
-        return None
+        return None, "request_error"
     if resp.status_code != 302:
-        return None
+        return None, f"non_302_{resp.status_code}"
     location = resp.headers.get("location")
-    if not location or not _is_absolute_http_url(location):
-        return None
+    if not location:
+        return None, "no_location"
+    if not _is_absolute_http_url(location):
+        return None, "relative_location"
     return SearchResult(
         url=location, title=result.title, snippet=result.snippet,
         engine="google", position=result.position, date=result.date,
-    )
+    ), None
 
 
 def _is_absolute_http_url(location: str) -> bool:
