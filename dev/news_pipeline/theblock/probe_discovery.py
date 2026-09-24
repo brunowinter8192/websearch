@@ -107,12 +107,8 @@ def load_sub_cache(sub_url):
     p = sub_cache_path(sub_url)
     if not p.exists():
         return None
-    try:
-        d = json.loads(p.read_text())
-        return d.get("urls", [])
-    except json.JSONDecodeError as e:
-        print(f"  WARNING: corrupt cache for {sub_url.split('/')[-1]}: {e} — will re-fetch")
-        return None
+    d = json.loads(p.read_text())
+    return d.get("urls", [])
 
 def save_sub_cache(sub_url, urls):
     p = sub_cache_path(sub_url)
@@ -194,12 +190,9 @@ def fetch_full_sitemap_union():
 def _reconstruct_sub_urls_from_cache():
     sub_urls = []
     for f in sorted(CACHE_DIR.glob("sub_*.json")):
-        try:
-            d = json.loads(f.read_text())
-            if d.get("sub"):
-                sub_urls.append(d["sub"])
-        except json.JSONDecodeError as e:
-            print(f"  WARNING: could not read {f.name}: {e}")
+        d = json.loads(f.read_text())
+        if d.get("sub"):
+            sub_urls.append(d["sub"])
     return sub_urls
 
 
@@ -214,13 +207,10 @@ def fetch_news_sitemap():
             return unique, False
 
     if NEWS_CACHE.exists():
-        try:
-            cached = json.loads(NEWS_CACHE.read_text())
-            if cached.get("urls"):
-                print(f"  news sitemap: CF-blocked — cache: {len(cached['urls'])} URLs")
-                return cached["urls"], True
-        except json.JSONDecodeError as e:
-            print(f"  WARNING: corrupt news cache: {e}")
+        cached = json.loads(NEWS_CACHE.read_text())
+        if cached.get("urls"):
+            print(f"  news sitemap: CF-blocked — cache: {len(cached['urls'])} URLs")
+            return cached["urls"], True
 
     print("  news sitemap: CF-blocked, no cache")
     return [], True

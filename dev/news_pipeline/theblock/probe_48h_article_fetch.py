@@ -94,17 +94,13 @@ def _fetch_index(pool: list) -> list[str]:
 
 
 def _fetch_index_direct() -> bytes | None:
-    try:
-        r = httpx.get(INDEX_URL, timeout=DIRECT_TIMEOUT, follow_redirects=True)
-        head = r.content[:500]
-        if r.status_code == 200 and any(m in head for m in XML_MARKERS):
-            print(f"[sitemap] Direct OK ({len(r.content):,} bytes)")
-            return r.content
-        print(f"[sitemap] Direct: status={r.status_code}, no XML marker — parallel fallback")
-        return None
-    except Exception as e:
-        print(f"[sitemap] Direct error: {e} — parallel fallback")
-        return None
+    r = httpx.get(INDEX_URL, timeout=DIRECT_TIMEOUT, follow_redirects=True)
+    head = r.content[:500]
+    if r.status_code == 200 and any(m in head for m in XML_MARKERS):
+        print(f"[sitemap] Direct OK ({len(r.content):,} bytes)")
+        return r.content
+    print(f"[sitemap] Direct: status={r.status_code}, no XML marker — parallel fallback")
+    return None
 
 
 def _pick_highest_numbered(urls: list[str]) -> str:
@@ -145,12 +141,9 @@ def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
             continue
         url     = loc_m.group(1).decode().strip()
         mod_raw = mod_m.group(1).decode().strip().replace("Z", "+00:00")
-        try:
-            mod = datetime.fromisoformat(mod_raw)
-            if mod.tzinfo is None:
-                mod = mod.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
+        mod = datetime.fromisoformat(mod_raw)
+        if mod.tzinfo is None:
+            mod = mod.replace(tzinfo=timezone.utc)
         results.append((url, mod))
     return results
 

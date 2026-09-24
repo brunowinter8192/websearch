@@ -173,10 +173,7 @@ def build_options(headless: bool, session_dir: str) -> ChromiumOptions:
 
 
 def _extract_value(raw):
-    try:
-        return raw["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return raw["result"]["result"]["value"]
 
 
 async def inspect_containers(tab) -> dict:
@@ -184,10 +181,7 @@ async def inspect_containers(tab) -> dict:
     val = _extract_value(raw)
     if not val:
         return {}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    return json.loads(val)
 
 
 async def extract_articles(tab) -> list[dict]:
@@ -195,10 +189,7 @@ async def extract_articles(tab) -> list[dict]:
     val = _extract_value(raw)
     if not val:
         return []
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    return json.loads(val)
 
 
 async def wait_for_new_articles(tab, prev_count: int) -> int:
@@ -216,10 +207,7 @@ async def find_button(tab) -> dict | None:
     val = _extract_value(raw)
     if not val:
         return None
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return None
+    return json.loads(val)
 
 
 async def click_button(tab) -> bool:

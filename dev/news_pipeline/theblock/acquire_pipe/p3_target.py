@@ -26,17 +26,13 @@ def build_sitemap_target(pool: list | None = None) -> list[str]:
 # FUNCTIONS
 
 def _fetch_index_direct() -> bytes | None:
-    try:
-        r = httpx.get(THEBLOCK_INDEX, timeout=DIRECT_TIMEOUT, follow_redirects=True)
-        head = r.content[:500]
-        if r.status_code == 200 and any(m in head for m in XML_MARKERS):
-            print(f"[sitemap] Direct fetch OK ({len(r.content):,} bytes)")
-            return r.content
-        print(f"[sitemap] Direct fetch: status={r.status_code}, no XML marker — proxy fallback")
-        return None
-    except Exception as e:
-        print(f"[sitemap] Direct fetch error: {e} — proxy fallback")
-        return None
+    r = httpx.get(THEBLOCK_INDEX, timeout=DIRECT_TIMEOUT, follow_redirects=True)
+    head = r.content[:500]
+    if r.status_code == 200 and any(m in head for m in XML_MARKERS):
+        print(f"[sitemap] Direct fetch OK ({len(r.content):,} bytes)")
+        return r.content
+    print(f"[sitemap] Direct fetch: status={r.status_code}, no XML marker — proxy fallback")
+    return None
 
 
 def _fetch_index_via_proxy(pool: list) -> bytes:

@@ -13,7 +13,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** CLI only. `--headless` to run headless.
 **Calls out:** `_01_dom.py` (this directory) for the pydoll/CDP DOM-scripting layer.
 
-### _01_dom.py (227 LOC)
+### _01_dom.py (215 LOC)
 
 **Purpose:** pydoll/CDP DOM-scripting layer for `01_coindesk_ui_probe.py` — Chromium launch options and the JS snippets + async wrappers that inspect, extract, count, find and click against the live page.
 **Reads:** nothing — takes a pydoll `tab` handle from `01_coindesk_ui_probe.py`.
@@ -69,7 +69,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** CLI only. No flag: bounded run cap=`STAGE_A_CAP`(400); `--cap N` override; `--full` uncapped Stage B.
 **Calls out:** `_03_capture.py`, `_03_log.py`, `_03_report.py` (this directory).
 
-### _03_capture.py (225 LOC)
+### _03_capture.py (216 LOC)
 
 **Purpose:** pydoll/CDP browser launch + click/extract/button-state JS wrappers for `03`, including the disabled-button retry-with-scroll-nudge mechanism.
 **Reads:** nothing — takes a pydoll `tab` handle from the caller.
@@ -101,7 +101,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** CLI only. `--loop N` (default 3, cursor-loop calls after initial capture), `--delay S` (default 0.3), `--rate-test` (rerun loop with 2s delay).
 **Calls out:** `_04_capture.py`, `_04_replay.py`, `_04_report.py` (this directory).
 
-### _04_capture.py (121 LOC)
+### _04_capture.py (118 LOC)
 
 **Purpose:** Captures CoinDesk timeline API requests via background Chrome + pydoll HAR recorder (full wire headers incl. `sec-ch-ua*`). Establishes minimum header set for replay (Referer, User-Agent, `sec-ch-ua*` — no cookie/auth required).
 **Reads:** live CoinDesk site.
@@ -109,7 +109,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `04_coindesk_timeline_replay_probe.py` only.
 **Calls out:** `pydoll`.
 
-### _04_replay.py (328 LOC)
+### _04_replay.py (325 LOC)
 
 **Purpose:** Dual-client HTTP replay (`httpx` + `curl_cffi` Chrome impersonation) of the captured timeline URL, cursor-chained pagination, and 403 diagnostics (header signals, recoverability retest at +10s/+40s).
 **Reads:** live CoinDesk timeline API.
@@ -133,7 +133,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** CLI only. `--mode walk|fixed`, `--n N` (default 25), `--invalid-types T1,T2` (fixed mode), `--delay S` (default 0.3).
 **Calls out:** `_05_capture.py`, `_05_parse.py`, `_05_fixed.py`, `_05_report.py` (this directory).
 
-### _05_capture.py (125 LOC)
+### _05_capture.py (122 LOC)
 
 **Purpose:** pydoll/CDP browser launch + timeline-request capture layer for `05_coindesk_cursor_probe.py`.
 **Reads:** nothing — takes a pydoll `tab` handle and a `mode` label from the caller.
@@ -141,9 +141,9 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `05_coindesk_cursor_probe.py` only.
 **Calls out:** `pydoll`.
 
-### _05_parse.py (46 LOC)
+### _05_parse.py (43 LOC)
 
-**Purpose:** Shared article-body parsing and standard-cursor/URL-building utilities used by both walk and fixed modes.
+**Purpose:** Shared article-body parsing and standard-cursor/URL-building utilities used by both walk and fixed modes; a non-JSON body raises.
 **Reads:** nothing — pure functions over the caller's response bodies/article lists.
 **Writes:** nothing.
 **Called by:** `05_coindesk_cursor_probe.py`, `_05_fixed.py`.
@@ -165,7 +165,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `05_coindesk_cursor_probe.py` only.
 **Calls out:** none.
 
-### 05b_coindesk_warmth_probe.py (335 LOC)
+### 05b_coindesk_warmth_probe.py (332 LOC)
 
 **Purpose:** Measures IP warmth duration after a browser session closes. Captures the first timeline API URL + headers via Chrome (same mechanism as 04), saves to `state.json`, closes Chrome, replays the SAME URL at cumulative intervals (T=0,10,20,30,60,120,180,300s). At first 403: tests httpx feedpage GET re-warm + subprocess cold call. Findings: warmth lasts ≥300s for repeated-URL replays after browser close; warmth is IP-level (fresh subprocess with no prior coindesk connection returns 200 when IP warm); Phase C (rewarm/cold path) not triggered in first run — warmth outlasted the 300s ladder; a deep loop of 350 cursor advances (~4-5min) also fully succeeded.
 **Reads:** live CoinDesk site + timeline API.
@@ -181,7 +181,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** `05b_coindesk_warmth_probe.py` only.
 **Calls out:** none.
 
-### 06_coindesk_full_discovery.py (351 LOC)
+### 06_coindesk_full_discovery.py (348 LOC)
 
 **Purpose:** Combines the browser-capture (04-style timeline URL/header capture) and cursor-loop (05-style pagination) techniques into one full discovery run — captures initial timeline request via background Chrome, then chains cursor calls to exhaustion, writing articles per-year with checkpoint-based resume and rewarm fallback on 403.
 **Reads:** live CoinDesk site + timeline API.
@@ -189,7 +189,7 @@ Manual UI exploration probes for CoinDesk. Goal: learn page structure (button se
 **Called by:** CLI only.
 **Calls out:** `_06_capture.py`, `_06_progress.py`, `_06_report.py` (this directory).
 
-### _06_capture.py (170 LOC)
+### _06_capture.py (167 LOC)
 
 **Purpose:** pydoll/CDP browser launch + timeline-request capture layer for `06_coindesk_full_discovery.py` — same background-Chrome mechanism as `05b`, reused for this probe's warmup/rewarm cycles.
 **Reads:** nothing — takes an `n_clicks` count and an optional log handle.

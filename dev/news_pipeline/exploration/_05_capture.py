@@ -89,10 +89,7 @@ def kill_chrome_on_port(port: int) -> None:
 
 
 def _extract_value(raw):
-    try:
-        return raw["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return raw["result"]["result"]["value"]
 
 
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
