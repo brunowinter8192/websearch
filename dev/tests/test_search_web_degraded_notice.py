@@ -1,4 +1,4 @@
-from src.search.search_web import (
+from src.search.degraded_notice import (
     DEGRADED_ENGINE_FAILURE_RATIO,
     BROWSER_REPAIR_COMMAND,
     _failing_engines,

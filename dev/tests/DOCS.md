@@ -94,7 +94,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### test_search_web_degraded_notice.py (233 LOC)
 
-**Purpose:** src/search/search_web.py degraded-run notice: real recorded engine_run fixtures, threshold, drop_reason display, repair-line gate.
+**Purpose:** src/search/degraded_notice.py: real recorded engine_run fixtures, threshold, drop_reason display, repair-line gate.
 
 ### test_query_logger.py (330 LOC)
 
