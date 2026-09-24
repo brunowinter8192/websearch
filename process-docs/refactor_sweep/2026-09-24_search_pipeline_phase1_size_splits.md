@@ -1942,7 +1942,7 @@ Every module of the area was imported standalone (own folder and project root on
 
 ## Deleted files
 
-Last commit where each file existed, taken with `git log -1 --format=%h -- <path>` immediately before `git rm`; restore any of them with `git show <hash>:dev/search_pipeline/<path>`. Files at `aa714bc` still had their pre-comment-sweep text there only if the hash says so; the newest commit that touched them is what is listed.
+Last commit where each file existed, taken with `git log -1 --format=%h -- <path>` immediately before `git rm`; restore any of them with `git show <hash>:dev/search_pipeline/<path>`. The hash is the newest commit that touched the file, so it holds the last version of it.
 
 | file (under `dev/search_pipeline/`) | last commit | missing symbol / reason |
 |---|---|---|
