@@ -13,13 +13,13 @@ from pydoll.protocol.network.types import CookieSameSite
 from src.search.browser import new_tab, kill_tab
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
+from src.search.selector_hits import collect_selector_hits
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
 
 SEARCH_URL = "https://www.google.com/search?q={}&hl={}&num={}"
-CONSENT_DOMAIN = "consent.google.com"
 CAPTCHA_PATH = "/sorry/"
 MAX_WAIT_CYCLES = 3
 WAIT_INTERVAL = 0.2
@@ -36,21 +36,44 @@ var _out = [];
 for (var _i = 0; _i < _cs.length; _i++) {
     var _c = _cs[_i];
     var _a = null;
+    var _sel = {};
     var _title = '';
     var _h3 = _c.querySelector('h3');
     var _lc = _c.querySelector('.LC20lb');
     if (_h3) {
         _title = _h3.textContent.trim();
-        _a = _h3.closest('a[href^="/goto?url="]') || _h3.parentElement.querySelector('a[href^="/goto?url="]');
+        _a = _h3.closest('a[href^="/goto?url="]');
+        if (_a) { _sel.anchor = 0; }
+        else {
+            _a = _h3.parentElement.querySelector('a[href^="/goto?url="]');
+            if (_a) { _sel.anchor = 1; }
+        }
     }
     if (!_a && _lc) {
         if (!_title) { _title = _lc.textContent.trim(); }
-        _a = _lc.closest('a[href^="/goto?url="]') || _lc.parentElement.querySelector('a[href^="/goto?url="]');
+        _a = _lc.closest('a[href^="/goto?url="]');
+        if (_a) { _sel.anchor = 2; }
+        else {
+            _a = _lc.parentElement.querySelector('a[href^="/goto?url="]');
+            if (_a) { _sel.anchor = 3; }
+        }
     }
-    if (!_a) { _a = _c.querySelector('a[href^="/goto?url="]'); }
+    if (!_a) {
+        _a = _c.querySelector('a[href^="/goto?url="]');
+        if (_a) { _sel.anchor = 4; }
+    }
     if (!_title && _a) { _title = _a.textContent.trim(); }
     if (!_a || !_title) continue;
-    var _snip = _c.querySelector('.VwiC3b') || _c.querySelector('[data-sncf]') || _c.querySelector('.lEBKkf');
+    var _snip = _c.querySelector('.VwiC3b');
+    if (_snip) { _sel.snippet = 0; }
+    else {
+        _snip = _c.querySelector('[data-sncf]');
+        if (_snip) { _sel.snippet = 1; }
+        else {
+            _snip = _c.querySelector('.lEBKkf');
+            if (_snip) { _sel.snippet = 2; }
+        }
+    }
     var _date = null;
     var _snipText = '';
     if (_snip) {
@@ -62,18 +85,9 @@ for (var _i = 0; _i < _cs.length; _i++) {
             _snipText = _snip.textContent.trim();
         }
     }
-    _out.push({url: _a.href, title: _title, snippet: _snipText, date: _date});
+    _out.push({url: _a.href, title: _title, snippet: _snipText, date: _date, sel: _sel});
 }
 return JSON.stringify(_out);
-"""
-
-_JS_CONSENT = """
-var btn = document.querySelector('button[jsname="b3VHJd"]') ||
-           document.querySelector('.lssxud') ||
-           document.querySelector('form[action*="consent"] button[type="submit"]') ||
-           document.querySelector('button[aria-label*="Accept"]');
-if (btn) { btn.click(); return true; }
-return false;
 """
 
 _JS_DIAGNOSE = """
@@ -102,10 +116,6 @@ class GoogleEngine(BaseEngine):
             status_chain = await start_document_status_capture(tab)
             await tab.go_to(search_url, timeout=3.0)
             current = await tab.current_url
-            if CONSENT_DOMAIN in current or await _has_inline_consent(tab):
-                await _handle_consent(tab)
-                await tab.go_to(search_url, timeout=3.0)
-                current = await tab.current_url
             if CAPTCHA_PATH in current:
                 logger.warning("Google CAPTCHA detected for: %s", query)
                 diag = await _diagnose(tab)
@@ -116,11 +126,11 @@ class GoogleEngine(BaseEngine):
                 diag["containers_found"] = False
                 logger.debug("Google empty for: %s", query)
                 return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
+            results, selector_hits = await _parse_results(tab, max_results)
             results, resolution = await _resolve_urls(results)
             _log_drops(resolution)
             if results:
-                return results, None, attach_document_status({"goto_resolution": resolution}, status_chain)
+                return results, None, attach_document_status({"goto_resolution": resolution, "selector_hits": selector_hits}, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
             diag["goto_resolution"] = resolution
@@ -150,18 +160,6 @@ async def _inject_socs_cookie(tab) -> None:
     ))
 
 
-async def _has_inline_consent(tab) -> bool:
-    js = "var body = document.body ? document.body.innerText : ''; return body.indexOf('Before you continue') !== -1 || body.indexOf('cookies and data') !== -1;"
-    raw = await tab.execute_script(js)
-    val = _extract_value(raw)
-    return bool(val)
-
-
-async def _handle_consent(tab) -> None:
-    logger.info("Google consent page detected — clicking accept")
-    await tab.execute_script(_JS_CONSENT)
-
-
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -173,13 +171,13 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
     return False
 
 
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
     if not value:
-        return []
+        return [], {}
     items = json.loads(value)
-    return _build_results(items, max_results)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:

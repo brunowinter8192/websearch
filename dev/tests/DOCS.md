@@ -21,7 +21,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 **Purpose:** Shared FakeChrome and state-reset helper for the browser lifecycle tests. Not collected by pytest.
 **Called by:** test_browser.py, test_browser_get_tab.py.
 
-### test_browser.py (360 LOC)
+### test_browser.py (363 LOC)
 
 **Purpose:** src/search/browser.py: PID snapshot/kill mechanics, session-dir cleanup, watchdog cancellation, kill_own_chrome teardown, focus-steal watchdog branches.
 
@@ -45,7 +45,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/bing.py: _clean_url redirect unwrap, _build_results, _parse_results error propagation.
 
-### test_brave_engine.py (384 LOC)
+### test_brave_engine.py (390 LOC)
 
 **Purpose:** src/search/engines/brave.py: fixture-driven regression tests (marker reflection, challenge solving, partial facts on cancellation) against a real headless pydoll Chrome on loopback.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -66,7 +66,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/startpage.py: _build_results.
 
-### test_yandex_engine.py (220 LOC)
+### test_yandex_engine.py (221 LOC)
 
 **Purpose:** src/search/engines/yandex.py: self-link filter, block-URL detection, _build_results, two fixture-driven regression tests.
 **Calls out:** pydoll.browser, pydoll.commands.
@@ -75,7 +75,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/search/engines/google.py: _build_results, source-level guard for the snippet selector, _resolve_urls against a loopback fixture server.
 
-### test_google_goto_drops.py (147 LOC)
+### test_google_goto_drops.py (143 LOC)
 
 **Purpose:** src/search/engines/google.py redirect resolution: drop-reason counting, timeout/request-error classification, diagnosis attachment.
 **Calls out:** dev.search_pipeline._google_fixture.
@@ -250,6 +250,22 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 ### test_proxy_pool_fetch.py (48 LOC)
 
 **Purpose:** proxy_pool fetch_url: transport errors become fail with the exception class name, non-transport exceptions propagate, status reasons.
+
+### test_selector_hits.py (69 LOC)
+
+**Purpose:** collect_selector_hits aggregation; `sel` never reaches SearchResult; `_parse_results` returns (results, hits) for google/bing/brave/yandex; google consent branch removed.
+
+### test_search_web_select_engines.py (16 LOC)
+
+**Purpose:** `_select_engines` default set, case-insensitive names, unknown name raises.
+
+### test_browser_lock_tripwires.py (46 LOC)
+
+**Purpose:** browser_lock stale-takeover warning, unreadable sidecar raises, atomic sidecar write.
+
+### test_browser_osascript.py (43 LOC)
+
+**Purpose:** browser focus helpers log a warning once on failing osascript.
 
 ### test_coindesk_stop_date.py (27 LOC)
 

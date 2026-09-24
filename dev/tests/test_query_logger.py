@@ -205,7 +205,7 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
 
     assert rec["bottleneck_engine"] in ("google", "duckduckgo")
     assert "search_key" in rec
-    assert rec["engines_excluded"] == {}
+    assert "engines_excluded" not in rec
 
 
 @pytest.mark.asyncio

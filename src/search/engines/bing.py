@@ -10,6 +10,7 @@ from urllib.parse import urlparse, parse_qs
 from src.search.browser import new_tab, kill_tab
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.engines.base import BaseEngine
+from src.search.selector_hits import collect_selector_hits
 from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
@@ -27,14 +28,21 @@ var _out = [];
 for (var _i = 0; _i < _cs.length; _i++) {
     var _c = _cs[_i];
     var _h2a = _c.querySelector('h2 a');
-    var _cap = _c.querySelector('.b_caption p') || _c.querySelector('.b_caption');
+    var _sel = {};
+    var _cap = _c.querySelector('.b_caption p');
+    if (_cap) { _sel.caption = 0; }
+    else {
+        _cap = _c.querySelector('.b_caption');
+        if (_cap) { _sel.caption = 1; }
+    }
     var _dt = _c.querySelector('span.news_dt');
     if (!_h2a || !_h2a.href) continue;
     _out.push({
         url: _h2a.href,
         title: _h2a.textContent.trim(),
         snippet: _cap ? _cap.textContent.trim() : '',
-        date_raw: _dt ? _dt.textContent.trim() : ''
+        date_raw: _dt ? _dt.textContent.trim() : '',
+        sel: _sel
     });
 }
 return JSON.stringify(_out);
@@ -73,9 +81,9 @@ class BingEngine(BaseEngine):
                 diag["containers_found"] = False
                 logger.debug("Bing empty for: %s", query)
                 return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
+            results, selector_hits = await _parse_results(tab, max_results)
             if results:
-                return results, None, attach_document_status({}, status_chain)
+                return results, None, attach_document_status({"selector_hits": selector_hits}, status_chain)
             diag = await _diagnose(tab)
             diag["containers_found"] = True
             return results, None, attach_document_status(diag, status_chain)
@@ -156,13 +164,13 @@ def _extract_date(news_dt_text: str) -> str | None:
     return None
 
 
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
     if not value:
-        return []
+        return [], {}
     items = json.loads(value)
-    return _build_results(items, max_results)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 async def _diagnose(tab) -> dict:
