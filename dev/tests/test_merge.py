@@ -1,15 +1,3 @@
-"""Tests for build_engine_pools in src/search/merge.py.
-
-Guards the M2 fix: cross-engine dedup used to pick ONE winning engine per URL (lowest position,
-random tie-break) and every other engine that had also returned that URL lost it entirely from its
-own pool. Measured against the query log this cost duckduckgo/brave/bing/startpage/yandex 7-20% of
-everything they returned, for a benefit (a URL shown once across all pools) that only pays off when
-several engines get drilled per query — which the same log showed happens in roughly 1 of 6 drilled
-searches. build_engine_pools now keeps one entry per engine that returned a URL; the cross-engine
-knowledge (engine_positions) is preserved as an annotation on every one of those entries rather than
-only on a single reassigned winner. Dedup WITHIN a single engine (same engine, same URL, returned
-twice) still collapses to one entry.
-"""
 from src.search.merge import build_engine_pools
 from src.search.result import SearchResult
 

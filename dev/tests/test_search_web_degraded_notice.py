@@ -1,15 +1,3 @@
-"""Tests for the degraded-run notice in src/search/search_web.py.
-
-All non-boundary fixtures are the real per-engine `status` values lifted verbatim from
-src/logs/query_log.jsonl `engine_run` records (re-verified against the raw file, not the
-summary table in the milestone brief, which had merged two adjacent 2026-09-15T18:43 records
-into one wrong "3 of 7" claim). The genuine 3-of-7 (43%) boundary case that separates a 30%
-threshold from a 50% one is a DIFFERENT record (2026-09-15T18:43:05, "gegarte Speisen
-abkuehlen ..."), confirmed against the raw log and included below.
-
-Only `status` is read by the code under test — the fixtures below carry just that field,
-matching the real records' status values exactly, in the real records' own engine order.
-"""
 from src.search.search_web import (
     DEGRADED_ENGINE_FAILURE_RATIO,
     BROWSER_REPAIR_COMMAND,
@@ -66,10 +54,6 @@ def test_threshold_is_thirty_percent():
     assert DEGRADED_ENGINE_FAILURE_RATIO == 0.30
 
 
-# ---------------------------------------------------------------------------
-# Real recorded runs that must stay silent
-# ---------------------------------------------------------------------------
-
 def test_shear_revival_zero_failures_stays_silent():
     engine_stats = _stats(
         ("google", "EMPTY"), ("duckduckgo", "OK"), ("openalex", "OK"),
@@ -95,10 +79,6 @@ def test_altcha_one_of_eight_stays_silent_even_with_error_browser_present():
     )
     assert _format_degraded_notice(engine_stats) is None
 
-
-# ---------------------------------------------------------------------------
-# Real recorded runs that must fire
-# ---------------------------------------------------------------------------
 
 def test_techniker_krankenkasse_hauptverwaltung_seven_of_eight_fires():
     reason = _ws_refused(9296)
@@ -169,7 +149,6 @@ def test_2026_09_24_second_run_webkit_query_shape_has_no_repair_line():
 
 
 def test_hypothesis_error_browser_without_drop_reason_gets_no_repair_line():
-    """HYPOTHESIS, never observed: ERROR_BROWSER with no recorded drop_reason or an unknown one."""
     engine_stats = _stats(
         ("google", "ERROR_BROWSER"), ("duckduckgo", "ERROR_BROWSER", "some unseen browser error"),
         ("openalex", "OK"), ("startpage", "OK"),
@@ -204,10 +183,6 @@ def test_hackfleisch_vorschrift_five_of_seven_fires():
 
 
 def test_gegarte_speisen_boundary_case_three_of_seven_43_percent_fires():
-    # The real boundary record (2026-09-15T18:43:05, "gegarte Speisen abkuehlen Kuehlschrank
-    # Zeitvorgabe Bacillus cereus") that separates a 30% threshold from a 50% one. It still
-    # returned 10 URLs total (bing=OK) -- a partially degraded run that must still speak up,
-    # because 3 engines' worth of coverage silently went missing.
     engine_stats = _stats(
         ("google", "ERROR_BROWSER"), ("duckduckgo", "TIMEOUT_WATCHDOG"),
         ("openalex", "EMPTY"), ("startpage", "TIMEOUT_WATCHDOG"),
@@ -231,16 +206,7 @@ def test_gegarte_speisen_boundary_case_would_stay_silent_at_fifty_percent_thresh
     assert len(failing) / len(engine_stats) < 0.50
 
 
-# ---------------------------------------------------------------------------
-# Branch coverage not yet observed in the real data (hypothesis, explicitly labelled)
-# ---------------------------------------------------------------------------
-
 def test_hypothesis_fires_without_error_browser_omits_repair_hint():
-    """HYPOTHESIS, never observed: every real record in the 164-record query_log.jsonl that
-    crosses the 30% threshold has at least one ERROR_BROWSER in its failing set (verified by
-    scanning the whole file, not sampling). This case cannot be built from an observed record,
-    so it exists purely to prove the repair line is conditional on ERROR_BROWSER specifically,
-    not on the notice firing at all."""
     engine_stats = _stats(
         ("google", "TIMEOUT_WATCHDOG"), ("duckduckgo", "TIMEOUT_WATCHDOG"),
         ("openalex", "OK"), ("startpage", "OK"),
@@ -249,10 +215,6 @@ def test_hypothesis_fires_without_error_browser_omits_repair_hint():
     assert notice is not None
     assert "Repair:" not in notice
 
-
-# ---------------------------------------------------------------------------
-# Placement and byte-identical-on-healthy-runs guarantee
-# ---------------------------------------------------------------------------
 
 def test_prepend_puts_notice_before_breakdown_not_after():
     engine_stats = _record_2026_09_21_0841()

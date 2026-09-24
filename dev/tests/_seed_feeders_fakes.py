@@ -1,10 +1,6 @@
 import json
 
 
-# ---------------------------------------------------------------------------
-# Fakes
-# ---------------------------------------------------------------------------
-
 class _FakeResponse:
     def __init__(self, status_code: int, content: bytes = b"", text: str = None):
         self.status_code = status_code
@@ -13,7 +9,6 @@ class _FakeResponse:
 
 
 class _FakeAsyncClient:
-    """Routes GET requests by exact URL; unmapped URLs come back 404."""
 
     def __init__(self, routes: dict):
         self._routes = routes
@@ -37,6 +32,5 @@ def _next_data_html(payload: dict) -> str:
 
 
 def _rsc_html(rows: list) -> str:
-    # One push call carrying every row, JSON-escaped exactly as a real page embeds it
     content = "\n".join(rows)
     return f'<html><script>self.__next_f.push([1,{json.dumps(content)}])</script></html>'

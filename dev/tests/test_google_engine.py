@@ -1,27 +1,3 @@
-"""Tests for src/search/engines/google.py's redirect-resolution fix (process-docs/search_pipeline/
-google_goto_redirect_fix.md carries the investigation and the measurements behind the numbers
-used here).
-
-Two layers, following this project's established split for scraping engines (test_yandex_engine.py,
-test_startpage_engine.py etc.): no engine's own DOM-parsing JS is ever run in this suite —
-conftest.py's autouse _no_real_browser_launch fixture traps any real browser launch project-wide,
-not just against real Google, so there is no path to exercising _JS_PARSE itself without violating
-that trap. What IS tested:
-
-- _build_results: pure Python, fed item dicts shaped exactly like what _JS_PARSE would produce
-  (title/snippet/date/url), derived from the real HTML this milestone's investigation saved
-  (dev/access_recovery/html/google_dom_probe_20260918_181820/
-  best-noise-cancelling-headphones-2025_num10.html, gitignored — read directly during the
-  investigation, its 8 organic results are reproduced as dev/search_pipeline/_google_fixture.py's
-  HAPPY_SPECS).
-- _resolve_urls: real local HTTP against dev/search_pipeline/_google_fixture.py's fixture server —
-  real network I/O, but loopback-only, instant, never touches real Google.
-
-The one exception is a source-level regression guard for the second bug found during this
-milestone (the pre-existing .wHYlTd snippet-selector bug, unrelated to the redirect fix) — since
-that fix lives entirely inside the _JS_PARSE JS string and is therefore just as untestable at
-runtime as the rest of the JS, the guard checks the JS source text itself instead.
-"""
 import pytest
 
 from src.search.engines import google as google_mod
@@ -30,10 +6,6 @@ from dev.search_pipeline._google_fixture import (
     ResultSpec, HAPPY_SPECS, start_fixture_server, stop_fixture_server, goto_url,
 )
 
-
-# ---------------------------------------------------------------------------
-# _build_results — pure Python, evidence-derived item dicts, no network
-# ---------------------------------------------------------------------------
 
 def test_build_results_maps_title_snippet_date_and_position():
     items = [
@@ -70,22 +42,10 @@ def test_build_results_empty_items_produces_clean_empty_not_exception():
     assert _build_results([], max_results=10) == []
 
 
-# ---------------------------------------------------------------------------
-# The .wHYlTd snippet-selector bug — a second, independently found bug (real
-# Google markup wraps the ENTIRE result block, title+cite+snippet, in a .wHYlTd
-# div; it is an ancestor of the real snippet element .VwiC3b, not the snippet
-# itself, so it was silently returning garbled composite text as the "snippet"
-# for every Google result). Source-level guard since the JS cannot run here.
-# ---------------------------------------------------------------------------
-
 def test_js_parse_no_longer_prioritizes_wHYlTd_as_snippet_selector():
     assert ".wHYlTd" not in google_mod._JS_PARSE
     assert ".VwiC3b" in google_mod._JS_PARSE
 
-
-# ---------------------------------------------------------------------------
-# _resolve_urls — real local HTTP, dev/search_pipeline/_google_fixture.py's server, loopback only
-# ---------------------------------------------------------------------------
 
 def _items_from_specs(specs: list[ResultSpec], port: int) -> list[dict]:
     return [

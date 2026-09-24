@@ -1,8 +1,3 @@
-"""Tests for query_logger + per-engine stats capture in search_web_workflow.
-
-Runs without network: mock engines return fixed results immediately.
-Uses tmp_path (via WEBSEARCH_QUERY_LOG_PATH) so production log is never touched.
-"""
 import asyncio
 import json
 import logging
@@ -12,18 +7,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _make_mock_engine_with_reason(
     name: str, results: list, delay: float = 0.0, empty_reason: str | None = None, diagnosis: dict | None = None,
     partial_facts: dict | None = None,
 ):
-    """Mock engine matching the current _engine_with_timing interface:
-    engine.search_with_reason(query, language, max_results, partial) -> (results, empty_reason, diagnosis).
-    partial_facts, if given, is written into the caller-supplied partial dict before the delay —
-    simulating a poll-loop checkpoint reached before a cancellation."""
     eng = MagicMock()
     eng.name = name
 
@@ -42,7 +30,6 @@ async def _fake_prewarm_browser() -> None:
     return None
 
 
-# Current-time ts — log_janitor prunes lines with a "ts" older than the 90-day retention window on every write.
 def _now_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
@@ -52,12 +39,7 @@ def _fake_result(url: str = "https://example.com", title: str = "T", snippet: st
     return SearchResult(url=url, title=title, snippet=snippet, engine=engine, position=1)
 
 
-# ---------------------------------------------------------------------------
-# test_log_query_writes_jsonl
-# ---------------------------------------------------------------------------
-
 def test_log_query_writes_jsonl(tmp_path, monkeypatch):
-    """log_query appends exactly one JSONL line with the provided record."""
     log_file = tmp_path / "query_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
 
@@ -72,7 +54,6 @@ def test_log_query_writes_jsonl(tmp_path, monkeypatch):
 
 
 def test_log_query_appends(tmp_path, monkeypatch):
-    """Two log_query calls produce two JSONL lines."""
     log_file = tmp_path / "query_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
 
@@ -87,10 +68,8 @@ def test_log_query_appends(tmp_path, monkeypatch):
 
 
 def test_log_query_fail_soft(tmp_path, caplog, monkeypatch):
-    """log_query does NOT raise when write fails — logs a warning instead."""
     import src.search.query_logger as ql
 
-    # Create a FILE where the parent dir should be, so mkdir fails
     blocker = tmp_path / "blocked"
     blocker.write_text("i am a file")
     bad_path = blocker / "nested" / "query_log.jsonl"
@@ -102,13 +81,8 @@ def test_log_query_fail_soft(tmp_path, caplog, monkeypatch):
     assert any("query_log write failed" in m for m in caplog.messages)
 
 
-# ---------------------------------------------------------------------------
-# test_engine_with_timing (unit tests, no workflow)
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_engine_with_timing_ok():
-    """_engine_with_timing returns (results, rate_wait_ms, search_ms, OK, None) on success."""
     from src.search.search_web import _engine_with_timing
 
     r = _fake_result("https://x.com", engine="fast")
@@ -128,9 +102,6 @@ async def test_engine_with_timing_ok():
 
 @pytest.mark.asyncio
 async def test_engine_with_timing_timeout():
-    """_engine_with_timing returns TIMEOUT_WATCHDOG + drop_reason when engine exceeds watchdog.
-    diagnosis stays None when the engine never wrote anything into partial before cancellation —
-    the same "don't invent a fact" rule the guessed-verdict-removal milestone settled."""
     from src.search.search_web import _engine_with_timing
 
     slow = _make_mock_engine_with_reason("slow_eng", [], delay=5.0)
@@ -149,11 +120,6 @@ async def test_engine_with_timing_timeout():
 
 @pytest.mark.asyncio
 async def test_engine_with_timing_timeout_preserves_facts_written_before_cancellation():
-    """A poll-loop checkpoint reached before the watchdog fires survives the cancellation, merged
-    with diagnosis_partial=True — the mechanism this milestone adds. asyncio.wait_for cancels the
-    engine's own Task, not _engine_with_timing itself, so a mutable dict handed to the engine by
-    reference and written into before that cancellation is the only thing that can still be read
-    afterward; this proves exactly that channel."""
     from src.search.search_web import _engine_with_timing
 
     slow = _make_mock_engine_with_reason(
@@ -174,7 +140,6 @@ async def test_engine_with_timing_timeout_preserves_facts_written_before_cancell
 
 @pytest.mark.asyncio
 async def test_engine_with_timing_empty():
-    """_engine_with_timing returns EMPTY status when engine returns []."""
     from src.search.search_web import _engine_with_timing
 
     empty = _make_mock_engine_with_reason("empty_eng", [])
@@ -188,10 +153,6 @@ async def test_engine_with_timing_empty():
     assert drop_reason is None
     assert diagnosis is None
 
-
-# ---------------------------------------------------------------------------
-# test_search_web_workflow_writes_log (integration, no network)
-# ---------------------------------------------------------------------------
 
 async def _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, default_engines,
                                                      query="test query"):
@@ -212,11 +173,6 @@ async def _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock
 
 @pytest.mark.asyncio
 async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
-    """search_web_workflow writes 2 JSONL records — "engine_run" (from _query_engines_concurrent)
-    then "workflow_summary" (from _build_query_log_entry); this test checks the workflow_summary
-    one's full field shape (current shape: record_type/ts/query/language/engines_requested/
-    engines_excluded/total_wall_ms/bottleneck_engine/engines/search_key — no preview pipeline,
-    that was removed from search_web_workflow)."""
     result_a = _fake_result("https://a.com", engine="google")
     result_b = _fake_result("https://b.com", engine="duckduckgo")
 
@@ -257,13 +213,6 @@ async def test_search_web_workflow_writes_log(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_search_web_workflow_propagates_diagnosis_into_both_records(tmp_path, monkeypatch):
-    """A browser-engine-shaped mock returning (results, empty_reason, diagnosis) has that diagnosis
-    dict land unchanged in engines[name]['diagnosis'] for BOTH the engine_run record (written by
-    _query_engines_concurrent) and the workflow_summary record (written by _build_query_log_entry).
-    empty_reason is None here — every real engine's search_with_reason returns None as of the
-    guessed-verdict-removal milestone — so status falls through to the generic "EMPTY"; the point
-    this test guards is that an empty result still carries its observation snapshot, not just the
-    bare status string. The OK-status engine's diagnosis stays None."""
     from src.search import search_web
     log_file = tmp_path / "query_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
@@ -290,14 +239,7 @@ async def test_search_web_workflow_propagates_diagnosis_into_both_records(tmp_pa
         assert rec["engines"]["duckduckgo"]["status"] == "EMPTY"
 
 
-# ---------------------------------------------------------------------------
-# record_type = "drilldown" — schema + search_key correlation
-# ---------------------------------------------------------------------------
-
 def test_log_query_accepts_drilldown_record_shape(tmp_path, monkeypatch):
-    """log_query writes a well-shaped drilldown record — the generic writer, exercised with the
-    new record_type's fields (mirrors test_log_query_writes_jsonl's pattern for engine_run/
-    workflow_summary)."""
     import src.search.query_logger as ql
     log_file = tmp_path / "query_log.jsonl"
     monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
@@ -319,11 +261,6 @@ def test_log_query_accepts_drilldown_record_shape(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_search_web_workflow_writes_search_key_matching_cache_key(tmp_path, monkeypatch):
-    """workflow_summary's search_key equals the real cache.cache_key(...) output for the same
-    call — the exact join value a drilldown record must reproduce to correlate back to this
-    search. Real engine fanout mocked (no network); cache_write mocked (no real cache-dir write);
-    cache_key itself is NOT mocked — it must be the real function for this assertion to mean
-    anything."""
     from src.search import search_web
     from src.search.cache import cache_key as real_cache_key
     log_file = tmp_path / "query_log.jsonl"
@@ -349,18 +286,7 @@ async def test_search_web_workflow_writes_search_key_matching_cache_key(tmp_path
     assert rec["search_key"] == expected_key
 
 
-# ---------------------------------------------------------------------------
-# cli.py's _log_drilldown — real function, isolated subprocess (importing cli.py in-process
-# reconfigures the root logger via logging.basicConfig and registers an atexit chrome-kill hook;
-# side effects that must not bleed into the rest of this test suite)
-# ---------------------------------------------------------------------------
-
 def test_log_drilldown_all_cache_status_and_pool_combinations(tmp_path):
-    """Real cli.py._log_drilldown, exercised for the sub-cases that matter: a hit with the engine
-    present (real urls, result_count matches); a hit with the engine absent from pools
-    (engine_in_pools=False, urls empty — distinguishing 'excluded upstream' from 'zero results');
-    and a cache-miss-then-search-failure (cache_status names the failure explicitly rather than
-    looking like an ordinary hit)."""
     import os
     import subprocess
     import sys

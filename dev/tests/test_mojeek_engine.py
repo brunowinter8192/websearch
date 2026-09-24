@@ -1,18 +1,3 @@
-"""Tests for src/search/engines/mojeek.py — the ALTCHA-challenge plumbing, the parse-readiness
-rule, and the result parse.
-
-No network, no browser. Two seams are exercised directly: the pure functions (_is_ready_to_parse,
-_should_fire_verify, _build_results) and _await_results driven by a scripted fake tab that
-dispatches on script content and records every call, so "verify() was dispatched exactly once" and
-"the loop stopped at the deadline" are observable.
-
-Mojeek is the one engine that solves its own challenge, so the plumbing is what breaks silently:
-the engine deliberately has NO block-detection early-exit branch. Mojeek's challenge page carries
-its boilerplate from the first poll and keeps it there for the whole verification sequence, so any
-verdict keyed on that text fires on iteration zero and the challenge is never solved — that defect
-cost two wrong live runs in the engine_reduction area. test_block_boilerplate_from_first_poll_does
-_not_short_circuit is the regression guard for it.
-"""
 import json
 import time
 
@@ -26,11 +11,6 @@ from src.search.engines.mojeek import (
 
 
 class _ScriptedTab:
-    """Returns a queued value per _JS_POLL call; every other script gets a fixed reply.
-
-    Poll replies are dicts (serialised on the way out, the way the real page does). The last entry
-    repeats once exhausted, so a test only has to describe the states it cares about.
-    """
 
     def __init__(self, poll_replies, parse_value=None, diagnose_reply=None):
         self.poll_replies = list(poll_replies)
@@ -68,10 +48,6 @@ def _fast_polls(monkeypatch):
     monkeypatch.setattr(mojeek_mod, "WAIT_INTERVAL", 0.001)
 
 
-# ---------------------------------------------------------------------------
-# _is_ready_to_parse — the sufficiency-or-stability rule
-# ---------------------------------------------------------------------------
-
 def test_not_ready_while_no_links_present():
     assert _is_ready_to_parse(0, previous=-1, target=10) is False
 
@@ -81,8 +57,6 @@ def test_ready_immediately_once_a_full_page_is_present():
 
 
 def test_not_ready_on_a_partially_rendered_list():
-    """Observed three times live (M1 phase A, both runs, plus the challenge capture): at the
-    instant the poll first matches after a solved challenge the link count is 1, not 10."""
     assert _is_ready_to_parse(1, previous=-1, target=10) is False
 
 
@@ -98,10 +72,6 @@ def test_target_is_capped_at_one_page_of_results():
     assert _parse_target(100) == 10
     assert _parse_target(5) == 5
 
-
-# ---------------------------------------------------------------------------
-# _should_fire_verify
-# ---------------------------------------------------------------------------
 
 def test_fires_when_a_triggerable_widget_is_present():
     assert _should_fire_verify(_page(widget=True, verify_ready=True), already_triggered=False) is True
@@ -119,10 +89,6 @@ def test_does_not_fire_when_there_is_no_challenge():
     assert _should_fire_verify(_page(links=10), already_triggered=False) is False
 
 
-# ---------------------------------------------------------------------------
-# _await_results — the common unchallenged path
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_unchallenged_page_parses_on_the_first_poll_without_firing_verify():
     tab = _ScriptedTab([_page(links=10)])
@@ -132,10 +98,6 @@ async def test_unchallenged_page_parses_on_the_first_poll_without_firing_verify(
     assert tab.verify_calls == 0
     assert trace["challenge_triggered"] is False
 
-
-# ---------------------------------------------------------------------------
-# _await_results — the challenged path
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_challenged_page_fires_verify_once_and_waits_out_the_partial_render():
@@ -156,9 +118,6 @@ async def test_challenged_page_fires_verify_once_and_waits_out_the_partial_rende
 
 @pytest.mark.asyncio
 async def test_block_boilerplate_from_first_poll_does_not_short_circuit():
-    """The regression guard. Every poll here carries a live challenge widget and its note text —
-    the condition that is true from iteration zero — and the results only arrive on poll 3. An
-    engine that treated the challenge page as a terminal verdict would return empty here."""
     tab = _ScriptedTab([
         _page(widget=True, verify_ready=True, state="unverified", note="Waiting for verification."),
         _page(widget=True, verify_ready=True, state="verified", note="Verified successfully. Reloading..."),
@@ -168,10 +127,6 @@ async def test_block_boilerplate_from_first_poll_does_not_short_circuit():
     assert trace["ready"] is True
     assert trace["link_count"] == 10
 
-
-# ---------------------------------------------------------------------------
-# _await_results — budget behaviour
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_unsolved_challenge_gives_up_at_the_deadline_and_reports_it_was_triggered():
@@ -200,10 +155,6 @@ async def test_empty_poll_read_is_treated_as_no_facts_yet_not_as_results():
     assert trace["link_count"] == 0
 
 
-# ---------------------------------------------------------------------------
-# _diagnose — the empty-record contract
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_diagnosis_separates_an_unsolved_challenge_from_a_page_with_no_challenge():
     challenged = _ScriptedTab([], diagnose_reply={
@@ -228,11 +179,6 @@ async def test_diagnosis_separates_an_unsolved_challenge_from_a_page_with_no_cha
 
 @pytest.mark.asyncio
 async def test_diagnosis_leaves_marker_null_because_mojeeks_signal_is_structural():
-    """marker is the common text-based block field. Mojeek's own signal is the presence of the
-    altcha-widget element, not a keyword, so marker stays None here the way it does for google (a
-    URL path) and duckduckgo (an element count). The engine matches no page literal at all: the
-    challenge copy was observed served in English on a page whose html lang is 'de', and the
-    results page body would contain those same words for anyone who searched them."""
     tab = _ScriptedTab([], diagnose_reply={"title": "Captcha", "challenge_widget": True})
     diag = await _diagnose(tab, {"challenge_triggered": True})
     assert diag["marker"] is None
@@ -246,10 +192,6 @@ async def test_diagnosis_survives_an_unreadable_dom_read():
     assert diag["challenge_triggered"] is False
     assert diag["title"] == ""
 
-
-# ---------------------------------------------------------------------------
-# _build_results / _parse_results
-# ---------------------------------------------------------------------------
 
 def test_build_results_maps_fields_and_position():
     items = [
@@ -283,9 +225,6 @@ def test_build_results_respects_max_results_cap():
 
 @pytest.mark.asyncio
 async def test_parse_results_raises_on_invalid_json():
-    """Matches the 2026-09-09 decision recorded in src/search/engines/DOCS.md: the swallowing
-    handler was removed from the browser engines so a parse failure surfaces as ERROR_PARSE
-    instead of masquerading as an empty page."""
     tab = _ScriptedTab([], parse_value="not valid json{")
     with pytest.raises(json.JSONDecodeError):
         await _parse_results(tab, max_results=10)

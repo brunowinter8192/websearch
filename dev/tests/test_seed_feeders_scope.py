@@ -3,10 +3,6 @@ import pytest
 from src.crawler.seed_feeders_scope import normalize_url, scope_and_dedup
 
 
-# ---------------------------------------------------------------------------
-# normalize_url — merge-vs-keep-distinct boundary (see seed_feeders_scope.py docstring)
-# ---------------------------------------------------------------------------
-
 def test_normalize_url_lowercases_scheme_and_host():
     assert normalize_url("HTTP://Example.COM/a") == "http://example.com/a"
 
@@ -38,8 +34,6 @@ def test_normalize_url_keeps_non_root_trailing_slash_distinct():
 
 
 def test_normalize_url_preserves_legacy_params_segment():
-    # urlparse would split ";jsessionid=ABC" into its own .params field and drop it on rebuild;
-    # normalize_url uses urlsplit specifically so this stays part of path (review note #3)
     assert normalize_url("https://example.com/a;jsessionid=ABC") == "https://example.com/a;jsessionid=ABC"
 
 
@@ -47,10 +41,6 @@ def test_normalize_url_raises_on_bad_port():
     with pytest.raises(ValueError):
         normalize_url("https://example.com:notaport/a")
 
-
-# ---------------------------------------------------------------------------
-# scope_and_dedup — host scope + the same merge boundary applied end-to-end
-# ---------------------------------------------------------------------------
 
 def test_scope_and_dedup_drops_foreign_host():
     urls = ["https://docs.example.com/a", "https://evil.example.org/a"]

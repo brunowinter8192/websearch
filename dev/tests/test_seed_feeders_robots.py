@@ -6,10 +6,6 @@ from src.crawler import seed_feeders
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient
 
 
-# ---------------------------------------------------------------------------
-# parse_robots_directives — Allow/Disallow paths + Sitemap: lines
-# ---------------------------------------------------------------------------
-
 def test_parse_robots_directives_extracts_paths_and_sitemap():
     text = (
         "User-agent: *\n"
@@ -52,10 +48,6 @@ def test_parse_robots_directives_empty_value_dropped():
     assert result["paths"] == []
 
 
-# ---------------------------------------------------------------------------
-# fetch_robots_txt — DI'd fake client, no monkeypatching
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 async def test_fetch_robots_txt_returns_text_on_200():
     client = _FakeAsyncClient({"https://example.com/robots.txt": _FakeResponse(200, text="Disallow: /a\n")})
@@ -65,15 +57,10 @@ async def test_fetch_robots_txt_returns_text_on_200():
 
 @pytest.mark.asyncio
 async def test_fetch_robots_txt_missing_returns_none_not_error():
-    client = _FakeAsyncClient({})  # every URL 404s
+    client = _FakeAsyncClient({})
     text = await fetch_robots_txt(client, "https://example.com/")
     assert text is None
 
-
-# ---------------------------------------------------------------------------
-# robots_feeder_workflow / sitemap_feeder_workflow — end-to-end, fake client injected
-# via monkeypatching seed_feeders.httpx.AsyncClient (workflows construct it internally)
-# ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 async def test_robots_feeder_workflow_returns_scoped_paths(monkeypatch):

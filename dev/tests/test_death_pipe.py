@@ -1,13 +1,3 @@
-"""Tests for death_pipe's generic crash-backstop primitive: a real spawned watchdog subprocess
-that blocks on a pipe and cleans up only once that pipe's write end closes (simulating this
-process's own death without actually exiting the test process — os.close() on the fd returned by
-spawn_watchdog does that), plus the pure terminate/kill and no-op-detection logic.
-
-Real subprocesses are spawned here (this module's own primitive IS spawning a subprocess — there is
-no meaningful way to test it without one), but the PROTECTED targets are always `sleep`/`python -c`
-dummy processes, never real Chrome/Firefox — consistent with "I/O boundaries mocked" elsewhere in
-this suite, applied to the boundary that matters here (no real browser involved).
-"""
 import os
 import subprocess
 import sys
@@ -23,9 +13,6 @@ def _spawn_dummy() -> subprocess.Popen:
     return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
 
 
-# "Gone" means terminated, not necessarily reaped — the dummy is OUR OWN child (unlike a real
-# detached Chrome/Firefox), so a killed dummy sits as a zombie (still psutil.pid_exists()==True)
-# until this test reaps it; a real production target has no such parent and fully disappears.
 def _wait_until_gone(dummy: subprocess.Popen, timeout_s: float = 5.0) -> bool:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
@@ -45,7 +32,7 @@ def test_watchdog_kills_dummy_process_once_write_end_closes(tmp_path):
     assert write_fd is not None
     assert psutil.pid_exists(dummy.pid)
 
-    os.close(write_fd)  # simulates this process dying, without actually exiting it
+    os.close(write_fd)
 
     assert _wait_until_gone(dummy), "watchdog did not kill the dummy process in time"
 
@@ -71,7 +58,6 @@ def test_watchdog_is_silent_noop_when_target_already_dead(tmp_path):
     dummy = _spawn_dummy()
     write_fd = death_pipe.spawn_watchdog([dummy.pid])
 
-    # Simulate net 1 (the real caller's own teardown) already having killed it
     dummy.kill()
     dummy.wait(timeout=5)
 
@@ -79,7 +65,7 @@ def test_watchdog_is_silent_noop_when_target_already_dead(tmp_path):
     os.environ["WEBSEARCH_DEATH_PIPE_LOG_PATH"] = str(log_path)
     try:
         os.close(write_fd)
-        time.sleep(0.5)  # give the watchdog a moment to run and (not) write
+        time.sleep(0.5)
         assert not log_path.exists(), "watchdog logged an intervention on the happy (already-dead) path"
     finally:
         del os.environ["WEBSEARCH_DEATH_PIPE_LOG_PATH"]
@@ -101,10 +87,6 @@ def test_watchdog_logs_intervention_when_it_actually_kills_something(tmp_path):
     finally:
         del os.environ["WEBSEARCH_DEATH_PIPE_LOG_PATH"]
 
-
-# ---------------------------------------------------------------------------
-# _terminate_then_kill — pure logic, psutil mocked
-# ---------------------------------------------------------------------------
 
 def test_terminate_then_kill_returns_pids_that_died_gracefully(monkeypatch):
     class FakeProc:

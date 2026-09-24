@@ -1,9 +1,3 @@
-# ---------------------------------------------------------------------------
-# Shared test helper: bypass the real self-launch/port-wait/teardown mechanics so the default cdp
-# path can be exercised (AsyncWebCrawler mocked separately, per test) without spawning a real
-# browser — mirrors how AsyncWebCrawler itself is already mocked throughout this file.
-# ---------------------------------------------------------------------------
-
 def _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process):
     async def _fake_resolve_bundle():
         return chromium_process.Path("/fake/chromium-1228/Google Chrome for Testing.app")

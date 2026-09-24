@@ -1,11 +1,3 @@
-"""Tests for browser_lock's generic cross-process file lock: immediate acquire when free, real
-blocking (via a real held flock on a background thread) until release, and the stale-takeover path
-(a sidecar older than hard_budget_s is force-broken, on_stale invoked first, then reacquired).
-
-flock is per-open-file-description, not per-thread, so a real background thread holding its own
-fd against the same path genuinely contends with the main thread's acquire() call — no mocking
-needed, this exercises the real fcntl syscalls against tmp_path.
-"""
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -57,8 +49,6 @@ def test_acquire_blocks_until_release(tmp_path):
 def test_stale_lock_is_broken_and_on_stale_invoked(tmp_path):
     lock_path = tmp_path / "session.lock"
     sidecar = lock_path.with_suffix(".json")
-    # Real held flock, simulating a stuck (never-releasing) holder — a stale sidecar alone proves
-    # nothing without contention, since an uncontended acquire() never reaches the age check.
     stuck_holder = browser_lock.acquire(lock_path, hard_budget_s=9999.0)
     old = datetime.now(timezone.utc) - timedelta(seconds=120)
     sidecar.write_text(

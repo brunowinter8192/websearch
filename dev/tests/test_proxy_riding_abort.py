@@ -22,10 +22,6 @@ def _make_state(tmp_path: Path) -> RiderState:
 
 
 def test_abort_stall_writes_no_job_md_on_reporter_failure(tmp_path, monkeypatch, capsys):
-    """2026-09-09: the stub job.md fallback on a reporter failure was removed (user decision,
-    Phase 4 control-flow review — a second way to produce the same artifact is a fallback). On
-    write_riding_report raising, no job.md is written, the WARN line names the exception on
-    stderr, and the process exits with the caller's exit_code."""
     def _raise(*a, **kw):
         raise RuntimeError("simulated reporter failure")
     monkeypatch.setattr(reporter_mod, "write_riding_report", _raise)

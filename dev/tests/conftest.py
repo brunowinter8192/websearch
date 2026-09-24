@@ -1,17 +1,3 @@
-"""Autouse tripwire: no test in this suite may launch a real browser.
-
-Each real browser-launch primitive this project owns is replaced, for every test, with a callable
-that fails the test loudly and by name if it is ever reached unmocked. A test that legitimately
-exercises browser-launching code overrides the relevant primitive itself via its own
-monkeypatch.setattr call inside the test body — that call runs after this fixture's own setup (a
-standard pytest fixture guarantee), so it wins for the duration of that test and the trap below
-never fires for it.
-
-This exists because a launch that tears itself down in its own finally leaves nothing behind to
-find after the fact — a real search_web_workflow call opened and closed three real Chrome windows
-across dev/tests/test_query_logger.py alone, invisible to a grep-only audit of the suite. See
-process-docs/browser_posture/ for the investigation.
-"""
 import pytest
 
 from src.search import browser

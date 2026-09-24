@@ -12,12 +12,7 @@ def _md(tmp_path, events, target=10, done=5):
     return _write_and_read_md(_compute_stats, _write_md, tmp_path, events, target, done)
 
 
-# ---------------------------------------------------------------------------
-# D2 — logger.record_pool_source
-# ---------------------------------------------------------------------------
-
 def test_record_pool_source_writes_jsonl_event(tmp_path):
-    """record_pool_source appends a pool_source event with correct fields to JSONL."""
     from src.news.engine.proxy_pool.logger import AcquireLogger
 
     log_dir = tmp_path / "logs"
@@ -39,10 +34,6 @@ def test_record_pool_source_writes_jsonl_event(tmp_path):
     assert events[1]["count"] == 0
 
 
-# ---------------------------------------------------------------------------
-# D2 — _group_pool_sources
-# ---------------------------------------------------------------------------
-
 def _pool_source(url: str, ok: bool, count: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
     return {"event": "pool_source", "url": url, "ok": ok, "count": count, "ts": ts}
 
@@ -52,7 +43,6 @@ def _pool_refresh(size: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
 
 
 def test_group_pool_sources_single_refresh():
-    """Single pool_refresh → one batch containing all following pool_source events."""
     events = [
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
         _pool_source("https://src1.com", True,  50, "2026-01-01T00:00:01Z"),
@@ -66,34 +56,27 @@ def test_group_pool_sources_single_refresh():
 
 
 def test_group_pool_sources_two_refreshes():
-    """Two pool_refresh events → two batches; attempt events between are ignored."""
     events = [
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
         _pool_source("https://src1.com", True, 50, "2026-01-01T00:00:01Z"),
-        _attempt("http://p1:1", "https://target.com", "2026-01-01T00:05:00Z"),  # interleaved attempt
+        _attempt("http://p1:1", "https://target.com", "2026-01-01T00:05:00Z"),
         _pool_refresh(90, "2026-01-01T01:00:00Z"),
         _pool_source("https://src1.com", True, 48, "2026-01-01T01:00:01Z"),
         _pool_source("https://src2.com", False,  0, "2026-01-01T01:00:02Z"),
     ]
     batches = _group_pool_sources(events)
     assert len(batches) == 2
-    assert len(batches[0]) == 1   # startup: src1 only
-    assert len(batches[1]) == 2   # refresh: src1 + src2
+    assert len(batches[0]) == 1
+    assert len(batches[1]) == 2
 
 
 def test_group_pool_sources_empty_events():
-    """No pool_refresh/pool_source events → empty list."""
     events = [_attempt("http://p1:1", "https://t.com", "2026-01-01T00:00:01Z")]
     batches = _group_pool_sources(events)
     assert batches == []
 
 
-# ---------------------------------------------------------------------------
-# D2 — job.md source section rendering
-# ---------------------------------------------------------------------------
-
 def test_job_md_source_section_present(tmp_path):
-    """job.md renders ## Pool source breakdown when pool_source events exist."""
     events = [
         _attempt("http://p1:1", "https://t.com/a", "2026-01-01T00:00:00Z"),
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
@@ -110,7 +93,6 @@ def test_job_md_source_section_present(tmp_path):
 
 
 def test_job_md_source_section_dedup_note(tmp_path):
-    """job.md source section contains the cross-repo dedup explanation."""
     events = [
         _attempt("http://p1:1", "https://t.com/a", "2026-01-01T00:00:00Z"),
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
@@ -121,7 +103,6 @@ def test_job_md_source_section_dedup_note(tmp_path):
 
 
 def test_job_md_source_section_two_refreshes(tmp_path):
-    """Two pool_refresh batches produce Refresh 0 (startup) and Refresh 1 subsections."""
     events = [
         _attempt("http://p1:1", "https://t.com/a", "2026-01-01T00:00:00Z"),
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
@@ -135,7 +116,6 @@ def test_job_md_source_section_two_refreshes(tmp_path):
 
 
 def test_job_md_source_section_absent_without_pool_source_events(tmp_path):
-    """job.md has no source section when no pool_source events exist (legacy JSONL)."""
     events = [
         _pool_refresh(100, "2026-01-01T00:00:00Z"),
         _attempt("http://p1:1", "https://t.com/a", "2026-01-01T00:01:00Z"),
@@ -145,7 +125,6 @@ def test_job_md_source_section_absent_without_pool_source_events(tmp_path):
 
 
 def test_job_md_source_count_values(tmp_path):
-    """Count column in source table shows the raw proxy count per source."""
     events = [
         _attempt("http://p1:1", "https://t.com/a", "2026-01-01T00:00:00Z"),
         _pool_refresh(100, "2026-01-01T00:00:00Z"),

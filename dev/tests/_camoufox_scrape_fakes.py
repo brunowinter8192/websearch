@@ -1,10 +1,6 @@
 import asyncio
 
 
-# ---------------------------------------------------------------------------
-# Fakes
-# ---------------------------------------------------------------------------
-
 def _fake_launch_options(**kwargs):
     return {"executable_path": "/fake/camoufox/firefox-bin", **kwargs}
 
@@ -30,16 +26,6 @@ class _FakeMainFrame:
 
 
 class _FakePage:
-    """Fires document_statuses (default: just the returned response's own status, the pre-existing
-    single-hop shape every earlier test in this file relies on) as main-frame document responses
-    DURING goto() — CAMOUFOX_RENDER_WAIT_S is zeroed in every test that uses this fake, so there is
-    no real "later" window to fire into; firing the whole intended chain before goto() returns is an
-    equivalent, deterministic stand-in for a redirect chain plus a same-document JS navigation that
-    resolves during the (zeroed) render wait. Each entry in document_statuses is either a plain int
-    (fired as a main-frame document response) or a (status, resource_type, frame) tuple for tests
-    proving non-document/non-main-frame responses are excluded from the chain. The RETURNED response
-    can carry a DIFFERENT status than document_statuses' last entry — proving the override actually
-    happens, not just coincidentally matching."""
     def __init__(self, landed_url, status, html, document_statuses=None):
         self._landed_url = landed_url
         self._status = status
@@ -83,7 +69,6 @@ class _FakeBrowser:
 
 def _make_fake_camoufox(landed_url="https://x.test/a", status=200,
                          html="<html><body>real page content</body></html>", document_statuses=None):
-    """Factory: returns a fake AsyncCamoufox class bound to one fake page's fixed shape."""
     page = _FakePage(landed_url, status, html, document_statuses=document_statuses)
     browser = _FakeBrowser(page)
 
@@ -154,11 +139,6 @@ class _FakeAsyncWebCrawler:
 
 
 class _UrlsplitAsyncWebCrawler:
-    """Simulates crawl4ai's OWN internal urllib.parse.urlsplit(url) call on the pseudo-URL — the
-    real failure mode this guards against: a raw://<html> pseudo-URL where the HTML contains a
-    bare "[" before the first "/" raises ValueError("Invalid IPv6 URL") (Python 3.14's
-    _check_bracketed_netloc) before crawl4ai's own raw-html branch ever runs. "raw:" (no netloc)
-    does not trigger this parsing at all."""
     def __init__(self, *a, **kw):
         pass
 
