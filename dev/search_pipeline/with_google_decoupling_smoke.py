@@ -168,21 +168,26 @@ def _write_report(records: list[dict], path: Path, log_lines_written: int) -> No
         lines.append(f"| {i} | {q} | {p} | {sa} | {gp} | {ec} | {n} |")
 
     if fail_count > 0:
-        lines += ["", "## Failures", ""]
-        for r in records:
-            if not r["pass"]:
-                lines += [
-                    f"### {r['query'][:80]}",
-                    "",
-                    f"- scholar_in_requested: {r['scholar_in_requested']}",
-                    f"- google_in_requested: {r['google_in_requested']}",
-                    f"- excluded_correct: {r['excluded_correct']}",
-                    f"- has_excluded_field: {r['has_excluded_field']}",
-                    f"- engines_excluded (raw): {r['engines_excluded_raw']}",
-                    "",
-                ]
+        lines += _render_failures(records)
 
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _render_failures(records: list[dict]) -> list[str]:
+    lines = ["", "## Failures", ""]
+    for r in records:
+        if not r["pass"]:
+            lines += [
+                f"### {r['query'][:80]}",
+                "",
+                f"- scholar_in_requested: {r['scholar_in_requested']}",
+                f"- google_in_requested: {r['google_in_requested']}",
+                f"- excluded_correct: {r['excluded_correct']}",
+                f"- has_excluded_field: {r['has_excluded_field']}",
+                f"- engines_excluded (raw): {r['engines_excluded_raw']}",
+                "",
+            ]
+    return lines
 
 
 if __name__ == "__main__":

@@ -326,11 +326,7 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
     oracle_pool = sorted(filt_capped, key=lambda m: m["url"])
     _save_pool_json(ts_dir, mode, slug, oracle_pool, query)
 
-    # C1/C2'/C3 operate on capped pool (same as oracle input); C2 on full pool (its defining property)
-    c1_urls, c1_ms   = _apply_c1(filt_capped,  TOP_N)
-    c2_urls, c2_ms   = _apply_c2(filt_pool,    query, TOP_N)
-    c2p_urls, c2p_ms = _apply_c2p(filt_capped, query, TOP_N)
-    c3_urls, c3_ms   = _apply_c3(filt_capped,  query, TOP_N)
+    c_results = _apply_c_methods(filt_pool, filt_capped, query)
 
     _save_methods_json(ts_dir, mode, slug, {
         "mode":                      mode,
@@ -341,10 +337,7 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
         "filtered_pool_size":        len(filt_pool),
         "filtered_capped_pool_size": len(filt_capped),
         "oracle_pool_size":          len(oracle_pool),
-        "c1":    c1_urls,   "c1_ms":  c1_ms,
-        "c2":    c2_urls,   "c2_ms":  c2_ms,
-        "c2p":   c2p_urls,  "c2p_ms": c2p_ms,
-        "c3":    c3_urls,   "c3_ms":  c3_ms,
+        **c_results,
         "method_pool_sizes":  {"c1": len(filt_capped), "c2": len(filt_pool), "c2p": len(filt_capped), "c3": len(filt_capped)},
         "fetch_ms": fetch_ms,
     })
@@ -355,7 +348,21 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
         "capped_pool_size":   len(capped_pool),
         "filtered_pool_size": len(filt_pool),
         "fetch_ms":           fetch_ms,
-        "c3_ms":              c3_ms,
+        "c3_ms":              c_results["c3_ms"],
+    }
+
+
+def _apply_c_methods(filt_pool: list[dict], filt_capped: list[dict], query: str) -> dict:
+    # C1/C2'/C3 operate on capped pool (same as oracle input); C2 on full pool (its defining property)
+    c1_urls, c1_ms   = _apply_c1(filt_capped,  TOP_N)
+    c2_urls, c2_ms   = _apply_c2(filt_pool,    query, TOP_N)
+    c2p_urls, c2p_ms = _apply_c2p(filt_capped, query, TOP_N)
+    c3_urls, c3_ms   = _apply_c3(filt_capped,  query, TOP_N)
+    return {
+        "c1":    c1_urls,   "c1_ms":  c1_ms,
+        "c2":    c2_urls,   "c2_ms":  c2_ms,
+        "c2p":   c2p_urls,  "c2p_ms": c2p_ms,
+        "c3":    c3_urls,   "c3_ms":  c3_ms,
     }
 
 
