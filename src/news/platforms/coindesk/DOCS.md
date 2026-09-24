@@ -29,7 +29,7 @@ request (URL + headers + first response body). Returns `(headers, api_url, body_
 **Called by:** `discover.py:discover` (warmup); `timeline.py:try_rewarm` (re-warm fallback).
 **Calls out:** `pydoll` (Chrome CDP), `httpx` (first response replay).
 
-### discover.py (282 LOC)
+### discover.py (279 LOC)
 
 **Purpose:** Discover orchestration + cursor paging — `discover(timeframe)` orchestrates warmup → load discover → `cursor_loop` (backward-paging, crash-safe per-article shard writes) → incremental discover write. Timeline-API access/re-warm and per-year shard storage were split out into `timeline.py`/`shards.py` (below, pure relocation, same behavior) once this file crossed 400 LOC by mixing three concerns.
 **Called by:** `__init__.py:CoinDeskPlatform.discover` (via `discover`).
@@ -59,6 +59,8 @@ request (URL + headers + first response body). Returns `(headers, api_url, body_
 **Called by:** `__main__.py` (side-effect import); `pipeline.py:run_scrape_only` (via `platform.load_scrape_entries`, `platform.scrape_engine`); `pipeline.py:_run_scrape_only_riding` (via `platform.riding_scrape_config`).
 
 ## Gotchas
+
+- **`_parse_stop_date` treats `"delta"` explicitly (2026-09-24 Phase 4 pass).** The CLI default `--timeframe` is `delta`, which resolved to `DEFAULT_DELTA_DAYS` only because `int("delta")` raised into a swallowing handler; the branch is now explicit and any other non-integer value raises.
 
 - `REGWALL_SIGNALS` uses precise match strings deliberately — do NOT loosen to generic markers like "subscribe"/"register": those fire on ordinary article footers, producing false regwall positives.
 - `cleanup(raw_markdown, entry)`'s `entry` param is unused but part of the platform-generic signature — do not remove as dead.

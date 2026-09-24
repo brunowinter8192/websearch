@@ -25,10 +25,7 @@ def _extract_next_data_payloads(html: str) -> list:
     match = _NEXT_DATA_RE.search(html)
     if not match:
         return []
-    try:
-        return [json.loads(match.group(1))]
-    except json.JSONDecodeError:
-        return []
+    return [json.loads(match.group(1))]
 
 
 def _extract_rsc_stream_payloads(html: str) -> list:
@@ -209,11 +206,8 @@ def canonicalize_version_url(url: str, version_keys) -> str:
 
 
 async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
-    try:
-        response = await client.get(url, timeout=HTTP_TIMEOUT_S,
-                                    headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    except httpx.HTTPError:
-        return None
+    response = await client.get(url, timeout=HTTP_TIMEOUT_S,
+                                headers={"User-Agent": USER_AGENT}, follow_redirects=True)
     if response.status_code != 200:
         return None
     return response.text

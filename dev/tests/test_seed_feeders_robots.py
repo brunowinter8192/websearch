@@ -1,9 +1,10 @@
+import httpx
 import pytest
 
 from src.crawler.seed_feeders_scope import FeederResult
 from src.crawler.seed_feeders_robots import fetch_robots_txt, parse_robots_directives
 from src.crawler import seed_feeders
-from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient
+from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient
 
 
 def test_parse_robots_directives_extracts_paths_and_sitemap():
@@ -89,3 +90,21 @@ async def test_robots_feeder_workflow_invalid_seed_url_is_failed_not_empty():
     assert result.ok is False
     assert result.urls == []
     assert result.error is not None
+
+
+@pytest.mark.asyncio
+async def test_fetch_robots_txt_network_error_propagates():
+    client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
+    with pytest.raises(httpx.ConnectError):
+        await fetch_robots_txt(client, "https://example.com/")
+
+
+@pytest.mark.asyncio
+async def test_robots_feeder_workflow_network_error_is_failed_with_error(monkeypatch):
+    client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: client)
+
+    result = await seed_feeders.robots_feeder_workflow("https://docs.example.com/")
+    assert result.ok is False
+    assert result.urls == []
+    assert "connection refused" in result.error

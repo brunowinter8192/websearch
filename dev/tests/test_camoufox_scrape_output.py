@@ -1,3 +1,5 @@
+import subprocess
+
 import pytest
 
 from src.scraper import camoufox_scrape
@@ -166,3 +168,21 @@ async def test_scrape_url_camoufox_workflow_logs_full_field_set_unchanged(monkey
         "markdown_conversion_error", "document_status_chain", "config_hash", "config",
     }
     assert expected_fields <= captured.keys()
+
+
+def test_resolve_system_locale_command_failure_propagates(monkeypatch):
+    def _fail(*a, **kw):
+        raise subprocess.CalledProcessError(1, ["defaults", "read", "-g", "AppleLocale"])
+    monkeypatch.setattr(camoufox_scrape.sys, "platform", "darwin")
+    monkeypatch.setattr(camoufox_scrape.subprocess, "run", _fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        camoufox_scrape._resolve_system_locale()
+
+
+def test_resolve_system_locale_converts_apple_locale_to_bcp47(monkeypatch):
+    monkeypatch.setattr(camoufox_scrape.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        camoufox_scrape.subprocess, "run",
+        lambda *a, **kw: subprocess.CompletedProcess(a, 0, stdout="de_DE\n", stderr=""),
+    )
+    assert camoufox_scrape._resolve_system_locale() == "de-DE"

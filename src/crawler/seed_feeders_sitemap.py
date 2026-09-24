@@ -11,19 +11,13 @@ from src.crawler.seed_feeders_constants import HTTP_TIMEOUT_S, USER_AGENT, SITEM
 # FUNCTIONS
 
 async def fetch_sitemap(client: httpx.AsyncClient, url: str) -> bytes | None:
-    try:
-        response = await client.get(url, timeout=HTTP_TIMEOUT_S,
-                                    headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    except httpx.HTTPError:
-        return None
+    response = await client.get(url, timeout=HTTP_TIMEOUT_S,
+                                headers={"User-Agent": USER_AGENT}, follow_redirects=True)
     if response.status_code != 200:
         return None
     content = response.content
     if url.endswith(".gz"):
-        try:
-            content = gzip.decompress(content)
-        except OSError:
-            return None
+        content = gzip.decompress(content)
     return content
 
 
@@ -39,10 +33,7 @@ def _child_text(parent, local_name: str) -> str | None:
 
 
 def parse_sitemap_xml(content: bytes) -> tuple:
-    try:
-        root = ElementTree.fromstring(content)
-    except ElementTree.ParseError:
-        return ("unknown", [])
+    root = ElementTree.fromstring(content)
     root_tag = _local_name(root.tag)
     if root_tag == "sitemapindex":
         locs = [_child_text(entry, "loc") for entry in root]

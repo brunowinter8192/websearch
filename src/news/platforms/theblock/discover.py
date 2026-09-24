@@ -96,14 +96,11 @@ def _fetch_xml(url: str, pool_cache: list, logger=None) -> bytes | None:
 
 
 def _fetch_direct(url: str) -> bytes | None:
-    try:
-        r = httpx.get(url, timeout=DIRECT_TIMEOUT, follow_redirects=True)
-        head = r.content[:500]
-        if r.status_code == 200 and any(m in head for m in XML_MARKERS):
-            return r.content
-        return None
-    except Exception:
-        return None
+    r = httpx.get(url, timeout=DIRECT_TIMEOUT, follow_redirects=True)
+    head = r.content[:500]
+    if r.status_code == 200 and any(m in head for m in XML_MARKERS):
+        return r.content
+    return None
 
 
 def _parse_post_sub_urls(content: bytes) -> list[str]:
@@ -151,11 +148,8 @@ def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
             continue
         url     = loc_m.group(1).decode().strip()
         mod_raw = mod_m.group(1).decode().strip().replace("Z", "+00:00")
-        try:
-            mod = datetime.fromisoformat(mod_raw)
-            if mod.tzinfo is None:
-                mod = mod.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
+        mod = datetime.fromisoformat(mod_raw)
+        if mod.tzinfo is None:
+            mod = mod.replace(tzinfo=timezone.utc)
         results.append((url, mod))
     return results
