@@ -143,6 +143,26 @@ CLI `--help` output was diffed for eight argparse scripts: identical.
   Nothing was fixed (out of scope). The scenarios injected stub attributes into `src.*` before
   import. The six new sibling modules that import `bm25_sweep_smoke` fail import for the same
   transitive reason: 63 modules imported cleanly before, 82 after, same 14 root causes.
+
+### Baseline import failures, exact (14 modules, measured 2026-09-24 before any edit)
+
+Measured by importing each module standalone from a `git archive integration` snapshot with the
+project venv. Python stops at the first failing import, so "first error" is what the import reports
+and "missing" is the full set checked afterwards against the live `src/` modules.
+
+| Module | First error | Missing symbols |
+|---|---|---|
+| `bm25_sweep_smoke` | `ImportError: cannot import name 'ACADEMIC' from 'src.search.merge'` | `src.search.merge.ACADEMIC`, `GENERAL`, `QA`, `_merge_and_rank` (module exports only `build_engine_pools`) |
+| `rerank_probe_smoke` | same, on `from src.search.merge import _merge_and_rank` after the `bm25_sweep_smoke` import chain fails | `src.search.merge._merge_and_rank` (plus the four above via `bm25_sweep_smoke`) |
+| `bm25_capped_smoke`, `bm25_compare_smoke`, `bm25_idf_engine_smoke` | same (they import `bm25_sweep_smoke` first) | `src.search.merge._merge_and_rank` and the four above |
+| `pooling_probe`, `single_query_pool_dump`, `stage1_pool_fetch`, `stage3_method_run`, `stage3_method_run_v3`, `value_eval_probe` | same (they import `bm25_sweep_smoke` / `rerank_probe_smoke` first) | the four above |
+| `16_search_to_pdf_probe` | `ModuleNotFoundError: No module named 'src.scraper.pdf_chain'` | the whole module; the script imports `HARD_BLACKLIST`, `TIER1_DOMAINS`, `apply_tier1_transform`, `is_blacklisted`, `is_github_blob`, `parse_citation_pdf_url` from it |
+| `13_timing_ablation` | `AttributeError: module 'src.search.engines.scholar' has no attribute 'MAX_WAIT_CYCLES'` | `src.search.engines.scholar.MAX_WAIT_CYCLES`, `WAIT_INTERVAL`, `_handle_consent`, `_JS_CONSENT`; also `_limiters["openalex"]` (the limiter registry holds only `google` at import time) |
+| `00_single_query` | `AttributeError: module 'smoke' has no attribute 'load_config'` | `01_google_smoke.py` defines only `run_smoke_test`, `load_queries`, `run_query`, `write_report`; the six names `00` copies (`load_config`, `start_browser`, `stop_browser`, `_build_js_patches`, `_inject_consent_cookie`, `_extract_scalar`) do not exist there |
+
+Present and fine: `src.search.search_web._query_engines_concurrent` and `_select_engines`,
+`src.search.merge.build_engine_pools`, `src.search.engines.google._handle_consent` and `_JS_CONSENT`.
+
 - `src.search.merge` stubs used by scenarios: `ACADEMIC`, `GENERAL`, `QA` frozen sets and a
   `_merge_and_rank` that dedups by URL. If the ranking family is ever repaired, rerun the scenarios
   without them.
