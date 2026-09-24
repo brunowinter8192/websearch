@@ -1,6 +1,5 @@
 # INFRASTRUCTURE
 
-# Algorithm 2 thresholds, verbatim from the spec
 LINK_DENSITY_SPLIT = 0.333333
 PREV_LINK_DENSITY_SPLIT = 0.555556
 CURR_WORDS_LOW_BRANCH_SPLIT = 16
@@ -9,8 +8,6 @@ PREV_WORDS_LOW_BRANCH_SPLIT = 4
 CURR_WORDS_HIGH_BRANCH_SPLIT = 40
 NEXT_WORDS_HIGH_BRANCH_SPLIT = 17
 
-# jusText-style heading rescue: a BOILERPLATE heading becomes CONTENT if a CONTENT block starts
-# within this many characters of block text
 HEADING_LOOKAHEAD_CHARS = 200
 
 ZERO_NEIGHBOR = {"num_words": 0, "link_density": 0.0}
@@ -18,7 +15,6 @@ ZERO_NEIGHBOR = {"num_words": 0, "link_density": 0.0}
 
 # FUNCTIONS
 
-# Algorithm 2's decision tree for one block, given its previous and next neighbour
 def classify_block(curr: dict, prev: dict, nxt: dict) -> str:
     if curr["link_density"] > LINK_DENSITY_SPLIT:
         return "BOILERPLATE"
@@ -37,7 +33,6 @@ def classify_block(curr: dict, prev: dict, nxt: dict) -> str:
     return "BOILERPLATE"
 
 
-# Tree classification for every block in a file; missing neighbours count as numWords=0, linkDensity=0
 def classify_blocks(blocks: list[dict]) -> list[str]:
     n = len(blocks)
     classifications = []
@@ -48,8 +43,6 @@ def classify_blocks(blocks: list[dict]) -> list[str]:
     return classifications
 
 
-# One pass, off the tree's own classifications: a BOILERPLATE heading becomes CONTENT if a CONTENT
-# block starts within HEADING_LOOKAHEAD_CHARS of block text
 def apply_heading_rule(blocks: list[dict], tree_classifications: list[str]) -> list[str]:
     final = list(tree_classifications)
     for i, block in enumerate(blocks):

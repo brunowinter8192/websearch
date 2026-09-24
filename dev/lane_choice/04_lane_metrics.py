@@ -1,33 +1,21 @@
 #!/usr/bin/env python3
-"""Boilerplate/content block classifier over EVERY paired chromium/camoufox scrape in the
-production log — a faithful, mechanical implementation of Kohlschuetter/Fankhauser/Nejdl (WSDM
-2010, Algorithm 2), adapted to markdown, plus the jusText-style short-heading rescue rule, plus a
-block-level PROSE test on top of CONTENT: CONTENT, at or under a corpus-derived length cap, and
-containing a sentence-ending mark — added because a single very long markdown line (embedded JSON/
-CSS/markup) can pass the CONTENT tree with a huge word count that no real prose block has. Builds
-its own pair list from the production `scrape_log.jsonl` (every URL where both lanes have a
-freshest record with no `acquisition_error` and real `bytes_returned`, plus a `content_path` —
-the log no longer computes an "ok" verdict itself, see src/scraper/DOCS.md's Gotchas), no external
-file dependency. Reports numbers only — no verdict on which lane is "better".
-"""
 # INFRASTRUCTURE
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lane_metrics_aggregate import compute_aggregate  # noqa: E402
-from _lane_metrics_pairing import collect_pairs_from_scrape_log  # noqa: E402
-from _lane_metrics_prose import (  # noqa: E402
+from _lane_metrics_aggregate import compute_aggregate
+from _lane_metrics_pairing import collect_pairs_from_scrape_log
+from _lane_metrics_prose import (
     PROSE_PERCENTILE, compute_file_metrics, compute_metrics_from_blocks, compute_prose_cap,
 )
-from _lane_metrics_blocks import read_blocks  # noqa: E402
-from _lane_metrics_report import write_report  # noqa: E402
+from _lane_metrics_blocks import read_blocks
+from _lane_metrics_report import write_report
 
 
 # ORCHESTRATOR
 
-# Build the pair list from the production log, derive the PROSE cap, classify both lanes per URL, report
 def lane_metrics_workflow() -> None:
     t_start = time.perf_counter()
 

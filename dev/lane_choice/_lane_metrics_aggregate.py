@@ -4,7 +4,6 @@ LANES = ("chromium", "camoufox")
 
 # FUNCTIONS
 
-# 'chromium', 'camoufox', or 'tie' — whichever lane has the larger value
 def winning_lane(chromium_value: float, camoufox_value: float) -> str:
     if chromium_value > camoufox_value:
         return "chromium"
@@ -13,8 +12,6 @@ def winning_lane(chromium_value: float, camoufox_value: float) -> str:
     return "tie"
 
 
-# Cross-pair counts: wins on CONTENT words/percentage, cap-exclusion totals per lane, and the
-# chromium-zero-CONTENT / camoufox-PROSE-rescue counts
 def compute_aggregate(results: list[dict]) -> dict:
     words_wins = {"chromium": 0, "camoufox": 0, "tie": 0}
     pct_wins = {"chromium": 0, "camoufox": 0, "tie": 0}

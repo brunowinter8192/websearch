@@ -33,7 +33,7 @@ gets checked against `ground_truth()`, computed from those same source lists.
 
 ## Modules
 
-### 01_resume_state_probe.py (295 LOC)
+### 01_resume_state_probe.py (258 LOC)
 
 **Purpose:** Verifies, by running it, whether `BFSDeepCrawlStrategy(resume_state=...)` can
 pre-populate the BFS frontier with an arbitrary URL set instead of a single `start_url` — and, if
@@ -48,7 +48,7 @@ after a `crawl4ai` version bump).
 
 ---
 
-### _fixture_site.py (167 LOC)
+### _fixture_site.py (117 LOC)
 
 **Purpose:** The HTTP serving mechanics for the fixture site — request handling, the two switchable
 failure modes (thin-body-200, sliding-window 429), and server lifecycle. Re-exports the constants
@@ -65,7 +65,7 @@ discovery target.
 `json`, `urllib.parse`) — no `crawl4ai`/`httpx` dependency, since this module is a target, never a
 client.
 
-### _fixture_site_content.py (263 LOC)
+### _fixture_site_content.py (226 LOC)
 
 **Purpose:** Defines the fixture site's shape — every constant (navtree/sitemap/robots page lists),
 every page/route content generator (`__NEXT_DATA__` pages, leaf pages, the RSC demo page, robots.txt,
@@ -77,7 +77,7 @@ those same source lists.
 re-export and for `start_fixture_server`).
 **Calls out:** stdlib only (`json`, `urllib.parse`).
 
-### 02_fixture_site_server.py (45 LOC)
+### 02_fixture_site_server.py (35 LOC)
 
 **Purpose:** Standalone entry point — starts `_fixture_site.py` on a fixed/given port, prints its
 seed URL + `ground_truth()`, blocks until Ctrl+C, then shuts it down cleanly.

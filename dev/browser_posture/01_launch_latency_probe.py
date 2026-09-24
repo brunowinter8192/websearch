@@ -1,42 +1,4 @@
 #!/usr/bin/env python3
-"""Launch-latency + backgrounding-flag probe (macOS) — Milestone 1 of the headed-default decision.
-
-Measures, per configuration, repeated N times:
-- start-to-drivable-tab latency (process launch -> a tab that actually executes a script)
-- one-page navigation latency (Tab.go_to against a local, neutral, zero-anti-bot target)
-- background-timer-throttling drift (setInterval(100ms) actual-vs-expected tick count/gaps)
-
-Configurations:
-1. headless, direct launch (today's production shape, src/search/browser.py)
-2. headed, backgrounded (`open -g`, dev/search_pipeline/27_brave_headed_lane_probe.py mechanism),
-   WITHOUT the three Playwright-default backgrounding flags
-3. headed, backgrounded, WITH the three flags
-4. headless, direct, WITH the three flags (control — isolates flag-effect from headed-effect)
-
-Why a local HTTP server, not example.com, for the timer-drift measurement: that measurement needs
-a page under our control with running timers to observe throttling on; a static third-party page
-has nothing running to throttle. Navigation-latency and drift both use the SAME local page —
-neutral, deterministic, no anti-bot involved (hard scope boundary: never point this probe at
-Google/Brave/Bing or any production search engine).
-
-Occlusion for the drift measurement (configs 2/3 only): `--disable-backgrounding-occluded-windows`
-governs OCCLUDED windows specifically (covered by another window), not merely unfocused ones — a
-window opened via `open -g` is typically still fully visible on screen, just not frontmost, which
-is a weaker condition than occlusion. To actually exercise what the flag governs, a second,
-identically-positioned Chrome window (throwaway profile, `-g` backgrounded, no CDP, never
-foregrounded — see `spawn_plain_chrome` in `_lib.py`) is spawned on top of the automation window
-immediately after navigation, intended to occlude it for the duration of the timer harness. Headless
-configs (1/4) have no window to occlude — the harness runs unmodified. This occlusion attempt was
-NOT confirmed to work in this environment (see the report's occlusion-confirmed column and caveat) —
-read the drift numbers accordingly.
-
-NOT measured (deliberately excluded, out of scope for this milestone):
---disable-new-content-rendering-timeout — governs blanking of stale COMPOSITOR/visual output after
-a stalled paint. Production never screenshots or reads rendered pixels; every signal it consumes is
-CDP/DOM (execute_script, Runtime.evaluate). A blanked compositor frame is invisible to every
-production signal, so this flag has no measurable effect on anything this probe or production reads.
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -45,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import (  # noqa: E402
+from _lib import (
     BACKGROUNDING_FLAGS, WINDOW_ARGS, launch_chrome, stop_chrome, spawn_plain_chrome, kill_by_profile,
     profile_dir, start_probe_server, stop_probe_server, read_tick_stats, read_visibility_state, stats_ms,
 )
@@ -56,7 +18,7 @@ REPORT_DIR = SCRIPT_DIR / "md"
 N_LATENCY = 5
 N_DRIFT = 3
 NAV_TIMEOUT_S = 15.0
-DRIFT_WAIT_S = 4.5  # covers the 40 x 100ms = 4000ms nominal harness duration + margin
+DRIFT_WAIT_S = 4.5
 
 CONFIGS = [
     {"slug": "headless_direct", "label": "1. headless, direct", "headless": True, "flags": [], "backgrounded": False},
@@ -95,7 +57,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Run N_LATENCY launch+nav cycles for one config, return per-metric stats_ms dicts
 async def measure_latency(cfg: dict, base_url: str) -> dict:
     profile = profile_dir(cfg["slug"])
     tab_times, drivable_times, nav_times, nav_failures = [], [], [], 0
@@ -120,8 +81,6 @@ async def measure_latency(cfg: dict, base_url: str) -> dict:
     }
 
 
-# Run N_DRIFT timer-harness cycles for one config, return actual-vs-expected tick stats plus
-# whether real occlusion (document.visibilityState === "hidden") was ever confirmed to engage
 async def measure_drift(cfg: dict, base_url: str) -> dict:
     profile = profile_dir(f"{cfg['slug']}-drift")
     counts, mean_intervals, max_gaps, occluded_confirmed = [], [], [], []
@@ -153,7 +112,6 @@ async def measure_drift(cfg: dict, base_url: str) -> dict:
     }
 
 
-# Grep for any leftover Chrome process pinned to any probe profile dir
 def check_orphans() -> list[str]:
     import subprocess
     result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
@@ -272,7 +230,6 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-# Write markdown report and return its path
 def write_report(results: dict, orphans: list[str]) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"

@@ -1,19 +1,3 @@
-"""
-Measures URL discovery recall on docs.github.com/de/rest against a 305-URL gold standard.
-Compares three BFS strategies to isolate the effect of JS rendering on discovered link count.
-
-Strategies:
-  A: prefetch=True  + wait_until=domcontentloaded  (mirrors current discover_urls in src/)
-  B: prefetch=True  + wait_until=networkidle        (prefetch path with JS wait — may be identical to A)
-  C: prefetch=False + wait_until=networkidle        (full-render BFS, mirrors crawl_bfs — guaranteed JS execution)
-
-Usage:
-    ./venv/bin/python dev/explore_pipeline/04_render_recall.py
-    ./venv/bin/python dev/explore_pipeline/04_render_recall.py --max-pages 600 --depth 10
-    ./venv/bin/python dev/explore_pipeline/04_render_recall.py --no-regression
-    ./venv/bin/python dev/explore_pipeline/04_render_recall.py --gold dev/explore_pipeline/goldstandard/docs_github_rest.txt
-"""
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -90,13 +74,11 @@ async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
 
 # FUNCTIONS
 
-# Load gold URLs from file, normalize, return as frozenset
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
         return frozenset(normalize_url(ln.strip()) for ln in f if ln.strip())
 
 
-# Strip query/fragment, @version path segments, trailing slash
 def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
@@ -104,7 +86,6 @@ def normalize_url(url: str) -> str:
     return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
-# Run one BFS discovery pass, return (normalized_url_list, wall_clock_seconds)
 async def discover_with_config(url: str, domain: str, max_pages: int, depth: int,
                                include_pattern: str | None, wait_until: str,
                                use_prefetch: bool) -> tuple[list[str], float]:
@@ -154,7 +135,6 @@ async def discover_with_config(url: str, domain: str, max_pages: int, depth: int
     return urls, elapsed
 
 
-# Compute recall, noise, missing — returns stats dict including found_urls set for diff analysis
 def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
     found_set = set(found_urls)
     matched = found_set & gold
@@ -172,7 +152,6 @@ def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
     }
 
 
-# Run strategy A vs C on non-SPA regression domains, return list of per-run dicts
 async def run_regression() -> list[dict]:
     print(f"\n{'=' * 60}")
     print("Regression check (non-SPA domains)")
@@ -195,7 +174,6 @@ async def run_regression() -> list[dict]:
     return rows
 
 
-# Build full markdown report from main eval results + regression rows
 def format_report(gold: frozenset, main_results: dict, regression_rows: list[dict]) -> str:
     lines = _format_main_results_table(gold, main_results)
     lines += _format_key_url_check(main_results)
@@ -225,7 +203,6 @@ def _format_main_results_table(gold: frozenset, main_results: dict) -> list:
     return lines
 
 
-# Key URL check
 def _format_key_url_check(main_results: dict) -> list:
     lines = ["", "## Key URL Check", ""]
     for name, s in main_results.items():
@@ -234,7 +211,6 @@ def _format_key_url_check(main_results: dict) -> list:
     return lines
 
 
-# Recovery analysis: URLs A missed that B or C found
 def _format_recovery_analysis(gold: frozenset, main_results: dict) -> list:
     lines = []
     a_found = main_results.get("A_prefetch_domcontentloaded", {}).get("found_urls", set())
@@ -258,7 +234,6 @@ def _format_recovery_analysis(gold: frozenset, main_results: dict) -> list:
     return lines
 
 
-# Best strategy missing sample
 def _format_best_strategy_missing(main_results: dict) -> list:
     best_name = max(main_results, key=lambda n: main_results[n]["recall_pct"])
     lines = [
@@ -290,7 +265,6 @@ def _format_regression_check(regression_rows: list[dict]) -> list:
     return lines
 
 
-# Save report to md/04_docs_github_rest_YYYYMMDD.md, return path
 def save_report(report: str) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / f"04_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"

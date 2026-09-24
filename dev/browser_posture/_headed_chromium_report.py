@@ -5,14 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import BACKGROUNDING_FLAGS  # noqa: E402
+from _lib import BACKGROUNDING_FLAGS
 
-# Read directly off the installed crawl4ai 0.9.2's browser_manager.py `_build_browser_args()` this
-# session: unconditionally-included flags for the plain playwright.chromium.launch() path (no
-# cdp_url/use_managed_browser/use_persistent_context set — the exact path try_scrape's BrowserConfig
-# takes). `--disable-backgrounding-occluded-windows` is NOT in this set (only added when
-# config.light_mode=True, which try_scrape never sets) — if it shows up on the real cmdline anyway,
-# that's patchright's internal driver default, not crawl4ai's doing.
 CRAWL4AI_UNCONDITIONAL_ARGS = {
     "--disable-renderer-backgrounding",
     "--disable-background-timer-throttling",
@@ -21,15 +15,12 @@ CRAWL4AI_UNCONDITIONAL_ARGS = {
 
 # FUNCTIONS
 
-# Percent helper for the focus-poll table, "n/a" on an empty denominator
 def pct(count: int, total: int) -> str:
     if total == 0:
         return "n/a"
     return f"{round(100 * count / total)}%"
 
 
-# Attribute a backgrounding flag's presence on a real cmdline to crawl4ai's own arg list vs
-# patchright's internal driver default
 def attribute_flag(flag: str, cmdline: list[str] | None) -> str:
     present = bool(cmdline) and flag in cmdline
     if not present:
@@ -179,7 +170,6 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-# Write the markdown report and return its path
 def write_report(
     run_a: dict, run_b: dict, run_c: dict | None, bundle_path: Path,
     original_lsuielement: bool | None, plist_end_state: bool | None, plist_format_restored: bool,

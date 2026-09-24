@@ -16,7 +16,6 @@ DOMAINS_FILE = Path(__file__).parent / "domains.txt"
 TRAILING_SLASH = re.compile(r'/$')
 
 
-# Crawl website and report URL discovery metrics
 async def main(url: str, depth: int, max_pages: int, label: str):
     domain = urlparse(url).netloc
     results = await crawl_website(url, domain, depth, max_pages)
@@ -26,7 +25,6 @@ async def main(url: str, depth: int, max_pages: int, label: str):
     print_report(report)
 
 
-# Crawl website using BFS strategy with domain filtering
 async def crawl_website(url: str, domain: str, depth: int, max_pages: int) -> list:
     filter_chain = FilterChain([
         DomainFilter(allowed_domains=[domain])
@@ -58,7 +56,6 @@ async def crawl_website(url: str, domain: str, depth: int, max_pages: int) -> li
     return results
 
 
-# Remove duplicate URLs via trailing slash normalization
 def deduplicate(results: list) -> list:
     seen = set()
     unique = []
@@ -71,7 +68,6 @@ def deduplicate(results: list) -> list:
     return unique
 
 
-# Build discovery report from crawl results
 def build_report(seed_url, domain, depth, max_pages, total_fetched, unique_results):
     urls = []
     for r in unique_results:
@@ -100,7 +96,6 @@ def build_report(seed_url, domain, depth, max_pages, total_fetched, unique_resul
     }
 
 
-# Save report as JSON
 def save_report(report, label):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -110,7 +105,6 @@ def save_report(report, label):
     print(f"\nReport saved: {path}")
 
 
-# Print summary to console
 def print_report(report):
     s = report["summary"]
     print(f"\n{'=' * 60}")
@@ -127,7 +121,6 @@ def print_report(report):
         print(f"  {status}  {u['url']}")
 
 
-# Load domains from domains.txt
 def load_domains():
     entries = []
     with open(DOMAINS_FILE) as f:
@@ -144,7 +137,6 @@ def load_domains():
     return entries
 
 
-# Batch crawl all domains from domains.txt in parallel
 async def run_all():
     domains = load_domains()
     print(f"Batch crawl: {len(domains)} domains from domains.txt\n")

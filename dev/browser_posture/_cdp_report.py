@@ -3,25 +3,18 @@ import importlib.metadata
 from datetime import datetime
 from pathlib import Path
 
-# Stage taxonomy for the focus poll — ROUTE_STAGES is the actual cdp_url route under test;
-# REFERENCE_STAGE is an internal tooling step (the patchright DIRECT-launch baseline captured only
-# for the cmdline diff) that deliberately has NO backgrounding mitigation and is expected to steal
-# focus — must be reported separately, never folded into the route's own headline focus number.
 ROUTE_STAGES = ["self_launch", "cdp_port_wait", "cdp_connect_page_navigate", "teardown"]
 REFERENCE_STAGE = "reference_launch"
 
 
 # FUNCTIONS
 
-# Percent helper, "n/a" on an empty denominator
 def pct(count: int, total: int) -> str:
     if total == 0:
         return "n/a"
     return f"{round(100 * count / total)}%"
 
 
-# Set-difference between the self-launched cmdline and the patchright reference cmdline — the
-# anti-detection surface this route would make us own, measured not fixed
 def diff_cmdlines(self_cmdline: list[str] | None, reference_cmdline: list[str] | None) -> dict:
     if not self_cmdline or not reference_cmdline:
         return {"comparable": False}
@@ -39,9 +32,6 @@ def diff_cmdlines(self_cmdline: list[str] | None, reference_cmdline: list[str] |
     }
 
 
-# (stage, total_samples, chrome_frontmost_count) per stage, canonical order (ROUTE_STAGES then
-# REFERENCE_STAGE) — includes stages with 0 samples explicitly, so a fast stage that the 0.25s poll
-# never caught is visibly "0 samples" rather than silently absent from the table
 def stage_focus_breakdown(focus_samples: list[tuple[str, str]]) -> list[tuple[str, int, int]]:
     totals: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
     chrome_counts: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
@@ -155,7 +145,6 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-# Write the markdown report and return its path
 def write_report(
     bundle_path: Path, reference: dict, self_launch_result: dict, cdp_http_check: dict,
     scrape_result: dict, self_cmdline: list[str] | None, cmdline_diff: dict,

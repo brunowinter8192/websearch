@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Backfill paired chromium+camoufox scrapes for every distinct URL in the production scrape log —
-the calibration basis for a coming lane-choice metrics feature. Historical records are config/
-site-drift stale, so BOTH lanes are re-fired fresh for every URL, never just the missing one.
-
-Orchestration only: the production `websearch` CLI (PATH wrapper -> main-repo cli.py) does the real
-scraping and writes scrape_log.jsonl + sidecars itself. This script never writes content — only its
-own resume-state JSONL and the md/ report.
-"""
 # INFRASTRUCTURE
 import argparse
 import json
@@ -22,8 +14,6 @@ SCRIPT_DIR = Path(__file__).parent
 STATE_PATH = SCRIPT_DIR / "jsonl" / "backfill_pairs_state.jsonl"
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# The MAIN repo's canonical production log — never a worktree copy (worktrees have their own,
-# separate, gitignored src/logs/ tree).
 PROD_SCRAPE_LOG_PATH = Path(
     "/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch/src/logs/scrape_log.jsonl"
 )
@@ -31,20 +21,12 @@ PROD_SCRAPE_LOG_PATH = Path(
 WEBSEARCH_CMD = "websearch"
 ENGINES = [("scrape_url_chromium", "chromium"), ("scrape_url_camoufox", "camoufox")]
 
-# Both lanes' own internal acquisition budgets top out at ~245-246s (TOTAL_SCRAPE_BUDGET_S /
-# TOTAL_CAMOUFOX_BUDGET_S) — this wrapper timeout sits above both with margin so the CLI's own
-# graceful budget_exhausted path always gets first chance to fire and log a real outcome; only a
-# genuinely hung subprocess (no internal budget firing at all) ever hits this.
 SUBPROCESS_TIMEOUT_S = 260.0
-# Small pause between every CLI invocation (own lane switch or next URL alike) — the sites being
-# scraped are real, external, mostly-unrelated third parties; both lanes already spend several
-# seconds per call, this just adds a courteous floor rather than back-to-back launches.
 POLITENESS_DELAY_S = 2.0
 
 
 # ORCHESTRATOR
 
-# Collect distinct URLs, fire both lanes fresh per URL (skipping resume-complete pairs), report
 def backfill_pairs_workflow(limit: int | None) -> None:
     check_websearch_on_path()
     t_start = time.perf_counter()
@@ -86,13 +68,11 @@ def backfill_pairs_workflow(limit: int | None) -> None:
 
 # FUNCTIONS
 
-# Fail fast on a missing PATH entry — a setup defect, not a per-URL data point
 def check_websearch_on_path() -> None:
     if shutil.which(WEBSEARCH_CMD) is None:
         raise RuntimeError(f"`{WEBSEARCH_CMD}` not found on PATH — cannot fire the production CLI")
 
 
-# Distinct URLs from the production log, first-seen order, deduped
 def collect_distinct_urls() -> list[str]:
     urls = []
     with open(PROD_SCRAPE_LOG_PATH, encoding="utf-8") as f:
@@ -105,13 +85,11 @@ def collect_distinct_urls() -> list[str]:
     return list(dict.fromkeys(urls))
 
 
-# Split URLs into (fireable, skipped_pdf_count) — mirrors cli.py's own scrape-subcommand .pdf reject
 def filter_pdf_urls(urls: list[str]) -> tuple[list[str], int]:
     fireable = [u for u in urls if not urlparse(u).path.lower().endswith(".pdf")]
     return fireable, len(urls) - len(fireable)
 
 
-# (url, engine) pairs already recorded in this backfill's own resume-state file
 def load_completed_pairs() -> set[tuple[str, str]]:
     if not STATE_PATH.exists():
         return set()
@@ -126,7 +104,6 @@ def load_completed_pairs() -> set[tuple[str, str]]:
     return pairs
 
 
-# Fire one url+engine pair via the production CLI, then read back its own fresh log record
 def fire_one_pair(url: str, subcommand: str, engine: str) -> dict:
     call_start = datetime.now(timezone.utc)
     t0 = time.perf_counter()
@@ -152,19 +129,12 @@ def fire_one_pair(url: str, subcommand: str, engine: str) -> dict:
     }
 
 
-# This script's own local "did the pair fetch content" label — the production log no longer
-# computes an outcome verdict (see src/scraper/DOCS.md's Gotchas: acquisition_error is now logged
-# as its own fact instead), so this backfill tool derives the same three-way label it always
-# reported, off the two facts that already replace it: a named acquisition_error, or "ok"/"empty"
-# from whether any bytes actually came back.
 def _derive_outcome(log_record: dict) -> str:
     if log_record.get("acquisition_error"):
         return log_record["acquisition_error"]
     return "ok" if log_record.get("bytes_returned") else "empty"
 
 
-# The freshest production-log record for url+engine with ts >= since — the CLI's own just-written
-# record, read back rather than parsed off stdout (the canonical source, not a re-derived guess)
 def find_fresh_log_record(url: str, engine: str, since: datetime) -> dict | None:
     latest = None
     latest_ts = None
@@ -184,19 +154,16 @@ def find_fresh_log_record(url: str, engine: str, since: datetime) -> dict | None
     return latest
 
 
-# Parse the project's standard "%Y-%m-%dT%H:%M:%S.%fZ" timestamp into an aware UTC datetime
 def _parse_ts(ts: str) -> datetime:
     return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
 
 
-# Append one completed-pair record — written immediately so an interrupted run stays resumable
 def append_state(entry: dict) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(STATE_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-# Write the funnel + per-URL+engine report off the FULL cumulative state file (all invocations so far)
 def write_report(funnel: dict) -> Path:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     all_entries = _read_state_entries()
@@ -212,7 +179,6 @@ def write_report(funnel: dict) -> Path:
     return report_path
 
 
-# All entries ever recorded in the resume-state file, oldest first
 def _read_state_entries() -> list[dict]:
     if not STATE_PATH.exists():
         return []
@@ -220,7 +186,6 @@ def _read_state_entries() -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
-# Funnel section: this invocation's counts plus cumulative state-file totals
 def format_funnel_section(funnel: dict, all_entries: list[dict]) -> str:
     fired = funnel["fired_counts"]
     lines = [
@@ -246,7 +211,6 @@ def _urls_with_both_lanes(entries: list[dict]) -> int:
     return sum(1 for engines in by_url.values() if len(engines) >= 2)
 
 
-# Outcome counts per engine, cumulative
 def format_outcome_breakdown(all_entries: list[dict]) -> str:
     lines = ["## Outcome counts per engine (cumulative)"]
     for engine in ("chromium", "camoufox"):
@@ -261,7 +225,6 @@ def format_outcome_breakdown(all_entries: list[dict]) -> str:
     return "\n".join(lines)
 
 
-# One line per URL+engine with outcome, cumulative, in recorded order
 def format_per_pair_lines(all_entries: list[dict]) -> str:
     lines = ["## Per-URL+engine outcomes (cumulative)", ""]
     for e in all_entries:

@@ -12,7 +12,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ## Modules
 
-### _lib.py (307 LOC)
+### _lib.py (252 LOC)
 
 **Purpose:** Shared launch/teardown/measurement primitives for the pydoll-lane probes (`01`-`03`) — profile isolation, the `open -g` process creator, a throwaway local HTTP server, stats helpers, CDP injection, settle-poll.
 **Reads:** nothing (pure infra; makes its own subprocess/CDP calls).
@@ -22,7 +22,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### 01_launch_latency_probe.py (300 LOC)
+### 01_launch_latency_probe.py (257 LOC)
 
 **Purpose:** Measures launch/navigation latency and background-timer-throttling drift across 4 headed/headless x backgrounding-flag configs.
 **Reads:** nothing (self-contained; serves its own local HTTP target).
@@ -32,7 +32,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### 02_parallel_chrome_probe.py (221 LOC)
+### 02_parallel_chrome_probe.py (194 LOC)
 
 **Purpose:** Determines what happens when a headed-backgrounded launch targets the real production shared profile while a simulated already-running Chrome instance holds a separate profile.
 **Reads:** nothing.
@@ -42,7 +42,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### 03_fingerprint_patch_probe.py (230 LOC)
+### 03_fingerprint_patch_probe.py (180 LOC)
 
 **Purpose:** Per-block KEEP/DROP evidence for `src/search/browser.py`'s (since-removed) `JS_FINGERPRINT_PATCHES` under headed — 4 patch variants + 1 headless reference.
 **Reads:** nothing (self-contained; serves its own local artifact page via `_lib`).
@@ -52,7 +52,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _fingerprint_report.py (257 LOC)
+### _fingerprint_report.py (256 LOC)
 
 **Purpose:** Markdown report assembly for `03` — ActiveText verdict computation plus one section-builder helper per report section.
 **Reads:** nothing — takes `03`'s result dicts as arguments.
@@ -62,7 +62,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### 04_headed_chromium_probe.py (172 LOC)
+### 04_headed_chromium_probe.py (146 LOC)
 
 **Purpose:** Milestone 1 of the ad-hoc chromium lane's headed switch — binary identity, `LSUIElement` viability, and backgrounding-flag provenance through the real crawl4ai/patchright launch path.
 **Reads:** nothing (self-contained; serves its own local throwaway HTTP page via `_lib`).
@@ -72,7 +72,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _chromium_bundle.py (60 LOC)
+### _chromium_bundle.py (49 LOC)
 
 **Purpose:** Resolve `04`'s headed exe to its `.app` bundle and read/write/verify its `Info.plist` `LSUIElement` key and codesign status.
 **Reads:** the chromium-1228 bundle's `Info.plist` and codesign metadata on disk.
@@ -82,7 +82,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _chromium_teardown.py (68 LOC)
+### _chromium_teardown.py (49 LOC)
 
 **Purpose:** Multi-round Chrome-for-Testing process + launchd-supervision-job cleanup for `04`, against an observed launchd auto-relaunch race after a crash.
 **Reads:** nothing — inspects live processes/launchd state itself.
@@ -92,7 +92,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _headed_chromium_report.py (211 LOC)
+### _headed_chromium_report.py (201 LOC)
 
 **Purpose:** Markdown report assembly for `04` — one section-builder helper per report section (executable resolution, backgrounding flags, `LSUIElement`, teardown).
 **Reads:** nothing — takes `04`'s run dicts as arguments.
@@ -102,7 +102,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### 05_cdp_headed_probe.py (238 LOC)
+### 05_cdp_headed_probe.py (201 LOC)
 
 **Purpose:** Milestone 1b — the `cdp_url` self-launch-then-connect route for the ad-hoc chromium lane after `04` killed `LSUIElement`, with a stage-labeled frontmost-app poll split route-under-test vs. `reference_launch`.
 **Reads:** nothing (self-contained; serves its own local throwaway HTTP page via `_lib`).
@@ -112,7 +112,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _cdp_launch.py (87 LOC)
+### _cdp_launch.py (68 LOC)
 
 **Purpose:** Bundle resolution, self-launch (`open -g -n -a`), `DevToolsActivePort` wait, and CDP-HTTP-readiness check for `05`'s self-launched Chrome.
 **Reads:** the chromium-1228 bundle path on disk; the self-launched process's `DevToolsActivePort` file.
@@ -122,7 +122,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _cdp_teardown.py (51 LOC)
+### _cdp_teardown.py (44 LOC)
 
 **Purpose:** Single-pass Chrome-by-profile kill plus a defensive ms-playwright/launchd sweep for `05`, on a route where no crash is expected.
 **Reads:** nothing — inspects live processes/launchd state itself.
@@ -132,7 +132,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ---
 
-### _cdp_report.py (183 LOC)
+### _cdp_report.py (172 LOC)
 
 **Purpose:** Markdown report assembly for `05` — stage-focus breakdown, cmdline diff, and one section-builder helper per report section.
 **Reads:** nothing — takes `05`'s run dicts and focus samples as arguments.
@@ -144,3 +144,7 @@ No `__init__.py` — not a package. `01_launch_latency_probe.py` through `05_cdp
 
 ## State
 No cross-call module state. Every probe script holds its own run state in local dicts/lists passed explicitly between its own functions; `_lib.py` and the seven split-out helper modules are pure functions over their arguments, with no shared mutable globals.
+
+## Gotchas
+- The probes never import `src/`: the browser, patch and launch shapes they measure are copies as of their write date (August-September 2026) and do not follow later changes in `src/`. A probe result describes the copy, not current production.
+- Only `02_parallel_chrome_probe.py` addresses the real production `SESSION_DIR`; every other probe works under its own throwaway profile root. Details and the Playwright issue references behind the flag set: `process-docs/refactor_sweep/`.

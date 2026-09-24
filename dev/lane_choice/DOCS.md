@@ -55,7 +55,7 @@ camoufox-PROSE-rescue breakdown, written to md/.
 
 ## Modules
 
-### 01_backfill_pairs.py (285 LOC)
+### 01_backfill_pairs.py (248 LOC)
 
 **Purpose:** Orchestration only — fires the production `websearch scrape_url_chromium`/
 `scrape_url_camoufox` CLI per distinct URL, resumable via its own state file; never writes scrape
@@ -67,7 +67,7 @@ worktree copy — see Gotchas); this dir's own `jsonl/backfill_pairs_state.jsonl
 focus-steal instrumentation.
 **Calls out:** the `websearch` PATH command (subprocess) — see Gotchas.
 
-### 02_focus_poll_smoke.py (127 LOC)
+### 02_focus_poll_smoke.py (111 LOC)
 
 **Purpose:** Focus-steal verification gate for the backfill — a macOS frontmost-app poll (catches a
 regular/non-accessory app's steal). REMOVED 2026-08-27: a second, LSUIElement/accessory-process
@@ -81,7 +81,7 @@ runs against the original complaint's own sustained-load, multi-URL workload sha
 **Calls out:** the `websearch` PATH command indirectly (via `01_backfill_pairs.py`); macOS
 `osascript`/System Events for the poll.
 
-### 03_live_focus_probe.py (386 LOC)
+### 03_live_focus_probe.py (312 LOC)
 
 **Purpose:** Live HUMAN focus-steal verification for one or more ad-hoc URLs — one visible countdown
 so the human can switch away and start typing, then a real scrape per `--url` (repeatable) via this
@@ -113,7 +113,7 @@ verdict, full sample series).
 **Calls out:** this worktree's own `venv/bin/python cli.py` (subprocess, real production entry
 point, one call per URL); macOS `osascript`/System Events (via the imported `02_` function).
 
-### 04_lane_metrics.py (62 LOC)
+### 04_lane_metrics.py (50 LOC)
 
 **Purpose:** Orchestrates the pair-collection → PROSE-cap → per-URL classification → aggregate →
 report pipeline, importing each step from its own sibling module below. Neither the script nor its
@@ -124,7 +124,7 @@ report ever states which lane is "better" — purely descriptive.
 measurement.
 **Calls out:** none — stdlib only (`sys`, `time`).
 
-### _lane_metrics_pairing.py (68 LOC)
+### _lane_metrics_pairing.py (55 LOC)
 
 **Purpose:** Builds the URL pair list from the production log — freshest no-`acquisition_error`,
 real-`bytes_returned`, `content_path`-bearing record per `(url, engine)`, paired across both lanes.
@@ -134,7 +134,7 @@ worktree copy — same convention as `01_backfill_pairs.py`, see Gotchas).
 **Called by:** `04_lane_metrics.py`.
 **Calls out:** none — stdlib only (`json`).
 
-### _lane_metrics_blocks.py (77 LOC)
+### _lane_metrics_blocks.py (68 LOC)
 
 **Purpose:** Reads one scrape_content `.md` file into blocks (non-comment, non-empty lines with
 >=1 token), each carrying its own word count, link density, heading flag and sentence-end flag.
@@ -144,7 +144,7 @@ files run past 1MB, the largest so far ~52MB).
 **Called by:** `04_lane_metrics.py`, `_lane_metrics_prose.py`.
 **Calls out:** none — stdlib only (`re`).
 
-### _lane_metrics_classify.py (66 LOC)
+### _lane_metrics_classify.py (59 LOC)
 
 **Purpose:** Kohlschuetter/Fankhauser/Nejdl (WSDM 2010) Algorithm 2's decision tree over
 `numWords`/`linkDensity`, adapted to markdown image/link syntax, plus the jusText-style
@@ -154,7 +154,7 @@ short-heading rescue rule applied once afterwards.
 **Called by:** `_lane_metrics_prose.py`.
 **Calls out:** none — stdlib only.
 
-### _lane_metrics_prose.py (90 LOC)
+### _lane_metrics_prose.py (79 LOC)
 
 **Purpose:** The PROSE test layered on top of Algorithm 2's CONTENT/BOILERPLATE verdict — CONTENT,
 word count at or under a corpus-derived length cap, and containing a sentence-ending mark
@@ -171,7 +171,7 @@ and the reasoning.
 **Called by:** `04_lane_metrics.py`.
 **Calls out:** `_lane_metrics_blocks.py`, `_lane_metrics_classify.py`; stdlib `statistics`.
 
-### _lane_metrics_aggregate.py (55 LOC)
+### _lane_metrics_aggregate.py (52 LOC)
 
 **Purpose:** Cross-pair aggregate over every URL's per-lane metrics — CONTENT-word/percentage
 wins, cap-exclusion totals per lane, and how many chromium-zero-CONTENT pairs camoufox rescues
@@ -181,7 +181,7 @@ with a PROSE block.
 **Called by:** `04_lane_metrics.py`.
 **Calls out:** none — stdlib only.
 
-### _lane_metrics_report.py (136 LOC)
+### _lane_metrics_report.py (128 LOC)
 
 **Purpose:** Renders the per-URL sections, the all-pairs table, the PROSE-cap section and the
 aggregate/rescue sections into one markdown report and writes it.

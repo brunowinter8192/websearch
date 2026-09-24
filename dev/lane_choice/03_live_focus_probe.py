@@ -1,30 +1,4 @@
 #!/usr/bin/env python3
-"""Live HUMAN focus-steal probe — launches one or more REAL scrapes via THIS worktree's own
-`cli.py` (never the `websearch` PATH wrapper, which is pinned to the main repo — see DOCS.md
-Gotchas), after a single visible countdown that gives the human time to switch to another
-application and start typing. With multiple `--url` flags, one fresh browser launches per URL,
-back-to-back, right after that one countdown — the workload shape of the original sustained-load
-complaint (one fresh Camoufox per scraped URL across a backfill), not just a single isolated
-launch. While the human watches/types, the frontmost-app poll this project already uses
-(`02_focus_poll_smoke.py`'s instrument) runs concurrently on a background thread across the WHOLE
-sequence, independent of the human's own judgment. Afterwards prints a compact verdict for the
-whole sequence (sample count, deviation count, longest continuous deviation, deviation offsets, and
-the instrument's own OBSERVED sampling resolution — mean interval, max gap, effective rate, derived
-from real inter-sample timestamps rather than the nominal poll-loop sleep constant), plus a per-URL
-breakdown sliced to each URL's own launch span, to the terminal the human is looking at, and writes
-the full sample series to md/ so the numbers survive the terminal.
-
-REMOVED 2026-08-27: a second, LSUIElement/accessory-process-scoped window-activation instrument.
-Live human-judged runs (both on `example.com` and, decisively, against 5 real URLs sequentially
-under sustained load — the original complaint's own workload shape) found that signal fires
-constantly with ZERO perceived focus loss, with or without a reclaim mechanism reacting to it — a
-phantom signal, not a real steal. See `process-docs/camoufox_lane/` for the exact mechanism name
-and the live-verification writeup.
-
-Measurement only — no fix, no mitigation change. Reuses 02's instrument primitives via
-importlib.util.spec_from_file_location (same numbered-script-reuse pattern as
-dev/search_pipeline/00_single_query.py importing 01_google_smoke.py).
-"""
 # INFRASTRUCTURE
 import argparse
 import importlib.util
@@ -41,29 +15,18 @@ CLI_PATH = WORKTREE_ROOT / "cli.py"
 PYTHON = WORKTREE_ROOT / "venv" / "bin" / "python"
 REPORT_DIR = SCRIPT_DIR / "md"
 
-# Reuse 02_focus_poll_smoke.py's instrument primitive directly rather than re-declaring it —
-# filename starts with a digit, so a normal `import` statement can't name it; this is this project's
-# own precedent for wiring one numbered dev script off another (dev/search_pipeline/00_single_query.py
-# importing 01_google_smoke.py the same way). Module-level code in 02 is only constants/def's plus an
-# `if __name__ == "__main__"` guard, so exec_module here has no side effects.
 _spec = importlib.util.spec_from_file_location("focus_poll_smoke", SCRIPT_DIR / "02_focus_poll_smoke.py")
 _focus_poll_smoke = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_focus_poll_smoke)
 get_frontmost_app = _focus_poll_smoke.get_frontmost_app
 
 POLL_INTERVAL_S = 0.25
-# Long enough for a human to read the on-screen instruction, alt-tab/click to a different
-# application, and actually start typing there before the browser launches — a 2-3s countdown was
-# judged too tight for the read-then-act sequence, 10s gives clear margin.
 COUNTDOWN_S = 10
 DEFAULT_URL = "https://example.com"
 
 
 # ORCHESTRATOR
 
-# Countdown ONCE -> launch each URL's real lane via THIS worktree's cli.py back-to-back -> poll the
-# instrument continuously across the whole sequence -> print overall + per-URL verdicts -> write
-# full-series report
 def live_focus_probe_workflow(urls: list[str], use_chromium: bool) -> None:
     lane = "chromium" if use_chromium else "camoufox"
     subcommand = "scrape_url_chromium" if use_chromium else "scrape_url_camoufox"
@@ -101,8 +64,6 @@ def live_focus_probe_workflow(urls: list[str], use_chromium: bool) -> None:
 
 # FUNCTIONS
 
-# Clearly visible pre-launch instruction + second-by-second countdown, printed to the terminal the
-# human is sitting at — the whole reason this probe exists (a human must have time to act on it)
 def print_countdown(lane: str) -> None:
     print("=" * 64)
     print(f"LIVE FOCUS-STEAL PROBE — {lane} lane")
@@ -115,10 +76,6 @@ def print_countdown(lane: str) -> None:
     print("  LAUNCHING NOW.\n", flush=True)
 
 
-# Runs each URL's real lane subprocess back-to-back (one fresh browser per URL, no countdown between
-# them — the workload shape of the original sustained-load complaint), recording each URL's own
-# launch span (elapsed seconds since t0) so the instrument samples collected concurrently on the
-# calling thread can later be sliced per URL
 def run_urls_in_sequence(urls: list[str], subcommand: str, t0: float) -> list[dict]:
     url_runs = []
     for i, url in enumerate(urls, start=1):
@@ -138,14 +95,12 @@ def run_urls_in_sequence(urls: list[str], subcommand: str, t0: float) -> list[di
     return url_runs
 
 
-# Compact per-URL launch-span summary, printed right after the whole sequence finishes
 def print_url_runs(url_runs: list[dict]) -> None:
     print(f"\nPer-URL launch spans (elapsed seconds since the countdown ended, {len(url_runs)} URL(s)):")
     for i, run in enumerate(url_runs, start=1):
         print(f"  [{i}] {run['url']}: t={run['start_s']}s-{run['end_s']}s, exit={run['returncode']}")
 
 
-# Background-thread loop: append (elapsed_s_since_launch, frontmost_app) samples until stop_event fires
 def poll_frontmost_loop(t0: float, samples: list[tuple[float, str]], stop_event: threading.Event) -> None:
     while not stop_event.is_set():
         app = get_frontmost_app()
@@ -153,20 +108,10 @@ def poll_frontmost_loop(t0: float, samples: list[tuple[float, str]], stop_event:
         time.sleep(POLL_INTERVAL_S)
 
 
-# Gaps between consecutive samples' timestamps, in seconds — the REAL observed cadence. Measured
-# live (2026-08-26 self-run): 8-9 samples over a 12.5s span, ~0.38-0.41s apart, not the nominal
-# POLL_INTERVAL_S=0.25s sleep — each sample also pays a real osascript subprocess round-trip, which
-# the sleep() call doesn't account for. Any duration estimate must be built from these gaps, not the
-# nominal constant, or it silently understates true steal duration and true sample density alike.
 def sample_gaps(samples: list[tuple[float, object]]) -> list[float]:
     return [samples[i + 1][0] - samples[i][0] for i in range(len(samples) - 1)]
 
 
-# This instrument's own observed resolution: sample count, mean inter-sample interval, largest single
-# gap, and the effective sampling rate that follows from them — printed/reported ALONGSIDE every
-# deviation count so "0 deviations" can be read against how finely that span was actually sampled
-# (a run that starts and ends between two samples 0.4-0.8s apart is invisible to either instrument,
-# and the verdict should say so rather than imply dense, uniform coverage)
 def instrument_resolution_stats(samples: list[tuple[float, object]]) -> dict:
     n = len(samples)
     if n < 2:
@@ -181,12 +126,6 @@ def instrument_resolution_stats(samples: list[tuple[float, object]]) -> dict:
     }
 
 
-# Longest continuous run of deviating samples, in seconds — walks the (timestamp, value) series once.
-# A run that CLOSES on a later non-deviating sample is bounded by that sample's own real timestamp
-# (an honest upper bound: we know for a fact the deviation was gone by then, whatever the actual poll
-# cadence was). A run still open at the end of the series (no closing sample observed) has no such
-# bound, so it is extended by the series' own mean observed gap (sample_gaps-derived, never a nominal
-# constant) as the best available estimate, clearly distinct from the closed-run case.
 def longest_continuous_run(samples: list[tuple[float, object]], is_deviation) -> float:
     longest = 0.0
     run_start = None
@@ -205,8 +144,6 @@ def longest_continuous_run(samples: list[tuple[float, object]], is_deviation) ->
     return round(longest, 2)
 
 
-# Instrument tally + longest continuous deviation + deviation offsets + observed resolution —
-# the compact verdict shape
 def compute_verdict(baseline_app: str, frontmost_samples: list[tuple[float, str]]) -> dict:
     fm_deviations = [(t, app) for t, app in frontmost_samples if app != baseline_app]
     fm_stats = instrument_resolution_stats(frontmost_samples)
@@ -221,15 +158,10 @@ def compute_verdict(baseline_app: str, frontmost_samples: list[tuple[float, str]
     }
 
 
-# Samples whose own timestamp falls inside [start_s, end_s] — used to slice the one continuous
-# sample series collected across the whole URL sequence down to a single URL's own launch span
 def _samples_in_window(samples: list[tuple[float, object]], start_s: float, end_s: float) -> list[tuple[float, object]]:
     return [(t, v) for t, v in samples if start_s <= t <= end_s]
 
 
-# One compute_verdict() per URL, each computed over ONLY that URL's own launch span — the instrument
-# thread runs continuously across the whole sequence, so this is where a same-shape single-URL
-# verdict shape gets reused per URL rather than re-declared
 def compute_per_url_verdicts(
     baseline_app: str, frontmost_samples: list[tuple[float, str]], url_runs: list[dict],
 ) -> list[tuple[dict, dict]]:
@@ -239,9 +171,6 @@ def compute_per_url_verdicts(
     ]
 
 
-# Per-URL verdict, printed right after the overall (whole-sequence) verdict — makes clear which
-# deviations, if any, fall inside which URL's own launch span rather than leaving that as one pooled
-# number nobody can attribute back to a specific URL
 def print_per_url_verdicts(per_url_verdicts: list[tuple[dict, dict]]) -> None:
     print("\n" + "=" * 64)
     print("PER-URL VERDICT (instrument samples sliced to each URL's own launch span)")
@@ -254,8 +183,6 @@ def print_per_url_verdicts(per_url_verdicts: list[tuple[dict, dict]]) -> None:
         )
 
 
-# Compact verdict, printed to the terminal the human is looking at — resolution stats sit right next
-# to the deviation count so a "0 deviations" line can't be misread as dense, gap-free coverage
 def print_verdict(verdict: dict) -> None:
     print("\n" + "=" * 64)
     print("VERDICT")
@@ -276,7 +203,6 @@ def print_verdict(verdict: dict) -> None:
     )
 
 
-# Write the full sample series + overall verdict + per-URL breakdown to md/ so the numbers survive the terminal
 def write_report(
     lane: str, url_runs: list[dict], baseline_app: str,
     frontmost_samples: list[tuple[float, str]], verdict: dict, per_url_verdicts: list[tuple[dict, dict]],

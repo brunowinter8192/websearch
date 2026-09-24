@@ -1,43 +1,4 @@
 #!/usr/bin/env python3
-"""Fingerprint-patch consistency probe (macOS) — Milestone 2 of the headed-default decision.
-
-src/search/browser.py's JS_FINGERPRINT_PATCHES was written for a HEADLESS browser and has never run
-under a headed one. Two of its parts are suspect under headed, for opposite reasons: the
-getComputedStyle Proxy corrects a CSS artifact its own comment claims is headless-only (if true
-under headed, the Proxy wrapper itself becomes the only detectable deviation); the screen/window
-overrides hardcode values that contradicted nothing when there was no real display, but this machine
-has a real 3456x2234 Retina display and a real window under headed.
-
-Four variants, headed-backgrounded only (never foreground — `_lib.py`'s `open -g` mechanism):
-1. full patch set (screen/window overrides + getComputedStyle Proxy, today's shape)
-2. without the getComputedStyle Proxy (screen/window overrides only)
-3. without the screen/window overrides (getComputedStyle Proxy only)
-4. no patches at all (baseline)
-Plus ONE headless reference run (no patches) for the artifact test only — the only way to tell
-"headless-only artifact" apart from "Chrome says this regardless of mode".
-
-The getComputedStyle artifact test does NOT use a plain resting link — the patch comment names CSS
-ActiveText, the system color for a link in its ACTIVE state, not a link at rest (which just computes
-to the ordinary link color in every mode). The artifact page (`_lib.py` ARTIFACT_HTML) declares
-`color: ActiveText` explicitly, alongside LinkText/VisitedText (broader-divergence contrast) and a
-plain link (contrast datapoint) — read directly via getComputedStyle, per variant.
-
-Targets bot.sannysoft.com and CreepJS (abrahamjuliot.github.io/creepjs) are detection test pages
-whose entire purpose is being measured against — scraping them IS the intended use here, not a
-block-rate/anti-bot-evasion measurement, and no production search engine is a target. CreepJS is
-heavy client-side JS; settle-detection polls document.body.textContent.length until two consecutive
-reads match rather than trusting a fixed sleep.
-
-CreepJS finding from live reconnaissance (this build, checked directly rather than assumed from
-memory of another version): there is no literal "Trust Score" or "N lies" summary anywhere in the
-rendered output — every "trust"/"lie" substring hit in the full HTML is either a false-positive
-substring (e.g. "CLIENT" containing "lie", "TrustedTypePolicy") or a "confidence: <level>" note. The
-actual inconsistency-scoring surface in this build is the "Headless" section's three percentages
-("N% like headless", "N% headless", "N% stealth") plus scattered "confidence: <level>" notes — that
-is what this probe extracts and reports as CreepJS's signal, instead of forcing a extraction for
-wording the live page does not use.
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -47,12 +8,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _lib import (  # noqa: E402
+from _lib import (
     launch_chrome, stop_chrome, profile_dir, start_probe_server, stop_probe_server,
     inject_before_navigation, read_system_colors, read_screen_window_props,
     wait_for_stable_content, extract_value,
 )
-from _fingerprint_report import write_report  # noqa: E402
+from _fingerprint_report import write_report
 
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -62,8 +23,6 @@ CREEPJS_URL = "https://abrahamjuliot.github.io/creepjs/"
 SANNYSOFT_SETTLE_S = 3.0
 CREEPJS_MAX_WAIT_S = 25.0
 
-# Verbatim copies of the two independent IIFEs in src/search/browser.py's JS_FINGERPRINT_PATCHES —
-# duplicated per dev-script isolation, composable independently since neither references the other
 SCREEN_WINDOW_PATCH = """
 (function() {
     // Screen dimensions: 1920x1080 (external Mac monitor)
@@ -139,8 +98,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Run one headed-backgrounded variant: inject script, read local artifact colors/props, then hit
-# both external detection targets
 async def run_variant(variant: dict, artifact_url: str) -> dict:
     profile = profile_dir(f"fp-{variant['slug']}")
     browser, tab, _, _ = await launch_chrome(profile, headless=False, extra_flags=[], backgrounded=True)
@@ -170,8 +127,6 @@ async def run_variant(variant: dict, artifact_url: str) -> dict:
     return data
 
 
-# Headless, no-patches reference — the artifact test only, to discriminate "headless-only artifact"
-# from "Chrome reports this regardless of mode"
 async def run_headless_reference(artifact_url: str) -> dict:
     profile = profile_dir("fp-headless-ref")
     browser, tab, _, _ = await launch_chrome(profile, headless=True, extra_flags=[], backgrounded=False)
@@ -185,7 +140,6 @@ async def run_headless_reference(artifact_url: str) -> dict:
     return data
 
 
-# Extract every table row's label/result on bot.sannysoft.com, flagging "failed"-classed results
 async def extract_sannysoft(tab) -> dict:
     raw = await tab.execute_script(
         "return JSON.stringify(Array.from(document.querySelectorAll('tr')).map(function(tr) {"
@@ -202,9 +156,6 @@ async def extract_sannysoft(tab) -> dict:
     return {"total_rows": len(rows), "failed_rows": failed_rows, "rows": rows}
 
 
-# Extract CreepJS's actual inconsistency-scoring surface in this build: the "Headless" section's
-# three percentages plus "confidence: <level>" notes — NOT a "trust score"/"lies" summary, which
-# this live build does not render (verified by direct inspection, not assumed)
 async def extract_creepjs(tab) -> dict:
     raw = await tab.execute_script("return document.body.textContent")
     full = extract_value(raw) or ""
@@ -220,7 +171,6 @@ async def extract_creepjs(tab) -> dict:
     }
 
 
-# Grep for any leftover Chrome process pinned to any probe profile dir
 def check_orphans() -> list[str]:
     result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
     return [line for line in result.stdout.splitlines() if line.strip()]

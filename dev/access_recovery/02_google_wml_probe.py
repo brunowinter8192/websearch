@@ -1,39 +1,4 @@
 #!/usr/bin/env python3
-"""Path B probe — does Google's browserless WML route work from THIS machine's IP?
-
-Replicates SearXNG's current Google engine shape (searx/engines/google.py on master, as reported
-to this milestone, not re-derived here): endpoint https://www.google.com/wml/search, a Nokia
-Symbian User-Agent, impersonate="chrome99_android" (curl_cffi TLS/JA3 fingerprint impersonation —
-verified present in this venv, curl_cffi 0.16.0, before relying on it), plain HTTP, lxml parse. No
-browser at all.
-
-SearXNG's own selectors (as reported, for THEIR page fetched THEIR way — not assumed to transfer,
-measured here against what THIS machine actually gets back):
-  container: //div[contains(@class, "zMzFAb")]
-  title:     .//a[contains(@class, "fuLhoc")]//span[contains(@class, "CVA68e")]
-  url:       .//a[contains(@class, "fuLhoc")]/@href  (unwrap /url?q=..., cut at &sa=U)
-  snippet:   .//div[contains(@class, "taTFJ")]//span[contains(@class, "FrIlee")]
-
-Self-contained: does NOT import src/ — no engine in src/search/engines/ uses this route today,
-there is nothing to share.
-
-Outcomes, same four-state model as the Path A probe for direct comparability:
-  BLOCKED       - non-200 status, or a known block-indicator string in the body.
-  NO_CONTAINERS - the zMzFAb container selector matches nothing.
-  EMPTY_PARSED  - containers matched but title/url extraction found zero results.
-  OK            - real results extracted.
-
-Pacing: NAV_DELAY_S seconds between every request. Lighter than Path A's browser pacing (no
-session/cookie state to poison, no browser fingerprint to burn) but still deliberately non-zero —
-zero-delay pacing is exactly what turned a prior probe's measurement into a block measurement
-instead (process-docs/engine_expansion/brave_reeval_2026-07-21.md).
-
-Interpretation note carried into the report: a live result from THIS run is a finding about this
-machine's IP on this day, not about the method in general — same caveat already on record for the
-2026-07-21 Startpage probe (process-docs/engine_expansion/startpage_reeval_2026-07-21.md), stated
-here for the same reason.
-"""
-
 # INFRASTRUCTURE
 import json
 import sys
@@ -55,8 +20,6 @@ NOKIA_UA = "Nokia7610/2.0 (5.0509.0) SymbianOS/7.0s Series60/2.1 Profile/MIDP-2.
 IMPERSONATE = "chrome99_android"
 TIMEOUT_S = 15.0
 
-# See module docstring — lighter than Path A's 15s (no browser/session state to poison) but
-# deliberately non-zero for the same reason Path A paces at all.
 NAV_DELAY_S = 5.0
 
 _BLOCK_MARKERS = (
@@ -120,7 +83,6 @@ def _clean_url(href: str) -> str:
 
 
 def _parse_results(body: str) -> tuple[int, list, list]:
-    """Returns (container_count, results, sample_debug) using SearXNG's own selectors."""
     try:
         doc = lhtml.fromstring(body)
     except Exception:

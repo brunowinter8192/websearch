@@ -13,7 +13,6 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 OUTPUT_DIR = Path(__file__).parent / "md"
 
 
-# Run baseline and filtered crawl, compare results
 async def main(url: str, depth: int, max_pages: int, exclude_patterns: str, label: str):
     domain = urlparse(url).netloc
 
@@ -29,7 +28,6 @@ async def main(url: str, depth: int, max_pages: int, exclude_patterns: str, labe
     save_report(report, label)
 
 
-# Crawl with optional URL pattern exclusion
 async def crawl(url: str, domain: str, depth: int, max_pages: int,
                 exclude_patterns: str = None) -> list:
     filters = [
@@ -68,7 +66,6 @@ async def crawl(url: str, domain: str, depth: int, max_pages: int,
     return results
 
 
-# Extract unique normalized URLs from results
 def extract_urls(results: list) -> set:
     urls = set()
     for r in results:
@@ -77,7 +74,6 @@ def extract_urls(results: list) -> set:
     return urls
 
 
-# Build comparison report
 def build_report(url, domain, depth, max_pages, exclude_patterns,
                  baseline_urls, filtered_urls, removed_urls):
     return {
@@ -100,7 +96,6 @@ def build_report(url, domain, depth, max_pages, exclude_patterns,
     }
 
 
-# Save report as markdown
 def save_report(report, label):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

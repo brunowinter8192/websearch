@@ -11,12 +11,10 @@ REPORT_DIR = SCRIPT_DIR / "md"
 
 # FUNCTIONS
 
-# Pad s to width with spaces, but never fewer than 2 (so huge numbers still get a column gap)
 def pad_min2(s: str, width: int) -> str:
     return s + " " * max(2, width - len(s))
 
 
-# One lane's lean summary line, e.g. "chromium  content 187/187 words (100%)  blocks 8/8  ..."
 def format_lane_line(lane: str, m: dict) -> str:
     content_str = f"content {m['words_content']}/{m['words_total']} words ({m['words_content_pct']:.0f}%)"
     blocks_str = f"blocks {m['blocks_content']}/{m['blocks_total']}"
@@ -29,7 +27,6 @@ def format_lane_line(lane: str, m: dict) -> str:
     )
 
 
-# Per-URL section: the URL heading plus one lean line per lane
 def format_url_section(entry: dict) -> str:
     lines = [f"### {entry['url']}", ""]
     for lane in LANES:
@@ -37,7 +34,6 @@ def format_url_section(entry: dict) -> str:
     return "\n".join(lines)
 
 
-# One markdown table row per lane per URL, same numbers as the per-URL sections, plus PROSE columns
 def format_table(results: list[dict]) -> str:
     header = (
         "| URL | Lane | Content words | Content % | Blocks | Link density | Longest (w) | "
@@ -57,7 +53,6 @@ def format_table(results: list[dict]) -> str:
     return f"## All {len(results)} URLs\n\n" + "\n".join(rows)
 
 
-# The corpus-derived PROSE cap: the chromium block-word-count distribution and the value chosen
 def format_cap_section(cap: int, distribution: dict) -> str:
     lines = [
         "## PROSE length cap (derived from the chromium block-word-count distribution)",
@@ -71,7 +66,6 @@ def format_cap_section(cap: int, distribution: dict) -> str:
     return "\n".join(lines)
 
 
-# Aggregate section: per-lane win counts, cap-exclusion totals, and where the two win-measures disagree
 def format_aggregate_section(aggregate: dict, pair_count: int) -> str:
     ww = aggregate["words_wins"]
     pw = aggregate["pct_wins"]
@@ -96,7 +90,6 @@ def format_aggregate_section(aggregate: dict, pair_count: int) -> str:
     return "\n".join(lines)
 
 
-# Where chromium has zero CONTENT blocks, split by whether camoufox has a PROSE block or not
 def format_rescue_section(aggregate: dict) -> str:
     rescued = aggregate["rescued_by_camoufox_prose"]
     not_rescued = aggregate["not_rescued"]
@@ -118,7 +111,6 @@ def format_rescue_section(aggregate: dict) -> str:
     return "\n".join(lines)
 
 
-# Assemble and write the full report to dev/lane_choice/md/
 def write_report(results: list[dict], aggregate: dict, cap: int, distribution: dict) -> Path:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
