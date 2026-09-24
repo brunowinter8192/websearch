@@ -687,3 +687,59 @@ only, no stub), root `DOCS.md` (`01_coindesk_discover`: unwrap/parse failures ra
 - Rows with class A still lose the exception detail in several places (`cf_get` returns `(b"", 0)`,
   `check_proxy` returns `False`): they are counted as failures, which is the intended outcome for free proxies, so
   they were not touched.
+
+
+# Follow-up: test_watchdog repoint, the 21-vs-25 measurement, import check of dev/news_pipeline (2026-09-24, same session)
+
+## test_watchdog.py: repointed, not deleted
+
+What it tests: the stall abort of the riding pool. `_watchdog` fires on a `RiderState` whose
+`last_progress_mono` is aged past the threshold; `_abort_stall` then drains the queue, writes
+`remaining_urls.txt` (queue section, in-flight/wedged section, idle seconds in the header), writes `job.md` through
+the real reporter and calls `os._exit(1)`. The test replaces `os._exit` with a function that raises `SystemExit`
+and asserts on the exit code and on the two files (test 1 through the `_watchdog` task, test 2 through a direct
+`_abort_stall(idle_s=999.0)` call).
+Why it failed: it patched `p2_browser_rider.os`, but the watchdog code moved to `_p2_watchdog.py` in the module
+split, and `p2_browser_rider` no longer imports `os`; both tests died with `module 'p2_browser_rider' has no
+attribute 'os'` before reaching any assertion. That was true before the Phase 4 stub removal too, so the stub never
+masked anything.
+Why not delete: the behaviour still exists and is still the tripwire path of the pool. The fix is `import
+_p2_watchdog` plus `patch.object(_p2_watchdog.os, "_exit", ...)` in both tests (3 changed lines, no new
+assertions). Result: `test_watchdog.py` exits 0 with 2/2 passed, and `job.md` is now written by the real reporter
+(the stub that used to be the fallback is gone, so the test now demonstrates that the reporter itself works on that
+minimal state). Its DOCS.md LOC heading went 143 -> 144.
+
+## The 21 vs 25 Cloudflare threshold
+
+- Measured, ~21: `curl` with a 1 s delay got 200 + real XML for the first ~21 sub-sitemaps and flipped to 403/429
+  at about request 21 (~21 requests in ~21 s); afterwards every request from that IP was blocked, and 30 s probes
+  over ~5 min stayed 429 (`news_pipeline` process-docs, the CF-block entry). The roadmap entry of the same area
+  records ~21 of 64 subs cached before the block, and git commit `86c361d` ("theblock discover partial -
+  CF-blocked") carries the data: 19,060 unique URLs from ~21/64 sub-sitemaps (19,000 `/post/`, IDs 136-342,769),
+  non-post subs blocked mid-run.
+- Not measured, ~25: it exists only in one summary line of the clean-slate entry of `news_pipeline` and in the
+  code comment deleted in Phase 2 ("even at 5s/sub"). No run at the probe's `SUB_DELAY = 5.0` is recorded
+  anywhere I could find (process-docs `news_pipeline`/`pooling`, `md/` reports, `src/logs`, git history of the file).
+- `theblock/DOCS.md` (`probe_discovery.py`) now says: fired after ~21 sequential fetches at a 1 s delay (measured,
+  with the source area named), no measurement exists at the 5 s delay, the older ~25 figure is unmeasured.
+  This supersedes the "not reconciled" note in the Phase 2 section above.
+
+## Import check of every module (no main run)
+
+Method: each `.py` under `dev/news_pipeline/` (jhao104 tree excluded, 78 modules including `monosans_loader.py`)
+was loaded in its own fresh interpreter (8 in parallel) with `importlib.util.spec_from_file_location` under a name
+that is not `__main__` and with its own directory as `sys.path[0]`, which is how the scripts run, so no `main`
+executes. Before that, an AST scan of module-level statements found nothing but imports, constants and
+`sys.path` inserts; the only import-time calls with any effect are `git rev-parse` in
+`analyze_write_times._repo_root` / `p3_url_sampler._repo_root` and
+`importlib.import_module("src.crawler.pipe_scraper")` in `prod_scrape_smoke.py` and `scrape_isolation_smoke.py`
+(pure imports). Result: 78 of 78 import without error. Nothing to report or fix.
+
+## Verification
+
+`py_compile` of the touched test: clean. Comment/docstring scan of the scope: 0 hits (78 files). Full suite
+`./venv/bin/python -m pytest dev/tests/ -q`: 541 passed before and after (the suite grew from 492 when
+`integration` was merged at the start of this task; none of the touched files is imported by it). Offline scripts
+re-run: `test_sigint_report.py`, `test_tail_race.py`, `test_cooldown_policy.py` exit 0 as before (output differs
+from the earlier run only in temporary directory names); `test_watchdog.py` now exits 0 instead of 1. All LOC
+headings of the five DOCS.md files match `wc -l` (0 mismatches).

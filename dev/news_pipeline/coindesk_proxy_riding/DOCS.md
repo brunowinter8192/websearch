@@ -130,7 +130,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Called by:** `test_tail_race.py` only.
 **Calls out:** none.
 
-### test_watchdog.py (143 LOC)
+### test_watchdog.py (144 LOC)
 
 **Purpose:** Deterministic watchdog verification — no browser or proxy infrastructure needed. `test_watchdog_task_fires_and_writes_files`: constructs `RiderState` with `last_progress_mono` aged 200s past a 1s threshold + 2 queued + 1 in-flight URL; patches `os._exit` → `SystemExit(code)`; runs `_watchdog(poll_interval=0.1)`; asserts `os._exit(1)` called, `remaining_urls.txt` has both section headers + all 3 URLs, `job.md` exists with `stall`. `test_abort_stall_directly`: same assertions via direct `_abort_stall(idle_s=999.0)` call; also checks `"999"` in the header line.
 **Reads:** none (constructed state).
