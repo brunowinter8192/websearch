@@ -238,6 +238,16 @@ def build_report(
     h6: str, h7: int, cfg: dict,
 ) -> str:
     status, diag_detail = diagnose(h1, h2, h3, h7, cfg)
+    L = _render_h1(engine_name, query, url, wait_s, ts, h1, cfg)
+    L += _render_h2(h2, h2_all)
+    L += _render_h3(h3)
+    L += _render_h4(h4)
+    L += _render_h5(h5)
+    L += _render_h6_h7_diagnosis(h6, h7, cfg, status, diag_detail)
+    return "\n".join(L)
+
+
+def _render_h1(engine_name: str, query: str, url: str, wait_s: float, ts: str, h1: dict, cfg: dict) -> list[str]:
     L = [
         f"# Engine DOM Inspection — {engine_name} — {ts}",
         "",
@@ -252,8 +262,11 @@ def build_report(
         count = h1.get(role, 0)
         flag = "✅ PRESENT" if count > 0 else "❌ BROKEN"
         L.append(f"| {role} | `{sel}` | {count} | {flag} |")
+    return L
 
-    L += [
+
+def _render_h2(h2: dict, h2_all: dict) -> list[str]:
+    L = [
         "",
         "## H2 — data-test-id Inventory (semantic keywords filtered)",
         "",
@@ -265,8 +278,11 @@ def build_report(
     if not h2:
         L.append("| *(none matched)* | — |")
     L.append(f"*Total distinct data-test-id values on page: {len(h2_all)}*")
+    return L
 
-    L += [
+
+def _render_h3(h3: dict) -> list[str]:
+    L = [
         "",
         "## H3 — Repeating Class Clusters (≥4 occurrences, top 20)",
         "",
@@ -277,8 +293,11 @@ def build_report(
         L.append(f"| `{k}` | {v} |")
     if not h3:
         L.append("| *(none)* | — |")
+    return L
 
-    L += [
+
+def _render_h4(h4: dict) -> list[str]:
+    L = [
         "",
         "## H4 — Class-Substring Matches (top 15)",
         "",
@@ -289,8 +308,11 @@ def build_report(
         L.append(f"| `{k}` | {v} |")
     if not h4:
         L.append("| *(none)* | — |")
+    return L
 
-    L += [
+
+def _render_h5(h5: dict) -> list[str]:
+    L = [
         "",
         "## H5 — data-* Attribute Inventory (count ≥ 3)",
         "",
@@ -301,8 +323,11 @@ def build_report(
         L.append(f"| `{k}` | {v} |")
     if not h5:
         L.append("| *(none)* | — |")
+    return L
 
-    L += [
+
+def _render_h6_h7_diagnosis(h6: str, h7: int, cfg: dict, status: str, diag_detail: str) -> list[str]:
+    return [
         "",
         "## H6 — HTML Snippet (top H3 cluster element)",
         "",
@@ -323,7 +348,6 @@ def build_report(
         "",
         diag_detail,
     ]
-    return "\n".join(L)
 
 
 if __name__ == "__main__":
