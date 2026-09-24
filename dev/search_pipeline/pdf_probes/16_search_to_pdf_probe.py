@@ -210,22 +210,19 @@ async def _get_pdf_and_save(client: httpx.AsyncClient, url: str) -> tuple[str, s
 
 
 async def _extract_citation_pdf_url(client: httpx.AsyncClient, url: str) -> str | None:
-    try:
-        body_chunks: list[bytes] = []
-        async with client.stream("GET", url, timeout=DOWNLOAD_TIMEOUT) as resp:
-            if resp.status_code >= 400:
-                return None
-            ct = resp.headers.get("content-type", "").lower()
-            if "text/html" not in ct:
-                return None
-            async for chunk in resp.aiter_bytes(chunk_size=4096):
-                body_chunks.append(chunk)
-                if sum(len(c) for c in body_chunks) >= HTML_READ_BYTES:
-                    break
-        body_str = b"".join(body_chunks).decode("utf-8", errors="replace")
-        return parse_citation_pdf_url(body_str)
-    except Exception:
-        return None
+    body_chunks: list[bytes] = []
+    async with client.stream("GET", url, timeout=DOWNLOAD_TIMEOUT) as resp:
+        if resp.status_code >= 400:
+            return None
+        ct = resp.headers.get("content-type", "").lower()
+        if "text/html" not in ct:
+            return None
+        async for chunk in resp.aiter_bytes(chunk_size=4096):
+            body_chunks.append(chunk)
+            if sum(len(c) for c in body_chunks) >= HTML_READ_BYTES:
+                break
+    body_str = b"".join(body_chunks).decode("utf-8", errors="replace")
+    return parse_citation_pdf_url(body_str)
 
 
 def _save_bytes(data: bytes, filename: str) -> Path:
@@ -257,11 +254,8 @@ def _extract_filename_from_resp(headers: httpx.Headers, url: str) -> str:
 
 
 def _base_domain(url: str) -> str:
-    try:
-        netloc = urlparse(url).netloc.lower()
-        return netloc[4:] if netloc.startswith("www.") else netloc
-    except Exception:
-        return ""
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
 
 
 def _row(result: SearchResult, rank: int, chain_path: str, outcome: str,

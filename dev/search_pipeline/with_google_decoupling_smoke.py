@@ -78,11 +78,8 @@ def _count_log_lines() -> int:
 def _read_last_log_entry() -> dict:
     if not LOG_PATH.exists():
         return {}
-    try:
-        lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
-        return json.loads(lines[-1]) if lines else {}
-    except (json.JSONDecodeError, IndexError):
-        return {}
+    lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
+    return json.loads(lines[-1]) if lines else {}
 
 
 def _verify_log_entry(entry: dict, query: str) -> dict:

@@ -326,24 +326,18 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
 
 
 def _match_heuristics(url: str) -> list[str]:
-    try:
-        parsed = urlparse(url)
-        h = parsed.netloc.lower()
-        if h.startswith("www."):
-            h = h[4:]
-        p = parsed.path
-        return [
-            HEURISTIC_KEYS[i]
-            for i, (_, _, fn) in enumerate(HEURISTICS)
-            if fn(h, p)
-        ]
-    except Exception:
-        return []
+    parsed = urlparse(url)
+    h = parsed.netloc.lower()
+    if h.startswith("www."):
+        h = h[4:]
+    p = parsed.path
+    return [
+        HEURISTIC_KEYS[i]
+        for i, (_, _, fn) in enumerate(HEURISTICS)
+        if fn(h, p)
+    ]
 
 
 def _domain(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.lower()
-        return host[4:] if host.startswith("www.") else host
-    except Exception:
-        return ""
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host

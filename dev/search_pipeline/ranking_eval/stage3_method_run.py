@@ -124,15 +124,10 @@ def _apply_c3(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]
     docs_v  = [m for m, _ in valid]
     texts_v = [t for _, t in valid]
     t0 = time.perf_counter()
-    try:
-        pairs  = _cross_encoder_rerank(query, texts_v)
-        ranked = sorted(pairs, key=lambda x: -x[1])[:top_n]
-        ms     = round((time.perf_counter() - t0) * 1000)
-        return [docs_v[idx]["url"] for idx, _ in ranked], ms
-    except Exception as exc:
-        ms = round((time.perf_counter() - t0) * 1000)
-        print(f"  C3 error: {exc}", file=sys.stderr)
-        return [], ms
+    pairs  = _cross_encoder_rerank(query, texts_v)
+    ranked = sorted(pairs, key=lambda x: -x[1])[:top_n]
+    ms     = round((time.perf_counter() - t0) * 1000)
+    return [docs_v[idx]["url"] for idx, _ in ranked], ms
 
 
 def _run_one_pair(ts_dir: Path, mode: str, slug: str, query: str, pool_data: dict) -> dict:

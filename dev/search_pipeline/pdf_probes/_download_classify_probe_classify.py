@@ -151,10 +151,7 @@ async def _read_response_body(resp: httpx.Response) -> bytes:
 
 
 def _classify_html_body(rec: dict, body: bytes) -> None:
-    try:
-        body_str = body.decode("utf-8", errors="replace")
-    except Exception:
-        body_str = ""
+    body_str = body.decode("utf-8", errors="replace")
 
     rec["page_title"] = _extract_title(body_str)
 

@@ -65,6 +65,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     engines = [(name, cls()) for name, cls in ENGINE_ORDER]
     all_runs: dict[tuple[str, str], list[dict]] = {}
+    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
 
     try:
         for base_query in BASE_QUERIES:
@@ -83,6 +84,7 @@ async def run_probe() -> None:
                         results = await engine.search(query, "en", max_r)
                         ms = round((time.monotonic() - t0) * 1000)
                         print(f" {len(results)} ({ms}ms)", file=sys.stderr)
+                        run_stats[eng_name]["total"] += len(results)
                         for r in results:
                             run_results.append({
                                 "engine":   eng_name,
@@ -93,6 +95,7 @@ async def run_probe() -> None:
                     except Exception as e:
                         ms = round((time.monotonic() - t0) * 1000)
                         print(f" ERROR {e} ({ms}ms)", file=sys.stderr)
+                        run_stats[eng_name]["errors"] += 1
 
                     if i < len(engines) - 1:
                         await asyncio.sleep(sleep_s)
@@ -101,20 +104,20 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(all_runs, REPORT_DIR)
+    report_path = write_report(all_runs, run_stats, REPORT_DIR)
     print(f"\nReport: {report_path}", file=sys.stderr)
 
 
 # FUNCTIONS
 
-def write_report(all_runs: dict, report_dir: Path) -> Path:
+def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"free_word_injection_probe_{ts}.md"
-    path.write_text("\n".join(_build_report(all_runs, ts)), encoding="utf-8")
+    path.write_text("\n".join(_build_report(all_runs, run_stats, ts)), encoding="utf-8")
     return path
 
 
-def _build_report(all_runs: dict, ts: str) -> list[str]:
+def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     lines = [
         f"# Free-Word Injection Probe — {ts}",
         "",
@@ -125,6 +128,7 @@ def _build_report(all_runs: dict, ts: str) -> list[str]:
     lines += _url_listings(all_runs)
     lines += _domain_distribution(all_runs)
     lines += _summary_insights(all_runs)
+    lines += _run_stats(all_runs, run_stats)
     return lines
 
 
@@ -234,6 +238,27 @@ def _summary_insights(all_runs: dict) -> list[str]:
     return lines
 
 
+def _run_stats(all_runs: dict, run_stats: dict) -> list[str]:
+    lines = ["## Run Stats", ""]
+    lines += [
+        "| Engine | Total URLs | Mean / Run | Errors / Empties |",
+        "|--------|----------:|-----------:|-----------------:|",
+    ]
+    for eng_name, _ in ENGINE_ORDER:
+        total = run_stats[eng_name]["total"]
+        errors = run_stats[eng_name]["errors"]
+        empties = sum(
+            1 for results in all_runs.values()
+            if not any(r["engine"] == eng_name for r in results)
+        )
+        mean = round(total / len(all_runs), 1) if all_runs else 0
+        lines.append(f"| {eng_name} | {total} | {mean} | {errors} errors / {empties} empties |")
+
+    total_all = sum(len(v) for v in all_runs.values())
+    lines += ["", f"**Total URLs collected:** {total_all}", ""]
+    return lines
+
+
 def _stats(results: list[dict]) -> dict:
     domains = Counter(_domain(r["url"]) for r in results if _domain(r["url"]))
     return {
@@ -245,11 +270,8 @@ def _stats(results: list[dict]) -> dict:
 
 
 def _domain(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.lower()
-        return host[4:] if host.startswith("www.") else host
-    except Exception:
-        return ""
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 def _is_pdf(url: str) -> bool:

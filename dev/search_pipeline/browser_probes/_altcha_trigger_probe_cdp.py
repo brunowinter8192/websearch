@@ -10,10 +10,7 @@ async def cdp_get_document_root(cdp) -> int:
 
 
 async def cdp_query_selector(cdp, root_node_id: int, selector: str) -> int | None:
-    try:
-        response = await cdp.send("DOM.querySelector", {"nodeId": root_node_id, "selector": selector})
-    except Exception:
-        return None
+    response = await cdp.send("DOM.querySelector", {"nodeId": root_node_id, "selector": selector})
     return response.get("nodeId") or None
 
 

@@ -131,10 +131,7 @@ async def read_counts(tab) -> dict:
     val = _extract_value(raw)
     if not val:
         return {}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    return json.loads(val)
 
 
 async def read_structure(tab) -> list:
@@ -142,10 +139,7 @@ async def read_structure(tab) -> list:
     val = _extract_value(raw)
     if not val:
         return []
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    return json.loads(val)
 
 
 def diagnose(counts: dict) -> tuple[str, str]:

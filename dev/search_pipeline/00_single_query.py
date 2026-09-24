@@ -131,10 +131,7 @@ async def _print_parsed_results(tab, gc: dict) -> None:
     val2 = _extract_scalar(raw2)
     results = []
     if isinstance(val2, str):
-        try:
-            results = json.loads(val2)
-        except Exception:
-            pass
+        results = json.loads(val2)
 
     print(f"\nParsed results: {len(results)}")
     for r in results[:5]:

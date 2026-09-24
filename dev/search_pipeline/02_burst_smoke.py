@@ -160,10 +160,7 @@ def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str
 
 
 def _domain(url: str) -> str:
-    try:
-        return urlparse(url.strip()).netloc
-    except Exception:
-        return ""
+    return urlparse(url.strip()).netloc
 
 
 def write_report(records, batch_times, total_s, report_dir, ts, n_batches,

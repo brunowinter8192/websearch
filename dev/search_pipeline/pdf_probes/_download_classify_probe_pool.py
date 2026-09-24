@@ -51,11 +51,8 @@ def _extract_pool(smoke_path: Path, free_path: Path) -> set[str]:
 
 
 def _has_real_path(url: str) -> bool:
-    try:
-        path = urlparse(url).path
-        return bool(path) and path != "/"
-    except Exception:
-        return False
+    path = urlparse(url).path
+    return bool(path) and path != "/"
 
 
 def _url_tier(url: str) -> str | None:
@@ -72,11 +69,8 @@ def _url_tier(url: str) -> str | None:
 
 
 def _base_domain(url: str) -> str:
-    try:
-        netloc = urlparse(url).netloc.lower()
-        return netloc[4:] if netloc.startswith("www.") else netloc
-    except Exception:
-        return ""
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
 
 
 def _filter_and_tier(all_urls: set[str]) -> list[tuple[str, str]]:

@@ -72,19 +72,20 @@ async def run_probe(query: str, output_path: Path | None) -> None:
     url_engine_pos = _build_url_engine_pos(raw_results, google_count)
     pool            = _build_capped_pool(raw_results, google_count)
 
-    c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms = _rank_all_configs(query, pool, google_count)
+    c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms, c3_failed, c4_failed = _rank_all_configs(query, pool, google_count)
 
     wall_ms = round((time.perf_counter() - t_wall) * 1000)
 
     print(
         f"google_count={google_count}  pool={len(pool)}  fetch={fetch_ms}ms  "
-        f"C1={c1_ms}ms  C2={c2_ms}ms  C3={c3_ms}ms  C4={c4_ms}ms  wall={wall_ms}ms",
+        f"C1={c1_ms}ms  C2={c2_ms}ms  C3={c3_ms}ms  C4={c4_ms}ms  wall={wall_ms}ms  "
+        f"C3_failed={c3_failed}  C4_failed={c4_failed}",
         file=sys.stderr,
     )
 
     sections = _build_sections(
         query, ts_display, google_count, pool, engine_stats, wall_ms, raw_results, url_engine_pos,
-        c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms,
+        c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms, c3_failed, c4_failed,
     )
     _write_report(sections, report_path)
     print(f"\nReport: {report_path}", file=sys.stderr)
@@ -107,13 +108,13 @@ def _rank_all_configs(query: str, pool: list[dict], google_count: int) -> tuple:
     c2_ms     = round((time.perf_counter() - t0) * 1000)
 
     t0        = time.perf_counter()
-    c3_scored = _ce_top_scored(query, texts_v, pool_v, google_count)
+    c3_scored, c3_failed = _ce_top_scored(query, texts_v, pool_v, google_count)
     c3_ms     = round((time.perf_counter() - t0) * 1000)
 
     t0        = time.perf_counter()
-    c4_scored = _embed_top_scored(query, texts_v, pool_v, google_count)
+    c4_scored, c4_failed = _embed_top_scored(query, texts_v, pool_v, google_count)
     c4_ms     = round((time.perf_counter() - t0) * 1000)
-    return c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms
+    return c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms, c3_failed, c4_failed
 
 
 def _build_capped_pool(raw_results: list, google_count: int) -> list[dict]:
@@ -136,36 +137,36 @@ def _rank_c1(pool: list[dict], top_n: int) -> list[dict]:
 
 def _ce_top_scored(
     query: str, texts_v: list[str], pool_v: list[dict], top_n: int
-) -> list[tuple[dict, float]]:
+) -> tuple[list[tuple[dict, float]], bool]:
     if not texts_v:
-        return []
+        return [], False
     for attempt in range(2):
         try:
             pairs = cross_encoder_rerank(query, texts_v)
-            return [(pool_v[idx], score) for idx, score in sorted(pairs, key=lambda x: -x[1])[:top_n]]
+            return [(pool_v[idx], score) for idx, score in sorted(pairs, key=lambda x: -x[1])[:top_n]], False
         except Exception as exc:
             print(f"  C3 API error attempt {attempt + 1}: {exc}", file=sys.stderr)
             if attempt == 0:
                 time.sleep(2)
-    return []
+    return [], True
 
 
 def _embed_top_scored(
     query: str, texts_v: list[str], pool_v: list[dict], top_n: int
-) -> list[tuple[dict, float]]:
+) -> tuple[list[tuple[dict, float]], bool]:
     if not texts_v:
-        return []
+        return [], False
     for attempt in range(2):
         try:
             embs       = embed_batch([query] + texts_v)
             cos_scores = [cosine_sim(embs[0], e) for e in embs[1:]]
             ranked     = sorted(range(len(pool_v)), key=lambda i: -cos_scores[i])[:top_n]
-            return [(pool_v[i], cos_scores[i]) for i in ranked]
+            return [(pool_v[i], cos_scores[i]) for i in ranked], False
         except Exception as exc:
             print(f"  C4 API error attempt {attempt + 1}: {exc}", file=sys.stderr)
             if attempt == 0:
                 time.sleep(2)
-    return []
+    return [], True
 
 
 if __name__ == "__main__":

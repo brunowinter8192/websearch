@@ -115,33 +115,33 @@ def _rank_c1_overlap(pool: list[dict], top_n: int) -> list[dict]:
     return sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))[:top_n]
 
 
-def _safe_rerank(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> list[dict]:
+def _safe_rerank(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> tuple[list[dict], bool]:
     if not texts_v:
-        return []
+        return [], False
     for attempt in range(2):
         try:
             ce_sorted = sorted(cross_encoder_rerank(query, texts_v), key=lambda x: -x[1])
-            return [pool_v[idx] for idx, _ in ce_sorted[:top_n]]
+            return [pool_v[idx] for idx, _ in ce_sorted[:top_n]], False
         except Exception as exc:
             print(f"  C3 API error attempt {attempt+1}: {exc}", file=sys.stderr)
             if attempt == 0:
                 time.sleep(2)
-    return []
+    return [], True
 
 
-def _safe_embed(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> list[dict]:
+def _safe_embed(query: str, texts_v: list[str], pool_v: list[dict], top_n: int) -> tuple[list[dict], bool]:
     if not texts_v:
-        return []
+        return [], False
     for attempt in range(2):
         try:
             embs       = embed_batch([query] + texts_v)
             cos_scores = [cosine_sim(embs[0], e) for e in embs[1:]]
-            return [pool_v[i] for i in sorted(range(len(pool_v)), key=lambda i: -cos_scores[i])[:top_n]]
+            return [pool_v[i] for i in sorted(range(len(pool_v)), key=lambda i: -cos_scores[i])[:top_n]], False
         except Exception as exc:
             print(f"  C4 API error attempt {attempt+1}: {exc}", file=sys.stderr)
             if attempt == 0:
                 time.sleep(2)
-    return []
+    return [], True
 
 
 async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
@@ -168,20 +168,21 @@ async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
     c2_ms  = round((time.perf_counter() - t0) * 1000)
 
     t0 = time.perf_counter()
-    c3_top = _safe_rerank(query, texts_v, pool_v, google_count)
+    c3_top, c3_failed = _safe_rerank(query, texts_v, pool_v, google_count)
     c3_ms  = round((time.perf_counter() - t0) * 1000)
 
     t0 = time.perf_counter()
-    c4_top = _safe_embed(query, texts_v, pool_v, google_count)
+    c4_top, c4_failed = _safe_embed(query, texts_v, pool_v, google_count)
     c4_ms  = round((time.perf_counter() - t0) * 1000)
 
     section = _build_query_section(
         query, engine_stats, google_count, len(pool), fetch_ms,
-        c1_top, c2_top, c3_top, c4_top, c1_ms, c2_ms, c3_ms, c4_ms,
+        c1_top, c2_top, c3_top, c4_top, c1_ms, c2_ms, c3_ms, c4_ms, c3_failed, c4_failed,
     )
     summary = {
         "query": query, "category": QUERY_CATEGORIES.get(query, "unknown"),
-        "skipped": False, "google_count": google_count, "pool_size": len(pool),
+        "skipped": False, "c3_failed": c3_failed, "c4_failed": c4_failed,
+        "google_count": google_count, "pool_size": len(pool),
         "rate_skip_count": len(rate_skip_engines), "rate_skip_engines": rate_skip_engines,
         "fetch_ms": fetch_ms, "c1_ms": c1_ms, "c2_ms": c2_ms, "c3_ms": c3_ms, "c4_ms": c4_ms,
         "c1_urls": [m["url"] for m in c1_top],
@@ -195,7 +196,8 @@ async def _run_one_query(query: str, selected: dict) -> tuple[str, dict]:
 def _skipped_summary(query: str, rate_skip_engines: list, fetch_ms: int) -> dict:
     return {
         "query": query, "category": QUERY_CATEGORIES.get(query, "unknown"),
-        "skipped": True, "google_count": 0, "pool_size": 0,
+        "skipped": True, "c3_failed": False, "c4_failed": False,
+        "google_count": 0, "pool_size": 0,
         "rate_skip_count": len(rate_skip_engines), "rate_skip_engines": rate_skip_engines,
         "fetch_ms": fetch_ms, "c1_ms": 0, "c2_ms": 0, "c3_ms": 0, "c4_ms": 0,
         "c1_urls": [], "c2_urls": [], "c3_urls": [], "c4_urls": [],
@@ -250,6 +252,8 @@ def _build_query_section(
     c2_ms: int,
     c3_ms: int,
     c4_ms: int,
+    c3_failed: bool,
+    c4_failed: bool,
 ) -> str:
     ok  = [(n, s["result_count"]) for n, s in sorted(engine_stats.items()) if s["result_count"] > 0]
     rsk = [n for n, s in engine_stats.items() if s["status"] == "RATE_SKIP"]
@@ -265,13 +269,13 @@ def _build_query_section(
     ]
 
     configs = [
-        ("C1 — Overlap-Count (−n_engines, min_position)", c1_top, c1_ms),
-        ("C2 — BM25 (k1=1.2, b=0.75, sw=on, title+snippet)", c2_top, c2_ms),
-        ("C3 — Cross-Encoder direct (Qwen3-Reranker-0.6B, port 8082)", c3_top, c3_ms),
-        ("C4 — Embedding-Cosine direct (Qwen3-Embedding-0.6B, port 8084)", c4_top, c4_ms),
+        ("C1 — Overlap-Count (−n_engines, min_position)", c1_top, c1_ms, False),
+        ("C2 — BM25 (k1=1.2, b=0.75, sw=on, title+snippet)", c2_top, c2_ms, False),
+        ("C3 — Cross-Encoder direct (Qwen3-Reranker-0.6B, port 8082)", c3_top, c3_ms, c3_failed),
+        ("C4 — Embedding-Cosine direct (Qwen3-Embedding-0.6B, port 8084)", c4_top, c4_ms, c4_failed),
     ]
-    for label, top, ms in configs:
-        lines += [f"### {label} — {ms}ms", ""]
+    for label, top, ms, failed in configs:
+        lines += [f"### {label} — {ms}ms{' — API FAILED after retry' if failed else ''}", ""]
         for i, m in enumerate(top, 1):
             lines.append(_url_entry(i, m))
             lines.append("")
@@ -309,7 +313,8 @@ def _header_lines(ts: str, summaries: list[dict], valid: list[dict], skipped: li
         f"**Pool rule:** per-engine top-google_count results, dedup by URL  ",
         f"**GPU:** embedding port 8084 (Qwen3-Embedding-0.6B) / reranker port 8082 (Qwen3-Reranker-0.6B)  ",
         f"**Total wallclock:** {total_ms}ms ({total_ms / 1000:.1f}s)  ",
-        f"**RATE_SKIP total (all queries, all engines):** {rsk_total}",
+        f"**RATE_SKIP total (all queries, all engines):** {rsk_total}  ",
+        f"**API failures after retry (C3 / C4):** {sum(s['c3_failed'] for s in summaries)} / {sum(s['c4_failed'] for s in summaries)}",
         "",
         "## Global Summary",
         "",
@@ -322,6 +327,8 @@ def _summary_rows(summaries: list[dict]) -> list[str]:
     rows = []
     for i, s in enumerate(summaries, 1):
         flag = " ⚠SKIPPED" if s["skipped"] else ""
+        flag += " C3_FAILED" if s["c3_failed"] else ""
+        flag += " C4_FAILED" if s["c4_failed"] else ""
         rows.append(
             f"| {i} | {s['query'][:38]}{flag} | {s['category'][:10]} | {s['google_count']} "
             f"| {s['pool_size']} | {s['rate_skip_count']} "

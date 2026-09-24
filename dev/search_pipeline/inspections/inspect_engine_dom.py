@@ -154,19 +154,13 @@ async def run_js_dict(tab, js: str) -> dict:
     val = _extract_value(raw)
     if not val:
         return {}
-    try:
-        return json.loads(val)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    return json.loads(val)
 
 
 async def run_js_int(tab, js: str) -> int:
     raw = await tab.execute_script(js)
     val = _extract_value(raw)
-    try:
-        return int(val or 0)
-    except (ValueError, TypeError):
-        return 0
+    return int(val or 0)
 
 
 async def run_js_str(tab, js: str) -> str:

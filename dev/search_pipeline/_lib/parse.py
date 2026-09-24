@@ -14,12 +14,7 @@ KNOWN_ENGINES = {
 
 def _repr_unquote(s: str) -> str:
     s = s.strip()
-    try:
-        return ast.literal_eval(s)
-    except (ValueError, SyntaxError):
-        if len(s) >= 2 and s[0] in ('"', "'") and s[-1] == s[0]:
-            return s[1:-1]
-        return s
+    return ast.literal_eval(s)
 
 
 def parse_smoke_report(path: Path) -> list[dict]:

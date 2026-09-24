@@ -19,7 +19,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pd
 **Called by:** CLI only.
 **Calls out:** the three `_download_classify_probe_*` siblings.
 
-### _download_classify_probe_classify.py (220 LOC)
+### _download_classify_probe_classify.py (217 LOC)
 
 **Purpose:** HTTP fetch and sniff concern: per-domain-capped async classification, Tier-1 transform, content-type, PDF-magic and paywall sniffing.
 **Reads:** none (fetches URLs live).
@@ -27,7 +27,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pd
 **Called by:** `14_download_classify_probe.py`, report sibling (constants).
 **Calls out:** `httpx`.
 
-### _download_classify_probe_pool.py (106 LOC)
+### _download_classify_probe_pool.py (100 LOC)
 
 **Purpose:** Pool-building concern: extracts, domain-tiers and doi.org-samples the URL pool from the two source reports.
 **Reads:** report paths passed in.
@@ -43,7 +43,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pd
 **Called by:** `14_download_classify_probe.py`.
 **Calls out:** pool and classify siblings.
 
-### 15_citation_pdf_followup.py (252 LOC)
+### 15_citation_pdf_followup.py (249 LOC)
 
 **Purpose:** Two-hop validation: re-GETs HTML_HAS_PDF_LINK URLs from probe 14, follows `citation_pdf_url`, classifies actual PDF delivery.
 **Reads:** `../md/<SOURCE_REPORT>` (hardcoded), `../txt/<SOURCE_POOL>`.
@@ -67,7 +67,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pd
 **Called by:** `15_citation_pdf_followup.py`.
 **Calls out:** config sibling.
 
-### 16_search_to_pdf_probe.py (293 LOC)
+### 16_search_to_pdf_probe.py (287 LOC)
 
 **Purpose:** End-to-end search-to-PDF chain probe: workflow search, Tier-1/DIRECT/MULTI_STEP/BLACKLIST download chain, real PDFs saved.
 **Reads:** queries as CLI positional args.

@@ -185,10 +185,7 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     value = _extract_value(raw)
     if not value:
         return []
-    try:
-        items = json.loads(value)
-    except (json.JSONDecodeError, TypeError):
-        return []
+    items = json.loads(value)
     return [item for item in items[:max_results] if item.get("url")]
 
 
@@ -197,10 +194,7 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     diag = {"marker": None, "url_block": False, "url": "", "ready_state": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     return diag
 
 
