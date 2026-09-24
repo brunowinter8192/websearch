@@ -267,3 +267,23 @@ Do not run these to check anything: they overwrite files in the sibling RAG proj
 - DOCS.md LOC headings for every touched file that has a DOCS entry were updated to the new
   `wc -l` values (the `pipe_scraper_hardening` and `camoufox_lane` directories have no DOCS.md and
   none was created).
+
+## Recap, Phase 2 (2026-09-24)
+
+Files changed versus `integration`: 35 `.py` files in `dev/scrape_pipeline/`, `dev/agentic_discovery/`,
+`dev/logging/`, `dev/pipe_scraper_hardening/`, `dev/camoufox_lane/`, `dev/engine_reduction/`; nine
+`DOCS.md` files (`dev/scrape_pipeline/` and its subdirectories `03_cleanup`, `04_overview_sweep`,
+`05_paper_mode`, `browser_eval`, `filter_eval`, `garbage_eval`, plus `dev/agentic_discovery`,
+`dev/logging`, `dev/engine_reduction`); this file. Every `### <module>.py (N LOC)` heading in those
+DOCS.md files was re-checked against `wc -l` at recap time: no mismatch.
+
+Lessons for a successor:
+- A tokenize/AST stripper plus an `ast.dump` equality check (docstrings removed on both sides) proves
+  zero behavior change for a comment sweep far more cheaply than reviewing 35 diffs by eye.
+- Before removing docstrings, grep for `__doc__`; here it fed `argparse(description=...)` in three
+  scripts. Capture `--help` before and after and diff it, but only for scripts that parse arguments
+  before doing any work.
+- Do not put helper scripts at fixed names in `/tmp`; another worker overwrote one mid-session.
+- Facts worth keeping in these dev scripts sit in a few places: site-chrome patterns in
+  `agentic_discovery`, pattern-discovery URLs in `03_cleanup/clean.py`, and the mirrors of production
+  constants in the probes. Read the "Facts moved here" section above before touching them.
