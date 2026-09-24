@@ -54,29 +54,15 @@ def main():
     args = build_parser().parse_args()
 
     if args.cmd == "search_web":
-        result = asyncio.run(search_web_workflow(args.query, "en", None, None))
-
+        _dispatch_search_web(args)
     elif args.cmd == "search_engine_drilldown":
         _dispatch_search_engine_drilldown(args)
-        return
-
     elif args.cmd == "scrape_url_chromium":
-        url = args.url
-        if urlparse(url).path.lower().endswith(".pdf"):
-            print(f"PDF must be downloaded by the user: {url}")
-            return
-        result = asyncio.run(scrape_url_chromium_workflow(url))
-
+        _dispatch_scrape_url_chromium(args)
     elif args.cmd == "discover_urls":
-        result = asyncio.run(discover_urls_workflow(args.seed_url))
-        _write_discovery_output(result, args.url_file)
-        return
-
+        _dispatch_discover_urls(args)
     elif args.cmd == "index_scrapes":
         _dispatch_index_scrapes(args)
-        return
-
-    print(result[0].text)
 
 
 # FUNCTIONS
@@ -133,6 +119,11 @@ class NoHelpParser(argparse.ArgumentParser):
         self.exit(2)
 
 
+def _dispatch_search_web(args) -> None:
+    result = asyncio.run(search_web_workflow(args.query, "en", None, None))
+    print(result[0].text)
+
+
 def _dispatch_search_engine_drilldown(args) -> None:
     key = cache_key(args.query, "en", None, None)
     hit = cache_read(key)
@@ -170,6 +161,20 @@ def _log_drilldown(query, language, engine, search_key, cache_status, engine_in_
         "result_count": len(urls),
         "urls": urls,
     })
+
+
+def _dispatch_scrape_url_chromium(args) -> None:
+    url = args.url
+    if urlparse(url).path.lower().endswith(".pdf"):
+        print(f"PDF must be downloaded by the user: {url}")
+        return
+    result = asyncio.run(scrape_url_chromium_workflow(url))
+    print(result[0].text)
+
+
+def _dispatch_discover_urls(args) -> None:
+    result = asyncio.run(discover_urls_workflow(args.seed_url))
+    _write_discovery_output(result, args.url_file)
 
 
 def _write_discovery_output(result, url_file: str) -> None:

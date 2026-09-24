@@ -36,3 +36,12 @@ Residual non-conformance, deliberately not fixed (scope: zero behavior change, c
 - `search_web` help string said "7 engines"; `_DEFAULT_ENGINES` in `src/search/search_web.py`
   has 8. String corrected to "8 engines" (the only text change in the file).
 - LOC heading updated 230 -> 213 (`wc -l`).
+
+## Follow-up: pure orchestrator (2026-09-24)
+
+The residual noted above was fixed after review. `main` is now a pure if/elif over `args.cmd`,
+one dispatcher call per branch: `_dispatch_search_web`, `_dispatch_search_engine_drilldown`,
+`_dispatch_scrape_url_chromium`, `_dispatch_discover_urls`, `_dispatch_index_scrapes`. The PDF
+check lives in `_dispatch_scrape_url_chromium` as an early return before the workflow call (no
+sentinel, no shared `result` variable). `_write_discovery_output` moved below its caller for
+stepdown order. LOC heading 213 -> 218. Tests: 476 passed; all `--help` checks unchanged.
