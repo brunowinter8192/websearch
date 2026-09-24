@@ -1,2 +1,0 @@
-# INFRASTRUCTURE
-TOP_N        = 10

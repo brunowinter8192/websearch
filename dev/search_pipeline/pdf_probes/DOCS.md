@@ -1,13 +1,13 @@
 # dev/search_pipeline/pdf_probes/
 
 ## Role
-Three probes for the search-to-PDF download chain: classifying pooled URLs, following citation_pdf_url meta tags, and an end-to-end search-to-PDF regression run. Touch after `pdf_chain` changes; not for production download code.
+Two probes for the search-to-PDF download chain: classifying pooled URLs and following citation_pdf_url meta tags. Touch after `pdf_chain` changes; not for production download code.
 
 ## Public Interface
-No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pdf_followup.py`, `16_search_to_pdf_probe.py` run as `./venv/bin/python dev/search_pipeline/pdf_probes/<script>.py`.
+No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation_pdf_followup.py` run as `./venv/bin/python dev/search_pipeline/pdf_probes/<script>.py`.
 
 ## Flow
-14 reads smoke and free-word reports from `../md/`, builds a tiered URL pool and sniff-classifies it; 15 re-fetches probe 14's HTML_HAS_PDF_LINK rows in two hops; 16 runs `search_web_workflow` and downloads real PDFs. Reports land in `../md/`.
+14 reads smoke and free-word reports from `../md/`, builds a tiered URL pool and sniff-classifies it; 15 re-fetches probe 14's HTML_HAS_PDF_LINK rows in two hops. Reports land in `../md/`.
 
 ## Modules
 
@@ -65,30 +65,6 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py`, `15_citation_pd
 **Reads:** none (arguments only).
 **Writes:** `<report_dir>/citation_pdf_followup_<ts>.md`.
 **Called by:** `15_citation_pdf_followup.py`.
-**Calls out:** config sibling.
-
-### 16_search_to_pdf_probe.py (287 LOC)
-
-**Purpose:** End-to-end search-to-PDF chain probe: workflow search, Tier-1/DIRECT/MULTI_STEP/BLACKLIST download chain, real PDFs saved.
-**Reads:** queries as CLI positional args.
-**Writes:** `../md/search_to_pdf_<ts>.md`, PDFs in `~/Downloads/`.
-**Called by:** CLI only (`--top-n`).
-**Calls out:** `src.scraper.pdf_chain`, `src.search.{browser,merge,result,search_web}`, `httpx`, config and report siblings.
-
-### _search_to_pdf_probe_config.py (8 LOC)
-
-**Purpose:** Constants shared by the search-to-PDF entry and its report: download dir, connection caps, timeout.
-**Reads:** none.
-**Writes:** none.
-**Called by:** `16_search_to_pdf_probe.py`, report sibling.
-**Calls out:** stdlib only.
-
-### _search_to_pdf_probe_report.py (182 LOC)
-
-**Purpose:** Markdown report assembly for the search-to-PDF probe: metadata, per-query tables, path distribution, highlights.
-**Reads:** none (arguments only).
-**Writes:** `<report_dir>/search_to_pdf_<ts>.md`.
-**Called by:** `16_search_to_pdf_probe.py`.
 **Calls out:** config sibling.
 
 ---

@@ -1,8 +1,0 @@
-# INFRASTRUCTURE
-from pathlib import Path
-
-DOWNLOAD_DIR = Path.home() / "Downloads"
-
-MAX_CONNECTIONS = 8
-DOMAIN_CONCURRENCY_CAP = 2
-DOWNLOAD_TIMEOUT = 15.0
