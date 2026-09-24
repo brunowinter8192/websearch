@@ -36,7 +36,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 **Reads:** entry chunks and platform configuration.
 **Writes:** raw files, the raw manifest and the regwall and empty block-lists.
 **Called by:** src/news/pipeline.py.
-**Calls out:** scrape.py.
+**Calls out:** none.
 
 ### browser_reporter.py (196 LOC)
 
@@ -44,7 +44,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 **Reads:** in-memory job records and the job start time.
 **Writes:** the job summary and plot in the job directory.
 **Called by:** src/news/pipeline.py.
-**Calls out:** matplotlib, statistics.
+**Calls out:** matplotlib.
 
 ## State
 

@@ -1,7 +1,7 @@
 # dev/news_pipeline/theblock/
 
 ## Role
-Discovery and proxy-pool infrastructure for scraping theblock.co past Cloudflare: proxy source aggregation, liveness and CF-pass checking, sitemap discovery, and per-source quality tracking. `acquire_pipe/` (own DOCS.md) is the fetch pipeline built on top; `jhao104/` is a vendored comparison baseline, not documented here.
+Discovery and proxy-pool infrastructure for scraping theblock.co past Cloudflare: proxy source aggregation, liveness and CF-pass checking, sitemap discovery, and per-source quality tracking. `acquire_pipe/` (own DOCS.md) is the fetch pipeline built on top; `jhao104/` is a vendored comparison baseline; only its `patches/helper/` overlay has a DOCS.md.
 
 ## Public Interface
 No `__init__.py` — not a package. The probe scripts and the pipe script are CLI entry points run via `./venv/bin/python`; underscore modules are helpers imported by flat name.
@@ -17,7 +17,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** Public proxy-list source URLs.
 **Writes:** nothing; returns proxy lists in memory.
 **Called by:** `acquire_pipe/acquire_pipe.py`, `probe_liveness.py`, `pipe_theblock.py`, `probe_48h_article_fetch.py`.
-**Calls out:** `monosans_loader.py`, `httpx`.
+**Calls out:** `httpx`.
 
 ### monosans_loader.py (36 LOC)
 
@@ -41,7 +41,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
 **Writes:** `discover_coverage_report.md`; checkpoints in `cache/`.
 **Called by:** CLI only; `pipe_theblock.py`.
-**Calls out:** `_probe_discovery_report.py`.
+**Calls out:** none.
 
 ### _probe_discovery_report.py (221 LOC)
 
@@ -65,7 +65,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** Proxy lists from `probe_pool_size.py`.
 **Writes:** `probe_repo_cf_survey_reports/` (gitignored).
 **Called by:** CLI only.
-**Calls out:** `curl_cffi`, `probe_pool_size.py`.
+**Calls out:** `curl_cffi`.
 
 ### probe_liveness.py (192 LOC)
 
@@ -73,7 +73,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** Source lists, live sources, and the frozen pool.
 **Writes:** `probe_liveness_logs/sweep_log.md`, the status log, and `frozen_pool/`.
 **Called by:** CLI only; `pipe_theblock.py`.
-**Calls out:** `_probe_liveness_classify.py`, `_probe_liveness_report.py`, `probe_pool_size.py`, `curated_sources.py`, `proxy_status_log.py`, `curl_cffi`.
+**Calls out:** `curl_cffi`.
 
 ### _probe_liveness_classify.py (108 LOC)
 
@@ -105,7 +105,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** The curated fresh source pool.
 **Writes:** `pipe_log.md` funnel entry; sub-sitemap checkpoints in `cache/`.
 **Called by:** CLI only.
-**Calls out:** `_pipe_theblock_cf.py`, `probe_liveness.py`, `probe_pool_size.py`, `probe_discovery.py`, `source_tracker.py`, `curated_sources.py`.
+**Calls out:** none.
 
 ### _pipe_theblock_cf.py (55 LOC)
 
@@ -121,7 +121,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** The curated proxy list.
 **Writes:** `probe_curated_theblock_cf_reports/` (gitignored).
 **Called by:** CLI only.
-**Calls out:** `curl_cffi`, `curated_sources.py`.
+**Calls out:** `curl_cffi`.
 
 ### probe_curl_cffi_discriminator.py (268 LOC)
 
@@ -137,7 +137,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Reads:** The backfill pool and the theblock sitemap.
 **Writes:** `probe_48h_output/` (gitignored).
 **Called by:** CLI only.
-**Calls out:** `acquire_pipe/p1_fetch.py`, `curated_sources.py`.
+**Calls out:** none.
 
 ### probe_monosans.sh (81 LOC)
 

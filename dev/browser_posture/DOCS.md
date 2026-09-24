@@ -28,7 +28,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing; serves its own local target.
 **Writes:** `md/01_launch_latency_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll` via `_lib.py`.
+**Calls out:** `pydoll`.
 
 ---
 
@@ -38,7 +38,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing.
 **Writes:** `md/02_parallel_chrome_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll` via `_lib.py`, macOS process tools.
+**Calls out:** `pydoll`, macOS process tools.
 
 ---
 
@@ -48,7 +48,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing; serves its own local page.
 **Writes:** `md/03_fingerprint_patch_probe_<ts>.md` via the report helper.
 **Called by:** CLI only.
-**Calls out:** `pydoll` via `_lib.py`, live detection-test sites, `_fingerprint_report.py`.
+**Calls out:** `pydoll`, live detection-test sites.
 
 ---
 
@@ -68,7 +68,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing; serves its own local page.
 **Writes:** Markdown report via the report helper; edits and restores the chromium bundle's plist during one run.
 **Called by:** CLI only.
-**Calls out:** `crawl4ai`, `patchright`, `psutil`, `_chromium_bundle.py`, `_chromium_teardown.py`, `_headed_chromium_report.py`.
+**Calls out:** `crawl4ai`, `patchright`, `psutil`.
 
 ---
 
@@ -98,7 +98,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing; takes run dicts.
 **Writes:** `md/04_headed_chromium_probe_<ts>.md`.
 **Called by:** `04_headed_chromium_probe.py`.
-**Calls out:** `_lib.py`.
+**Calls out:** none.
 
 ---
 
@@ -108,7 +108,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 **Reads:** nothing; serves its own local page.
 **Writes:** Markdown report via the report helper; no plist edits.
 **Called by:** CLI only.
-**Calls out:** `crawl4ai`, `patchright`, `psutil`, `_cdp_launch.py`, `_cdp_teardown.py`, `_cdp_report.py`.
+**Calls out:** `crawl4ai`, `patchright`, `psutil`.
 
 ---
 

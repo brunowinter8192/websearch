@@ -16,12 +16,11 @@ def main() -> None:
 
     platform = get(args.source)
     skip_index = args.skip_index
-    if hasattr(platform, "timeframe"):
-        platform.timeframe = args.timeframe
-        if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
-            skip_index = True
-            print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
-            print(f"After review, run: rag-cli index --collection {platform.collection}")
+    platform.timeframe = args.timeframe
+    if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
+        skip_index = True
+        print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
+        print(f"After review, run: rag-cli index --collection {platform.collection}")
 
     if args.scrape_only:
         if args.year and (args.from_date or args.to_date):

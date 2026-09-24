@@ -10,7 +10,7 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 
 ## Flow
 
-Arguments in; the chosen platform module is imported (registering itself) and looked up by name. The pipeline then discovers, dedups, scrapes and persists raw files, dispatching the scrape step on the platform's engine attribute (browser, proxy pool or proxy riding), optionally followed by the clean pass. Scrape-only mode backfills from stored discover lists.
+Arguments in; the chosen platform module is imported (registering itself) and looked up by name. The pipeline then discovers, dedups, scrapes and persists raw files, dispatching the scrape step on the platform's engine attribute (browser, proxy pool or proxy riding), optionally followed by the clean pass. Scrape-only mode backfills from stored discover lists. `pipeline.py` composes `engine/`, `pipeline_support.py`, `clean_pass.py` and `platform.py`; `__main__.py` imports `platforms/` and `registry.py`.
 
 ## Modules
 
@@ -20,7 +20,7 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Reads:** the per-platform raw corpus and discover files under data/news.
 **Writes:** raw files, the raw manifest, discover block-lists and job reports; delegates bookkeeping and clean-pass writes to siblings.
 **Called by:** __main__.py.
-**Calls out:** platform.py, engine/ (dedup, scrape, scrape_job, browser_reporter, proxy_pool, proxy_riding), pipeline_support.py, clean_pass.py.
+**Calls out:** none.
 
 ### pipeline_support.py (83 LOC)
 
@@ -36,19 +36,19 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Reads:** raw markdown files; the existing body-less URL list.
 **Writes:** cleaned article files in the collection directory; the body-less URL list.
 **Called by:** pipeline.py.
-**Calls out:** engine/dedup.py.
+**Calls out:** none.
 
-### __main__.py (155 LOC)
+### __main__.py (154 LOC)
 
 **Purpose:** Argparse entry point: imports platform modules for registration, resolves the platform and dispatches to the matching pipeline entry.
 **Reads:** CLI arguments.
 **Writes:** stdout.
 **Called by:** the `python -m src.news` entry.
-**Calls out:** platforms/, registry.py, pipeline.py.
+**Calls out:** none.
 
-### platform.py (35 LOC)
+### platform.py (52 LOC)
 
-**Purpose:** The extension seam: the platform protocol and the scrape-configuration dataclasses.
+**Purpose:** The extension seam: the platform protocol with declared defaults for its optional attributes, and the scrape-configuration dataclasses.
 **Reads:** none.
 **Writes:** none.
 **Called by:** pipeline.py, registry.py, platforms/, engine/.
@@ -60,7 +60,7 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Reads:** in-memory registry.
 **Writes:** in-memory registry.
 **Called by:** __main__.py, platforms/.
-**Calls out:** platform.py.
+**Calls out:** none.
 
 ## State
 

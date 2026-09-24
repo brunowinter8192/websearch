@@ -4,7 +4,7 @@
 Measurement tooling for whether mojeek.com can return to the engine pool, asked against the search lane's browser. Touch it to re-measure Mojeek's ALTCHA behaviour or check for drift. Nothing here is wired into `src/`, and mojeek remains absent from the engine pool.
 
 ## Public Interface
-No `__init__.py` — not a package. Three entry points: the pytest module (offline, loopback fixtures), the live probe, and the live one-request challenge capture. Sibling `_*` modules are imported via the script's own directory.
+No `__init__.py` — not a package. Three entry points: the verification module (loopback fixtures, real headless Chrome; a verification, not a test), the live probe, and the live one-request challenge capture. Sibling `_*` modules are imported via the script's own directory.
 
 ## Flow
 Launch Chrome on a dedicated profile -> control-URL tripwire -> per query navigate, poll the DOM into a page state, fire the widget verify, snapshot cookies -> three phases -> markdown report in `md/`.
@@ -17,7 +17,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** One live navigation against mojeek.com.
 **Writes:** `md/mojeek_challenge_capture_<ts>.md`; temporary Chrome profile.
 **Called by:** CLI only.
-**Calls out:** the launch and query siblings.
+**Calls out:** none.
 
 ### mojeek_pydoll_probe.py (182 LOC)
 
@@ -25,14 +25,14 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Reads:** nothing; hardcoded queries, live navigations.
 **Writes:** `md/mojeek_pydoll_probe_<ts>.md`; two temporary Chrome profiles.
 **Called by:** CLI only.
-**Calls out:** the `_mojeek_pydoll_probe_*` siblings.
+**Calls out:** none.
 
 ### _mojeek_pydoll_probe_launch.py (213 LOC)
 
 **Purpose:** Chrome launch, focus-steal watchdog, and teardown, an inline copy of the production browser shape.
 **Reads:** The profile's DevTools port file.
 **Writes:** nothing directly; spawns and kills Chrome processes.
-**Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
+**Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
 **Calls out:** `pydoll`, `psutil`, macOS process tools.
 
 ### _mojeek_pydoll_probe_query.py (227 LOC)
@@ -40,8 +40,8 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Drives and times one query on one tab, plus the control-URL tripwire.
 **Reads:** Live DOM and browser cookie store via CDP.
 **Writes:** nothing; returns a measurement.
-**Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
-**Calls out:** `pydoll`, the core, js, and launch siblings.
+**Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
+**Calls out:** `pydoll`.
 
 ### _mojeek_pydoll_probe_core.py (202 LOC)
 
@@ -64,31 +64,31 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Purpose:** Assembles the markdown report, one section per question plus methodology.
 **Reads:** nothing.
 **Writes:** `md/mojeek_pydoll_probe_<ts>.md`.
-**Called by:** `mojeek_pydoll_probe.py`, `test_mojeek_pydoll_core.py`.
-**Calls out:** `_mojeek_pydoll_probe_core.py`.
+**Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
+**Calls out:** none.
 
-### test_mojeek_pydoll_core.py (338 LOC)
+### verify_mojeek_pydoll_core.py (338 LOC)
 
-**Purpose:** Pytest module with one test per check, each on its own loopback fixture server, Chrome, and profile.
+**Purpose:** Verification of the probe checks against a real headless Chrome, one check per fixture server and profile; run by explicit path.
 **Reads:** `fixtures/*.html`.
 **Writes:** A fixture report under the pytest tmp path.
-**Called by:** pytest (verification, not part of the default run).
-**Calls out:** `pydoll` via the siblings, stdlib `http.server`.
+**Called by:** pytest by explicit path only (verification, never collected by the default run).
+**Calls out:** `pydoll`.
 
 ### _mojeek_pydoll_pure_checks.py (155 LOC)
 
 **Purpose:** The network-free checks of the test module: classifier, verdict, carry-over, cookie-diff, maths.
 **Reads:** nothing.
 **Writes:** stdout.
-**Called by:** `test_mojeek_pydoll_core.py`.
-**Calls out:** `_mojeek_pydoll_probe_core.py`.
+**Called by:** `verify_mojeek_pydoll_core.py`.
+**Calls out:** none.
 
 ### _mojeek_pydoll_check_result.py (5 LOC)
 
 **Purpose:** Assertion helper that fails fast on a false condition.
 **Reads:** nothing.
 **Writes:** stdout.
-**Called by:** `test_mojeek_pydoll_core.py`, `_mojeek_pydoll_pure_checks.py`.
+**Called by:** `verify_mojeek_pydoll_core.py`, `_mojeek_pydoll_pure_checks.py`.
 **Calls out:** none.
 
 ---

@@ -7,7 +7,7 @@ Standalone dev suite for scraping CoinDesk article HTML at scale through rotatin
 No `__init__.py` — not a package. The runner script is the CLI entry point; the analysis and smoke scripts are separate CLI entries. Other modules are helpers imported by flat name.
 
 ## Flow
-Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> riding pool fetches each URL through a fresh proxy context, classifying results and rotating burned proxies -> watchdog aborts on stall -> reporter renders job report and plots; raw HTML lands under the output dir.
+Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> riding pool fetches each URL through a fresh proxy context, classifying results and rotating burned proxies -> watchdog aborts on stall -> reporter renders job report and plots; raw HTML lands under the output dir. The riding pool under test is `src/news/engine/proxy_riding/`; the `_p*` helper modules split state, fetch, watchdog and report rendering.
 
 ## Modules
 
@@ -25,7 +25,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** Proxy pool via `p0_pool.py`, URL queue.
 **Writes:** Raw HTML per ok URL via `_p2_fetch.py`; remaining-URL list on stall via `_p2_watchdog.py`.
 **Called by:** `run_coindesk_riding.py`, `smoke_stage1.py`, `p4_reporter.py`, `_p4_stats.py`, `dev/tests/test_riding_*.py`.
-**Calls out:** `_p2_state.py`, `_p2_fetch.py`, `_p2_watchdog.py`.
+**Calls out:** none.
 
 ### _p2_state.py (77 LOC)
 
@@ -33,7 +33,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** nothing.
 **Writes:** nothing.
 **Called by:** `p2_browser_rider.py`, `_p2_watchdog.py`.
-**Calls out:** `p0_pool.py`.
+**Calls out:** none.
 
 ### _p2_fetch.py (97 LOC)
 
@@ -49,7 +49,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** nothing.
 **Writes:** Remaining-URL list and job report on stall.
 **Called by:** `p2_browser_rider.py`.
-**Calls out:** `p4_reporter.py` (lazy import).
+**Calls out:** none.
 
 ### p3_url_sampler.py (115 LOC)
 
@@ -65,7 +65,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** The run state.
 **Writes:** `job.md`.
 **Called by:** `run_coindesk_riding.py`, `_p2_watchdog.py`.
-**Calls out:** `_p4_stats.py`, `_p4_plots.py`.
+**Calls out:** none.
 
 ### _p4_stats.py (163 LOC)
 
@@ -73,7 +73,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** The run state.
 **Writes:** nothing.
 **Called by:** `p4_reporter.py`.
-**Calls out:** `p2_browser_rider.py`.
+**Calls out:** none.
 
 ### _p4_plots.py (59 LOC)
 
@@ -89,7 +89,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** CLI arguments.
 **Writes:** Raw HTML, job report, and plots under the output dir.
 **Called by:** CLI only.
-**Calls out:** `p0_pool.py`, `p2_browser_rider.py`, `p3_url_sampler.py`, `p4_reporter.py`.
+**Calls out:** none.
 
 ### analyze_write_times.py (254 LOC)
 
@@ -105,7 +105,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Reads:** The production riding package; a few inventory URLs.
 **Writes:** Raw HTML to a temp dir.
 **Called by:** CLI only.
-**Calls out:** `src/news/engine/proxy_riding/`.
+**Calls out:** none.
 
 ---
 

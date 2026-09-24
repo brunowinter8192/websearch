@@ -107,7 +107,7 @@ def _write_md(
     rw_rate = stats["n_regwall"] / max(stats["n_scraped"], 1)
     rw_cell = f"{stats['n_regwall']} ({rw_rate:.1%})"
     if regwall_abort:
-        rw_cell += "  ⚠ **REGWALL ABORT**"
+        rw_cell += "  **REGWALL ABORT**"
 
     lines  = _md_header(job_id, filter_desc, n_target, stats, rw_cell)
     lines += _md_char_distribution(stats)

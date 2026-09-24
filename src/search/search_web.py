@@ -116,27 +116,6 @@ async def search_web_workflow(
     )
 
 
-def fetch_search_results(
-    query: str,
-    category: str,
-    language: str,
-    time_range: str | None,
-    engines: str | None,
-    pageno: int
-) -> list:
-    selected = _select_engines(engines)
-    results, _ = asyncio.run(_query_engines_concurrent(query, language, 10, selected))
-    return [
-        {
-            "url": r.url,
-            "title": r.title,
-            "content": r.snippet,
-            "engines": [r.engine],
-        }
-        for r in results
-    ]
-
-
 # FUNCTIONS
 
 async def _prewarm_browser() -> None:

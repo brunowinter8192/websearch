@@ -17,7 +17,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`.
 **Writes:** `md/google_smoke_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.google`, `src.search.browser`.
+**Calls out:** none.
 
 ### selector_js_equivalence_check.py (113 LOC)
 
@@ -33,7 +33,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `config.yml`, `queries.txt`.
 **Writes:** `md/burst_<ts>.md`.
 **Called by:** CLI only (`--queries-per-burst`, `--cooldown`, `--max-queries`).
-**Calls out:** `cli.py` (subprocess), `yaml`.
+**Calls out:** `yaml`.
 
 ### 04_ddg_smoke.py (121 LOC)
 
@@ -41,7 +41,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`.
 **Writes:** `md/ddg_smoke_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.duckduckgo`, `src.search.browser`.
+**Calls out:** none.
 
 ### 05_search_smoke.py (223 LOC)
 
@@ -49,7 +49,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`.
 **Writes:** `md/search_smoke_<ts>.md`.
 **Called by:** CLI only (`--engines`, `--max-queries`).
-**Calls out:** `src.search.browser`, `src.search.engines.{google,duckduckgo,scholar,openalex}`, `src.search.result`.
+**Calls out:** none.
 
 ### 08_scholar_smoke.py (129 LOC)
 
@@ -57,7 +57,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`.
 **Writes:** `md/scholar_smoke_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.scholar`, `src.search.browser`.
+**Calls out:** none.
 
 ### 09_openalex_smoke.py (117 LOC)
 
@@ -65,7 +65,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`.
 **Writes:** `md/openalex_smoke_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.openalex`.
+**Calls out:** none.
 
 ### 11_pipeline_smoke.py (369 LOC)
 
@@ -73,7 +73,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `queries.txt`; the search cache.
 **Writes:** `md/pipeline_smoke_<ts>.md`.
 **Called by:** CLI only (`--max-queries`, `--language`, `--engine-timeout`, `--report-prefix`); output consumed by `report_analysis/`.
-**Calls out:** `src.search.browser`, `src.search.cache`, `src.search.search_web`.
+**Calls out:** none.
 
 ### 12_max_results_probe.py (168 LOC)
 
@@ -81,7 +81,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** hardcoded 3-query set.
 **Writes:** `md/max_results_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`.
+**Calls out:** none.
 
 ### 13_free_word_probe.py (299 LOC)
 
@@ -89,7 +89,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** hardcoded 3-query set.
 **Writes:** `md/free_word_injection_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`.
+**Calls out:** none.
 
 ### 24_pydoll_teardown_verify.py (268 LOC)
 
@@ -97,7 +97,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** none (self-contained hang simulation).
 **Writes:** `md/teardown_verify_<ts>.md`, stdout.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser` (via importlib), pydoll CDP.
+**Calls out:** pydoll CDP.
 
 ### _capture_sorry.py (223 LOC)
 
@@ -129,7 +129,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** Live DOM fetch with a hardcoded query.
 **Writes:** `md/google_selector_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`, `src.search.engines.google`.
+**Calls out:** none.
 
 ### no_google_burst_smoke.py (186 LOC)
 
@@ -137,7 +137,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** hardcoded 12-query set.
 **Writes:** `jsonl/no_google_burst_<ts>.jsonl`; summary table to stderr.
 **Called by:** CLI only.
-**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `src.search.{status,status_timeout,status_error,browser}`, `src.search.engines.{duckduckgo,openalex,scholar}`.
+**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`.
 
 ### pydoll_fingerprint_probe.py (192 LOC)
 
@@ -145,7 +145,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** live page load.
 **Writes:** `/tmp/pydoll_probe_sannysoft.png`; JSON summary to stdout.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`.
+**Calls out:** none.
 
 ### scholar_http_probe.py (119 LOC)
 
@@ -153,7 +153,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** live HTTP fetch.
 **Writes:** Returns a result list; no file output.
 **Called by:** none in use; `no_google_burst_smoke.py` imports it but the import is unused. Effectively DEAD CODE.
-**Calls out:** `httpx`, `lxml.html`, `src.search.{rate_limiter,result,status}`.
+**Calls out:** `httpx`, `lxml.html`.
 
 ### with_google_decoupling_smoke.py (172 LOC)
 
@@ -161,7 +161,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Reads:** `src/logs/query_log.jsonl` (tail).
 **Writes:** `md/with_google_decoupling_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.search_web`, `src.search.browser`.
+**Calls out:** none.
 
 ---
 

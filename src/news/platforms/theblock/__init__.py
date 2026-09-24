@@ -1,5 +1,5 @@
 # INFRASTRUCTURE
-from src.news.platform import ScrapeConfig
+from src.news.platform import Platform, ScrapeConfig
 from src.news.registry import register
 from src.news.platforms.theblock.config import PROXY_SCRAPE_CONFIG
 from src.news.platforms.theblock.discover import discover as _discover
@@ -8,7 +8,7 @@ from src.news.platforms.theblock.cleanup import cleanup as _cleanup
 
 # FUNCTIONS
 
-class TheBlockPlatform:
+class TheBlockPlatform(Platform):
     name: str                  = "theblock"
     collection: str            = "theblock"
     precondition_url: str      = "https://www.google.com"

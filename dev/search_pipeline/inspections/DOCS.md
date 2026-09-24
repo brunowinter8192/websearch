@@ -7,7 +7,7 @@ DOM-inspection tooling for engine selector-drift recovery: runs seven heuristics
 No `__init__.py`. Run as `./venv/bin/python dev/search_pipeline/inspections/inspect_engine_dom.py <engine_name> "<query>"`.
 
 ## Flow
-Engine config from the module-level registry and a live page load in, seven DOM heuristics and a diagnosis, Markdown report to `md/` out.
+Engine config from the module-level registry and a live page load in, seven DOM heuristics and a diagnosis, Markdown report to `md/` out. The probe drives the `src/search/` browser layer.
 
 ## Modules
 
@@ -17,7 +17,7 @@ Engine config from the module-level registry and a live page load in, seven DOM 
 **Reads:** Module-level engine registry; live DOM via pydoll.
 **Writes:** `md/<engine>_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `src.search.browser`.
+**Calls out:** none.
 
 ---
 

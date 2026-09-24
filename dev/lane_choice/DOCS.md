@@ -8,7 +8,7 @@ No `__init__.py` — not a package. Both numbered scripts are CLI entry points r
 
 ## Flow
 Focus probe: countdown -> real CLI scrape per URL against a frontmost-app poll -> verdict and sample series in `md/`.
-Metrics: production scrape log -> URL pairs -> block reading -> classification -> aggregate -> per-URL and all-pairs report in `md/`.
+Metrics: production scrape log -> URL pairs -> block reading -> classification -> aggregate -> per-URL and all-pairs report in `md/`. The focus probe runs the worktree's own `cli.py` as a subprocess.
 
 ## Modules
 
@@ -18,7 +18,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Reads:** nothing of its own; launches this worktree's CLI as a subprocess per URL.
 **Writes:** `md/03_live_focus_probe_report_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** the worktree's own `cli.py`, macOS `osascript`.
+**Calls out:** macOS `osascript`.
 
 ### 04_lane_metrics.py (50 LOC)
 
@@ -26,7 +26,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Reads:** nothing directly.
 **Writes:** nothing directly.
 **Called by:** CLI only.
-**Calls out:** the `_lane_metrics_*` modules.
+**Calls out:** none.
 
 ### _lane_metrics_pairing.py (55 LOC)
 
@@ -58,7 +58,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Reads:** nothing directly.
 **Writes:** nothing.
 **Called by:** `04_lane_metrics.py`.
-**Calls out:** `_lane_metrics_blocks.py`, `_lane_metrics_classify.py`.
+**Calls out:** none.
 
 ### _lane_metrics_aggregate.py (52 LOC)
 
@@ -74,7 +74,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Reads:** nothing.
 **Writes:** `md/04_lane_metrics_report_<ts>.md`.
 **Called by:** `04_lane_metrics.py`.
-**Calls out:** `_lane_metrics_aggregate.py`, `_lane_metrics_prose.py`.
+**Calls out:** none.
 
 ---
 

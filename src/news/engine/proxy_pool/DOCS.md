@@ -23,7 +23,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** the entry list and the pool provider.
 **Writes:** one file per ok fetch in the output directory.
 **Called by:** src/news/pipeline.py.
-**Calls out:** loop.py, cooldown.py, logger.py (type only).
+**Calls out:** none.
 
 ### loop.py (296 LOC)
 
@@ -31,7 +31,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** the pool provider callback and the target URL list.
 **Writes:** through the logger and cooldown manager; content files via the content handler.
 **Called by:** scrape.py.
-**Calls out:** fetch.py, cooldown.py, logger.py, buffer.py.
+**Calls out:** none.
 
 ### fetch.py (37 LOC)
 
@@ -47,7 +47,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** none.
 **Writes:** none.
 **Called by:** buffer.py, loop.py, scrape.py.
-**Calls out:** proxy_key.py.
+**Calls out:** none.
 
 ### buffer.py (32 LOC)
 
@@ -55,15 +55,15 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** the proxy pool and cooldown eligibility.
 **Writes:** none; returns new lists.
 **Called by:** loop.py.
-**Calls out:** cooldown.py.
+**Calls out:** none.
 
 ### logger.py (52 LOC)
 
 **Purpose:** Streams per-fetch, pool-refresh and pool-source events to a line-buffered JSONL file.
 **Reads:** events pushed by callers.
 **Writes:** the acquire-events JSONL in the platform's proxy-pool log directory.
-**Called by:** src/news/pipeline.py, loop.py, src/news/platforms/theblock/discover.py.
-**Calls out:** proxy_key.py.
+**Called by:** src/news/pipeline.py, loop.py, scrape.py.
+**Calls out:** none.
 
 ### janitor.py (264 LOC)
 
@@ -71,9 +71,9 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** the acquire-events JSONL.
 **Writes:** job report and plot; wipes log and report directories.
 **Called by:** src/news/pipeline.py.
-**Calls out:** matplotlib, statistics.
+**Calls out:** matplotlib.
 
-### box_lock.py (97 LOC)
+### box_lock.py (94 LOC)
 
 **Purpose:** System-wide single-job flock with a sidecar for busy messages and stale-lock recovery.
 **Reads:** the lock sidecar under the user lock directory.
@@ -103,7 +103,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** public GitHub-hosted proxy lists over HTTP.
 **Writes:** none.
 **Called by:** src/news/platforms/theblock/config.py, src/news/platforms/theblock/discover.py, src/news/engine/proxy_riding/scrape.py.
-**Calls out:** httpx, pool_retry.py, monosans_loader.py, proxy_key.py.
+**Calls out:** httpx.
 
 ### monosans_loader.py (38 LOC)
 
@@ -111,7 +111,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Reads:** the monosans list over HTTP.
 **Writes:** none.
 **Called by:** pool_loaders.py.
-**Calls out:** httpx, pool_retry.py.
+**Calls out:** httpx.
 
 ## State
 

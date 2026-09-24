@@ -17,7 +17,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/startpage_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, `_startpage_probe_report.py`.
+**Calls out:** `pydoll`.
 
 ### _startpage_probe_report.py (129 LOC)
 
@@ -33,7 +33,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/brave_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, `_brave_probe_report.py`.
+**Calls out:** `pydoll`.
 
 ### _brave_probe_report.py (142 LOC)
 
@@ -49,7 +49,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/brave_headed_lane_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, macOS `open`, `_brave_headed_lane_probe_report.py`.
+**Calls out:** `pydoll`, macOS `open`.
 
 ### _brave_headed_lane_probe_report.py (152 LOC)
 
@@ -65,7 +65,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/bing_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, `_bing_probe_report.py`.
+**Calls out:** `pydoll`.
 
 ### _bing_probe_report.py (143 LOC)
 
@@ -81,7 +81,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/yandex_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, `_yandex_probe_report.py`.
+**Calls out:** `pydoll`.
 
 ### _yandex_probe_report.py (174 LOC)
 
@@ -97,7 +97,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/date_availability_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `pydoll`, browser, nav and report siblings.
+**Calls out:** `pydoll`.
 
 ### _date_availability_probe_browser.py (148 LOC)
 
@@ -113,7 +113,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none.
 **Writes:** none (drives the live tab).
 **Called by:** `31_date_availability_probe.py`.
-**Calls out:** `pydoll`, browser sibling.
+**Calls out:** `pydoll`.
 
 ### _date_availability_probe_report.py (88 LOC)
 
@@ -129,7 +129,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Reads:** none (live run).
 **Writes:** `../md/altcha_trigger_probe_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `patchright`, `crawl4ai.browser_manager` (flags only), cdp, js, launch and report siblings.
+**Calls out:** `patchright`, `crawl4ai.browser_manager` (flags only).
 
 ### _altcha_trigger_probe_cdp.py (72 LOC)
 

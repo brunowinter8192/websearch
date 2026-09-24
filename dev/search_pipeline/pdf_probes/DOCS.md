@@ -17,7 +17,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 **Reads:** newest `pipeline_smoke_*.md` and `free_word_injection_probe_*.md` from `../md/`.
 **Writes:** `../md/download_classify_<ts>.md`, `../txt/pool_<ts>.txt`, `../txt/pool_doi_sample_<ts>.txt`.
 **Called by:** CLI only.
-**Calls out:** the three `_download_classify_probe_*` siblings.
+**Calls out:** none.
 
 ### _download_classify_probe_classify.py (217 LOC)
 
@@ -41,7 +41,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 **Reads:** none (arguments only).
 **Writes:** `<report_dir>/download_classify_<ts>.md`.
 **Called by:** `14_download_classify_probe.py`.
-**Calls out:** pool and classify siblings.
+**Calls out:** none.
 
 ### 15_citation_pdf_followup.py (249 LOC)
 
@@ -49,7 +49,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 **Reads:** a hardcoded source report in `../md/` and its pool file in `../txt/`.
 **Writes:** `../md/citation_pdf_followup_<ts>.md`, `../txt/pool_has_pdf_link_<ts>.txt`.
 **Called by:** CLI only.
-**Calls out:** `httpx`, config and report siblings.
+**Calls out:** `httpx`.
 
 ### _citation_pdf_followup_config.py (7 LOC)
 
@@ -65,7 +65,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 **Reads:** none (arguments only).
 **Writes:** `<report_dir>/citation_pdf_followup_<ts>.md`.
 **Called by:** `15_citation_pdf_followup.py`.
-**Calls out:** config sibling.
+**Calls out:** none.
 
 ---
 

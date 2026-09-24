@@ -123,7 +123,8 @@ def _make_document_status_listener(page, status_chain: list) -> Callable:
             return
         try:
             frame = request.frame
-        except Exception:
+        except Exception as e:
+            logger.debug("Document response dropped, request.frame unavailable: %s (%s)", response.url, e)
             return
         if frame is not page.main_frame:
             return

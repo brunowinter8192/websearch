@@ -2,11 +2,14 @@
 
 import fcntl
 import json
+import logging
 import os
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 LOCK_DIR = Path.home() / ".websearch-locks"
 _TS_FMT  = "%Y-%m-%dT%H:%M:%SZ"
@@ -21,11 +24,8 @@ class LockBusyError(RuntimeError):
 def cleanup_stale(sidecar: Path) -> None:
     if not sidecar.exists():
         return
-    try:
-        data = json.loads(sidecar.read_text(encoding="utf-8"))
-        pid  = data.get("pid")
-    except (json.JSONDecodeError, OSError):
-        return
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    pid  = data.get("pid")
     if pid is None:
         sidecar.unlink(missing_ok=True)
         return
@@ -34,7 +34,7 @@ def cleanup_stale(sidecar: Path) -> None:
     except ProcessLookupError:
         sidecar.unlink(missing_ok=True)
     except PermissionError:
-        return
+        logger.warning("proxy_pool lock holder pid=%s is owned by another user, sidecar kept", pid)
 
 
 @contextmanager
@@ -67,22 +67,19 @@ def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
 
 
 def _busy_message(sidecar: Path) -> str:
-    try:
-        data       = json.loads(sidecar.read_text(encoding="utf-8"))
-        pid        = data.get("pid", "?")
-        job        = data.get("job", "?")
-        target     = data.get("target", "?")
-        started_at = data.get("started_at", "")
-        elapsed    = ""
-        if started_at:
-            t0      = datetime.strptime(started_at, _TS_FMT).replace(tzinfo=timezone.utc)
-            elapsed = f", running {int((datetime.now(timezone.utc) - t0).total_seconds())}s"
-        return (
-            f"proxy_pool already running: pid={pid}, job={job!r}, "
-            f"target={target!r}{elapsed}"
-        )
-    except Exception:
-        return "proxy_pool already running (lock held, sidecar unreadable)"
+    data       = json.loads(sidecar.read_text(encoding="utf-8"))
+    pid        = data.get("pid", "?")
+    job        = data.get("job", "?")
+    target     = data.get("target", "?")
+    started_at = data.get("started_at", "")
+    elapsed    = ""
+    if started_at:
+        t0      = datetime.strptime(started_at, _TS_FMT).replace(tzinfo=timezone.utc)
+        elapsed = f", running {int((datetime.now(timezone.utc) - t0).total_seconds())}s"
+    return (
+        f"proxy_pool already running: pid={pid}, job={job!r}, "
+        f"target={target!r}{elapsed}"
+    )
 
 
 def _write_sidecar(sidecar: Path, data: dict) -> None:

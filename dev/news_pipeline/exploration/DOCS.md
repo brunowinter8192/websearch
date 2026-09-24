@@ -17,7 +17,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site.
 **Writes:** `01_output/` JSON and a debug screenshot.
 **Called by:** CLI only.
-**Calls out:** `_01_dom.py`.
+**Calls out:** none.
 
 ### _01_dom.py (215 LOC)
 
@@ -33,7 +33,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** nothing.
 **Writes:** nothing directly.
 **Called by:** CLI only.
-**Calls out:** `_02_quick.py`, `_02_depth.py`.
+**Calls out:** none.
 
 ### _02_dom.py (131 LOC)
 
@@ -49,7 +49,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site.
 **Writes:** `02_output/` HAR and report.
 **Called by:** `02_coindesk_pagination_probe.py`.
-**Calls out:** `playwright`, `_02_dom.py`, `_02_report.py`.
+**Calls out:** `playwright`.
 
 ### _02_depth.py (164 LOC)
 
@@ -57,7 +57,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site.
 **Writes:** `02_output/` depth report.
 **Called by:** `02_coindesk_pagination_probe.py`.
-**Calls out:** `playwright`, `_02_dom.py`, `_02_report.py`.
+**Calls out:** `playwright`.
 
 ### _02_report.py (185 LOC)
 
@@ -73,7 +73,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site.
 **Writes:** `03_output/` final URL list, crash-safe checkpoint, progress log, stage report.
 **Called by:** CLI only.
-**Calls out:** `_03_capture.py`, `_03_log.py`, `_03_report.py`.
+**Calls out:** none.
 
 ### _03_capture.py (216 LOC)
 
@@ -105,7 +105,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site and timeline API.
 **Writes:** `04_output/report_<ts>.md`.
 **Called by:** CLI only.
-**Calls out:** `_04_capture.py`, `_04_replay.py`, `_04_report.py`.
+**Calls out:** none.
 
 ### _04_capture.py (118 LOC)
 
@@ -137,7 +137,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live timeline API.
 **Writes:** `05_data/` walk, fixed, and deep reports.
 **Called by:** CLI only.
-**Calls out:** `_05_capture.py`, `_05_parse.py`, `_05_fixed.py`, `_05_report.py`.
+**Calls out:** none.
 
 ### _05_capture.py (122 LOC)
 
@@ -161,7 +161,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** nothing; takes headers and body.
 **Writes:** nothing.
 **Called by:** `05_coindesk_cursor_probe.py`.
-**Calls out:** `httpx`, `_05_parse.py`.
+**Calls out:** `httpx`.
 
 ### _05_report.py (156 LOC)
 
@@ -177,7 +177,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site and timeline API.
 **Writes:** `05b_output/` warmth report and state file.
 **Called by:** CLI only.
-**Calls out:** `_05b_report.py`.
+**Calls out:** none.
 
 ### _05b_report.py (106 LOC)
 
@@ -193,7 +193,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Reads:** Live CoinDesk site and timeline API.
 **Writes:** `06_output/` per-year URL files, progress log, summary report.
 **Called by:** CLI only.
-**Calls out:** `_06_capture.py`, `_06_progress.py`, `_06_report.py`.
+**Calls out:** none.
 
 ### _06_capture.py (167 LOC)
 

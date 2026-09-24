@@ -37,7 +37,7 @@ async def run_discover_only(platform: Platform) -> None:
         sys.exit(1)
     entries = await platform.discover()
     log.info(f"discover → {len(entries)} entries")
-    if getattr(platform, "uses_master_list", False):
+    if platform.uses_master_list:
         master_path = DATA_ROOT / platform.name / "discover" / "master_urls.txt"
         _persist_master_list(entries, master_path, log)
     _write_marker(platform.name, log)
@@ -129,7 +129,7 @@ def _scrape_only_preamble(
     if not _check_internet(platform, log):
         log.error("Internet check failed — aborting.")
         sys.exit(1)
-    if not hasattr(platform, "load_scrape_entries"):
+    if not platform.supports_scrape_only:
         log.error(f"--scrape-only not supported for {platform.name} (no load_scrape_entries)")
         sys.exit(1)
     return log, job_id, filter_desc
@@ -146,7 +146,7 @@ async def _run_scrape_only_riding(
     page_timeout_ms: int | None,
     log:             logging.Logger,
 ) -> None:
-    riding_cfg = getattr(platform, "riding_scrape_config", None) or RidingScrapeConfig()
+    riding_cfg = platform.riding_scrape_config or RidingScrapeConfig()
     overrides = {
         k: v for k, v in (
             ("n_browsers", n_browsers), ("n_slots", n_slots),
@@ -247,7 +247,7 @@ async def _stage_discover_proxy_pool(
         log.error("discover returned 0 articles — aborting.")
         _write_marker(platform.name, log)
         return None
-    if getattr(platform, "uses_master_list", False):
+    if platform.uses_master_list:
         master_path = DATA_ROOT / platform.name / "discover" / "master_urls.txt"
         _persist_master_list(entries, master_path, log)
     else:

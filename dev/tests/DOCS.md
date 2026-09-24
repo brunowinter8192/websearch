@@ -4,7 +4,7 @@
 The project's pytest suite: regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`, `src/news/`, and the log janitor. I/O boundaries are mocked per test and production logic runs for real. Touch it when coverage changes, not when production behavior changes without an assertion needing to change.
 
 ## Public Interface
-`__init__.py` is empty. Collected via `pytest` from the repo root (settings in `pytest.ini`). Real-browser tests carry the `browser` marker and run only with `-m browser`. Files named `_*_fakes.py` are shared helpers, not collected. `run_strands.sh` runs one fail-fast pytest per file in parallel.
+`__init__.py` is empty. Collected via `pytest` from the repo root (settings in `pytest.ini`). Real-browser tests carry the `browser` marker and run only with `-m browser`. Files named `_*_fakes.py` are shared helpers, not collected. `run_strands.sh` runs one fail-fast pytest per file in parallel, skips modules marked browser-only with a printed SKIP line, and counts any other nonzero exit (including 5, no tests collected) as a failure.
 
 ## Flow
 Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) go into the real function under test, and assertions read its real output. `tmp_path` and `monkeypatch` isolate filesystem and environment per test; `conftest.py` fails any test that reaches an unmocked real browser launch.
@@ -15,9 +15,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name.
 
-### run_strands.sh (33 LOC)
+### run_strands.sh (39 LOC)
 
-**Purpose:** Runs one fail-fast pytest per test file in parallel, each with its own base temp directory and log under /tmp. Not collected by pytest.
+**Purpose:** Runs one fail-fast pytest per test file in parallel with separate temp directories and logs; skips browser-only modules, fails on exit 5.
 
 ### test_conftest_guards.py (22 LOC)
 
@@ -301,7 +301,15 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### test_search_control_flow_removals.py (116 LOC)
 
-**Purpose:** Removed swallow handlers: engine value extraction, diagnosis, brave polling, and cache read now raise on corrupt input; a parse failure surfaces as a parse-error status; the prewarm failure log makes no retry claim.
+**Purpose:** Removed swallow handlers: engine extraction, diagnosis, brave polling and cache read raise on corrupt input; parse failures surface as a parse-error status.
+
+### test_platform_optional_attributes.py (58 LOC)
+
+**Purpose:** Platform protocol defaults, registered platforms' attribute values, and the scrape-only support check.
+
+### test_drop_reporting.py (145 LOC)
+
+**Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.

@@ -1,5 +1,5 @@
 # INFRASTRUCTURE
-from src.news.platform import ScrapeConfig
+from src.news.platform import Platform, ScrapeConfig
 from src.news.registry import register
 from src.news.engine.proxy_riding.scrape import RidingScrapeConfig
 from src.news.platforms.coindesk.config import REGWALL_SIGNALS, SCRAPE_CONFIG, DISCOVER_DIR
@@ -10,7 +10,7 @@ from src.news.platforms.coindesk.cleanup import cleanup as _cleanup
 
 # FUNCTIONS
 
-class CoinDeskPlatform:
+class CoinDeskPlatform(Platform):
     name: str = "coindesk"
     collection: str = "coindesk"
     precondition_url: str = "https://www.coindesk.com"
@@ -20,6 +20,7 @@ class CoinDeskPlatform:
     proxy_scrape_config = None
     riding_scrape_config = RidingScrapeConfig()
     timeframe: str = "30"
+    supports_scrape_only: bool = True
 
     async def discover(self) -> list[dict]:
         return await _discover(self.timeframe)
