@@ -130,7 +130,18 @@ def _write_query_md(result: dict, ts: str) -> Path:
     path  = REPORT_DIR / f"value_eval_{mode}_{slug}_{ts}.md"
     mm    = result["methods_meta"]
 
-    lines = [
+    lines = _render_query_header(result, mode, query, mm)
+    lines += _render_pool_dump(result)
+    lines += _render_oracle_selection(result)
+    lines += _render_method_top10s(result, mm)
+    lines += _render_comparison(result, mm)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _render_query_header(result: dict, mode: str, query: str, mm: dict) -> list[str]:
+    return [
         f"# Value Eval — {mode} × {query}",
         "",
         f"**Mode:** {mode}  ",
@@ -143,15 +154,20 @@ def _write_query_md(result: dict, ts: str) -> Path:
         "",
     ]
 
+
+def _render_pool_dump(result: dict) -> list[str]:
     # Pool dump (oracle input)
-    lines += ["## Pool (oracle input — url/title/snippet only)", ""]
+    lines = ["## Pool (oracle input — url/title/snippet only)", ""]
     for i, m in enumerate(result["pool"], 1):
         title   = (m.get("title")   or "").strip().replace("\n", " ")[:100]
         snippet = (m.get("snippet") or "").strip().replace("\n", " ")[:200]
         lines += [f"{i}. {m['url']}", f"   Title: {title}", f"   Snippet: {snippet}", ""]
+    return lines
 
+
+def _render_oracle_selection(result: dict) -> list[str]:
     # Oracle selection
-    lines += ["## Oracle Selection", ""]
+    lines = ["## Oracle Selection", ""]
     if result["oracle_data"]:
         for i, item in enumerate(result["oracle_data"].get("top_10", []), 1):
             url = item["url"] if isinstance(item, dict) else item
@@ -163,9 +179,12 @@ def _write_query_md(result: dict, ts: str) -> Path:
             ]
     else:
         lines += ["_Oracle not yet selected._", ""]
+    return lines
 
+
+def _render_method_top10s(result: dict, mm: dict) -> list[str]:
     # C-method Top-10s
-    lines += ["## C-Method Top-10s", ""]
+    lines = ["## C-Method Top-10s", ""]
     for key in METHOD_KEYS:
         urls = result["methods"].get(key, [])
         ms   = mm.get(f"{key}_ms", "?")
@@ -177,51 +196,62 @@ def _write_query_md(result: dict, ts: str) -> Path:
         else:
             lines.append("_No results._")
         lines.append("")
+    return lines
 
+
+def _render_comparison(result: dict, mm: dict) -> list[str]:
     # Comparison
-    lines += ["## Comparison (Oracle vs Methods)", ""]
+    lines = ["## Comparison (Oracle vs Methods)", ""]
     if result["oracle_urls"]:
-        oracle_set = set(result["oracle_urls"])
-        lines += [
-            "| Method | Jaccard | Oracle URLs captured |",
-            "|--------|---------|----------------------|",
-        ]
-        for key in METHOD_KEYS:
-            method_set = set(result["methods"].get(key, []))
-            shared     = oracle_set & method_set
-            j          = result["overlaps"][key]
-            lines.append(
-                f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
-            )
-        lines.append("")
-
-        all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
-        missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
-        lines += ["### Oracle URLs missed by all methods", ""]
-        if missed:
-            for u in missed:
-                lines.append(f"- {u}")
-        else:
-            lines.append("_All oracle URLs captured by at least one method._")
-        lines.append("")
+        lines += _comparison_with_oracle(result)
     else:
-        # Smoke: show pool coverage only
-        mps = mm.get("method_pool_sizes", {})
-        lines += [
-            "| Method | Pool size | Top-10 count | ms |",
-            "|--------|-----------|--------------|----|",
-        ]
-        for key in METHOD_KEYS:
-            urls      = result["methods"].get(key, [])
-            ms        = mm.get(f"{key}_ms", "?")
-            pool_size = mps.get(key, result["pool_size"])
-            lines.append(
-                f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
-            )
-        lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
+        lines += _comparison_pool_coverage(result, mm)
+    return lines
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+
+def _comparison_with_oracle(result: dict) -> list[str]:
+    oracle_set = set(result["oracle_urls"])
+    lines = [
+        "| Method | Jaccard | Oracle URLs captured |",
+        "|--------|---------|----------------------|",
+    ]
+    for key in METHOD_KEYS:
+        method_set = set(result["methods"].get(key, []))
+        shared     = oracle_set & method_set
+        j          = result["overlaps"][key]
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
+        )
+    lines.append("")
+
+    all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
+    missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
+    lines += ["### Oracle URLs missed by all methods", ""]
+    if missed:
+        for u in missed:
+            lines.append(f"- {u}")
+    else:
+        lines.append("_All oracle URLs captured by at least one method._")
+    lines.append("")
+    return lines
+
+
+def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
+    # Smoke: show pool coverage only
+    mps = mm.get("method_pool_sizes", {})
+    lines = [
+        "| Method | Pool size | Top-10 count | ms |",
+        "|--------|-----------|--------------|----|",
+    ]
+    for key in METHOD_KEYS:
+        urls      = result["methods"].get(key, [])
+        ms        = mm.get(f"{key}_ms", "?")
+        pool_size = mps.get(key, result["pool_size"])
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
+        )
+    lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
+    return lines
 
 
 # Write summary MD; return path
@@ -240,76 +270,93 @@ def _write_summary_md(results: list[dict], ts: str) -> Path:
 
     if has_oracle:
         scored = [r for r in results if r["oracle_urls"]]
-
-        # Per-mode table
-        lines += ["## Per-Mode Mean Jaccard", ""]
-        header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
-        sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
-        lines += [header, sep]
-        for mode in MODES:
-            grp = [r for r in scored if r["mode"] == mode]
-            if not grp:
-                continue
-            means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
-            winner = max(means, key=means.get)
-            row    = f"| {mode} | " + " | ".join(f"{means[k]:.3f}" for k in METHOD_KEYS)
-            row   += f" | **{METHOD_LABELS[winner]}** |"
-            lines.append(row)
-        lines.append("")
-
-        # Overall winner
+        lines += _summary_per_mode_table(scored)
         if scored:
-            overall = {k: sum(r["overlaps"][k] for r in scored) / len(scored) for k in METHOD_KEYS}
-            winner  = max(overall, key=overall.get)
-            lines += [
-                "## Overall Winner",
-                "",
-                "| Method | Mean Jaccard (all 16 probes) |",
-                "|--------|------------------------------|",
-            ]
-            for k in METHOD_KEYS:
-                mark = "  ← **WINNER**" if k == winner else ""
-                lines.append(f"| {METHOD_LABELS[k]} | {overall[k]:.3f}{mark} |")
-            lines.append("")
-
-            # Flag large-margin modes
-            lines += ["## Mode-Specific Signals (margin ≥ 0.10 vs second-best)", ""]
-            found_signal = False
-            for mode in MODES:
-                grp = [r for r in scored if r["mode"] == mode]
-                if not grp:
-                    continue
-                means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
-                sorted_k = sorted(means, key=means.get, reverse=True)
-                margin   = means[sorted_k[0]] - means[sorted_k[1]]
-                if margin >= 0.10:
-                    lines.append(
-                        f"- **{mode}**: {METHOD_LABELS[sorted_k[0]]} leads by {margin:.3f} "
-                        f"(vs {METHOD_LABELS[sorted_k[1]]} at {means[sorted_k[1]]:.3f})"
-                    )
-                    found_signal = True
-            if not found_signal:
-                lines.append("_No mode shows a margin ≥ 0.10 between first and second method._")
-            lines.append("")
+            lines += _summary_overall_winner(scored)
+            lines += _summary_mode_signals(scored)
 
     else:
-        # Smoke: coverage table
-        lines += ["## Method Coverage (smoke check — no oracle)", ""]
-        lines += [
-            "| Mode | Query | Pool | C1 | C2 | C2' | C3 |",
-            "|------|-------|------|----|----|-----|-----|",
-        ]
-        for r in results:
-            q_short = r["query"][:38]
-            counts  = [len(r["methods"].get(k, [])) for k in METHOD_KEYS]
-            lines.append(
-                f"| {r['mode']} | {q_short} | {r['pool_size']} "
-                f"| {counts[0]} | {counts[1]} | {counts[2]} | {counts[3]} |"
-            )
-        lines.append("")
+        lines += _summary_smoke_coverage(results)
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _summary_per_mode_table(scored: list[dict]) -> list[str]:
+    # Per-mode table
+    lines = ["## Per-Mode Mean Jaccard", ""]
+    header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
+    sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
+    lines += [header, sep]
+    for mode in MODES:
+        grp = [r for r in scored if r["mode"] == mode]
+        if not grp:
+            continue
+        means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
+        winner = max(means, key=means.get)
+        row    = f"| {mode} | " + " | ".join(f"{means[k]:.3f}" for k in METHOD_KEYS)
+        row   += f" | **{METHOD_LABELS[winner]}** |"
+        lines.append(row)
+    lines.append("")
+    return lines
+
+
+def _summary_overall_winner(scored: list[dict]) -> list[str]:
+    # Overall winner
+    overall = {k: sum(r["overlaps"][k] for r in scored) / len(scored) for k in METHOD_KEYS}
+    winner  = max(overall, key=overall.get)
+    lines = [
+        "## Overall Winner",
+        "",
+        "| Method | Mean Jaccard (all 16 probes) |",
+        "|--------|------------------------------|",
+    ]
+    for k in METHOD_KEYS:
+        mark = "  ← **WINNER**" if k == winner else ""
+        lines.append(f"| {METHOD_LABELS[k]} | {overall[k]:.3f}{mark} |")
+    lines.append("")
+    return lines
+
+
+def _summary_mode_signals(scored: list[dict]) -> list[str]:
+    # Flag large-margin modes
+    lines = ["## Mode-Specific Signals (margin ≥ 0.10 vs second-best)", ""]
+    found_signal = False
+    for mode in MODES:
+        grp = [r for r in scored if r["mode"] == mode]
+        if not grp:
+            continue
+        means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
+        sorted_k = sorted(means, key=means.get, reverse=True)
+        margin   = means[sorted_k[0]] - means[sorted_k[1]]
+        if margin >= 0.10:
+            lines.append(
+                f"- **{mode}**: {METHOD_LABELS[sorted_k[0]]} leads by {margin:.3f} "
+                f"(vs {METHOD_LABELS[sorted_k[1]]} at {means[sorted_k[1]]:.3f})"
+            )
+            found_signal = True
+    if not found_signal:
+        lines.append("_No mode shows a margin ≥ 0.10 between first and second method._")
+    lines.append("")
+    return lines
+
+
+def _summary_smoke_coverage(results: list[dict]) -> list[str]:
+    # Smoke: coverage table
+    lines = ["## Method Coverage (smoke check — no oracle)", ""]
+    lines += [
+        "| Mode | Query | Pool | C1 | C2 | C2' | C3 |",
+        "|------|-------|------|----|----|-----|-----|",
+    ]
+    for r in results:
+        q_short = r["query"][:38]
+        counts  = [len(r["methods"].get(k, [])) for k in METHOD_KEYS]
+        lines.append(
+            f"| {r['mode']} | {q_short} | {r['pool_size']} "
+            f"| {counts[0]} | {counts[1]} | {counts[2]} | {counts[3]} |"
+        )
+    lines.append("")
+    return lines
 
 
 if __name__ == "__main__":

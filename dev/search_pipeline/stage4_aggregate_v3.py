@@ -196,34 +196,55 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
         "",
     ]
 
+    overall = None
     if has_oracle and scored:
-        # Per-mode Jaccard table
-        lines += ["## Per-Mode Mean Jaccard", ""]
-        header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
-        sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
-        lines += [header, sep]
-        for mode in MODES:
-            grp = [r for r in scored if r["mode"] == mode]
-            if not grp:
-                continue
-            means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
-            winner = max(means, key=means.get)
-            row    = f"| {mode} | " + " | ".join(f"{means[k]:.3f}" for k in METHOD_KEYS)
-            row   += f" | **{METHOD_LABELS[winner]}** |"
-            lines.append(row)
-        lines.append("")
-
-        # Overall mean Jaccard
+        lines += _summary_per_mode_jaccard(scored)
         overall = {k: sum(r["overlaps"][k] for r in scored) / len(scored) for k in METHOD_KEYS}
-        winner  = max(overall, key=overall.get)
-        lines += ["## Overall Mean Jaccard", "", "| Method | Mean Jaccard |", "|--------|--------------|"]
-        for k in METHOD_KEYS:
-            mark = "  ← **WINNER**" if k == winner else ""
-            lines.append(f"| {METHOD_LABELS[k]} | {overall[k]:.3f}{mark} |")
-        lines.append("")
+        lines += _summary_overall_jaccard(overall)
 
+    lines += _summary_per_mode_latency(results)
+    lines += _summary_latency_statistics(results)
+
+    if has_oracle and scored:
+        lines += _summary_pareto(results, overall)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _summary_per_mode_jaccard(scored: list[dict]) -> list[str]:
+    # Per-mode Jaccard table
+    lines = ["## Per-Mode Mean Jaccard", ""]
+    header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
+    sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
+    lines += [header, sep]
+    for mode in MODES:
+        grp = [r for r in scored if r["mode"] == mode]
+        if not grp:
+            continue
+        means  = {k: sum(r["overlaps"][k] for r in grp) / len(grp) for k in METHOD_KEYS}
+        winner = max(means, key=means.get)
+        row    = f"| {mode} | " + " | ".join(f"{means[k]:.3f}" for k in METHOD_KEYS)
+        row   += f" | **{METHOD_LABELS[winner]}** |"
+        lines.append(row)
+    lines.append("")
+    return lines
+
+
+def _summary_overall_jaccard(overall: dict) -> list[str]:
+    # Overall mean Jaccard
+    winner  = max(overall, key=overall.get)
+    lines = ["## Overall Mean Jaccard", "", "| Method | Mean Jaccard |", "|--------|--------------|"]
+    for k in METHOD_KEYS:
+        mark = "  ← **WINNER**" if k == winner else ""
+        lines.append(f"| {METHOD_LABELS[k]} | {overall[k]:.3f}{mark} |")
+    lines.append("")
+    return lines
+
+
+def _summary_per_mode_latency(results: list[dict]) -> list[str]:
     # Per-mode mean latency
-    lines += ["## Per-Mode Mean Latency (ms)", ""]
+    lines = ["## Per-Mode Mean Latency (ms)", ""]
     header = "| Mode | " + " | ".join(k.upper() for k in METHOD_KEYS) + " |"
     sep    = "|------|" + "---|" * len(METHOD_KEYS)
     lines += [header, sep]
@@ -235,9 +256,12 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
         row = f"| {mode} | " + " | ".join(f"{ms_means[k]:.0f}" for k in METHOD_KEYS) + " |"
         lines.append(row)
     lines.append("")
+    return lines
 
+
+def _summary_latency_statistics(results: list[dict]) -> list[str]:
     # Per-method latency statistics across all 16 queries
-    lines += ["## Per-Method Latency Statistics (across 16 pairs)", ""]
+    lines = ["## Per-Method Latency Statistics (across 16 pairs)", ""]
     lines += [
         "| Method | Mean | p50 | p95 | Max | Tokens in/out (LLM) |",
         "|--------|------|-----|-----|-----|---------------------|",
@@ -256,34 +280,34 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
             tok = "—"
         lines.append(f"| {METHOD_LABELS[k]} | {mean_ms:.0f} | {p50:.0f} | {p95:.0f} | {max_ms} | {tok} |")
     lines.append("")
+    return lines
 
+
+def _summary_pareto(results: list[dict], overall: dict) -> list[str]:
     # Quality × Latency Pareto
-    if has_oracle and scored:
-        lines += ["## Quality × Latency Pareto", ""]
-        method_stats: list[tuple[str, float, float]] = []
-        for k in METHOD_KEYS:
-            mean_j  = overall[k]
-            ms_vals = [r["methods_meta"].get(f"{k}_ms", 0) for r in results]
-            mean_ms = sum(ms_vals) / len(ms_vals) if ms_vals else 0
-            method_stats.append((k, mean_j, mean_ms))
-        method_stats.sort(key=lambda x: -x[1])  # sort by quality desc
+    lines = ["## Quality × Latency Pareto", ""]
+    method_stats: list[tuple[str, float, float]] = []
+    for k in METHOD_KEYS:
+        mean_j  = overall[k]
+        ms_vals = [r["methods_meta"].get(f"{k}_ms", 0) for r in results]
+        mean_ms = sum(ms_vals) / len(ms_vals) if ms_vals else 0
+        method_stats.append((k, mean_j, mean_ms))
+    method_stats.sort(key=lambda x: -x[1])  # sort by quality desc
 
-        lines += [
-            "| Method | Mean Jaccard | Mean Latency (ms) | Pareto Status |",
-            "|--------|--------------|-------------------|---------------|",
-        ]
-        for k, j, ms in method_stats:
-            dominated = any(
-                other_j >= j and other_ms <= ms and (other_j > j or other_ms < ms)
-                for _, other_j, other_ms in method_stats
-                if _ != k
-            )
-            status = "DOMINATED" if dominated else "Pareto-optimal"
-            lines.append(f"| {METHOD_LABELS[k]} | {j:.3f} | {ms:.0f} | {status} |")
-        lines.append("")
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+    lines += [
+        "| Method | Mean Jaccard | Mean Latency (ms) | Pareto Status |",
+        "|--------|--------------|-------------------|---------------|",
+    ]
+    for k, j, ms in method_stats:
+        dominated = any(
+            other_j >= j and other_ms <= ms and (other_j > j or other_ms < ms)
+            for _, other_j, other_ms in method_stats
+            if _ != k
+        )
+        status = "DOMINATED" if dominated else "Pareto-optimal"
+        lines.append(f"| {METHOD_LABELS[k]} | {j:.3f} | {ms:.0f} | {status} |")
+    lines.append("")
+    return lines
 
 
 if __name__ == "__main__":
