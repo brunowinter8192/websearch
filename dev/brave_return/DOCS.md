@@ -97,4 +97,4 @@ Cookies must be read browser-wide via `Storage.getCookies`. `Tab.get_cookies()` 
 
 The page-state classifier must never call a terminal verdict on the mere presence of a challenge marker or a pow-link. That is the defect `src/search/engines/brave.py` carries today, and repeating it inside the probe would make the completion question unanswerable by construction.
 
-The launch module resolves patchright's own Chromium bundle rather than importing `dev/_lib/browser_launch.py`, which hardcodes the literal Google Chrome app. Reusing that helper would measure a different browser than production drives.
+The launch module resolves patchright's own Chromium bundle inline. It predates the 2026-09-24 fix that made `dev/_lib/browser_launch.py` launch the same patchright bundle; before that fix the shared helper launched the literal Google Chrome app and would have measured a different browser than production drives.

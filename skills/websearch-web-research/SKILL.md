@@ -5,15 +5,13 @@ description:
 
 # Web Research — Skill
 
-**Ein Deep Dive hängt am Typ der Domain, nie an deinem Bedarf.**
-- Der Deep-Dive-Workflow wird genutzt, basierend auf den Ergebnissen, die du mit den Commands erzielt hast.
+**Mache einen Deep Dive wenn auch andere urls einer Domain für deine Fragestellung relevant sein könnten**
 - Diese Domaintypen kommen für einen Deep Dive meist infrage:
    - Dokumentation einer Bibliothek, eines Frameworks oder einer API.
    - Handbuch oder Referenz eines Herstellers.
-- Diese Typen kommen oft nicht infrage:
+- Diese Typen kommen meist nicht infrage:
    - Blog, News, Forum, Produktseite, Changelog, Release Feed.
 - Schlage dem User proaktiv einen Deep Dive vor.
-    - Solltest du den kleinsten Verdacht haben, dass auch andere Websites der Domain konsultierenswert sind, schlage einen Deep Dive vor.
 
 **Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
 - Die Sprache des Chats gilt hier nicht.
