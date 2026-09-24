@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-# Measure discovery coverage + URL taxonomy for theblock.co
-# Methods: full sitemap union, news sitemap, RSS, bounded UI crawl
-# Output: dev/news_pipeline/theblock/discover_coverage_report.md
-#
-# Cache: dev/news_pipeline/theblock/cache/ — one JSON per sub-sitemap + news_sitemap.json
-# Resume-safe: already-cached subs are skipped on re-run.
-# CF behaviour: IP-level 429 fires after ~25 sequential fetches even at 5s/sub.
-# Backoff: per-sub retry with 60/120/180s waits. Re-run to fill remaining subs.
-#
-# Pre-probe RSS sample (captured before first sitemap run, verified same session):
-# /tmp/tb_rss.txt — 22 <link> tags total, 20 unique /post/ URLs.
 
 # INFRASTRUCTURE
 import subprocess
@@ -20,7 +9,7 @@ import json
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _probe_discovery_report import build_report, post_id, url_type  # noqa: E402
+from _probe_discovery_report import build_report, post_id, url_type
 
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 BASE = "https://www.theblock.co"
@@ -29,8 +18,8 @@ NEWS_CACHE  = CACHE_DIR / "news_sitemap.json"
 REPORT_PATH = "dev/news_pipeline/theblock/discover_coverage_report.md"
 
 SUB_DELAY    = 5.0
-BACKOFF_WAIT = [60, 120, 180]   # wait times for 429-retry; set MAX_RETRIES=0 for fast scan
-MAX_RETRIES  = 3                # set to 0 for a quick no-retry scan
+BACKOFF_WAIT = [60, 120, 180]
+MAX_RETRIES  = 3
 
 RSS_PREPROBE_URLS = [
     "https://www.theblock.co/post/403982/solana-infrastructure-firm-helius-acquires-light-protocol-expand-onchain-privacy",
@@ -142,7 +131,6 @@ def fetch_sub_with_retry(sub_url):
             return None, "cf_blocked"
     return None, "cf_blocked"
 
-# --- Method 1: Full sitemap union ---
 
 def _fetch_pending_subs(to_fetch):
     blocked_subs = []
@@ -214,7 +202,6 @@ def _reconstruct_sub_urls_from_cache():
             print(f"  WARNING: could not read {f.name}: {e}")
     return sub_urls
 
-# --- Method 2: News sitemap ---
 
 def fetch_news_sitemap():
     xml = curl_get(f"{BASE}/sitemap_tbco_news.xml")
@@ -238,7 +225,6 @@ def fetch_news_sitemap():
     print("  news sitemap: CF-blocked, no cache")
     return [], True
 
-# --- Method 3: RSS ---
 
 def fetch_rss():
     xml = curl_get(f"{BASE}/rss.xml")
@@ -253,7 +239,6 @@ def fetch_rss():
     print(f"  RSS: {len(unique)} unique article URLs ({len(links + guids)} <link>/<guid> tags)")
     return unique, False
 
-# --- Method 4: Bounded UI crawl ---
 
 def fetch_ui_crawl():
     status_notes = []

@@ -6,10 +6,9 @@ import time
 import httpx
 from curl_cffi import requests as curl_requests
 
-CALL_DELAY = 0.3         # seconds between cursor-loop HTTP calls
+CALL_DELAY = 0.3
 IMPERSONATE_TARGET = "chrome136"
 
-# HTTP/2 pseudo-headers + client-managed headers — strip before replay
 SKIP_HEADERS = frozenset({
     ":authority", ":method", ":path", ":scheme",
     "host", "content-length", "content-encoding", "transfer-encoding",
@@ -18,12 +17,10 @@ SKIP_HEADERS = frozenset({
 
 # FUNCTIONS
 
-# Strip HTTP/2 pseudo-headers and client-managed headers; preserve the rest exactly
 def filter_replay_headers(raw: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
 
 
-# Replay URL with httpx plain; return (status_code, body_bytes, resp_headers, error_str)
 def replay_httpx(url: str, headers: dict[str, str]) -> tuple[int, bytes | None, dict, str | None]:
     try:
         resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=30)
@@ -32,7 +29,6 @@ def replay_httpx(url: str, headers: dict[str, str]) -> tuple[int, bytes | None, 
         return -1, None, {}, str(e)
 
 
-# Replay URL with curl_cffi Chrome impersonation; return (status_code, body_bytes, resp_headers, error_str)
 def replay_curl_cffi(url: str, headers: dict[str, str]) -> tuple[int, bytes | None, dict, str | None]:
     try:
         resp = curl_requests.get(
@@ -43,7 +39,6 @@ def replay_curl_cffi(url: str, headers: dict[str, str]) -> tuple[int, bytes | No
         return -1, None, {}, str(e)
 
 
-# Parse response body JSON; return (last_article_id, last_article_display_date) for cursor chaining
 def extract_cursor(body: bytes) -> tuple[str | None, str | None]:
     try:
         data = json.loads(body)
@@ -72,7 +67,6 @@ def extract_cursor(body: bytes) -> tuple[str | None, str | None]:
     return str(last_id) if last_id else None, str(last_date) if last_date else None
 
 
-# Build next cursor URL from lastId + lastDisplayDate (lang=en required)
 def build_cursor_url(last_id: str, last_date: str) -> str:
     return (
         f"https://www.coindesk.com/api/v1/articles/timeline"
@@ -80,7 +74,6 @@ def build_cursor_url(last_id: str, last_date: str) -> str:
     )
 
 
-# Count articles in JSON response body
 def count_articles(body: bytes) -> int:
     try:
         data = json.loads(body)
@@ -95,7 +88,6 @@ def count_articles(body: bytes) -> int:
     return 0
 
 
-# Extract first/last article summary from response for structure inspection
 def extract_json_sample(body: bytes) -> dict | None:
     try:
         data = json.loads(body)
@@ -171,7 +163,6 @@ def record_cursor_success(i: int, next_url: str, outcome: dict, last_date: str,
     return row, total_articles, oldest_date
 
 
-# First 403/non-200: capture full diagnostics
 def handle_cursor_failure(i: int, next_url: str, headers: dict, prev_body: bytes, attempt: dict) -> list:
     diag = diagnose_403(
         next_url, headers, prev_body,
@@ -204,9 +195,6 @@ def build_cursor_summary(results: list, total_articles: int, oldest_date: str | 
     }
 
 
-# Chain n cursor-based HTTP calls from the first 200 response; return per-call stats + summary.
-# On first 403: capture full diagnostics (URL, body, resp-headers, cursor-source article)
-# and immediately run a recoverability test (10s + 30s retry).
 def cursor_loop(
     first_url: str,
     headers: dict[str, str],
@@ -216,7 +204,7 @@ def cursor_loop(
 ) -> list[dict]:
     results = []
     body = first_body
-    prev_body = first_body   # body from the call before the current one
+    prev_body = first_body
     url = first_url
     total_articles = 0
     oldest_date = None
@@ -251,14 +239,12 @@ def cursor_loop(
         body = next_body
         url = next_url
 
-    # Summary sentinel
     if results:
         results.append(build_cursor_summary(results, total_articles, oldest_date))
 
     return results
 
 
-# Response header signals
 def flag_headers(hdrs: dict) -> dict:
     keys = {k.lower() for k in hdrs}
     return {
@@ -273,7 +259,6 @@ def flag_headers(hdrs: dict) -> dict:
     }
 
 
-# Recoverability: wait 10s, retry; wait 30s more, retry
 def test_recoverability(url: str, req_headers: dict) -> dict:
     print("  [DIAG] sleeping 10s, retrying …", file=sys.stderr)
     time.sleep(10)
@@ -288,8 +273,6 @@ def test_recoverability(url: str, req_headers: dict) -> dict:
     return {"retry_at_10s": s10, "retry_at_40s": s40}
 
 
-# On first non-200: capture URL, body snippet, resp-headers, cursor-source article;
-# then run recoverability test (retry at +10s and +30s).
 def diagnose_403(
     url: str,
     req_headers: dict,
@@ -299,7 +282,6 @@ def diagnose_403(
 ) -> dict:
     print(f"  [DIAG] 403 on {url} — running recoverability test …", file=sys.stderr)
 
-    # Inspect cursor-source article (last article of previous successful response)
     cursor_source = inspect_cursor_source(prev_body)
 
     body_snippet_h = (body_h or b"")[:300].decode("utf-8", errors="replace")
@@ -320,7 +302,6 @@ def diagnose_403(
     }
 
 
-# Extract metadata of the last article from a response body (the article that generated the cursor)
 def inspect_cursor_source(body: bytes) -> dict:
     try:
         data = json.loads(body)

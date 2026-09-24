@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-# The Block proxy pipe — Stage 1 (neutral liveness) → Stage 2 (CF check) → Stage 3 (sitemap discovery + B-capture)
-#
-# Stage 1: Fetch fresh pool from 68 sources, sample 5k, neutral liveness @ concurrency=128.
-# Stage 2: CF-pass check on neutral-alive with curl_cffi impersonate=chrome.
-# Stage 3: Sequential-exhaustion discovery — drain ONE proxy until it 403/429s, record B, rotate.
-#          This guarantees real B observations (vs round-robin which never exhausts any single proxy).
-#
-# Usage:
-#   ./venv/bin/python dev/news_pipeline/theblock/pipe_theblock.py
-#
-# Output:
-#   dev/news_pipeline/theblock/pipe_log.md  — funnel log (appended per run)
-#   dev/news_pipeline/theblock/cache/       — per-sub sitemap checkpoint JSONs (resume-safe)
 
 # INFRASTRUCTURE
 
@@ -24,12 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from probe_pool_size  import fetch_all_sources   # noqa: E402
-from probe_liveness   import run_checks          # noqa: E402
-from probe_discovery  import (                   # noqa: E402
+from probe_pool_size  import fetch_all_sources
+from probe_liveness   import run_checks
+from probe_discovery  import (
     load_sub_cache, save_sub_cache, extract_locs, normalize_url, CACHE_DIR,
 )
-from source_tracker   import update_and_flush as tracker_flush  # noqa: E402
+from source_tracker   import update_and_flush as tracker_flush
 from _pipe_theblock_cf import cf_get, is_xml, stage2_cf_check, CONCURRENCY_CF
 
 SCRIPT_DIR            = Path(__file__).parent
@@ -88,7 +75,6 @@ async def run_stage1() -> tuple[list[tuple[str, str]], list[dict], dict[str, set
 
 
 async def fetch_fresh_pool() -> tuple[list[tuple[str, str]], list[dict], dict[str, set[str]]]:
-    """Fetch all 68 sources fresh; return (entries, source_results, hp_to_sources)."""
     source_results = await fetch_all_sources()
     bucket: dict[str, set[str]] = {"http": set(), "socks4": set(), "socks5": set()}
     hp_to_sources: dict[str, set[str]] = {}
@@ -104,7 +90,6 @@ async def fetch_fresh_pool() -> tuple[list[tuple[str, str]], list[dict], dict[st
 
 
 def build_proxy_urls(liveness_results: list[dict]) -> list[str]:
-    """Extract alive results → proxy URL strings (socks5 → socks5h for remote DNS)."""
     urls = []
     for r in liveness_results:
         if r["alive"]:
@@ -153,14 +138,6 @@ def run_stage3(cf_passing: list[str]) -> tuple[int, int, list[int], list[int], f
 
 
 def stage3_discovery(cf_proxies: list[str]) -> tuple[int, int, list[int], list[int]]:
-    """Fetch missing sub-sitemaps with sequential proxy exhaustion for B-capture.
-
-    Strategy: stay on current proxy for consecutive subs until it returns 403/429 →
-    record B (fetches completed by that proxy) → rotate to next. This guarantees
-    each proxy reaches (or approaches) its CF block limit before we move on.
-
-    Returns: (subs_fetched, total_subs, b_exhausted, b_active_lower_bounds)
-    """
     sub_urls = get_sitemap_index(cf_proxies)
     if not sub_urls:
         print("  Could not fetch sitemap index — no working CF-passing proxy.")
@@ -179,7 +156,7 @@ def stage3_discovery(cf_proxies: list[str]) -> tuple[int, int, list[int], list[i
     proxy_budget: dict[str, int]  = {p: 0 for p in proxy_queue}
     b_exhausted:  list[int]       = []
     subs_fetched = 0
-    proxy_idx    = 0   # index into proxy_queue; stay put on success, advance on exhaust/transient
+    proxy_idx    = 0
 
     for sub_url in pending:
         proxy_idx, subs_fetched = fetch_one_sub(
@@ -222,7 +199,6 @@ def fetch_one_sub(
             print(f"  [{subs_fetched:>2}] {sub_name:<55} "
                   f"B_so_far={proxy_budget[purl]}  proxy={purl[:35]}…")
             fetched = True
-            # DO NOT advance proxy_idx — sequential exhaustion
 
         elif status in (403, 429):
             b = proxy_budget[purl]
@@ -232,20 +208,17 @@ def fetch_one_sub(
             proxy_queue.pop(proxy_idx)
             if proxy_idx >= len(proxy_queue):
                 proxy_idx = 0
-            # Retry same sub with next proxy (proxy_idx already points at successor)
 
         else:
-            # Transient (connect error, timeout, etc.) — skip this proxy for this sub
             transient_tries += 1
             proxy_idx += 1
             if transient_tries >= len(proxy_queue):
                 print(f"  [!!] {sub_name} — all proxies failed transiently, skipping")
-                fetched = True   # accept skip; sub stays uncached for next run
+                fetched = True
     return proxy_idx, subs_fetched
 
 
 def get_sitemap_index(cf_proxies: list[str]) -> list[str]:
-    """Fetch sitemap_tbco_index.xml, trying proxies until one returns valid XML."""
     for purl in cf_proxies[:10]:
         body, status = cf_get(purl, SITEMAP_INDEX_URL)
         if status == 200 and is_xml(body):
@@ -339,7 +312,6 @@ def append_pipe_log(
     elapsed_s2: float,
     elapsed_s3: float,
 ) -> None:
-    """Append one structured funnel entry to pipe_log.md."""
     lines = build_funnel_lines(
         ts, raw_n, neutral_n, cf_n, subs_fetched, total_subs,
         elapsed_s1, elapsed_s2, elapsed_s3,

@@ -15,21 +15,19 @@ _TS_FMT     = "%Y-%m-%dT%H:%M:%SZ"
 
 
 class LockBusyError(RuntimeError):
-    """Raised when the acquire_pipe lock is held by another process."""
+    pass
 
 
 # FUNCTIONS
 
-# Remove stale sidecar if the owning PID is no longer alive
 def cleanup_stale() -> None:
-    """Check sidecar PID via os.kill; unlink sidecar if process dead. PermissionError → held."""
     if not _SIDECAR.exists():
         return
     try:
         data = json.loads(_SIDECAR.read_text(encoding="utf-8"))
         pid  = data.get("pid")
     except (json.JSONDecodeError, OSError):
-        return  # unreadable → treat as held
+        return
     if pid is None:
         _SIDECAR.unlink(missing_ok=True)
         return
@@ -38,10 +36,9 @@ def cleanup_stale() -> None:
     except ProcessLookupError:
         _SIDECAR.unlink(missing_ok=True)
     except PermissionError:
-        return  # process alive but not ours → treat as held
+        return
 
 
-# Single-job system-wide lock for acquire_pipe; crash-safe (kernel releases flock on death)
 @contextmanager
 def acquire(job: str, target: str):
     LOCK_DIR.mkdir(parents=True, exist_ok=True)
@@ -69,7 +66,6 @@ def acquire(job: str, target: str):
         fd.close()
 
 
-# Build human-readable busy message from sidecar JSON (pid, job, target, elapsed)
 def _busy_message() -> str:
     try:
         data       = json.loads(_SIDECAR.read_text(encoding="utf-8"))
@@ -89,7 +85,6 @@ def _busy_message() -> str:
         return "acquire_pipe already running (lock held, sidecar unreadable)"
 
 
-# Write sidecar JSON atomically via tmp file + os.rename
 def _write_sidecar(data: dict) -> None:
     tmp_fd, tmp_path = tempfile.mkstemp(dir=LOCK_DIR, suffix=".tmp")
     try:

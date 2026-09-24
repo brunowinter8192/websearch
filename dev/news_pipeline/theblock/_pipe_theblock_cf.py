@@ -16,7 +16,6 @@ XML_MARKERS           = [b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>"]
 # FUNCTIONS
 
 def cf_get(proxy_url: str, url: str) -> tuple[bytes, int]:
-    """GET url via proxy with curl_cffi chrome impersonation. Returns (body, status_code)."""
     try:
         s = cffi_requests.Session(impersonate="chrome")
         r = s.get(url, proxies={"http": proxy_url, "https": proxy_url}, timeout=CF_TIMEOUT_S)
@@ -32,7 +31,6 @@ def is_xml(body: bytes) -> bool:
 
 
 def stage2_cf_check(proxy_urls: list[str]) -> list[str]:
-    """CF-pass check on neutral-alive proxies. Returns list of passing proxy URL strings."""
     passing: list[str] = []
     lock = threading.Lock()
     done = [0]

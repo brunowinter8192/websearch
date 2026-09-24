@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# Per-source proxy attribution, cumulative scoreboard, and freshness tracking.
-# Called by pipe_theblock.py at end of each run via update_and_flush().
-#
-# Outputs (all in dev/news_pipeline/theblock/):
-#   source_scoreboard.json  — cumulative state across runs (tracked)
-#   source_scoreboard.md    — rendered ranking table (tracked, re-generated each run)
-#   freshness_log.md        — per-run new/dropped diffs (tracked, appended)
-#   source_snapshots/       — per-source proxy sets for diffing (gitignored)
 
 # INFRASTRUCTURE
 
@@ -21,7 +13,7 @@ SCOREBOARD_MD   = SCRIPT_DIR / "source_scoreboard.md"
 FRESHNESS_LOG   = SCRIPT_DIR / "freshness_log.md"
 SNAPSHOTS_DIR   = SCRIPT_DIR / "source_snapshots"
 
-CF_RATE_MIN_N = 30   # cf_checked threshold for cf_rate to be statistically meaningful
+CF_RATE_MIN_N = 30
 
 # ORCHESTRATOR
 
@@ -34,8 +26,6 @@ def update_and_flush(
     cf_passing: list[str],
     hp_to_sources: dict[str, set[str]],
 ) -> None:
-    """Compute this run's per-source stats, merge into cumulative scoreboard,
-    write freshness diff. Single entry point called by pipe_theblock.py."""
     run_stats = compute_run_stats(
         source_results, sample, liveness_results,
         neutral_alive, cf_passing, hp_to_sources,
@@ -58,24 +48,18 @@ def compute_run_stats(
     cf_passing: list[str],
     hp_to_sources: dict[str, set[str]],
 ) -> dict[str, dict]:
-    """Return per-source-url counters for this run."""
     src_proxies: dict[str, set[str]] = {r["url"]: r["proxies"] for r in source_results}
 
     stats = _init_stats(src_proxies)
 
-    # unique_latest: proxies that belong exclusively to this source (not in any other)
     _count_unique_latest(stats, src_proxies, hp_to_sources)
 
-    # checked: sampled proxies attributable to each source
     _count_checked(stats, sample, hp_to_sources)
 
-    # alive: liveness-passing proxies attributable to each source
     _count_alive(stats, liveness_results, hp_to_sources)
 
-    # cf_checked: neutral-alive proxies fed into Stage 2, per source
     _count_proxy_urls(stats, neutral_alive, hp_to_sources, "cf_checked")
 
-    # cf_passed: CF-passing proxies per source
     _count_proxy_urls(stats, cf_passing, hp_to_sources, "cf_passed")
 
     return stats
@@ -137,7 +121,6 @@ def _count_proxy_urls(
 
 
 def load_scoreboard() -> dict:
-    """Load existing scoreboard JSON or return empty dict."""
     if SCOREBOARD_JSON.exists():
         return json.loads(SCOREBOARD_JSON.read_text(encoding="utf-8"))
     return {}
@@ -149,7 +132,6 @@ def merge_scoreboard(
     source_results: list[dict],
     ts: datetime,
 ) -> dict:
-    """Add this run's counts to cumulative scoreboard. Returns updated dict."""
     result = dict(scoreboard)
     bucket_map = {r["url"]: r["bucket"] for r in source_results}
 
@@ -164,7 +146,7 @@ def merge_scoreboard(
         entry["alive"]         += s["alive"]
         entry["cf_checked"]    += s["cf_checked"]
         entry["cf_passed"]     += s["cf_passed"]
-        entry["unique_latest"]  = s["unique_latest"]   # latest run only — overwritten
+        entry["unique_latest"]  = s["unique_latest"]
         entry["runs"]          += 1
         result[url] = entry
 
@@ -179,7 +161,6 @@ def save_scoreboard(scoreboard: dict) -> None:
 
 
 def _rank_score(entry: dict) -> float:
-    """Rank score: cf_rate if cf_checked >= threshold, else alive_rate × exclusivity."""
     if entry["cf_checked"] >= CF_RATE_MIN_N:
         return entry["cf_passed"] / entry["cf_checked"]
     alive_rate  = entry["alive"] / entry["checked"] if entry["checked"] else 0.0
@@ -189,7 +170,6 @@ def _rank_score(entry: dict) -> float:
 
 
 def render_scoreboard_md(scoreboard: dict, ts: datetime) -> None:
-    """Re-render source_scoreboard.md from current JSON state, sorted by rank score."""
     entries = [(url, e) for url, e in scoreboard.items() if not url.startswith("_")]
     entries.sort(key=lambda x: _rank_score(x[1]), reverse=True)
 
@@ -234,7 +214,6 @@ def render_scoreboard_md(scoreboard: dict, ts: datetime) -> None:
 
 
 def compute_freshness_diffs(source_results: list[dict]) -> list[dict]:
-    """Diff each source's current proxy set against its last snapshot. First run = baseline."""
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     diffs = []
     for r in source_results:
@@ -247,7 +226,7 @@ def compute_freshness_diffs(source_results: list[dict]) -> list[dict]:
             new     = current - prev
             dropped = prev - current
         else:
-            new     = set()    # first run — baseline, no meaningful diff
+            new     = set()
             dropped = set()
         diffs.append({
             "url": r["url"], "total": len(current),
@@ -257,7 +236,6 @@ def compute_freshness_diffs(source_results: list[dict]) -> list[dict]:
 
 
 def save_snapshots(source_results: list[dict], ts: datetime) -> None:
-    """Write/overwrite per-source snapshot files for the next run's diff."""
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
     for r in source_results:
         if not r["ok"]:
@@ -274,7 +252,6 @@ def save_snapshots(source_results: list[dict], ts: datetime) -> None:
 
 
 def append_freshness_log(diffs: list[dict], ts: datetime) -> None:
-    """Append one freshness entry (per-source new/dropped) to freshness_log.md."""
     changed = [d for d in diffs if d["new"] > 0 or d["dropped"] > 0]
 
     lines = [f"## {ts.strftime('%Y-%m-%dT%H:%M:%SZ')}", ""]
@@ -304,12 +281,10 @@ def append_freshness_log(diffs: list[dict], ts: datetime) -> None:
 
 
 def _source_id(url: str) -> str:
-    """Stable 12-char SHA1 hex of URL — used as snapshot filename."""
     return hashlib.sha1(url.encode()).hexdigest()[:12]
 
 
 def _source_label(url: str) -> str:
-    """Short human-readable label (mirrors probe_pool_size._source_label)."""
     if "proxyscrape.com" in url:
         return f"proxyscrape/{url.split('protocol=')[-1]}"
     parts = url.rstrip("/").split("/")

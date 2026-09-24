@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-# Discriminate: curl_cffi impersonate=chrome passability test against theblock.co
-#
-# WHY: monosans run found 494 alive proxies under neutral check_url but 0 under
-# theblock.co (rustls JA3). This probe re-tests with the CORRECT browser signature
-# (curl_cffi chrome) to discriminate:
-#   (a) signature was the blocker => some proxies now pass => free loop viable
-#   (b) proxy IPs are CF-reputation-blocked => still 0, failures dominated by 403/429
-#   (c) pool stale => still 0, failures dominated by connection errors
-#
-# Primary target:  https://www.theblock.co/sitemap_tbco_post_0.xml  (real fetch target,
-#                  same endpoint that returned 403/429 in the discovery run)
-# Secondary target: https://www.theblock.co/sitemap_tbco_index.xml  (index, tested on
-#                  passing proxies only for cross-check; results reported separately)
-#
-# Output: dev/news_pipeline/theblock/probe_curl_cffi_discriminator_reports/discriminator_<ts>.md
-# Usage:  ./venv/bin/python dev/news_pipeline/theblock/probe_curl_cffi_discriminator.py
 
 # INFRASTRUCTURE
 import json
@@ -28,12 +12,10 @@ from pathlib import Path
 from curl_cffi import requests as cffi_requests
 
 PROXIES_JSON   = Path("dev/news_pipeline/theblock/monosans_out_neutral/proxies.json")
-TARGET_PRIMARY = "https://www.theblock.co/sitemap_tbco_post_type_post_0.xml"  # real /post/ sub (from index)
+TARGET_PRIMARY = "https://www.theblock.co/sitemap_tbco_post_type_post_0.xml"
 TARGET_SECONDARY = "https://www.theblock.co/sitemap_tbco_index.xml"
-# NOTE: earlier guess "sitemap_tbco_post_0.xml" was wrong — returned 404 via proxies because
-# the URL doesn't exist; real pattern is sitemap_tbco_post_type_post_N.xml
 CONCURRENCY    = 20
-TIMEOUT        = 15  # seconds, total per request
+TIMEOUT        = 15
 REPORT_DIR     = Path("dev/news_pipeline/theblock/probe_curl_cffi_discriminator_reports")
 
 XML_MARKERS    = [b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>"]
@@ -101,20 +83,18 @@ def classify_exception(e):
     code = getattr(e, "code", None)
     if code is not None:
         code_int = int(code)
-        # libcurl CURLcode values
-        if code_int == 28:   # CURLE_OPERATION_TIMEDOUT
+        if code_int == 28:
             return ("fail_timeout", code_int)
-        elif code_int in (7, 5, 97):   # COULDNT_CONNECT, COULDNT_RESOLVE_PROXY, PROXY_*
+        elif code_int in (7, 5, 97):
             return ("fail_connection", code_int)
-        elif code_int == 6:  # COULDNT_RESOLVE_HOST
+        elif code_int == 6:
             return ("fail_connection", code_int)
-        elif code_int in (35, 51, 58, 60):  # SSL errors
+        elif code_int in (35, 51, 58, 60):
             return ("fail_ssl", code_int)
-        elif code_int in (55, 56):  # SEND_ERROR, RECV_ERROR
+        elif code_int in (55, 56):
             return ("fail_connection", code_int)
         else:
             return (f"fail_curl_{code_int}", code_int)
-    # fallback: classify by message
     msg = str(e).lower()
     if "timeout" in msg or "timed out" in msg:
         return ("fail_timeout", -1)
@@ -170,7 +150,6 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     return "\n".join(lines) + "\n"
 
 def failure_mode_counts(primary_counts):
-    # Failure mode breakdown
     cf_block   = primary_counts.get("fail_403", 0) + primary_counts.get("fail_429", 0)
     conn_err   = sum(v for k, v in primary_counts.items()
                      if "connection" in k or "ssl" in k or "curl_" in k)
@@ -240,14 +219,12 @@ def build_secondary_lines(passing_proxies, secondary_results, elapsed_secondary)
     return lines
 
 def build_asn_lines(proxies, passing_proxies):
-    # ASN distribution of passing proxies
     passing_asns = Counter(
         p["asn"]["autonomous_system_organization"]
         for p in passing_proxies
         if p.get("asn")
     ) if passing_proxies else Counter()
 
-    # ASN distribution of neutral pool (to document DC-IP prior)
     pool_asns = Counter(
         p["asn"]["autonomous_system_organization"]
         for p in proxies
@@ -272,7 +249,6 @@ def build_asn_lines(proxies, passing_proxies):
     return lines
 
 def build_verdict_lines(pass_count, cf_block, conn_err, timeout):
-    # Verdict
     if pass_count > 0:
         verdict = "(a) — SIGNATURE was the blocker. curl_cffi-chrome passes; free proxy loop is viable."
     elif cf_block > (conn_err + timeout) * 2:

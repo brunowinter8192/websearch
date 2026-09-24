@@ -11,10 +11,6 @@ from _p2_state import RiderState
 
 # FUNCTIONS
 
-# Independent progress watchdog — runs as a separate asyncio task, immune to wedged slots.
-# Uses asyncio.sleep() (timer-based) so it fires even when all slot tasks are permanently
-# suspended on await crawler.arun(). Polls every poll_interval seconds; default is
-# min(30, stall_timeout_s / 4) so a short smoke timeout still gets fast detection.
 async def _watchdog(
     state:         RiderState,
     output_dir:    Path,
@@ -27,12 +23,9 @@ async def _watchdog(
             return
         idle = time.monotonic() - state.last_progress_mono
         if idle > state.stall_timeout_s:
-            _abort_stall(state, output_dir, idle)  # does not return
+            _abort_stall(state, output_dir, idle)
 
 
-# Write remaining_urls.txt + job.md then os._exit(1). Never returns.
-# os._exit bypasses asyncio teardown and browser.close() so wedged Chrome processes
-# cannot re-hang the shutdown; raw files already flushed to disk before we reach here.
 def _abort_stall(state: RiderState, output_dir: Path, idle_s: float) -> None:
     print(
         f"[watchdog] STALL {idle_s:.0f}s ≥ {state.stall_timeout_s:.0f}s — "
@@ -43,7 +36,6 @@ def _abort_stall(state: RiderState, output_dir: Path, idle_s: float) -> None:
 
     queued = _drain_queue(state)
 
-    # In-flight URLs — the wedged ones: diagnostically valuable
     inflight = sorted(state.in_flight_urls)
 
     fail_log = _write_remaining_urls_log(output_dir, idle_s, state.stall_timeout_s, queued, inflight)
@@ -55,7 +47,6 @@ def _abort_stall(state: RiderState, output_dir: Path, idle_s: float) -> None:
     os._exit(1)
 
 
-# Drain remaining queue URLs
 def _drain_queue(state: RiderState) -> list:
     queued: list[str] = []
     while True:
@@ -66,7 +57,6 @@ def _drain_queue(state: RiderState) -> list:
     return queued
 
 
-# Write failure log
 def _write_remaining_urls_log(output_dir: Path, idle_s: float, stall_timeout_s: float,
                                queued: list, inflight: list) -> Path:
     fail_log = output_dir / "remaining_urls.txt"
@@ -83,10 +73,9 @@ def _write_remaining_urls_log(output_dir: Path, idle_s: float, stall_timeout_s: 
     return fail_log
 
 
-# Write job.md via reporter; fallback to minimal stub on any error
 def _write_stall_job_md(state: RiderState, output_dir: Path, idle_s: float) -> None:
     try:
-        from p4_reporter import write_riding_report  # late import — avoids circular at module level
+        from p4_reporter import write_riding_report
         write_riding_report(state, output_dir, state.t_job_start)
         print(f"[watchdog] job.md → {output_dir / 'job.md'}", file=sys.stderr)
     except Exception as exc:

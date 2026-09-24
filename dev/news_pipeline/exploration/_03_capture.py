@@ -7,11 +7,11 @@ import sys
 import time
 import urllib.request
 
-DISABLED_RETRY_MAX = 3   # retries before declaring persistent disabled (real end)
-DISABLED_RETRY_WAIT = 2.0  # seconds between disabled retries
+DISABLED_RETRY_MAX = 3
+DISABLED_RETRY_WAIT = 2.0
 
 POLL_INTERVAL = 0.5
-POLL_MAX = 40            # 20s max wait per click
+POLL_MAX = 40
 
 REAL_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -19,7 +19,6 @@ REAL_UA = (
     "Chrome/146.0.7680.154 Safari/537.36"
 )
 
-# Extract feed article URLs + title; excludes aside/nav/footer/sidebar noise (mirrors discover.py)
 _JS_EXTRACT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -63,7 +62,6 @@ _JS_EXTRACT = """
 })();
 """
 
-# Count feed-scoped article URLs (fast poll)
 _JS_COUNT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -86,7 +84,6 @@ _JS_COUNT = """
 })();
 """
 
-# Scroll "More stories" button into view and click it; return true if found
 _JS_CLICK_BTN = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -102,7 +99,6 @@ _JS_CLICK_BTN = """
 })();
 """
 
-# Button state — returns JSON string {found, disabled} for pydoll CDP unwrapping via _extract_value
 _JS_BTN_STATE_JSON = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -116,7 +112,6 @@ _JS_BTN_STATE_JSON = """
 })();
 """
 
-# Dismiss OneTrust cookie consent overlay so pointer events reach the feed
 _JS_DISMISS_COOKIE = """
 (function() {
     var btn = document.querySelector('#onetrust-accept-btn-handler');
@@ -130,14 +125,12 @@ _JS_DISMISS_COOKIE = """
 
 # FUNCTIONS
 
-# Bind to port 0 to get a free OS-assigned port
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-# Launch Chrome in background via open -gna (new instance, no foreground)
 def launch_background_chrome(port: int, session_dir: str) -> None:
     subprocess.run(
         [
@@ -154,7 +147,6 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
     )
 
 
-# Poll /json/version until Chrome responds; return webSocketDebuggerUrl
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
@@ -168,7 +160,6 @@ def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     raise TimeoutError(f"Chrome did not start on port {port} within {timeout}s")
 
 
-# Kill the Chrome process bound to this debug port
 def kill_chrome_on_port(port: int) -> None:
     try:
         subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
@@ -176,7 +167,6 @@ def kill_chrome_on_port(port: int) -> None:
         print(f"pkill (non-fatal): {e}", file=sys.stderr)
 
 
-# Unpack CDP execute_script result dict
 def _extract_value(raw):
     try:
         return raw["result"]["result"]["value"]
@@ -184,7 +174,6 @@ def _extract_value(raw):
         return None
 
 
-# Run extract JS + decode JSON response into list of article dicts
 async def extract_articles(tab) -> list[dict]:
     raw = await tab.execute_script(_JS_EXTRACT)
     val = _extract_value(raw)
@@ -196,13 +185,11 @@ async def extract_articles(tab) -> list[dict]:
         return []
 
 
-# Click "More stories" button via JS; return True if clicked
 async def click_button(tab) -> bool:
     raw = await tab.execute_script(_JS_CLICK_BTN)
     return bool(_extract_value(raw))
 
 
-# Poll feed-scoped count up to POLL_MAX × POLL_INTERVAL; return when it grows
 async def wait_for_new_articles(tab, prev_count: int) -> int:
     for _ in range(POLL_MAX):
         await asyncio.sleep(POLL_INTERVAL)
@@ -213,7 +200,6 @@ async def wait_for_new_articles(tab, prev_count: int) -> int:
     return prev_count
 
 
-# Query button presence and disabled state via CDP; return {found, disabled}
 async def check_btn_state(tab) -> dict:
     raw = await tab.execute_script(_JS_BTN_STATE_JSON)
     val = _extract_value(raw)
@@ -225,7 +211,6 @@ async def check_btn_state(tab) -> dict:
         return {"found": False, "disabled": False}
 
 
-# Retry a seen-disabled button up to DISABLED_RETRY_MAX times with scroll nudge; return True if recovered
 async def retry_disabled_check(tab, click_n: int) -> bool:
     for attempt in range(1, DISABLED_RETRY_MAX + 1):
         print(f"  [disabled-retry {attempt}/{DISABLED_RETRY_MAX}] click={click_n} waiting {DISABLED_RETRY_WAIT}s …", file=sys.stderr)

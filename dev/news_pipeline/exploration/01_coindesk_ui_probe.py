@@ -12,14 +12,14 @@ from pathlib import Path
 from pydoll.browser import Chrome
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _01_dom import build_options, click_button, extract_articles, find_button, inspect_containers, wait_for_new_articles  # noqa: E402
+from _01_dom import build_options, click_button, extract_articles, find_button, inspect_containers, wait_for_new_articles
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 SCREENSHOT_PATH = str(Path.home() / "tmp" / "coindesk_button_pos.png")
 OUTPUT_DIR = Path(__file__).parent / "01_output"
 DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 MAX_CLICK_ROUNDS = 20
-PRE_TODAY_THRESHOLD = 3  # stop when this many feed articles from before today
+PRE_TODAY_THRESHOLD = 3
 
 
 # ORCHESTRATOR
@@ -40,8 +40,6 @@ async def probe_workflow(headless: bool):
         "summary": {},
     }
 
-    # Explicit start/stop — async with __aexit__ tries to restore Preferences.backup
-    # which doesn't exist in a fresh temp session dir (pydoll bug with ephemeral profiles).
     browser = Chrome(build_options(headless, session_dir))
     tab = await browser.start()
     all_urls: dict = {}
@@ -67,7 +65,6 @@ async def run_initial_inspection(tab, today, report) -> dict:
     await tab.go_to(TARGET_URL, timeout=60)
     await asyncio.sleep(3.0)
 
-    # DOM inspection — log container counts + article-card ancestor chains
     inspection = await inspect_containers(tab)
     report["container_inspection"] = inspection
     print("Container counts:", {k: v for k, v in inspection["counts"].items()}, file=sys.stderr)
@@ -75,7 +72,6 @@ async def run_initial_inspection(tab, today, report) -> dict:
     for c in inspection.get("sample_chains", [])[:3]:
         print(f"  {c['url'][:55]} → {' > '.join(c['chain'][:4])}", file=sys.stderr)
 
-    # Snapshot 0 — initial feed articles (scoped, no sidebar)
     initial = await extract_articles(tab)
     all_urls = {a["url"]: a for a in initial}
     dates_0 = _date_span(list(all_urls.keys()))
@@ -86,7 +82,6 @@ async def run_initial_inspection(tab, today, report) -> dict:
     })
     print(f"Batch 0: {len(initial)} initial | span {dates_0} | pre-today={count_pre_today(list(all_urls.values()), today)}", file=sys.stderr)
 
-    # Find + describe button, then screenshot
     btn = await find_button(tab)
     report["button"] = btn
     if btn and btn.get("found"):
@@ -101,7 +96,6 @@ async def run_initial_inspection(tab, today, report) -> dict:
 
 
 async def run_click_loop(tab, today, report, all_urls: dict):
-    # Click + wait cycle — stop when ≥PRE_TODAY_THRESHOLD feed articles from before today
     prev_count = len(all_urls)
     for click_n in range(1, MAX_CLICK_ROUNDS + 1):
         clicked = await click_button(tab)
@@ -138,7 +132,6 @@ async def run_click_loop(tab, today, report, all_urls: dict):
 
 
 def finalize_summary(report: dict, all_urls: dict):
-    # Final summary
     all_list = list(all_urls.values())
     by_date = _group_by_date(all_list)
     report["summary"].update({
@@ -149,7 +142,6 @@ def finalize_summary(report: dict, all_urls: dict):
     })
 
 
-# Parse date from CoinDesk URL path (/YYYY/MM/DD/) → UTC midnight datetime
 def parse_url_date(url: str) -> datetime | None:
     m = DATE_RE.search(url)
     if not m:
@@ -160,12 +152,10 @@ def parse_url_date(url: str) -> datetime | None:
         return None
 
 
-# Count articles whose URL date is before today
 def count_pre_today(articles: list[dict], today) -> int:
     return sum(1 for a in articles if (d := parse_url_date(a["url"])) and d.date() < today)
 
 
-# Return date span string [earliest..latest] for a list of URLs
 def _date_span(urls: list[str]) -> str:
     dates = [parse_url_date(u) for u in urls]
     dates = [d for d in dates if d is not None]
@@ -176,7 +166,6 @@ def _date_span(urls: list[str]) -> str:
     return f"[{lo}..{hi}]" if lo != hi else f"[{lo}]"
 
 
-# Group articles by URL date → {date: count}
 def _group_by_date(articles: list[dict]) -> dict:
     groups: dict = {}
     for a in articles:
@@ -187,7 +176,6 @@ def _group_by_date(articles: list[dict]) -> dict:
     return groups
 
 
-# Return sample list [{url, timeLabel}] for oldest, middle, newest
 def _sample_by_age(articles: list[dict]) -> list[dict]:
     with_date = [(parse_url_date(a["url"]), a) for a in articles]
     with_date = [(d, a) for d, a in with_date if d is not None]
@@ -199,7 +187,6 @@ def _sample_by_age(articles: list[dict]) -> list[dict]:
     return [{"url": with_date[i][1]["url"], "timeLabel": with_date[i][1]["timeLabel"]} for i in indices]
 
 
-# Write probe JSON output, return path
 def write_output(data: dict) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -208,7 +195,6 @@ def write_output(data: dict) -> Path:
     return path
 
 
-# Print human-readable summary to stdout
 def _print_summary(report: dict):
     s = report["summary"]
     btn = report["button"] or {}

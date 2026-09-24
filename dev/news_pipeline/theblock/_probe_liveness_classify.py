@@ -27,13 +27,11 @@ async def check_proxy(
     connect_s: float,
     read_s: float,
 ) -> dict:
-    """GET CHECK_URL through one proxy; classify outcome into alive/dead bucket."""
-    # socks5h = remote DNS resolution through proxy (avoids local DNS load, more representative)
     proxy_proto = "socks5h" if proto == "socks5" else proto
     proxy_url   = f"{proxy_proto}://{host_port}"
 
     async with sem:
-        t0      = time.monotonic()          # measure from semaphore-acquire, not queue-entry
+        t0      = time.monotonic()
         elapsed = 0.0
         try:
             resp    = await asyncio.wait_for(
@@ -43,7 +41,7 @@ async def check_proxy(
                     timeout=(connect_s, read_s),
                     allow_redirects=False,
                 ),
-                timeout=connect_s + read_s + 2.0,   # hard Python deadline: curl timeout + 2s slack
+                timeout=connect_s + read_s + 2.0,
             )
             elapsed = time.monotonic() - t0
             body    = resp.text.strip() if resp.text else ""
@@ -76,13 +74,6 @@ def _res(proto: str, host_port: str, alive: bool, bucket: str, detail: str, elap
 def classify_error(
     exc: RequestException, elapsed_s: float, connect_s: float, read_s: float
 ) -> tuple[str, str]:
-    """Map RequestException → (reason_bucket, detail_string).
-
-    Timeout split: elapsed time is primary discriminator (robust across libcurl versions);
-    message text is secondary fallback; if NEITHER matches, bucket=unknown (version-drift signal).
-    ProxyError checked before CurlConnectionError because curl_cffi's code2error() re-maps
-    RECV_ERROR+"CONNECT" to ProxyError — catching that case as proxy_handshake_error, not connection_refused.
-    """
     code    = getattr(exc, "code", 0)
     msg     = str(exc)
     total_s = connect_s + read_s
@@ -93,12 +84,10 @@ def classify_error(
             return "connect_timeout", f"elapsed={elapsed_s:.2f}s"
         if elapsed_s >= total_s - slack:
             return "read_timeout", f"elapsed={elapsed_s:.2f}s"
-        # Fallback: libcurl message text (version-dependent)
         if "Connection timed out" in msg:
             return "connect_timeout", f"msg-text elapsed={elapsed_s:.2f}s"
         if "Operation timed out" in msg:
             return "read_timeout", f"msg-text elapsed={elapsed_s:.2f}s"
-        # Neither elapsed-time nor text matched — log as unknown for version-drift detection
         return "unknown", (
             f"Timeout unclassified elapsed={elapsed_s:.2f}s "
             f"connect_limit={connect_s}s total_limit={total_s}s msg={msg!r}"

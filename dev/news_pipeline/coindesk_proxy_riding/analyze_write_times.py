@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-Reconstruct proxy-riding throughput from raw/*.html file mtimes.
-
-Reads mtime of every *.html in --raw-dir, optionally filters to --since cutoff,
-sorts ascending, then plots:
-  top    — cumulative OK fetches over time (step-plot)
-  bottom — files-per-bin rate (bars) + rolling mean (line) +
-           30-min vertical markers (dashed grey) aligned to t[0]
-
-Output: dev/news_pipeline/coindesk_proxy_riding/png/raw_write_times_<YYYYMMDD>[_since<HH:MM>].png
-Stdout: Files, Span, Mean/Median rate, longest gap.
-
-Usage:
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/analyze_write_times.py
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/analyze_write_times.py \\
-        --raw-dir /path/to/raw --bin-minutes 2 --rolling 10
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/analyze_write_times.py \\
-        --since '2026-06-20 03:45'
-"""
 
 # INFRASTRUCTURE
 
@@ -31,14 +12,12 @@ from zoneinfo import ZoneInfo
 
 _HERE = Path(__file__).resolve()
 
-# Resolve project root via git (works inside worktrees).
 def _repo_root() -> Path:
     out = subprocess.check_output(
         ["git", "rev-parse", "--git-common-dir"],
         cwd=_HERE.parent,
         text=True,
     ).strip()
-    # --git-common-dir returns e.g. /repo/.git or /repo/.git/worktrees/name
     p = Path(out)
     return p.parent if p.name in (".git", "worktrees") or ".git" in str(p) else p.parent
 
@@ -46,7 +25,7 @@ def _repo_root() -> Path:
 _ROOT = _repo_root()
 _DEFAULT_RAW_DIR = _ROOT / "data" / "news" / "coindesk" / "raw"
 _REPORT_DIR = _HERE.parent / "png"
-_POOL_REFRESH_MIN = 30   # engine constant — vertical marker cadence
+_POOL_REFRESH_MIN = 30
 
 
 # ORCHESTRATOR
@@ -76,14 +55,12 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# Parse 'YYYY-MM-DD HH:MM' as local time; return epoch float.
 def _parse_since(s: str) -> float:
     local_tz = datetime.now().astimezone().tzinfo
     dt = datetime.strptime(s, "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
     return dt.timestamp()
 
 
-# Collect mtime (seconds since epoch) for every *.html in raw_dir; filter by since; return sorted list.
 def _load_mtimes(raw_dir: Path, since: float | None) -> list[float]:
     files = list(raw_dir.glob("*.html"))
     if not files:
@@ -98,7 +75,6 @@ def _load_mtimes(raw_dir: Path, since: float | None) -> list[float]:
     return mtimes
 
 
-# Bins
 def _compute_bins(mtimes: list[float], t0: float, span_s: float, bin_minutes: float) -> tuple:
     bin_s    = bin_minutes * 60.0
     n_bins   = int(span_s / bin_s) + 1
@@ -107,11 +83,10 @@ def _compute_bins(mtimes: list[float], t0: float, span_s: float, bin_minutes: fl
         idx = int((t - t0) / bin_s)
         counts[idx] += 1
 
-    bin_starts = [i * bin_minutes for i in range(n_bins)]   # in minutes
+    bin_starts = [i * bin_minutes for i in range(n_bins)]
     return counts, bin_starts
 
 
-# Rolling mean (centred on each bin)
 def _compute_rolling_mean(counts: list, rolling: int) -> list:
     half = rolling // 2
     rolling_mean = []
@@ -121,7 +96,6 @@ def _compute_rolling_mean(counts: list, rolling: int) -> list:
     return rolling_mean
 
 
-# Rate stats (per-bin, files per minute)
 def _compute_rate_stats(counts: list, bin_minutes: float) -> tuple:
     rates_per_min = [c / bin_minutes for c in counts]
     nonzero_rates = [r for r in rates_per_min if r > 0]
@@ -130,15 +104,13 @@ def _compute_rate_stats(counts: list, bin_minutes: float) -> tuple:
     return mean_rate, median_rate
 
 
-# Longest gap between consecutive writes (raw, not binned)
 def _compute_longest_gap(mtimes: list[float], t0: float) -> tuple:
     gaps     = [(mtimes[i] - mtimes[i - 1]) for i in range(1, len(mtimes))]
     max_gap_s  = max(gaps)
-    max_gap_at = (mtimes[gaps.index(max_gap_s)] - t0) / 60.0   # elapsed minutes at gap start
+    max_gap_at = (mtimes[gaps.index(max_gap_s)] - t0) / 60.0
     return max_gap_s, max_gap_at
 
 
-# Derive all metrics: elapsed array, bins, cumulative, rates, rolling mean, longest gap.
 def _compute_stats(mtimes: list[float], bin_minutes: float, rolling: int, since_label: str | None = None) -> dict:
     t0   = mtimes[0]
     tN   = mtimes[-1]
@@ -149,7 +121,6 @@ def _compute_stats(mtimes: list[float], bin_minutes: float, rolling: int, since_
     counts, bin_starts = _compute_bins(mtimes, t0, span_s, bin_minutes)
     rolling_mean = _compute_rolling_mean(counts, rolling)
 
-    # Cumulative
     cumulative = list(range(1, len(mtimes) + 1))
 
     mean_rate, median_rate = _compute_rate_stats(counts, bin_minutes)
@@ -176,7 +147,6 @@ def _compute_stats(mtimes: list[float], bin_minutes: float, rolling: int, since_
     }
 
 
-# Print summary to stdout.
 def _print_summary(stats: dict, bin_minutes: float) -> None:
     span_h   = int(stats["span_s"] // 3600)
     span_m   = int((stats["span_s"] % 3600) // 60)
@@ -200,7 +170,6 @@ def _print_summary(stats: dict, bin_minutes: float) -> None:
           f"  (starting at elapsed {gap_at_h}h {gap_at_m:02d}m)")
 
 
-# --- Top: cumulative ---
 def _render_cumulative_axis(ax_cum, stats: dict, span_min: float) -> None:
     import matplotlib.ticker as ticker
 
@@ -213,10 +182,9 @@ def _render_cumulative_axis(ax_cum, stats: dict, span_min: float) -> None:
     ax_cum.grid(True, alpha=0.25)
 
 
-# --- Bottom: rate bars + rolling mean + 30-min markers ---
 def _render_rate_axis(ax_rate, stats: dict, bin_minutes: float, rolling: int, span_min: float) -> None:
     xs = stats["bin_starts"]
-    ys = [c / bin_minutes for c in stats["counts"]]   # files per minute
+    ys = [c / bin_minutes for c in stats["counts"]]
 
     ax_rate.bar(xs, ys, width=bin_minutes * 0.9, color="steelblue",
                 alpha=0.55, label=f"files/{bin_minutes:.0f}min bin")
@@ -224,7 +192,6 @@ def _render_rate_axis(ax_rate, stats: dict, bin_minutes: float, rolling: int, sp
                  color="darkorange", linewidth=1.5,
                  label=f"rolling mean ({rolling} bins)")
 
-    # 30-min pool-refresh markers
     refresh_times = [i * _POOL_REFRESH_MIN for i in range(1, int(span_min / _POOL_REFRESH_MIN) + 1)]
     first_marker = True
     for rt in refresh_times:
@@ -248,7 +215,6 @@ def _build_output_path(stats: dict) -> Path:
     return _REPORT_DIR / f"raw_write_times_{date_tag}{since_tag}.png"
 
 
-# Plot cumulative (top) + rate bars/rolling/30-min markers (bottom); save PNG.
 def _plot(stats: dict, bin_minutes: float, rolling: int) -> Path:
     import matplotlib
     matplotlib.use("Agg")

@@ -11,14 +11,6 @@ FETCH_TIMEOUT  = 15
 # ORCHESTRATOR
 
 def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[str, bytes]:
-    """Fetch url through proto://host_port; validate by content_type.
-
-    content_type: "xml" (sitemap gate) | "html" (article gate)
-    Returns (status, content):
-      "ok"   — valid content fetched; content is raw bytes.
-      "dead" — origin returned 404/410 (proxy worked, URL is gone); content is b"".
-      "fail" — connection error, timeout, CF block, or wrong format; content is b"".
-    """
     purl = f"{proto}://{host_port}"
     try:
         s = cffi.Session(impersonate="chrome")
@@ -30,7 +22,6 @@ def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[
 
 # FUNCTIONS
 
-# Classify response: "dead" on 404/410, "fail" on other non-200, "ok"/"fail" on 200 by marker check
 def _validate(r, content_type: str) -> tuple[str, bytes]:
     if r.status_code in (404, 410):
         return "dead", b""

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Cumulative proxy-status log — keyed by "protocol://host:port", bounded by unique proxies (not run count).
 
 # INFRASTRUCTURE
 
@@ -13,7 +12,6 @@ LOG_PATH   = SCRIPT_DIR / "logs" / "proxy_status_log.json"
 # ORCHESTRATOR
 
 def record_run(results: list[dict], source_label: str) -> None:
-    """Upsert every result (alive + dead) into the cumulative proxy-status log."""
     ts   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     data = _load_log()
 
@@ -60,16 +58,10 @@ def _save_log(data: dict) -> None:
     LOG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-# Partition loaded monosans entries into (to_check, skipped_fresh)
 def partition_fresh(
     entries: list[tuple[str, str]],
     window_s: int,
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """Return (to_check, skipped_fresh).
-
-    to_check:      key absent from log  OR  last_seen age >= window_s
-    skipped_fresh: key present in log  AND  last_seen age < window_s
-    """
     data = _load_log()
     now  = datetime.now(timezone.utc)
     to_check: list[tuple[str, str]]      = []
@@ -90,13 +82,11 @@ def partition_fresh(
 
 
 def proxy_key(proto: str, host_port: str) -> str:
-    """Build canonical key: protocol://host:port (auth stripped if present)."""
     host, port = _parse_host_port(host_port)
     return f"{proto}://{host}:{port}"
 
 
 def _parse_host_port(host_port: str) -> tuple[str, int]:
-    """Return (host, port) from 'host:port' or 'user:pass@host:port'."""
     clean        = host_port.split("@")[-1]
     host, port_s = clean.rsplit(":", 1)
     return host, int(port_s)

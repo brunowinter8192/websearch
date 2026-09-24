@@ -77,7 +77,6 @@ def _render_walk_call_log(results: dict) -> list:
     return lines
 
 
-# Write walk report (MD) and per-article JSON dump
 def write_walk_report(report_path: Path, articles_path: Path, ts: str, api_url: str, n: int, results: dict) -> None:
     lines = []
     lines += _render_walk_header(ts, api_url, n, results)
@@ -149,7 +148,6 @@ def _render_fixed_call_log(results: list) -> list:
     return lines
 
 
-# Write fixed-cursor loop report (MD)
 def write_fixed_report(report_path: Path, ts: str, api_url: str, n: int, invalid_types: frozenset, results: list) -> None:
     lines = []
     lines += _render_fixed_header(ts, api_url, n, invalid_types)

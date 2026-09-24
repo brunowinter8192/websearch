@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""
-Deterministic tail-race tests for src/news/engine/proxy_riding/rider.py.
-No browser or proxy infrastructure needed — _fetch_one_url and _next_proxy are mocked.
-
-All src/ imports are lazy (inside function bodies) to satisfy dev/ isolation rules.
-
-Five cases:
-  1. surplus-slots race: 2 URLs, 6 slots → both done, n_ok=2, no double-write
-  2. write-exactly-once: 1 URL, 3 slots all racing → n_ok=1, exactly 1 raw file
-  3. no-spurious-requeue: stale dequeue → no fetch; raced-fail → not re-queued
-  4. normal path: 4 URLs, 4 slots → all done via dequeue, no racing
-  5. fail-before-success: URL fails first fetch (re-queued), succeeds second → done exactly once
-
-Usage:
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_tail_race.py
-"""
 
 # INFRASTRUCTURE
 
@@ -25,8 +9,6 @@ import tempfile
 import unittest.mock
 from pathlib import Path
 
-# Prepend worktree root so lazy src/ imports (inside function bodies) resolve correctly.
-# Pattern from smoke_stage1.py: parents[3] = dev/news_pipeline/coindesk_proxy_riding/ → worktree root.
 _WORKTREE = Path(__file__).parents[3]
 if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
@@ -77,7 +59,6 @@ def _url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]
 
 
-# 2 URLs, 6 slots: slots 0-1 dequeue, slots 2-5 race. Both URLs done, n_ok=2.
 def test_1_surplus_slots_race_both_done() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -122,7 +103,6 @@ def test_1_surplus_slots_race_both_done() -> None:
             assert (p / RAW_SUBDIR / f"{_url_hash(u)}.html").exists(), f"raw file missing: {u}"
 
 
-# 1 URL, 3 slots all racing — first writer wins, n_ok=1, exactly one raw file.
 def test_2_write_exactly_once_per_url() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -142,7 +122,7 @@ def test_2_write_exactly_once_per_url() -> None:
 
         async def run():
             q = asyncio.Queue()
-            q.put_nowait(url_x)          # one copy in queue
+            q.put_nowait(url_x)
             state = RiderState(
                 url_queue=q, proxy_pool=[("http", "p:1")],
                 cooldown_mgr=PersistentCooldownManager(),
@@ -166,8 +146,6 @@ def test_2_write_exactly_once_per_url() -> None:
         assert len(raw_files) == 1,            f"raw file count={len(raw_files)} (expected 1)"
 
 
-# Sub-case A: url_x already in done_urls, url_x stale-queued, url_y is the open one.
-# Slot must skip url_x (no fetch), race url_y, write url_y. fetch_call_count == 1.
 def _test_3_sub_a() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -190,7 +168,7 @@ def _test_3_sub_a() -> None:
 
         async def run_a():
             q = asyncio.Queue()
-            q.put_nowait(url_x)          # stale: url_x already done
+            q.put_nowait(url_x)
             state = RiderState(
                 url_queue=q, proxy_pool=[("http", "p:1")],
                 cooldown_mgr=PersistentCooldownManager(),
@@ -198,7 +176,7 @@ def _test_3_sub_a() -> None:
                 burn_threshold=10, page_timeout_ms=8000,
                 total_urls=2, target_urls=frozenset([url_x, url_y]),
             )
-            state.done_urls.add(url_x)   # pre-mark url_x as done
+            state.done_urls.add(url_x)
             with (
                 unittest.mock.patch.object(rider_mod, "_fetch_one_url", ok_fetch_spy),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
@@ -213,9 +191,6 @@ def _test_3_sub_a() -> None:
         assert state_a.done_urls == {url_x, url_y}, f"done_urls={state_a.done_urls}"
 
 
-# Sub-case B: url_x not done, queue empty → slot races url_x.
-# First fetch → "failed" (raced, dequeued=False) → must NOT be re-queued.
-# Second fetch → "ok" → done. Verify no put_nowait call for url_x after the failure.
 def _test_3_sub_b() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
@@ -239,7 +214,7 @@ def _test_3_sub_b() -> None:
         (p2 / RAW_SUBDIR).mkdir()
 
         async def run_b():
-            q = asyncio.Queue()          # empty — slot must race
+            q = asyncio.Queue()
             state = RiderState(
                 url_queue=q, proxy_pool=[("http", "p:1")],
                 cooldown_mgr=PersistentCooldownManager(),
@@ -263,20 +238,18 @@ def _test_3_sub_b() -> None:
         assert state_b.done_urls == {url_x2},  f"done_urls={state_b.done_urls}"
 
 
-# Two sub-cases: (a) stale dequeue skipped without fetch; (b) raced-fail not re-queued.
 def test_3_no_spurious_requeue() -> None:
     _test_3_sub_a()
     _test_3_sub_b()
 
 
-# 4 URLs, 4 slots: each slot dequeues one distinct URL. No racing. n_ok=4.
 def test_4_normal_path_no_racing() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     urls = [f"https://cd.com/{i}" for i in range(4)]
-    raced: list[str] = []   # URLs fetched via race path (dequeued=False) — must be empty
+    raced: list[str] = []
 
     async def ok_fetch(crawler, url, proxy_str, page_timeout_ms):
         return "ok", 1000, 500, 0.1, f"<html>{url}</html>", None
@@ -315,7 +288,6 @@ def test_4_normal_path_no_racing() -> None:
         assert len(raw_files) == 4,           f"raw file count={len(raw_files)} (expected 4)"
 
 
-# 1 URL, 1 slot: first fetch fails → requeue → second fetch ok → done exactly once.
 def test_5_fail_before_success_done_once() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR

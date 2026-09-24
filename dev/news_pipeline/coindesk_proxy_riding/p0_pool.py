@@ -1,6 +1,4 @@
 # INFRASTRUCTURE
-# Self-contained proxy pool utilities copied from src/news/engine/proxy_pool/
-# (pool_retry, proxy_key, cooldown, monosans_loader, pool_loaders)
 
 import re
 import time
@@ -86,7 +84,6 @@ COOLDOWN_S  = 3600
 
 # ORCHESTRATOR
 
-# Fetch all 13 Top-Repo sources; merge, dedup; return (pool, sources)
 def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
     entries: list[tuple[str, str]] = []
     sources: list[dict]            = []
@@ -122,7 +119,6 @@ def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
 
 # FUNCTIONS
 
-# Proxy key: canonical "proto://host:port" (auth stripped)
 def proxy_key(proto: str, host_port: str) -> str:
     clean        = host_port.split("@")[-1]
     host, port_s = clean.rsplit(":", 1)
@@ -130,7 +126,6 @@ def proxy_key(proto: str, host_port: str) -> str:
 
 
 class PersistentCooldownManager:
-    """In-memory per-job cooldown; starts empty each run."""
 
     def __init__(self, cooldown_s: int = COOLDOWN_S):
         self._cooldown_td   = timedelta(seconds=cooldown_s)
@@ -153,7 +148,6 @@ class PersistentCooldownManager:
         return sum(1 for dt in self._burned_utc.values() if (now - dt) < self._cooldown_td)
 
 
-# Retry fn() up to 5 times with exponential backoff; re-raise last on final failure
 def fetch_with_retry(fn):
     last_exc = None
     for delay in (None, *_BACKOFF):

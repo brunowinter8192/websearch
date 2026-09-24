@@ -20,12 +20,11 @@ from _02_dom import (
 )
 from _02_report import write_report
 
-MAX_CLICKS = 5         # quick mode
+MAX_CLICKS = 5
 
 
 # ORCHESTRATOR
 
-# Read POST body synchronously from Playwright impl object; handle gzip-compressed bodies via magic-byte check
 def _read_post_data_sync(request) -> str | None:
     raw_b64 = request._impl_obj._initializer.get("postData")
     if not raw_b64:
@@ -45,7 +44,6 @@ async def probe_workflow():
     print(f"HAR → {har_path}", file=sys.stderr)
     print(f"Report → {report_path}", file=sys.stderr)
 
-    # Accumulated network candidates — populated by on_response handler
     network_log: list[dict] = []
 
     async with async_playwright() as p:
@@ -60,7 +58,6 @@ async def probe_workflow():
 
         all_urls = await setup_and_capture_initial(page)
 
-        # Mark all pre-click network entries as click_n=0
         for entry in network_log:
             if entry["click_n"] is None:
                 entry["click_n"] = 0
@@ -73,7 +70,6 @@ async def probe_workflow():
 
         final_btn_state = await get_final_button_state(page)
 
-        # Close → flushes HAR
         await context.close()
         await browser.close()
 
@@ -86,23 +82,19 @@ async def probe_workflow():
 
 # FUNCTIONS
 async def setup_and_capture_initial(page) -> set:
-    # Navigate + settle
     print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
     await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
     await asyncio.sleep(3.0)
 
-    # Dismiss OneTrust cookie consent overlay so pointer events reach the feed
     cookie_result = await page.evaluate(_JS_DISMISS_COOKIE)
     print(f"Cookie consent: {cookie_result}", file=sys.stderr)
     await asyncio.sleep(0.5)
 
-    # Initial extraction
     all_urls: set[str] = set(await extract_articles(page))
     print(f"Batch 0: {len(all_urls)} initial articles", file=sys.stderr)
     return all_urls
 
 
-# Click loop — JS-based click bypasses pointer-event overlay interception
 async def run_click_loop(page, all_urls: set, oldest_date: str, network_log: list, batches: list) -> str:
     for click_n in range(1, MAX_CLICKS + 1):
         oldest_date, should_break = await run_click_batch(
@@ -113,12 +105,10 @@ async def run_click_loop(page, all_urls: set, oldest_date: str, network_log: lis
     return oldest_date
 
 
-# Live response logger — synchronous handler on every network response
 def record_network_entry(response, network_log: list) -> None:
     url = response.url
     method = response.request.method
     status = response.status
-    # Skip static assets
     if any(url.endswith(ext) for ext in (".js", ".css", ".png", ".woff", ".woff2", ".svg", ".ico", ".gif", ".webp")):
         return
     headers = response.request.headers
@@ -127,7 +117,6 @@ def record_network_entry(response, network_log: list) -> None:
     is_candidate = method == "POST" or has_rsc or next_action or "coindesk.com" in url
     if not is_candidate:
         return
-    # post_data is synchronously available — no await needed
     post_data = _read_post_data_sync(response.request) if method == "POST" else None
     network_log.append({
         "url": url,
@@ -136,7 +125,7 @@ def record_network_entry(response, network_log: list) -> None:
         "next_action": next_action,
         "has_rsc": has_rsc,
         "post_data": post_data,
-        "click_n": None,  # assigned by click loop
+        "click_n": None,
     })
 
 
@@ -165,7 +154,6 @@ async def run_click_batch(page, click_n: int, all_urls: set, oldest_date: str,
     new_dom_count = await wait_for_new_articles(page, prev_count)
     print(f"Click {click_n}: feed grew from {prev_count} → {new_dom_count}", file=sys.stderr)
 
-    # Assign click ownership to network entries that appeared after the click
     for entry in network_log[pre_net_idx:]:
         entry["click_n"] = click_n
 
@@ -188,7 +176,6 @@ async def run_click_batch(page, click_n: int, all_urls: set, oldest_date: str,
     return oldest_date, False
 
 
-# Build one per-click trajectory row dict
 def build_batch_row(click_n: int, cumulative: int, new_this: int, oldest: str, btn_state: str) -> dict:
     return {
         "click_n": click_n,
@@ -199,7 +186,6 @@ def build_batch_row(click_n: int, cumulative: int, new_this: int, oldest: str, b
     }
 
 
-# Final button state
 async def get_final_button_state(page) -> str:
     final_btn_info = await page.evaluate(_JS_BTN_STATE)
     if not final_btn_info.get("found"):
@@ -211,7 +197,6 @@ async def get_final_button_state(page) -> str:
     return final_btn_state
 
 
-# Partition network log by click number for diff analysis
 def partition_network_log(network_log: list) -> dict:
     click_nets: dict[int, list[dict]] = {}
     for entry in network_log:

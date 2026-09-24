@@ -5,7 +5,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 
 ## Modules
 
-### p1_fetch.py (46 LOC)
+### p1_fetch.py (37 LOC)
 
 **Purpose:** curl_cffi chrome fetch primitive + XML/HTML content validators.
 **Reads:** remote URLs via curl_cffi `Session(impersonate="chrome")`.
@@ -13,7 +13,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `p3_target._fetch_index_via_proxy`, `p4_loop.run_loop`, `p4_race.run_race`.
 **Calls out:** `curl_cffi`.
 
-### p2_cooldown.py (51 LOC)
+### p2_cooldown.py (42 LOC)
 
 **Purpose:** In-memory cooldown tracking — per-job clean slate, no file I/O. `PersistentCooldownManager.__init__` starts with `self._burned_utc = {}` fresh per process. `mark_burned()` records `now`. `is_eligible()`: `now − burned_at ≥ 60min`. `earliest_eligible_at()`: next re-eligibility moment (loop's wait-on-exhaustion). `eligible_candidates()`: pool filtered to eligible proxies, pool order preserved. `cooldown_count()`: count of proxies currently in cooldown.
 **Reads:** nothing (in-memory only).
@@ -21,7 +21,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `p4_loop.run_loop`, `p6_buffer`, `p3_target`, `acquire_pipe.py`.
 **Calls out:** `proxy_status_log.proxy_key`.
 
-### p3_target.py (66 LOC)
+### p3_target.py (57 LOC)
 
 **Purpose:** Sitemap target builder. Fetches theblock index → parses 64 sub-sitemap `<loc>` URLs. Direct httpx GET first; falls back to proxy rotation on non-XML response (403, CF challenge, error). Proxy pool is caller-supplied (no internal pool load).
 **Reads:** `THEBLOCK_INDEX` via httpx (direct) or `p1_fetch.fetch_url` (proxy fallback).
@@ -29,7 +29,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `httpx`, `p1_fetch`, `p2_cooldown`.
 
-### p4_loop.py (340 LOC)
+### p4_loop.py (309 LOC)
 
 **Purpose:** SUSTAINED concurrent rotation loop. Startup: calls `pool_provider()` once → `build_active_buffer`. 60-min tick: every `refresh_interval_s` (3600s) calls `pool_provider()` again → rebuilds buffer (2 pool-fetch sites: startup + tick; `logger.record_pool_refresh` at both). On exhaustion (buf + wset empty) → `_compute_sleep` (min of next cooldown expiry via `cm.earliest_eligible_at()` and next 60-min tick) → sleep → `build_active_buffer(pool_22k, cm)` using existing `pool_22k` (no `pool_provider()` call, no `_last_refresh` reset on exhaustion wakeup). `_sleep` module attr (patchable in tests).
 **3-branch fetch result** (`status, content = fut.result()`): `"ok"` — content valid: `batch_done` guard → `content_handler` + `done.append` + `wset.add` + `psuccess++` + `_consec_fail.pop`. `"dead"` — origin 404/410 (proxy confirmed working): `batch_done` guard → `dead.append`; proxy preserved (`wset.add` + `_consec_fail.pop`), NOT burned, NOT re-queued. `"fail"` — connection/timeout/CF/wrong format: `batch_failed.add` + 2-strikes lifecycle (2 consecutive fails → `cm.mark_burned` + remove from buf/wset; success resets counter).
@@ -41,7 +41,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Calls out:** `p1_fetch`, `p2_cooldown`, `p5_logger`, `p6_buffer`.
 **content_handler hook:** optional `content_handler: Callable[[str, bytes], None]` fires at the `if status == "ok":` branch (guarded by `batch_done`) — persist/parse fetched bytes at the fetch site.
 
-### p4_race.py (127 LOC)
+### p4_race.py (119 LOC)
 
 **Purpose:** Continuous race loop variant — `concurrency` workers each pull `(url, proxy)` and fetch immediately. URLs served round-robin; done entries skipped. At the tail, when fewer pending URLs remain than free workers, multiple workers race the same URL — first success wins. Pool shuffled once; each proxy consumed at most once (no cooldown, no burn). Simpler than `p4_loop` — no sustained refresh, no 2-strikes, one-shot pool consumption.
 **Reads:** proxy pool (caller-supplied), target URL list.
@@ -49,7 +49,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** not wired into `acquire_pipe.py` orchestrator as of this writing — standalone alternative loop implementation.
 **Calls out:** `p1_fetch.fetch_url`, `p5_logger.AcquireLogger`, `p6_buffer.DEFAULT_CONCURRENCY`.
 
-### p5_logger.py (47 LOC)
+### p5_logger.py (41 LOC)
 
 **Purpose:** Streams fetch events to JSONL (line-buffered, kill-safe). No in-memory counters. `close()` seals the stream; all stats derive from the JSONL inside `p7_janitor.end_job()`.
 **Reads:** events pushed by `run_loop` via `record_attempt` / `record_pool_refresh`.
@@ -58,7 +58,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Calls out:** `proxy_status_log.proxy_key`.
 **Methods:** `record_attempt(proto, hp, url, ok)` — writes `{proxy_key, ts, url, result}` per fetch. `record_pool_refresh(size)` — writes `{event:"pool_refresh", size, ts}`. `close()` — closes JSONL file handle; call before `janitor.end_job(logger._jsonl_path, ...)`.
 
-### box_lock.py (102 LOC)
+### box_lock.py (97 LOC)
 
 **Purpose:** Global single-job flock — one acquire-pipe job at a time, system-wide. Fixed lock paths: `~/.websearch-locks/acquire_pipe.flock` (flock vessel) + `~/.websearch-locks/acquire_pipe.lock` (JSON sidecar `{pid, job, target, started_at, status}`). `job`/`target` are sidecar metadata for the busy message — not in filenames. `cleanup_stale()`: reads PID → `os.kill(pid,0)` → `ProcessLookupError` → unlink sidecar (`PermissionError` → treat as held). `acquire(job, target)` contextmanager: `mkdir` → `cleanup_stale` → open flock file → `fcntl.LOCK_EX|LOCK_NB` → `BlockingIOError` → `LockBusyError(pid+job+elapsed from sidecar)`; on success: write sidecar atomically (`mkstemp`+`os.rename`) → `yield` → `finally`: unlink sidecar + `LOCK_UN` + close. Crash-safe: kernel releases flock on process death; stale sidecar cleaned on next `acquire()`.
 **Reads:** `~/.websearch-locks/acquire_pipe.lock` (in `cleanup_stale` + busy message).
@@ -66,7 +66,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `fcntl`, `os` (stdlib only).
 
-### p6_buffer.py (52 LOC)
+### p6_buffer.py (39 LOC)
 
 **Purpose:** Active-buffer helpers for the sustained loop. `build_active_buffer(pool, cm, max_size)` returns up to `max_size` eligible proxies (delegates eligibility to `cm.eligible_candidates()`; pool order preserved — no socks4-first sort). `refill_buffer(buf, pool, cm, target_size)` tops an existing buffer up to `target_size` from the eligible set (immutable — returns a new list; set-membership dedup; no-op when already full). Holds `BUFFER_SIZE = 1280` and `DEFAULT_CONCURRENCY = 128`.
 **Reads:** proxy pool + `cm` eligibility.
@@ -74,7 +74,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `p4_loop.run_loop`, `p4_race.run_race` (constant import), `acquire_pipe.py` (constants).
 **Calls out:** `p2_cooldown.PersistentCooldownManager`.
 
-### p7_janitor.py (150 LOC)
+### p7_janitor.py (140 LOC)
 
 **Purpose:** Job lifecycle — wipe transient artifacts at start, derive persistent record at end. `start_job(job_id)`: wipes `acquire_pipe_logs/` + `acquire_pipe_reports/` contents. `end_job(job_id, jsonl_path, target_count, done_count)`: reads JSONL → `_compute_stats` (ok-event inter-hit deltas → mean/median, total wall time `max(ts)-min(ts)`, pool sizes from `pool_refresh` events; `t0=min(ts)`) → `_write_plot` (matplotlib step chart, `cumulative_hits.png`, x=elapsed s, y=cumul ok, `where="post"`) → `_write_md` (lean job.md — exactly 5 fields) → unlink JSONL → wipe `acquire_pipe_logs/` + `acquire_pipe_reports/`. Only `acquire_pipe_jobs/<job_id>/` survives after `end_job`.
 **Reads:** streaming JSONL (via `jsonl_path`).
@@ -82,7 +82,7 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `matplotlib.pyplot` (lazy import in `_write_plot`), `statistics` (stdlib).
 
-### acquire_pipe.py (150 LOC)
+### acquire_pipe.py (142 LOC)
 
 **Purpose:** Job orchestrator. Eager-loads full backfill pool via `load_backfill_pool()` (~22k proxies, stdout print) → `build_sitemap_target` (64 sub-sitemap URLs, same pool) → `job_id` → `box_lock.acquire` (`LockBusyError` → print+exit(1)) → `janitor.start_job` → `PersistentCooldownManager` (in-memory, fresh per job) → sustained `run_loop` via `_pool_provider` closure (returns eager pool on first call, re-fetches via `load_backfill_pool()` on 60-min tick) → `content_handler` (persist raw XML + parse `<loc>` bytes) → dedup article URLs → `theblock_article_urls.txt` → dead-count print → `logger.close()` → `janitor.end_job` (job.md + plot + wipe transient).
 **Reads:** `load_backfill_pool()` (always full ~22k pool — no curated/pool flag) + theblock sitemap index (via `p3_target`).

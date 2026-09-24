@@ -4,7 +4,6 @@ from pathlib import Path
 
 # FUNCTIONS
 
-# Write final discovery report (MD)
 def write_report(path: Path, results: dict, ts: str, stop_date: str) -> None:
     lines = ["# CoinDesk Full Discovery Report"]
     lines.append(f"\n**Run:** {ts} | **Stop date:** {stop_date}\n")

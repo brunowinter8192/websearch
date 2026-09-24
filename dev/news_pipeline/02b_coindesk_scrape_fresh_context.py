@@ -14,21 +14,14 @@ from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-# Isolation: fresh AsyncWebCrawler per URL = fresh Chromium process + clean cookie jar per fetch.
-# Pacing: prod's deterministic per-domain Scrapy gate (ported from src/crawler/pipe_scraper.py) —
-# ~1 req/s start rate, jitter = uniform(0.5x, 1.5x) DOWNLOAD_DELAY, no adaptive reduction.
-# Validated WAF-safe (0×429 over 316 URLs in prod). Only deviation from prod: fresh-crawler-per-URL.
-# Concurrency: asyncio.gather + per-domain Semaphore(CONCURRENCY_PER_DOMAIN) + asyncio.Lock gate.
 
-# Exit non-zero if regwall_count/total >= this fraction (isolation likely broken).
 REGWALL_FAIL_THRESHOLD = 0.20
 
-DOWNLOAD_DELAY = 1.0           # Scrapy per-domain base delay (s); jitter = uniform(0.5x, 1.5x)
-CONCURRENCY_PER_DOMAIN = 8     # Scrapy per-domain in-flight cap
+DOWNLOAD_DELAY = 1.0
+CONCURRENCY_PER_DOMAIN = 8
 PAGE_TIMEOUT_MS = 15000
 DELAY_BEFORE_RETURN_HTML = 0.5
 
-# Precise regwall signals — do NOT use loose markers (subscribe/register fire on article footers).
 REGWALL_SIGNALS = [
     "from_regwall",
     "Create a FREE account to continue reading",
@@ -38,7 +31,6 @@ REGWALL_SIGNALS = [
 INPUT_DIR = Path(__file__).parent / "01_json"
 OUTPUT_DIR = Path(__file__).parent / "02b_data"
 
-# Shared fetch config — no browser state carried between URLs (each gets a fresh crawler).
 _RUN_CFG = CrawlerRunConfig(
     cache_mode=CacheMode.BYPASS,
     wait_until="domcontentloaded",
@@ -51,7 +43,6 @@ _RUN_CFG = CrawlerRunConfig(
 
 # ORCHESTRATOR
 
-# Scrape all entries concurrently: fresh crawler per URL, prod gate pacing, loud regwall guard.
 async def scrape_workflow(input_path: Path) -> None:
     entries = load_entries(input_path)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -74,18 +65,14 @@ async def scrape_workflow(input_path: Path) -> None:
 
 # FUNCTIONS
 
-# Load entries from discover JSON.
 def load_entries(input_path: Path) -> list[dict]:
     return json.loads(input_path.read_text(encoding="utf-8"))
 
 
-# Return True if markdown contains a known regwall signal.
 def _is_regwall(markdown: str) -> bool:
     return any(sig in markdown for sig in REGWALL_SIGNALS)
 
 
-# Return or create per-domain state entry (lastseen, lock, sem) — asyncio-safe (no await, no race).
-# Ported from src/crawler/pipe_scraper.py:_ensure_domain_state.
 def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
     if domain not in domain_states:
         domain_states[domain] = {
@@ -96,8 +83,6 @@ def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domai
     return domain_states[domain]
 
 
-# Scrapy gate: under domain lock, wait until delay elapsed since lastseen, then stamp lastseen=now.
-# Ported from src/crawler/pipe_scraper.py:_gate_domain.
 async def _gate_domain(state: dict, download_delay: float) -> None:
     async with state["lock"]:
         jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
@@ -108,7 +93,6 @@ async def _gate_domain(state: dict, download_delay: float) -> None:
         state["lastseen"] = time.time()
 
 
-# Fetch one URL: domain sem → gate → fresh crawler → arun → regwall check → write or skip.
 async def _fetch_one(
     domain_states: dict,
     entry: dict,
@@ -159,7 +143,6 @@ async def _fetch_one(
     return result_entry
 
 
-# Map raw asyncio.gather results (dict or escaped exception) to manifest entries.
 def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
     manifest = []
     for i, r in enumerate(raw_results):
@@ -175,7 +158,6 @@ def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
     return manifest
 
 
-# Write YAML-frontmatter article file; return path.
 def write_article(entry: dict, url_hash: str, content: str) -> Path:
     scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     frontmatter = (
@@ -193,7 +175,6 @@ def write_article(entry: dict, url_hash: str, content: str) -> Path:
     return file_path
 
 
-# Regwall guard: WARN per-run; ERROR + exit(1) if fraction >= REGWALL_FAIL_THRESHOLD.
 def _check_regwall_guard(manifest: list[dict]) -> None:
     regwalled = [e for e in manifest if e["status"] == "regwall"]
     if not regwalled:
@@ -211,14 +192,12 @@ def _check_regwall_guard(manifest: list[dict]) -> None:
         sys.exit(1)
 
 
-# Write manifest JSON after all URLs processed.
 def write_manifest(manifest: list[dict]) -> None:
     manifest_path = OUTPUT_DIR / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Manifest: {manifest_path}", file=sys.stderr)
 
 
-# Print run summary to stdout — preserves orchestrator-parsed line format (ok / failed).
 def print_summary(manifest: list[dict], total_s: float) -> None:
     ok = [e for e in manifest if e["status"] == "ok"]
     ok_fb = [e for e in manifest if e["status"] == "ok_fallback"]
@@ -239,7 +218,6 @@ def print_summary(manifest: list[dict], total_s: float) -> None:
         print(f"  slowest : {slowest['url']} ({slowest.get('elapsed_s', '?')}s)")
 
 
-# Auto-pick newest discover_*.json from 01_json/.
 def pick_latest_input() -> Path:
     candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
     if not candidates:

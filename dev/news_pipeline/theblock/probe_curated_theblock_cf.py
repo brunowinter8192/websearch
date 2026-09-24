@@ -8,7 +8,6 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-# curated_sources + siblings resolve via theblock/ directory in sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 from curated_sources import load_curated_proxies
 
@@ -34,8 +33,6 @@ def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
 
 # FUNCTIONS
 
-# Check single proxy via curl_cffi chrome impersonation — same gate as jhao104 Stage 2 theblockValidator,
-# extended with per-protocol proxy scheme (http:// / socks4:// / socks5://)
 def check_proxy(protocol: str, host_port: str) -> bool:
     purl = f"{protocol}://{host_port}"
     try:
@@ -47,7 +44,6 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         return False
 
 
-# Run checks concurrently; return list of (protocol, host_port, passed) tuples
 def run_checks(proxies: list, concurrency: int) -> list:
     results = []
     total = len(proxies)
@@ -70,7 +66,6 @@ def run_checks(proxies: list, concurrency: int) -> list:
     return results
 
 
-# Write markdown report to REPORT_DIR
 def write_report(proxies: list, results: list, proto_counts: Counter, concurrency: int) -> Path:
     REPORT_DIR.mkdir(exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -113,7 +108,6 @@ def build_config_and_results_lines(ts: str, concurrency: int, total: int, total_
 
 
 def build_protocol_lines(results: list, proto_counts: Counter) -> list[str]:
-    # Per-protocol breakdown
     proto_pass = Counter(proto for proto, _, ok in results if ok)
     proto_fail = Counter(proto for proto, _, ok in results if not ok)
 

@@ -15,15 +15,12 @@ _TS_FMT      = "%Y-%m-%dT%H:%M:%SZ"
 
 # FUNCTIONS
 
-# Wipe transient run artifacts before starting a fresh job
 def start_job(job_id: str) -> None:
-    """Delete all files in acquire_pipe_logs/ and acquire_pipe_reports/."""
     _wipe_dir(LOG_DIR)
     _wipe_dir(REPORT_DIR)
     print(f"[janitor] start_job {job_id!r}: transient logs wiped")
 
 
-# Delete all contents of a directory without removing the directory itself
 def _wipe_dir(path: Path) -> None:
     if not path.exists():
         return
@@ -34,9 +31,7 @@ def _wipe_dir(path: Path) -> None:
             shutil.rmtree(item)
 
 
-# Derive persistent job record from streaming JSONL, then delete the JSONL
 def end_job(job_id: str, jsonl_path: Path, target_count: int, done_count: int) -> None:
-    """Read JSONL → compute stats → write job.md + cumulative_hits.png → delete JSONL."""
     job_dir = JOBS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,7 +47,6 @@ def end_job(job_id: str, jsonl_path: Path, target_count: int, done_count: int) -
     print(f"[janitor] end_job {job_id!r}: job.md + plot → {job_dir}  transient dirs wiped")
 
 
-# Read all JSONL lines into a list of dicts
 def _read_events(jsonl_path: Path) -> list[dict]:
     events = []
     for line in jsonl_path.read_text(encoding="utf-8").splitlines():
@@ -62,12 +56,10 @@ def _read_events(jsonl_path: Path) -> list[dict]:
     return events
 
 
-# Parse UTC ISO timestamp string to timezone-aware datetime
 def _parse_ts(ts_str: str) -> datetime:
     return datetime.strptime(ts_str, _TS_FMT).replace(tzinfo=timezone.utc)
 
 
-# Derive all MD/plot stats from event list
 def _compute_stats(events: list[dict]) -> dict:
     all_ts = [_parse_ts(e["ts"]) for e in events if "ts" in e]
     if not all_ts:
@@ -98,7 +90,6 @@ def _compute_stats(events: list[dict]) -> dict:
     }
 
 
-# Plot cumulative ok fetches vs elapsed seconds since t0; save as PNG
 def _write_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -109,7 +100,7 @@ def _write_plot(job_dir: Path, stats: dict) -> None:
         x, y = [0.0], [0]
     else:
         x = [0.0] + [(ts - t0).total_seconds() for ts in ok_ts]
-        y = list(range(len(x)))   # [0, 1, 2, ..., n_hits]
+        y = list(range(len(x)))
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.step(x, y, where="post", linewidth=1.5)
@@ -122,7 +113,6 @@ def _write_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-# Write lean job.md with exactly the spec-required fields
 def _write_md(
     job_dir: Path, job_id: str,
     target_count: int, done_count: int,

@@ -10,7 +10,6 @@ CHECKPOINT_FILE = OUTPUT_DIR / "checkpoint.json"
 
 # FUNCTIONS
 
-# Write a log line to both stdout and the open log file
 def log(log_fh, msg: str) -> None:
     ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
     line = f"[{ts}] {msg}"
@@ -19,7 +18,6 @@ def log(log_fh, msg: str) -> None:
     log_fh.flush()
 
 
-# Save checkpoint JSON with current cursor position and progress counts
 def save_checkpoint(call_num: int, last_id: str, last_date: str, year_counts: dict, total: int) -> None:
     data = {
         "call_num": call_num,

@@ -17,14 +17,13 @@ import httpx
 from pydoll.browser import Chrome
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _05b_report import write_warmth_report  # noqa: E402
+from _05b_report import write_warmth_report
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 TIMELINE_API_PATH = "/api/v1/articles/timeline"
 OUTPUT_DIR = Path(__file__).parent / "05b_output"
 STATE_FILE = OUTPUT_DIR / "state.json"
 
-# Cumulative seconds after Chrome closes at which to retry the same API URL
 WARMTH_INTERVALS = [0, 10, 20, 30, 60, 120, 180, 300]
 
 CLICKS_TO_TRIGGER = 8
@@ -68,10 +67,6 @@ _JS_CLICK_BTN = """
 
 # ORCHESTRATOR
 
-# Phase W: browser warmup → save state (URL + headers) → close Chrome → replay same URL at
-# increasing intervals to measure warmth duration.
-# Phase C: at first 403 → httpx feedpage GET → retry → feedpage rewarm test.
-#          subprocess cold test to verify process-vs-IP.
 async def warmth_probe_workflow() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -104,7 +99,6 @@ async def warmth_probe_workflow() -> None:
         print("ERROR: State not captured — aborting.", file=sys.stderr)
         return
 
-    # Phase W continued: timing ladder
     ladder_results = run_warmth_ladder(test_url, test_headers, WARMTH_INTERVALS)
 
     feedpage_result, subprocess_result = run_phase_c(test_url, test_headers, ladder_results)
@@ -136,12 +130,10 @@ def save_baseline_state(timeline_entry: dict) -> tuple:
     test_headers = filter_headers(raw_hdrs)
     print(f"Phase W: captured URL: {test_url}", file=sys.stderr)
 
-    # Baseline: verify URL works while Chrome is still open (warm)
     baseline = httpx.get(test_url, headers=test_headers, follow_redirects=True, timeout=30)
     baseline_status = baseline.status_code
     print(f"Phase W: baseline (Chrome open) → {baseline_status}", file=sys.stderr)
 
-    # Save state to disk (subprocess cold test reads this)
     state = {"url": test_url, "headers": test_headers}
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     print(f"Phase W: state saved → {STATE_FILE}", file=sys.stderr)
@@ -165,14 +157,12 @@ async def teardown_chrome_session(tab, chrome, port: int, session_dir: str) -> N
     print("Phase W: Chrome closed — timing ladder starts now.", file=sys.stderr)
 
 
-# Bind port 0 to get a free OS-assigned port
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-# Launch Chrome in background via open -gna
 def launch_background_chrome(port: int, session_dir: str) -> None:
     subprocess.run(
         [
@@ -189,7 +179,6 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
     )
 
 
-# Poll /json/version until Chrome responds; return webSocketDebuggerUrl
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
@@ -202,12 +191,10 @@ def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     raise TimeoutError(f"Chrome not ready on port {port}")
 
 
-# Kill Chrome process bound to this debug port
 def kill_chrome_on_port(port: int) -> None:
     subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
 
 
-# Unpack CDP execute_script result dict
 def _extract_value(raw):
     try:
         return raw["result"]["result"]["value"]
@@ -215,7 +202,6 @@ def _extract_value(raw):
         return None
 
 
-# Click More-stories n times under HAR record; return first HAR entry matching TIMELINE_API_PATH
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     async with tab.request.record() as capture:
         for i in range(n_clicks):
@@ -229,12 +215,10 @@ async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     return None
 
 
-# Strip HTTP/2 pseudo-headers and client-managed headers
 def filter_headers(raw: dict) -> dict:
     return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
 
 
-# Replay the same API URL at cumulative intervals (seconds) after Chrome close
 def run_warmth_ladder(url: str, headers: dict, intervals: list) -> list:
     results = []
     elapsed_total = 0.0
@@ -268,7 +252,6 @@ def run_warmth_ladder(url: str, headers: dict, intervals: list) -> list:
     return results
 
 
-# Phase C: feedpage rewarm + subprocess cold test (only if ladder hit a 403)
 def run_phase_c(test_url: str, test_headers: dict, ladder_results: list) -> tuple:
     first_403 = next((r for r in ladder_results if r["status"] != 200), None)
     if first_403 is None:
@@ -300,7 +283,6 @@ def run_phase_c(test_url: str, test_headers: dict, ladder_results: list) -> tupl
     return feedpage_result, subprocess_result
 
 
-# Fetch feed HTML page via plain httpx (no browser); return (status, byte_count)
 def fetch_feedpage(api_headers: dict) -> tuple:
     feed_headers = {
         k: v for k, v in api_headers.items()
@@ -313,7 +295,6 @@ def fetch_feedpage(api_headers: dict) -> tuple:
         return -1, 0
 
 
-# Run API call in a fresh subprocess; no prior coindesk connection in that process
 def subprocess_cold_test(state_file: Path) -> dict:
     script_lines = [
         "import json, httpx, sys",

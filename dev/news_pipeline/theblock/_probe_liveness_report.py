@@ -48,7 +48,6 @@ def append_sweep_log(
     elapsed: float,
     skipped: int = 0,
 ) -> None:
-    """Append one structured markdown entry to sweep_log.md (committed — comparable-over-time record)."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     alive     = sum(1 for r in results if r["alive"])
@@ -88,7 +87,6 @@ def append_sweep_log(
 
 
 def write_unknown_log(results: list[dict], ts: datetime) -> None:
-    """Write full detail of unknown-bucket results to a per-run gitignored log."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     path     = LOG_DIR / f"unknown_errors_{ts.strftime('%Y%m%dT%H%M%SZ')}.log"
     unknowns = [r for r in results if r["bucket"] == "unknown"]

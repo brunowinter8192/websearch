@@ -23,15 +23,14 @@ REAL_UA = (
     "Chrome/146.0.7680.154 Safari/537.36"
 )
 CHROME_BINARY = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-MAX_CLICK_ROUNDS = 8   # safety cap: 8 × ~16 URLs/batch ≈ 128 URLs max
+MAX_CLICK_ROUNDS = 8
 POLL_INTERVAL = 0.5
-POLL_MAX = 40          # 20s max wait per click
-PRE_48H_THRESHOLD = 3  # stop when this many articles older than 48h are seen
-CUTOFF_DAYS = 2        # collect back N days; terminate on articles older than cutoff
+POLL_MAX = 40
+PRE_48H_THRESHOLD = 3
+CUTOFF_DAYS = 2
 DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 OUTPUT_DIR = Path(__file__).parent / "01_json"
 
-# Extract feed article URLs + title + nearest time label — excludes aside/nav/footer/sidebar noise
 _JS_EXTRACT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -75,7 +74,6 @@ _JS_EXTRACT = """
 })();
 """
 
-# Count feed-scoped article URLs (same exclusions as _JS_EXTRACT, fast poll)
 _JS_COUNT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -98,7 +96,6 @@ _JS_COUNT = """
 })();
 """
 
-# Scroll "More stories" button into view and click it; return true if found
 _JS_CLICK_BTN = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -135,8 +132,6 @@ async def discover_workflow():
         await teardown_chrome_session(tab, chrome, port, session_dir)
 
     entries = build_entries(all_urls)
-    # Live-blogs are continuously-updated multi-story containers that don't fit a daily-cron
-    # pipeline with URL-dedup — skip deliberately.
     entries, n_filtered = filter_live_blogs(entries)
     if n_filtered:
         print(f"Filtered {n_filtered} live-blog URLs (skipped)")
@@ -203,14 +198,12 @@ async def teardown_chrome_session(tab, chrome, port: int, session_dir: str) -> N
     shutil.rmtree(session_dir, ignore_errors=True)
     print(f"Chrome on port {port} killed, session dir removed.", file=sys.stderr)
 
-# Bind to port 0 to get a free OS-assigned port
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
-# Launch Chrome in background via open -gna (new instance, no foreground)
 def launch_background_chrome(port: int, session_dir: str) -> None:
     subprocess.run(
         [
@@ -227,7 +220,6 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
     )
 
 
-# Poll /json/version until Chrome responds; return webSocketDebuggerUrl
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
@@ -241,7 +233,6 @@ def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     raise TimeoutError(f"Chrome did not start on port {port} within {timeout}s")
 
 
-# Kill the Chrome process bound to this debug port
 def kill_chrome_on_port(port: int) -> None:
     try:
         subprocess.run(
@@ -252,12 +243,10 @@ def kill_chrome_on_port(port: int) -> None:
         print(f"pkill (non-fatal): {e}", file=sys.stderr)
 
 
-# Return cutoff date: articles strictly before this date are outside the 48h window
 def compute_cutoff(today) -> object:
     return today - timedelta(days=CUTOFF_DAYS - 1)
 
 
-# Unpack CDP execute_script result dict
 def _extract_value(raw):
     try:
         return raw["result"]["result"]["value"]
@@ -265,7 +254,6 @@ def _extract_value(raw):
         return None
 
 
-# Run extract JS + decode JSON response into list of article dicts
 async def extract_articles(tab) -> list[dict]:
     raw = await tab.execute_script(_JS_EXTRACT)
     val = _extract_value(raw)
@@ -277,13 +265,11 @@ async def extract_articles(tab) -> list[dict]:
         return []
 
 
-# Click "More stories" button via JS; return True if clicked
 async def click_button(tab) -> bool:
     raw = await tab.execute_script(_JS_CLICK_BTN)
     return bool(_extract_value(raw))
 
 
-# Poll feed-scoped count up to POLL_MAX × POLL_INTERVAL; return when it grows
 async def wait_for_new_articles(tab, prev_count: int) -> int:
     for _ in range(POLL_MAX):
         await asyncio.sleep(POLL_INTERVAL)
@@ -294,7 +280,6 @@ async def wait_for_new_articles(tab, prev_count: int) -> int:
     return prev_count
 
 
-# Parse date from CoinDesk URL path (/YYYY/MM/DD/) → UTC midnight datetime
 def parse_url_date(url: str) -> datetime | None:
     m = DATE_RE.search(url)
     if not m:
@@ -305,12 +290,10 @@ def parse_url_date(url: str) -> datetime | None:
         return None
 
 
-# Count articles whose URL date is before cutoff_date (i.e., older than 48h window)
 def count_older_than_cutoff(articles: list[dict], cutoff_date) -> int:
     return sum(1 for a in articles if (d := parse_url_date(a["url"])) and d.date() < cutoff_date)
 
 
-# Convert URL date to ISO-8601 string (UTC midnight); empty string if no date in URL
 def _url_to_iso(url: str) -> str:
     dt = parse_url_date(url)
     if dt is None:
@@ -318,7 +301,6 @@ def _url_to_iso(url: str) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
 
-# Extract first path segment as section (e.g. /markets/2026/... → markets)
 def _extract_section(url: str) -> str:
     try:
         path = url.split("coindesk.com", 1)[1]
@@ -327,7 +309,6 @@ def _extract_section(url: str) -> str:
         return "unknown"
 
 
-# Build sorted output entry list from all_urls dict
 def build_entries(all_urls: dict) -> list[dict]:
     entries = []
     for url, article in all_urls.items():
@@ -343,20 +324,16 @@ def build_entries(all_urls: dict) -> list[dict]:
     return entries
 
 
-# Return True if URL is a CoinDesk live-blog: slug (last path segment) starts with "live-".
-# Catches live-markets-, live-updates-, and any future live-X- variant.
 def _is_live_blog(url: str) -> bool:
     slug = urlparse(url).path.rstrip("/").split("/")[-1]
     return slug.startswith("live-")
 
 
-# Remove CoinDesk live-blog URLs (slug starts with "live-"); return (filtered_list, count_removed).
 def filter_live_blogs(entries: list[dict]) -> tuple[list[dict], int]:
     kept = [e for e in entries if not _is_live_blog(e["url"])]
     return kept, len(entries) - len(kept)
 
 
-# Write JSON output, return path
 def write_output(entries: list[dict]) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -365,7 +342,6 @@ def write_output(entries: list[dict]) -> Path:
     return path
 
 
-# Print summary to stdout
 def print_summary(entries: list[dict], output_path: Path):
     from collections import Counter
     section_counts = Counter(e["section"] for e in entries)

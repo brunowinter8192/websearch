@@ -37,14 +37,6 @@ def run_race(
     content_handler: Callable[[str, bytes], None] | None = None,
     concurrency:     int = DEFAULT_CONCURRENCY,
 ) -> tuple[list[str], list[str]]:
-    """Continuous race loop: concurrency workers each pull (url, proxy) and fetch immediately.
-
-    URLs are served round-robin; done entries are skipped. At the tail, when fewer
-    pending URLs remain than free workers, multiple workers race the same URL — first
-    success wins. Pool is shuffled once; each proxy is consumed at most once (no
-    cooldown, no burn). Returns (done, gap); gap is non-empty only if the pool is
-    exhausted before all URLs are fetched.
-    """
     candidates  = pool[:]
     random.shuffle(candidates)
 
@@ -94,7 +86,7 @@ def _next_url(state: RaceState) -> str | None:
             state.url_idx += 1
             if url not in state.done_set:
                 return url
-        return None   # all done
+        return None
 
 
 def _next_proxy(state: RaceState) -> tuple[str, str] | None:

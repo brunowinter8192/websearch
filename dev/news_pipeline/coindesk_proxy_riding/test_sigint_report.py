@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""
-Deterministic SIGINT/SIGTERM report tests for src/news/engine/proxy_riding/rider.py.
-No browser or proxy infrastructure needed.
-
-test 1 — _abort_interrupted SIGINT: constructs RiderState with partial job data,
-         patches os._exit to raise SystemExit, calls _abort_interrupted directly,
-         asserts exit code 130, job.md + cumulative.png written, termination=interrupted.
-
-test 2 — _abort_interrupted SIGTERM: same but with signal.SIGTERM → exit code 143.
-
-All src/ imports are lazy (inside function bodies) to satisfy dev/ isolation rules.
-
-Usage:
-    ./venv/bin/python dev/news_pipeline/coindesk_proxy_riding/test_sigint_report.py
-"""
 
 # INFRASTRUCTURE
 
@@ -25,7 +10,6 @@ import time
 import unittest.mock
 from pathlib import Path
 
-# Prepend worktree root so lazy src/ imports inside function bodies resolve correctly.
 _WORKTREE = Path(__file__).parents[3]
 if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
@@ -104,7 +88,6 @@ def _build_ride_record() -> object:
     )
 
 
-# Build a minimal RiderState with two resolved job records so reporter has data.
 def _make_state(tmp_dir: Path) -> object:
     from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
@@ -153,7 +136,6 @@ def _make_state(tmp_dir: Path) -> object:
     return state
 
 
-# _abort_interrupted(SIGINT): report written, exit 130, termination=interrupted.
 def test_abort_interrupted_sigint() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.abort import _abort_interrupted
@@ -188,7 +170,6 @@ def test_abort_interrupted_sigint() -> None:
         assert "interrupted" in md.lower(),      "termination=interrupted missing from job.md"
 
 
-# _abort_interrupted(SIGTERM): exit 143, same files.
 def test_abort_interrupted_sigterm() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
     from src.news.engine.proxy_riding.abort import _abort_interrupted

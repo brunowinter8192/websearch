@@ -12,7 +12,6 @@ def _render_header(har_path: Path) -> list:
     return lines
 
 
-# Per-click trajectory table
 def _render_trajectory_table(batches: list) -> list:
     lines = ["## Per-Click Trajectory\n"]
     lines.append("| Click# | Cumulative Unique | New This Click | Oldest Date | Button State |")
@@ -25,7 +24,6 @@ def _render_trajectory_table(batches: list) -> list:
     return lines
 
 
-# Final summary
 def _render_final_summary(batches: list, oldest_date: str, final_btn_state: str) -> list:
     lines = [f"\n**Final total unique URLs:** {batches[-1]['cumulative_unique']}"]
     lines.append(f"**Oldest date reached:** {oldest_date}")
@@ -33,7 +31,6 @@ def _render_final_summary(batches: list, oldest_date: str, final_btn_state: str)
     return lines
 
 
-# Network candidates per click
 def _render_network_candidates(click_nets: dict) -> list:
     lines = ["## Network Candidates (non-static, per click)\n"]
     for cn in sorted(click_nets.keys()):
@@ -71,7 +68,6 @@ def _render_click_posts(label: str, posts: list) -> list:
     return lines
 
 
-# Find shared base URLs and diff their query strings
 def _render_shared_base_diff(c1_urls: list, c2_urls: list) -> list:
     shared_bases: list[str] = []
     for u1 in c1_urls:
@@ -98,7 +94,6 @@ def _render_shared_base_diff(c1_urls: list, c2_urls: list) -> list:
     return lines
 
 
-# Click-1 vs Click-2 diff — identifies the pagination cursor/offset
 def _render_click_diff(click_nets: dict) -> list:
     lines = ["## Click-1 vs Click-2 Request Diff\n"]
     lines.append("*(What changes between the first and second pagination calls — reveals the cursor/offset parameter)*\n")
@@ -122,7 +117,6 @@ def _render_click_diff(click_nets: dict) -> list:
     return lines
 
 
-# Render and write the findings report MD
 def write_report(
     path: Path,
     batches: list[dict],
@@ -144,7 +138,6 @@ def write_report(
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-# Write depth-mode ceiling report
 def write_depth_report(
     path: Path,
     max_unique: int,

@@ -10,9 +10,8 @@ REAL_UA = (
     "Chrome/146.0.7680.154 Safari/537.36"
 )
 POLL_INTERVAL = 0.5
-POLL_MAX = 40   # 20s max wait per click
+POLL_MAX = 40
 
-# Dump container selector counts + first 3 article-card ancestor chains
 _JS_INSPECT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -51,7 +50,6 @@ _JS_INSPECT = """
 })();
 """
 
-# Extract feed article URLs + nearest time label — excludes aside/nav/footer/sidebar noise
 _JS_EXTRACT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -95,7 +93,6 @@ _JS_EXTRACT = """
 })();
 """
 
-# Count feed-scoped article URLs (same exclusions as _JS_EXTRACT, fast poll)
 _JS_COUNT = """
 (function() {
     var dateRe = /\\/\\d{4}\\/\\d{2}\\/\\d{2}\\//;
@@ -118,7 +115,6 @@ _JS_COUNT = """
 })();
 """
 
-# Locate "More stories" button and return its descriptor
 _JS_FIND_BTN = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -146,7 +142,6 @@ _JS_FIND_BTN = """
 })();
 """
 
-# Scroll button into view and click it; return true if found
 _JS_CLICK_BTN = """
 (function() {
     var candidates = Array.from(document.querySelectorAll('button, a[role="button"], [role="button"]'));
@@ -165,7 +160,6 @@ _JS_CLICK_BTN = """
 
 # FUNCTIONS
 
-# Build pydoll ChromiumOptions with UA + anti-detection flags
 def build_options(headless: bool, session_dir: str) -> ChromiumOptions:
     opts = ChromiumOptions()
     opts.headless = headless
@@ -178,7 +172,6 @@ def build_options(headless: bool, session_dir: str) -> ChromiumOptions:
     return opts
 
 
-# Unpack CDP execute_script result dict
 def _extract_value(raw):
     try:
         return raw["result"]["result"]["value"]
@@ -186,7 +179,6 @@ def _extract_value(raw):
         return None
 
 
-# Run DOM inspection JS, return parsed dict
 async def inspect_containers(tab) -> dict:
     raw = await tab.execute_script(_JS_INSPECT)
     val = _extract_value(raw)
@@ -198,7 +190,6 @@ async def inspect_containers(tab) -> dict:
         return {}
 
 
-# Run extract JS + decode JSON response into list of article dicts
 async def extract_articles(tab) -> list[dict]:
     raw = await tab.execute_script(_JS_EXTRACT)
     val = _extract_value(raw)
@@ -210,7 +201,6 @@ async def extract_articles(tab) -> list[dict]:
         return []
 
 
-# Poll feed-scoped count up to POLL_MAX × POLL_INTERVAL; return when it grows
 async def wait_for_new_articles(tab, prev_count: int) -> int:
     for _ in range(POLL_MAX):
         await asyncio.sleep(POLL_INTERVAL)
@@ -221,7 +211,6 @@ async def wait_for_new_articles(tab, prev_count: int) -> int:
     return prev_count
 
 
-# Run JS button finder, return parsed dict or None
 async def find_button(tab) -> dict | None:
     raw = await tab.execute_script(_JS_FIND_BTN)
     val = _extract_value(raw)
@@ -233,7 +222,6 @@ async def find_button(tab) -> dict | None:
         return None
 
 
-# Click "More stories" button via JS; return True if clicked
 async def click_button(tab) -> bool:
     raw = await tab.execute_script(_JS_CLICK_BTN)
     return bool(_extract_value(raw))

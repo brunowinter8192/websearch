@@ -90,7 +90,6 @@ async def _prepare_proxy_pool() -> list:
     return proxy_pool
 
 
-# Raise RLIMIT_NOFILE soft limit to target; warn if it fails (do not abort).
 def _raise_fd_limit(target: int = 16_384) -> None:
     try:
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -106,7 +105,6 @@ def _raise_fd_limit(target: int = 16_384) -> None:
         )
 
 
-# Parse CLI arguments.
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="CoinDesk browser-proxy riding scraper")
     ap.add_argument("--concurrency",    type=int, default=20,    help="Browser slots (default 20)")

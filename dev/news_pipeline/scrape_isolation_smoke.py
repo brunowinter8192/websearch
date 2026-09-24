@@ -10,8 +10,6 @@ import time
 from pathlib import Path
 from zoneinfo import available_timezones
 
-# Make src.* resolve from repo root regardless of cwd.
-# parents[2] of dev/news_pipeline/scrape_isolation_smoke.py = repo root
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -50,7 +48,6 @@ REGWALL_MARKERS = [
 
 # ORCHESTRATOR
 
-# Run B1 and B2 isolation candidates over all 32 URLs; print comparison table.
 def main():
     urls = _load_urls(URL_FILE)
     print(f"Loaded {len(urls)} URLs", flush=True)
@@ -76,13 +73,11 @@ def main():
 
 # FUNCTIONS
 
-# Load URLs from JSON array (each item has a "url" key).
 def _load_urls(path: Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [item["url"] for item in data]
 
 
-# Build base CrawlerRunConfig (shared fetch settings, no timezone override).
 def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
     kwargs = dict(
         cache_mode=CacheMode.BYPASS,
@@ -97,14 +92,12 @@ def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
     return CrawlerRunConfig(**kwargs)
 
 
-# Derive safe filename from URL.
 def _url_to_filename(url: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
     slug = re.sub(r"_+", "_", slug).strip("_")[:100]
     return f"{slug}.md"
 
 
-# Write scraped markdown to output_dir, return byte count.
 def _save(url: str, raw_md: str, output_dir: Path) -> int:
     if not raw_md:
         return 0
@@ -113,8 +106,6 @@ def _save(url: str, raw_md: str, output_dir: Path) -> int:
     return len(content.encode("utf-8"))
 
 
-# B1: ONE shared crawler; each URL gets a distinct timezone_id → distinct context signature
-# → fresh BrowserContext → fresh cookie jar. Concurrency gated by semaphore.
 async def _run_b1(urls: list[str], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     zones = sorted(available_timezones())
@@ -139,7 +130,6 @@ async def _run_b1(urls: list[str], output_dir: Path) -> None:
         await asyncio.gather(*[fetch_one(crawler, url, zones[i]) for i, url in enumerate(urls)])
 
 
-# B2: fresh crawler per URL, concurrent under semaphore — guaranteed isolated cookie jar.
 async def _run_b2(urls: list[str], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     sem = asyncio.Semaphore(CONCURRENCY)
@@ -162,7 +152,6 @@ async def _run_b2(urls: list[str], output_dir: Path) -> None:
     await asyncio.gather(*[fetch_one(url) for url in urls])
 
 
-# Map source URL -> file via <!-- source: URL --> header; build row dicts.
 def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:
     file_by_url: dict[str, Path] = {}
     for fpath in output_dir.glob("*.md"):
@@ -191,7 +180,6 @@ def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:
     return rows
 
 
-# Write per-candidate review MD: summary table + 50-line previews.
 def _write_review(rows: list[dict], out_path: Path, title: str) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     parts = [
@@ -227,7 +215,6 @@ def _write_review(rows: list[dict], out_path: Path, title: str) -> None:
     out_path.write_text("\n".join(parts), encoding="utf-8")
 
 
-# Print comparison table vs Smoke A baseline.
 def _print_comparison(b1_rows: list[dict], b1_wall: int,
                       b2_rows: list[dict], b2_wall: int) -> None:
     def stats(rows: list[dict]) -> tuple[int, int, int]:

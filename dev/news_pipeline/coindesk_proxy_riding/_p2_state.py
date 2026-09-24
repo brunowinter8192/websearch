@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from p0_pool import PersistentCooldownManager
 
-STALL_TIMEOUT_S   = 3_600.0  # 60 min no progress → terminate
+STALL_TIMEOUT_S   = 3_600.0
 
 
 @dataclass
@@ -22,33 +22,33 @@ class RideRecord:
     n_ok:             int
     n_regwall:        int
     n_connect_fail:   int
-    n_failed:         int        # URLs that triggered the fail-rotation (2-strike drop)
+    n_failed:         int
     n_urls_attempted: int
     burned_threshold: bool
     burned_connect:   bool
     ride_s:           float
-    positions:        list = field(default_factory=list)  # (url, status, elapsed_s)
+    positions:        list = field(default_factory=list)
 
 
 @dataclass
 class JobRecord:
     url:           str
     url_hash:      str
-    status:        str        # ok | regwall | connect_fail | failed | empty
+    status:        str
     char_count:    int | None
     markdown_len:  int | None
     elapsed_s:     float | None
     error:         str | None
     file:          str | None
     t_start:       datetime
-    ride_position: int        # which URL on this proxy (1st, 2nd, …)
+    ride_position: int
     proxy_str:     str
 
 
 @dataclass
 class RiderState:
     url_queue:       asyncio.Queue
-    proxy_pool:      list               # raw (proto, hp) tuples from load_backfill_pool()
+    proxy_pool:      list
     cooldown_mgr:    PersistentCooldownManager
     output_dir:      Path
     burn_threshold:  int
@@ -64,7 +64,7 @@ class RiderState:
     ride_records:    list  = field(default_factory=list)
     last_progress_mono: float      = field(default_factory=time.monotonic)
     stall_timeout_s:    float      = STALL_TIMEOUT_S
-    termination:        str        = "running"   # all-done | stall | pool-exhausted
+    termination:        str        = "running"
     proxy_cursor:       int        = 0
     proxy_lock:         asyncio.Lock = field(default_factory=asyncio.Lock)
     n_browsers:         int        = 1

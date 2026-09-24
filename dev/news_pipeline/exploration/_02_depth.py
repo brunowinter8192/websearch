@@ -18,7 +18,7 @@ from _02_dom import (
 )
 from _02_report import write_depth_report
 
-DEPTH_CAP = 150        # depth mode safety cap
+DEPTH_CAP = 150
 
 _SKIP_EXT = (".js", ".css", ".woff", ".woff2", ".otf", ".png", ".jpg", ".jpeg",
              ".gif", ".webp", ".svg", ".ico", ".map")
@@ -27,13 +27,11 @@ _SKIP_PATH = ("/_next/static/", "/_next/image", "/api/cdn-fonts")
 
 # ORCHESTRATOR
 async def depth_workflow():
-    """Find the ceiling: click until disabled/gone/plateau/cap. No HAR. Coindesk-only net log."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     report_path = OUTPUT_DIR / f"depth_report_{ts}.md"
     print(f"Report → {report_path}", file=sys.stderr)
 
-    # Lightweight log: only www.coindesk.com non-image, non-static responses
     coindesk_log: list[dict] = []
 
     async with async_playwright() as p:
@@ -80,7 +78,6 @@ async def setup_and_capture_initial(page) -> tuple:
     return all_urls, oldest_date
 
 
-# Final button state
 async def get_final_button_state(page) -> str:
     final_btn_info = await page.evaluate(_JS_BTN_STATE)
     return (

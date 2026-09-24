@@ -7,12 +7,9 @@ import statistics
 import sys
 from pathlib import Path
 
-# Make `import src.crawler.pipe_scraper` resolve regardless of cwd.
-# parents[2] of dev/news_pipeline/prod_scrape_smoke.py = repo root
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-# Import prod scraper via importlib to satisfy project import conventions.
 _scraper_mod = importlib.import_module("src.crawler.pipe_scraper")
 scrape_urls_workflow = _scraper_mod.scrape_urls_workflow
 
@@ -35,7 +32,6 @@ REGWALL_MARKERS = [
 
 # ORCHESTRATOR
 
-# Run prod scraper on all 32 CoinDesk URLs, then build a regwall review markdown.
 def main():
     urls = _load_urls(URL_FILE)
     print(f"Loaded {len(urls)} URLs from {URL_FILE}", flush=True)
@@ -49,15 +45,12 @@ def main():
 
 # FUNCTIONS
 
-# Load URLs from the JSON array (each item has a "url" key).
 def _load_urls(path: Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [item["url"] for item in data]
 
 
-# Build one row dict per URL: url, found, bytes, lines, marker_hits, verdict, content_lines.
 def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:
-    # Map source URL -> file via the <!-- source: URL --> header pipe_scraper writes
     file_by_url: dict[str, Path] = {}
     for fpath in output_dir.glob("*.md"):
         text = fpath.read_text(encoding="utf-8", errors="replace")
@@ -102,7 +95,6 @@ def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:
     return rows
 
 
-# Write the markdown review file: summary table + per-URL sections with 50-line previews.
 def _write_review(rows: list[dict], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     parts = [
@@ -144,7 +136,6 @@ def _write_review(rows: list[dict], out_path: Path) -> None:
     out_path.write_text("\n".join(parts), encoding="utf-8")
 
 
-# Print stdout summary: ok/empty/error counts, byte distribution, REGWALL? count, review path.
 def _print_stdout_summary(rows: list[dict], review_path: Path) -> None:
     found = [r for r in rows if r["found"]]
     missing = [r for r in rows if not r["found"]]

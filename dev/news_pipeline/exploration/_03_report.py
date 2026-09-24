@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-COINDESK_ORIGIN = date(2013, 9, 1)   # projection anchor
+COINDESK_ORIGIN = date(2013, 9, 1)
 
 
 # FUNCTIONS
@@ -107,7 +107,6 @@ def _render_stage_b_projection(oldest_date: str, clicks_done: int, run_elapsed: 
     return lines
 
 
-# Write run summary: timing stats, DOM growth trend, Stage B projection
 def write_run_report(
     path: Path,
     ts: str,

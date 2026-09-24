@@ -1,17 +1,3 @@
-"""
-Stage 1 smoke — src/news/engine/proxy_riding/ package validation.
-
-Three sections:
-  1. Import check (no network)
-  2. Deterministic watchdog test (patches os._exit — no network, no browser)
-  3. Mini live run: 10 inventory URLs, 2 slots, 1 browser, 300s stall — validates
-     manifest shape, shuffle, and raw .html writes.
-
-Usage (from main checkout):
-    cd /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/searxng-cli
-    ./venv/bin/python .claude/worktrees/riding-port/dev/news_pipeline/coindesk_proxy_riding/smoke_stage1.py
-"""
-
 # INFRASTRUCTURE
 
 import asyncio
@@ -21,13 +7,11 @@ import time
 import unittest.mock
 from pathlib import Path
 
-# Worktree root contains the new src/news/engine/proxy_riding/ package;
-# prepend it so imports resolve from here, not the main checkout's src/.
-_WORKTREE = Path(__file__).parents[3]  # dev/news_pipeline/coindesk_proxy_riding/ → riding-port/
+_WORKTREE = Path(__file__).parents[3]
 if str(_WORKTREE) not in sys.path:
     sys.path.insert(0, str(_WORKTREE))
 
-MAIN_CHECKOUT = Path(__file__).parents[6]  # .claude/worktrees/riding-port → repo root
+MAIN_CHECKOUT = Path(__file__).parents[6]
 INVENTORY_DIR = MAIN_CHECKOUT / "data" / "news" / "coindesk" / "inventory"
 N_LIVE_URLS   = 10
 REQUIRED_KEYS = {"url", "hash", "status", "file", "char_count", "error"}
@@ -69,7 +53,6 @@ def _run(name: str, fn) -> bool:
         return False
 
 
-# Section 1 — import clean: package resolves without sys.path tricks
 def test_import_clean() -> None:
     import src.news.engine.proxy_riding.rider    as rider_mod
     import src.news.engine.proxy_riding.abort    as abort_mod
@@ -82,7 +65,6 @@ def test_import_clean() -> None:
     from src.news.engine.proxy_riding.abort import _abort_stall
     from src.news.engine.proxy_riding.reporter import write_riding_report
 
-    # Confirm defaults match validated production values
     cfg = RidingScrapeConfig()
     assert cfg.n_browsers      == 4,      f"n_browsers default wrong: {cfg.n_browsers}"
     assert cfg.n_slots         == 64,     f"n_slots default wrong: {cfg.n_slots}"
@@ -90,10 +72,8 @@ def test_import_clean() -> None:
     assert cfg.burn_threshold  == 2,      f"burn_threshold default wrong: {cfg.burn_threshold}"
     assert cfg.page_timeout_ms == 8_000,  f"page_timeout_ms default wrong: {cfg.page_timeout_ms}"
 
-    # Confirm BROWSER_ELIGIBLE_PROTOS matches dev runner
     assert BROWSER_ELIGIBLE_PROTOS == frozenset({"http", "socks5"})
 
-    # Confirm no sys.path manipulation in production modules
     src_rider    = Path(rider_mod.__file__).read_text()
     src_abort    = Path(abort_mod.__file__).read_text()
     src_reporter = Path(reporter_mod.__file__).read_text()
@@ -101,7 +81,6 @@ def test_import_clean() -> None:
     assert "sys.path.insert" not in src_abort,    "sys.path.insert found in abort.py"
     assert "sys.path.insert" not in src_reporter, "sys.path.insert found in reporter.py"
 
-    # Confirm late import in _abort_stall uses src package path
     assert "src.news.engine.proxy_riding.reporter" in src_abort, \
         "late import in _abort_stall does not reference src package"
 
@@ -145,7 +124,6 @@ def _assert_watchdog_outputs(tmp_dir: Path) -> None:
     assert "stall" in jobmd.read_text().lower(), "stall termination missing from job.md"
 
 
-# Section 2 — deterministic watchdog: pre-aged state + patched os._exit
 def test_watchdog_deterministic() -> None:
     import src.news.engine.proxy_riding.rider as rider_mod
     from src.news.engine.proxy_riding.rider import _watchdog
@@ -179,7 +157,6 @@ def test_watchdog_deterministic() -> None:
     print("    watchdog fired → os._exit(1), remaining_urls.txt ok, job.md ok")
 
 
-# Load inventory URLs
 def _load_inventory_urls(n: int) -> list:
     assert INVENTORY_DIR.exists(), f"inventory dir missing: {INVENTORY_DIR}"
     inv_files = sorted(INVENTORY_DIR.glob("*.txt"))
@@ -196,7 +173,6 @@ def _load_inventory_urls(n: int) -> list:
     return urls
 
 
-# Manifest shape
 def _assert_manifest_shape(manifest: list) -> None:
     assert len(manifest) == N_LIVE_URLS, \
         f"manifest length mismatch: {len(manifest)} ≠ {N_LIVE_URLS}"
@@ -212,7 +188,6 @@ def _assert_manifest_shape(manifest: list) -> None:
                 f"entry[{i}] ok file not .html: {m['file']}"
 
 
-# Shuffle: verify pool order differs from sequential (check raw_pool via loader)
 async def _assert_pool_shuffle_effective() -> int:
     import random as _random
     from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
@@ -221,14 +196,11 @@ async def _assert_pool_shuffle_effective() -> int:
     filtered    = [(p, hp) for p, hp in raw_pool if p in frozenset({"http", "socks5"})]
     shuffled    = filtered[:]
     _random.shuffle(shuffled)
-    # Shuffle is probabilistic; with ~15k entries the chance of identical order is ~0.
-    # Check that shuffled != sorted order as a proxy.
     assert shuffled != sorted(filtered), \
         "shuffle produced sorted order — extremely unlikely, re-run"
     return len(filtered)
 
 
-# Section 3 — live run: real pool + real URLs, validate manifest + shuffle + raw writes
 async def test_live_run() -> None:
     from src.news.engine.proxy_riding.scrape import scrape_entries_riding, RidingScrapeConfig
 
@@ -237,7 +209,6 @@ async def test_live_run() -> None:
 
     print(f"    {N_LIVE_URLS} inventory URLs loaded")
 
-    # Minimal config: 2 slots, 1 browser, 300s stall
     cfg = RidingScrapeConfig(
         n_slots=2, n_browsers=1, burn_threshold=2,
         page_timeout_ms=8_000, stall_timeout_s=300.0,

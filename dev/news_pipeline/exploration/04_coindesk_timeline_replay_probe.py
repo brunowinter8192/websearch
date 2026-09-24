@@ -10,14 +10,14 @@ from pathlib import Path
 from pydoll.browser import Chrome
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _04_capture import (  # noqa: E402
+from _04_capture import (
     get_free_port,
     kill_chrome_on_port,
     launch_background_chrome,
     run_capture_phase,
     wait_for_ws_url,
 )
-from _04_replay import (  # noqa: E402
+from _04_replay import (
     CALL_DELAY,
     cursor_loop,
     extract_json_sample,
@@ -25,18 +25,15 @@ from _04_replay import (  # noqa: E402
     replay_curl_cffi,
     replay_httpx,
 )
-from _04_report import write_report  # noqa: E402
+from _04_report import write_report
 
 OUTPUT_DIR = Path(__file__).parent / "04_output"
 
-CURSOR_LOOP_CALLS = 3    # default chained cursor calls; overridden by --loop N
+CURSOR_LOOP_CALLS = 3
 
 
 # ORCHESTRATOR
 
-# Navigate to CoinDesk feed, click More-stories to trigger Timeline API,
-# capture full request headers via HAR recorder, replay with httpx + curl_cffi,
-# and if 200, chain cursor calls to verify pure HTTP pagination.
 async def timeline_replay_workflow(loop: int = CURSOR_LOOP_CALLS, delay: float = CALL_DELAY, rate_test: bool = False) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

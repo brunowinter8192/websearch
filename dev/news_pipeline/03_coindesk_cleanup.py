@@ -9,16 +9,10 @@ from pathlib import Path
 INPUT_DIR = Path(__file__).parent / "02b_data"
 OUTPUT_DIR = Path(__file__).parent / "03_data"
 
-# End-anchor patterns — checked in document order; earliest match wins
 _RE_MORE_FOR_YOU     = re.compile(r'^More For You\s*$')
 _RE_MORE_FOR_YOU_H2  = re.compile(r'^## More For You')
 _RE_PRIVACY          = re.compile(r'^## We Care About Your Privacy')
-# ≥2 concatenated [text](url) groups with no surrounding plain text.
-# Requires {2,} to avoid firing on single-link lines (Google badge, nav labels).
 _RE_TAG_FOOTER       = re.compile(r'^(\[[^\]]+\]\([^)]+\)){2,}$')
-# Body tag-footer strip — 1+ groups; broader than _RE_TAG_FOOTER (which uses {2,} for end-anchor
-# detection) because orphan single-tag lines (e.g. [Tokenization](url)) also appear in body.
-# Applied BEFORE inline-link substitution so [text](url) form is still matchable.
 _RE_TAG_LINE         = re.compile(r'^(\[[^\]]+\]\([^)]+\))+$')
 
 _END_ANCHORS = [
@@ -28,17 +22,12 @@ _END_ANCHORS = [
     ("TAG_FOOTER",      _RE_TAG_FOOTER),
 ]
 
-# In-body strip patterns
 _RE_GOOGLE_BADGE = re.compile(r'\[Make\s*\]\(https://www\.google\.com/preferences/source')
-# Updated/Published prefix variant covered by optional group
 _RE_DATE_BYLINE  = re.compile(r'^(?:Updated |Published )?[A-Z][a-z]+ \d{1,2}, \d{4},.*read$')
 _RE_BYLINE       = re.compile(r'^By \[.*?\]\(.*?\)(?:[,|].*)?\s*$')
 _RE_IMAGE        = re.compile(r'^!\[.*?\]\(.*?\)\s*$')
 _RE_IMAGE_LINK   = re.compile(r'^\[!\[.*?\]\(.*?\)\]\(.*?\)\s*$')
 _RE_EMPTY_LINK   = re.compile(r'\[\]\(.*?\)')
-# Inline link strip: [text](url) → text. Applied after image-line removal so
-# standalone image lines are already gone before this substitution runs.
-# Does NOT match image markup (leading !) — those are handled by _RE_IMAGE/_RE_IMAGE_LINK.
 _RE_INLINE_LINK  = re.compile(r'\[([^\]]+)\]\([^)]+\)')
 
 
@@ -68,7 +57,6 @@ def cleanup_workflow(input_dir: Path, output_dir: Path):
 
 # FUNCTIONS
 
-# Parse, clean, and write one article file; return (manifest_entry, ws_strips, para_inserts, tag_strips)
 def process_file(path: Path, output_dir: Path) -> tuple[dict, int, int, int]:
     raw = path.read_text(encoding="utf-8")
     original_chars = len(raw)
@@ -78,7 +66,6 @@ def process_file(path: Path, output_dir: Path) -> tuple[dict, int, int, int]:
 
     start_idx = find_start_anchor(body_lines)
     if start_idx is None:
-        # No H1 — output raw body only (no frontmatter block), flag in manifest
         cleaned = "\n".join(body_lines).strip() + "\n"
         out_path = output_dir / path.name
         out_path.write_text(cleaned, encoding="utf-8")
@@ -94,7 +81,6 @@ def process_file(path: Path, output_dir: Path) -> tuple[dict, int, int, int]:
     return _manifest_entry(hash_name, fm_fields, original_chars, cleaned, anchor_name), ws_strips, para_inserts, tag_strips
 
 
-# Build manifest entry dict merging frontmatter fields + run stats
 def _manifest_entry(hash_name: str, fm: dict, original_chars: int, cleaned: str, anchor: str) -> dict:
     cleaned_chars = len(cleaned)
     reduction = round((1 - cleaned_chars / original_chars) * 100, 1) if original_chars else 0.0
@@ -113,7 +99,6 @@ def _manifest_entry(hash_name: str, fm: dict, original_chars: int, cleaned: str,
     }
 
 
-# Split raw file into frontmatter field dict and body lines
 def parse_frontmatter(raw: str) -> tuple[dict, list[str]]:
     lines = raw.splitlines(keepends=True)
     if not lines or lines[0].strip() != "---":
@@ -131,7 +116,6 @@ def parse_frontmatter(raw: str) -> tuple[dict, list[str]]:
     return fm_fields, body_lines
 
 
-# Return index of first H1 line in body_lines, or None
 def find_start_anchor(body_lines: list[str]) -> int | None:
     for i, line in enumerate(body_lines):
         if line.startswith("# "):
@@ -139,9 +123,6 @@ def find_start_anchor(body_lines: list[str]) -> int | None:
     return None
 
 
-# Return (end_idx, anchor_name) for the earliest end anchor after start_idx.
-# end_idx is exclusive — body slice is body_lines[start_idx:end_idx].
-# If no anchor found: (len(body_lines), "NONE")
 def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     for i in range(start_idx + 1, len(body_lines)):
         line = body_lines[i]
@@ -151,7 +132,6 @@ def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     return len(body_lines), "NONE"
 
 
-# Pass 1 — strip/substitute each line, count trailing-ws hits
 def _clean_body_pass1(lines: list[str]) -> tuple[list[str], int, int]:
     pass1: list[str] = []
     ws_strips = 0
@@ -177,7 +157,6 @@ def _clean_body_pass1(lines: list[str]) -> tuple[list[str], int, int]:
     return pass1, ws_strips, tag_strips
 
 
-# Pass 2 — paragraph normalization + blank-run collapse-to-1
 def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
     result: list[str] = []
     para_inserts = 0
@@ -191,7 +170,6 @@ def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
             prev_was_body_para = False
         else:
             blank_run = 0
-            # Body paragraph: non-empty, not a header/bullet/indented-bullet
             is_body_para = not line.lstrip().startswith(("#", "*", "-"))
             if is_body_para and prev_was_body_para:
                 if not result or result[-1].strip():
@@ -200,7 +178,6 @@ def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
             result.append(line)
             prev_was_body_para = is_body_para
 
-    # Strip leading/trailing blank lines from body
     while result and result[0] == "":
         result.pop(0)
     while result and result[-1] == "":
@@ -209,23 +186,17 @@ def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
     return result, para_inserts
 
 
-# Apply in-body cleanup rules; return (cleaned_lines, ws_strip_count, para_insert_count, tag_strip_count).
-# Two passes: (1) line-level strip/substitution + trailing-ws; (2) paragraph normalization.
-# Pass 1 order: tag-footer strip → image strip → byline/date → google-badge → empty-links → inline-link sub.
-# Tag-footer strip MUST precede inline-link sub so [text](url) form is still matchable.
 def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
     pass1, ws_strips, tag_strips = _clean_body_pass1(lines)
     result, para_inserts = _clean_body_pass2(pass1)
     return result, ws_strips, para_inserts, tag_strips
 
 
-# Write manifest JSON to output_dir
 def write_manifest(manifest: list[dict], output_dir: Path):
     path = output_dir / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-# Print summary: total files, reduction stats, normalization counts, anchor distribution
 def print_summary(manifest: list[dict], output_dir: Path, ws_strips: int, para_inserts: int, tag_strips: int):
     reductions = [e["reduction_pct"] for e in manifest]
     anchor_dist: dict[str, int] = {}

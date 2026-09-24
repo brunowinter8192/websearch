@@ -15,8 +15,8 @@ from p2_cooldown import PersistentCooldownManager
 from p5_logger import AcquireLogger
 from p6_buffer import build_active_buffer, refill_buffer, BUFFER_SIZE, DEFAULT_CONCURRENCY
 
-_sleep             = time.sleep    # patchable in tests without affecting stdlib time
-REFRESH_INTERVAL_S = 3600          # full pool reload cadence (60 min)
+_sleep             = time.sleep
+REFRESH_INTERVAL_S = 3600
 
 
 @dataclass
@@ -44,25 +44,6 @@ def run_loop(
     content_handler: Callable[[str, bytes], None] | None = None,
     refresh_interval_s: float = REFRESH_INTERVAL_S,
 ) -> tuple[list[str], list[str], list[str]]:
-    """Sustained concurrent rotation loop: 60-min pool refresh + wait-on-exhaustion.
-
-    pool_provider() is called once on startup and again at each refresh_interval_s
-    tick to fetch a fresh proxy list; build_active_buffer() filters it through cm
-    to rebuild the active buffer (up to buffer_size eligible, socks4-first).
-    2-strikes lifecycle (Stage 3) drives burn→cooldown.
-
-    Exhaustion (buf + wset both empty): sleeps until the earlier of (next cooldown
-    expiry, next refresh tick), then calls pool_provider() and rebuilds buf — no gap
-    reported, no early exit.
-
-    refresh_interval_s is a separate parameter to allow small values in tests without
-    patching module globals.
-
-    Returns (done, dead, gap):
-      done — URLs successfully fetched with valid content.
-      dead — URLs whose origin returned 404/410 (permanently gone; proxy confirmed working).
-      gap  — URLs remaining in queue (should be empty on clean termination).
-    """
     state = _init_state(pool_provider, target_urls, logger, cm, buffer_size)
 
     while state.queue:
@@ -111,7 +92,6 @@ def _run_iteration(
 
     batch = _build_batch(state.queue, state.wset, state.buf, concurrency)
     if not batch:
-        # buf + wset exhausted — sleep until next eligible proxy or scheduled refresh
         _sleep_until_eligible(cm, state.last_refresh, refresh_interval_s)
         state.buf = build_active_buffer(state.pool, cm, buffer_size)
         return
@@ -246,13 +226,11 @@ def _record_fail(
     return buf
 
 
-# Seconds to sleep on exhaustion: min(next cooldown expiry, next refresh tick)
 def _compute_sleep(
     cm: PersistentCooldownManager,
     last_refresh_mono: float,
     refresh_interval_s: float,
 ) -> float:
-    """Return seconds to sleep; 0.0 means immediate wakeup."""
     now_mono        = time.monotonic()
     secs_to_refresh = max(0.0, (last_refresh_mono + refresh_interval_s) - now_mono)
 
@@ -265,23 +243,14 @@ def _compute_sleep(
     return min(secs_to_refresh, secs_to_eligible)
 
 
-# Build one batch: working-set proxies first, then fresh candidates from active buffer
 def _build_batch(
     queue:       deque,
     wset:        set[tuple[str, str]],
     buf:         list[tuple[str, str]],
     concurrency: int,
 ) -> list[tuple[str, str, str]]:
-    """Return list of (proto, hp, url) up to concurrency; each proxy appears once.
-
-    Phase 1 — Normal: wset proxies first, then fresh buf entries; each gets the next
-    distinct URL from queue.
-    Phase 2 — Tail: when pending URLs < available proxy slots, surplus proxies race
-    the same remaining URLs round-robin so multiple proxies contest each leftover URL.
-    """
     batch, assigned_proxies = _assign_normal(queue, wset, buf, concurrency)
 
-    # Phase 2 — Tail: surplus proxy slots race the same pending URLs round-robin
     _add_tail_racers(batch, assigned_proxies, wset, buf, concurrency)
 
     return batch
