@@ -73,7 +73,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py.
 **Calls out:** matplotlib, statistics.
 
-### box_lock.py (97 LOC)
+### box_lock.py (94 LOC)
 
 **Purpose:** System-wide single-job flock with a sidecar for busy messages and stale-lock recovery.
 **Reads:** the lock sidecar under the user lock directory.

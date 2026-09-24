@@ -51,7 +51,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper.py.
 **Calls out:** crawl4ai, pipe_scraper_constants.py.
 
-### pipe_scraper_acquisition.py (129 LOC)
+### pipe_scraper_acquisition.py (133 LOC)
 
 **Purpose:** Per-URL executors for both engines; collects onward links on the chromium engine; classifies nothing.
 **Reads:** the URL list from pipe_scraper.py.
@@ -123,7 +123,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** seed_feeders.py.
 **Calls out:** httpx.
 
-### seed_feeders_navtree.py (264 LOC)
+### seed_feeders_navtree.py (267 LOC)
 
 **Purpose:** Detects a site's own frontend navigation tree in page payloads, walks it and unions every exposed version.
 **Reads:** the seed page and each version's root page over HTTP.

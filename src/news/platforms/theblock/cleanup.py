@@ -37,7 +37,7 @@ _SPONSOR_BLOCK_RE   = re.compile(
 # FUNCTIONS
 
 def cleanup(raw_html: str, entry: dict) -> str:
-    data = _find_news_article(raw_html)
+    data = _find_news_article(raw_html, entry.get('url', '?'))
     if data is None:
         print(f"[theblock] cleanup: no JSON-LD NewsArticle found — {entry.get('url','?')}", file=sys.stderr)
         return ""
@@ -54,11 +54,12 @@ def cleanup(raw_html: str, entry: dict) -> str:
     return _post_clean(_html_to_markdown(article_body))
 
 
-def _find_news_article(html: str) -> dict | None:
+def _find_news_article(html: str, url: str) -> dict | None:
     for raw in _LD_RE.findall(html):
         try:
             data = json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError as e:
+            print(f"[theblock] cleanup: malformed JSON-LD block skipped ({e}) — {url}", file=sys.stderr)
             continue
         for candidate in _iter_candidates(data):
             if _is_news_article(candidate):

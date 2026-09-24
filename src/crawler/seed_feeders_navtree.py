@@ -38,6 +38,7 @@ def _extract_rsc_stream_payloads(html: str) -> list:
     full_stream = "".join(json.loads(m) for m in matches)
     rows = re.split(r'\n(?=[0-9a-f]+:)', full_stream)
     payloads = []
+    non_json_rows = 0
     for row in rows:
         row_id, _, value = row.partition(":")
         if not _RSC_ROW_ID_RE.match(row_id):
@@ -45,7 +46,9 @@ def _extract_rsc_stream_payloads(html: str) -> list:
         try:
             payloads.append(json.loads(value))
         except json.JSONDecodeError:
-            continue
+            non_json_rows += 1
+    if non_json_rows:
+        logger.debug("RSC stream: %d of %d rows are not JSON and were skipped", non_json_rows, len(rows))
     return payloads
 
 

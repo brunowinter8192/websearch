@@ -59,7 +59,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `p4_loop.py`, `p4_race.py`, `acquire_pipe.py`.
 **Calls out:** `../proxy_status_log.py`.
 
-### box_lock.py (97 LOC)
+### box_lock.py (94 LOC)
 
 **Purpose:** Global single-job file lock so only one acquire job runs system-wide, with a JSON sidecar and stale recovery.
 **Reads:** The lock sidecar.

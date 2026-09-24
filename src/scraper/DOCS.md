@@ -19,7 +19,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 
 ## Modules
 
-### chromium_scrape.py (265 LOC)
+### chromium_scrape.py (266 LOC)
 
 **Purpose:** Scrape orchestrator: one crawl4ai call through the self-launched Chromium, returns fit markdown, logs facts, and runs three independent process-hygiene nets.
 **Reads:** the url argument.
@@ -51,7 +51,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** cli.py.
 **Calls out:** scrape_logger.py, src/crawler/pipe_scraper_acquisition.py, rag-cli (subprocess).
 
-### camoufox_scrape.py (218 LOC)
+### camoufox_scrape.py (219 LOC)
 
 **Purpose:** Calibrated Firefox/Camoufox acquisition lane with the same facts-only contract; reactivatable but currently without a CLI subcommand.
 **Reads:** the url and image-blocking arguments; the macOS system locale.

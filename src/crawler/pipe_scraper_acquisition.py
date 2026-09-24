@@ -1,4 +1,5 @@
 # INFRASTRUCTURE
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from src.crawler.pipe_scraper_records import _log_pipe_record, _log_pipe_camoufo
 from src.crawler.seed_feeders_scope import host_key
 from src.scraper.chromium_scrape import extract_crawl4ai_diagnosis
 from src.scraper.camoufox_scrape import try_scrape_camoufox
+
+logger = logging.getLogger(__name__)
 
 _NON_PAGE_EXTENSIONS = (
     ".gif", ".jpg", ".jpeg", ".png", ".webp", ".svg", ".ico", ".css", ".js",
@@ -28,7 +31,8 @@ def _url_to_filename(url: str) -> str:
 def _onward_link_identity(url: str) -> str | None:
     try:
         parsed = urlsplit(url)
-    except ValueError:
+    except ValueError as e:
+        logger.warning("Onward link dropped, malformed URL %r: %s", url, e)
         return None
     if not parsed.hostname:
         return None

@@ -2,11 +2,14 @@
 
 import fcntl
 import json
+import logging
 import os
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 LOCK_DIR    = Path.home() / ".websearch-locks"
 _FLOCK_FILE = LOCK_DIR / "acquire_pipe.flock"
@@ -23,11 +26,8 @@ class LockBusyError(RuntimeError):
 def cleanup_stale() -> None:
     if not _SIDECAR.exists():
         return
-    try:
-        data = json.loads(_SIDECAR.read_text(encoding="utf-8"))
-        pid  = data.get("pid")
-    except (json.JSONDecodeError, OSError):
-        return
+    data = json.loads(_SIDECAR.read_text(encoding="utf-8"))
+    pid  = data.get("pid")
     if pid is None:
         _SIDECAR.unlink(missing_ok=True)
         return
@@ -36,7 +36,7 @@ def cleanup_stale() -> None:
     except ProcessLookupError:
         _SIDECAR.unlink(missing_ok=True)
     except PermissionError:
-        return
+        logger.warning("acquire_pipe lock holder pid=%s is owned by another user, sidecar kept", pid)
 
 
 @contextmanager
@@ -67,22 +67,19 @@ def acquire(job: str, target: str):
 
 
 def _busy_message() -> str:
-    try:
-        data       = json.loads(_SIDECAR.read_text(encoding="utf-8"))
-        pid        = data.get("pid", "?")
-        job        = data.get("job", "?")
-        target     = data.get("target", "?")
-        started_at = data.get("started_at", "")
-        elapsed    = ""
-        if started_at:
-            t0      = datetime.strptime(started_at, _TS_FMT).replace(tzinfo=timezone.utc)
-            elapsed = f", running {int((datetime.now(timezone.utc) - t0).total_seconds())}s"
-        return (
-            f"acquire_pipe already running: pid={pid}, job={job!r}, "
-            f"target={target!r}{elapsed}"
-        )
-    except Exception:
-        return "acquire_pipe already running (lock held, sidecar unreadable)"
+    data       = json.loads(_SIDECAR.read_text(encoding="utf-8"))
+    pid        = data.get("pid", "?")
+    job        = data.get("job", "?")
+    target     = data.get("target", "?")
+    started_at = data.get("started_at", "")
+    elapsed    = ""
+    if started_at:
+        t0      = datetime.strptime(started_at, _TS_FMT).replace(tzinfo=timezone.utc)
+        elapsed = f", running {int((datetime.now(timezone.utc) - t0).total_seconds())}s"
+    return (
+        f"acquire_pipe already running: pid={pid}, job={job!r}, "
+        f"target={target!r}{elapsed}"
+    )
 
 
 def _write_sidecar(data: dict) -> None:
