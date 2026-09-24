@@ -1,4 +1,4 @@
-# Google goto-resolution drops are now counted and logged (2026-09-21)
+# Google goto-resolution drops are now counted and logged (2026-09-24)
 
 ## Problem
 `_resolve_urls` in `src/search/engines/google.py` dropped results silently (debug log only) and the
@@ -28,10 +28,18 @@ patched). One test stubs the tab and browser functions and asserts the diagnosis
 (`test_brave_engine.py::test_light_dom_challenge_button_is_solved_and_returns_real_results`) before;
 485 passed after. The brave failure did not recur on the full run afterwards; it was not investigated.
 
-## Verification (2026-09-21, one run)
+## Verification (2026-09-24, one run)
 `cli.py search_web "faltenbalg antriebswelle wechseln kosten werkstatt"`: google OK, 9 results,
 `goto_resolution: {found: 9, resolved: 9, dropped: 0, reasons: {}}`. This run had no drops, so the
 WARNING path was exercised only by the unit test, not live.
+
+## Recap notes (2026-09-24)
+- The file was first named with 2026-09-21 (the date of the issue observation); the work happened on
+  2026-09-24 and the file was renamed accordingly.
+- Pitfall for a successor: changing `_resolve_urls` to return a tuple breaks every caller. The only
+  callers were `dev/tests/test_google_engine.py` (5 sites, adapted) and `search_with_reason`.
+- `src/search/engines/DOCS.md` google.py LOC checked against `wc -l`: 292.
+- `dev/tests/DOCS.md` has no per-file entry for the google tests, so it was left unchanged.
 
 ## Open observation (no action taken)
 Whether drops are timeouts at 1.5 s cannot be judged until `reasons` accumulates in the log.
