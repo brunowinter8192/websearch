@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Two-hop validation probe: re-GETs HTML_HAS_PDF_LINK URLs and follows their citation_pdf_url to classify actual PDF delivery."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -54,7 +53,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Load HTML_HAS_PDF_LINK URLs from probe-14 report; resolve truncated entries via pool file
 def _load_pool() -> list[str]:
     report_path = REPORT_DIR / SOURCE_REPORT
     pool_path = DATA_DIR / SOURCE_POOL
@@ -89,14 +87,12 @@ def _load_pool() -> list[str]:
     return urls
 
 
-# Write pool file; log path to stderr
 def _write_pool_file(pool: list[str], ts: str) -> None:
     path = DATA_DIR / f"pool_has_pdf_link_{ts}.txt"
     path.write_text("\n".join(pool) + "\n", encoding="utf-8")
     print(f"[pool] written: {path.name}", file=sys.stderr)
 
 
-# Run two-hop classification for all URLs; return result list
 async def _probe_all(pool: list[str]) -> list[dict]:
     limits = httpx.Limits(max_connections=GLOBAL_MAX_CONNECTIONS, max_keepalive_connections=GLOBAL_MAX_KEEPALIVE)
     domain_sems: dict[str, asyncio.Semaphore] = {}
@@ -122,7 +118,6 @@ async def _probe_all(pool: list[str]) -> list[dict]:
     return [r for r in results if r is not None]
 
 
-# Semaphore-gated probe; semaphore keyed on citation_pdf_url domain (resolved during Hop 1)
 async def _probe_with_cap(
     client: httpx.AsyncClient,
     url: str,
@@ -130,7 +125,6 @@ async def _probe_with_cap(
     domain_sems: dict[str, asyncio.Semaphore],
     results: list,
 ) -> None:
-    # Hop 1: GET original URL, extract citation_pdf_url (no semaphore — original URLs are diverse)
     hop1 = await _hop1_extract(client, url)
 
     if hop1["citation_pdf_url"] is None:
@@ -151,7 +145,6 @@ async def _probe_with_cap(
     pdf_url = hop1["citation_pdf_url"]
     pdf_domain = urlparse(pdf_url).netloc
 
-    # Hop 2: GET citation_pdf_url, semaphore keyed on PDF host domain
     if pdf_domain not in domain_sems:
         domain_sems[pdf_domain] = asyncio.Semaphore(DOMAIN_CONCURRENCY_CAP)
     async with domain_sems[pdf_domain]:
@@ -172,7 +165,6 @@ async def _probe_with_cap(
     }
 
 
-# Hop 1: GET original URL, extract citation_pdf_url; return dict with outcome + citation_pdf_url
 async def _hop1_extract(client: httpx.AsyncClient, url: str) -> dict:
     rec = {"outcome": None, "citation_pdf_url": None}
     try:
@@ -205,7 +197,6 @@ async def _hop1_extract(client: httpx.AsyncClient, url: str) -> dict:
     return rec
 
 
-# Hop 2: GET citation_pdf_url, classify response; return dict with outcome + details
 async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
     rec = {"outcome": None, "status": None, "content_type": None, "title": None, "body_preview": None}
     try:
@@ -233,7 +224,6 @@ async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
                 title_m = re.search(r"<title[^>]*>([^<]{1,300})</title>", body_str, re.IGNORECASE | re.DOTALL)
                 if title_m:
                     rec["title"] = title_m.group(1).strip()[:200]
-                # First 200 chars of visible text (strip tags)
                 visible = re.sub(r"<[^>]+>", " ", body_str[:2000])
                 visible = re.sub(r"\s+", " ", visible).strip()
                 rec["body_preview"] = visible[:200]
@@ -250,7 +240,6 @@ async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
     return rec
 
 
-# Extract bare domain (strip www.) from URL
 def _base_domain(url: str) -> str:
     try:
         netloc = urlparse(url).netloc.lower()

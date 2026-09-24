@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""
-Value Eval Probe — Stage 1+2: pool fetch + C-method scoring (bead searxng-g82).
-
-Fetches results for each (mode, query) pair; saves pool.json (oracle input: url/title/snippet only,
-no scores) and methods.json (C1/C2/C2'/C3 Top-10 URLs) per pair.
-
-Methods:
-  C1  — Overlap-Count: sort (-n_engines, min_position)
-  C2  — BM25 vanilla (k1=1.2, b=0.75, sw=on, title+snippet) on full filtered pool
-  C2' — BM25-Capped: BM25 on capped pool (position ≤ google_count, then filtered)
-  C3  — Cross-Encoder rerank (Qwen3-Reranker-0.6B, port 8082) on full filtered pool
-
-Smoke mode (--smoke): one pair only (general × transformer attention mechanism),
-  then auto-runs Stage 4 aggregator with --no-oracle to verify the chain.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/value_eval_probe.py [--smoke] [--ts-dir PATH]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -36,7 +18,6 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-# Dev-module imports (src/ access via rerank_probe_smoke / bm25_sweep_smoke intermediaries)
 from bm25_sweep_smoke import _build_pool, _doc_repr
 from rerank_probe_smoke import (
     RERANKER_URL,
@@ -67,8 +48,6 @@ QUERIES = [
 
 SMOKE_MODE  = "general"
 SMOKE_QUERY = "transformer attention mechanism"
-
-# --- URL filter data (mirrors src/search/{pdf_filter,book_whitelist,docs_filter}.py) ---
 
 _PDF_HOSTS = frozenset({
     "arxiv.org", "aclanthology.org", "openreview.net",
@@ -115,7 +94,6 @@ _DOCS_BAD_HOSTS = frozenset({
 })
 _DOCS_BAD_PATHS = ("/blog/", "/community/")
 
-# --- Mode modifier engines ---
 _MODE_ENGINES = frozenset({"google", "duckduckgo"})
 
 
@@ -161,7 +139,6 @@ async def run_probe(smoke: bool, ts_dir_arg: Path | None) -> Path:
 
 # FUNCTIONS
 
-# Abort if reranker unreachable
 def _verify_reranker() -> None:
     print("Verifying reranker …", file=sys.stderr)
     try:
@@ -173,12 +150,10 @@ def _verify_reranker() -> None:
     print(file=sys.stderr)
 
 
-# Slug for file naming — must match value_eval_aggregate._query_slug
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# Build query_modifier_map for the given mode (None for general)
 def _modifier_map(mode: str) -> dict | None:
     if mode == "books": return {e: (lambda q: f"{q} book")          for e in _MODE_ENGINES}
     if mode == "pdf":   return {e: (lambda q: f"{q} pdf")           for e in _MODE_ENGINES}
@@ -186,7 +161,6 @@ def _modifier_map(mode: str) -> dict | None:
     return None
 
 
-# Bare domain (strip www.) from URL
 def _url_domain(url: str) -> str:
     try:
         host = _urlparse(url).netloc.lower()
@@ -195,7 +169,6 @@ def _url_domain(url: str) -> str:
         return ""
 
 
-# True if URL is a known-PDF host or path pattern; blacklisted hosts return False
 def _is_pdf_url(url: str) -> bool:
     d = _url_domain(url)
     if d in _PDF_BAD or any(d.endswith("." + h) for h in _PDF_BAD): return False
@@ -203,7 +176,6 @@ def _is_pdf_url(url: str) -> bool:
     return any(p in _urlparse(url).path.lower() for p in _PDF_PATHS)
 
 
-# True if URL is in book whitelist or book path pattern; code-hosting blacklist returns False
 def _is_book_url(url: str) -> bool:
     d = _url_domain(url)
     if d in _BOOK_BAD or any(d.endswith("." + h) for h in _BOOK_BAD): return False
@@ -211,14 +183,12 @@ def _is_book_url(url: str) -> bool:
     return any(p in _urlparse(url).path.lower() for p in _BOOK_PATHS)
 
 
-# True if URL is NOT in noise blacklist (inverted: passes docs, blocks noise)
 def _is_docs_url(url: str) -> bool:
     d = _url_domain(url)
     if d in _DOCS_BAD_HOSTS or any(d.endswith("." + h) for h in _DOCS_BAD_HOSTS): return False
     return not any(p in _urlparse(url).path.lower() for p in _DOCS_BAD_PATHS)
 
 
-# Apply mode URL filter to pool of dicts
 def _filter_pool(pool: list[dict], mode: str) -> list[dict]:
     if mode == "pdf":   return [m for m in pool if _is_pdf_url(m["url"])]
     if mode == "books": return [m for m in pool if _is_book_url(m["url"])]
@@ -226,12 +196,10 @@ def _filter_pool(pool: list[dict], mode: str) -> list[dict]:
     return pool
 
 
-# Cap raw results to position <= K and dedup
 def _build_capped_pool(raw_results: list, K: int) -> list[dict]:
     return _build_pool([r for r in raw_results if r.position <= K])
 
 
-# C1 Overlap-Count: sort (-n_engines, min_position), return Top-N URLs + latency ms
 def _apply_c1(pool: list[dict], top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     ranked = sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))
@@ -239,7 +207,6 @@ def _apply_c1(pool: list[dict], top_n: int) -> tuple[list[str], int]:
     return [m["url"] for m in ranked[:top_n]], ms
 
 
-# C2 BM25 vanilla: score full filtered pool, return Top-N URLs + latency ms
 def _apply_c2(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(pool, query, top_n)
@@ -247,7 +214,6 @@ def _apply_c2(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]
     return [m["url"] for m, _ in scored], ms
 
 
-# C2' BM25-Capped: score capped+filtered pool, return Top-N URLs + latency ms
 def _apply_c2p(capped_pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     t0     = time.perf_counter()
     scored = _bm25_score(capped_pool, query, top_n)
@@ -255,7 +221,6 @@ def _apply_c2p(capped_pool: list[dict], query: str, top_n: int) -> tuple[list[st
     return [m["url"] for m, _ in scored], ms
 
 
-# C3 Cross-Encoder: rerank pool, return Top-N URLs + latency ms (single attempt)
 def _apply_c3(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]:
     if not pool:
         return [], 0
@@ -276,7 +241,6 @@ def _apply_c3(pool: list[dict], query: str, top_n: int) -> tuple[list[str], int]
         return [], ms
 
 
-# Save pool.json — oracle-view only (url/title/snippet, no position or engine signals)
 def _save_pool_json(ts_dir: Path, mode: str, slug: str, pool: list[dict], query: str) -> None:
     data = {
         "mode":      mode,
@@ -296,14 +260,12 @@ def _save_pool_json(ts_dir: Path, mode: str, slug: str, pool: list[dict], query:
     )
 
 
-# Save methods.json — C1/C2/C2'/C3 Top-10 URL lists + metadata
 def _save_methods_json(ts_dir: Path, mode: str, slug: str, data: dict) -> None:
     (ts_dir / f"{mode}_{slug}_methods.json").write_text(
         json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
-# Fetch + score one (mode, query) pair; return progress metadata
 async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> dict:
     qmm = _modifier_map(mode)
 
@@ -322,7 +284,6 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
     filt_capped = _filter_pool(capped_pool, mode)
 
     slug = _query_slug(query)
-    # Oracle sees capped+filtered pool sorted by URL (neutral ordering, ~40-80 URLs, practical to review)
     oracle_pool = sorted(filt_capped, key=lambda m: m["url"])
     _save_pool_json(ts_dir, mode, slug, oracle_pool, query)
 
@@ -353,7 +314,6 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
 
 
 def _apply_c_methods(filt_pool: list[dict], filt_capped: list[dict], query: str) -> dict:
-    # C1/C2'/C3 operate on capped pool (same as oracle input); C2 on full pool (its defining property)
     c1_urls, c1_ms   = _apply_c1(filt_capped,  TOP_N)
     c2_urls, c2_ms   = _apply_c2(filt_pool,    query, TOP_N)
     c2p_urls, c2p_ms = _apply_c2p(filt_capped, query, TOP_N)

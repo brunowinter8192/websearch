@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Books domain probe — appends '+book' to 12 broad queries across Google, DDG.
-
-Collects raw URL pool to inform BOOK_WHITELIST/BLACKLIST design for the --books CLI flag.
-No classification applied — raw observation only.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -67,9 +62,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     engines = [(name, cls()) for name, cls in ENGINE_ORDER]
 
-    # all_runs: query → list of {engine, position, url}
     all_runs: dict[str, list[dict]] = {}
-    # stats: engine → {total, errors}
     run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
 
     try:
@@ -112,7 +105,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Write markdown report; return path
 def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"books_probe_{ts}.md"
@@ -120,7 +112,6 @@ def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     return path
 
 
-# Assemble all 6 report sections
 def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     lines = [
         f"# Books Domain Probe — {ts}",
@@ -139,7 +130,6 @@ def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     return lines
 
 
-# Section 2: Per-Query URL Listings
 def _section_url_listings(all_runs: dict) -> list[str]:
     lines = ["## Per-Query URL Listings", ""]
     for qi, base_query in enumerate(QUERIES, 1):
@@ -163,12 +153,10 @@ def _section_url_listings(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 3: Global Domain Frequency Table
 def _section_global_domain_freq(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
-    # Per-engine counters and query-presence tracking
     eng_counters: dict[str, Counter] = {name: Counter() for name, _ in ENGINE_ORDER}
-    query_presence: dict[str, set] = defaultdict(set)  # domain → set of queries
+    query_presence: dict[str, set] = defaultdict(set)
 
     for base_query, results in all_runs.items():
         for r in results:
@@ -210,12 +198,10 @@ def _section_global_domain_freq(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 4: Top-N Inspection Table (top 30, with 3 sample paths per domain)
 def _section_top_n_inspection(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
 
     total_counter: Counter = Counter()
-    # domain → list of seen paths (insertion order, deduped)
     domain_paths: dict[str, list[str]] = defaultdict(list)
     seen_paths: dict[str, set] = defaultdict(set)
 
@@ -242,7 +228,6 @@ def _section_top_n_inspection(all_runs: dict) -> list[str]:
     for d in top:
         count = total_counter[d]
         paths = domain_paths[d][:MAX_SAMPLE_PATHS]
-        # Pad only to the number of paths we actually have (no empty cells)
         row_paths = [f"`{p}`" if p else "`/`" for p in paths]
         while len(row_paths) < MAX_SAMPLE_PATHS:
             row_paths.append("—")
@@ -251,7 +236,6 @@ def _section_top_n_inspection(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 5: Per-Engine Domain Distribution
 def _section_per_engine_distribution(all_runs: dict) -> list[str]:
     eng_counters: dict[str, Counter] = {name: Counter() for name, _ in ENGINE_ORDER}
     for results in all_runs.values():
@@ -276,7 +260,6 @@ def _section_per_engine_distribution(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 6: Run Stats
 def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     lines = ["## Run Stats", ""]
     lines += [
@@ -286,7 +269,6 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     for eng_name, _ in ENGINE_ORDER:
         total = run_stats[eng_name]["total"]
         errors = run_stats[eng_name]["errors"]
-        # count queries that returned 0 results for this engine
         empties = sum(
             1 for base_query, results in all_runs.items()
             if not any(r["engine"] == eng_name for r in results)
@@ -299,7 +281,6 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     return lines
 
 
-# Extract bare domain (strip www. prefix) from URL
 def _domain(url: str) -> str:
     try:
         host = urlparse(url).netloc.lower()

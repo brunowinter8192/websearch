@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Full pipeline smoke -- search_web_workflow per query, engine-reliability focus."""
 
 # INFRASTRUCTURE
 import argparse
@@ -21,9 +20,6 @@ SCRIPT_DIR   = Path(__file__).parent
 QUERIES_FILE = SCRIPT_DIR / "queries.txt"
 REPORT_DIR   = SCRIPT_DIR / "md"
 
-# Short human-readable hint per non-OK status (shown in per-query engine breakdown table)
-# EMPTY_NO_RESULTS/EMPTY_NO_CONTAINER/EMPTY_CONSENT/EMPTY_BLOCK/EMPTY_CONCURRENT_RACE entries
-# removed with the guessed-verdict sub-statuses — every empty result now logs bare "EMPTY".
 _STATUS_HINTS: dict[str, str] = {
     "TIMEOUT_WATCHDOG":      "watchdog timeout",
     "TIMEOUT_NONCOOP":       "non-cooperative",
@@ -40,7 +36,6 @@ _STATUS_HINTS: dict[str, str] = {
 
 # ORCHESTRATOR
 
-# Run search_web_workflow per query (with timings), read structured cache data, write report
 async def run_pipeline_smoke(max_queries: int | None, language: str, engine_timeout: float | None = None, report_prefix: str = "pipeline_smoke") -> None:
     queries = _load_queries(QUERIES_FILE, max_queries)
     print(f"Pipeline smoke | Queries: {len(queries)} | Language: {language}", file=sys.stderr)
@@ -84,7 +79,6 @@ async def run_pipeline_smoke(max_queries: int | None, language: str, engine_time
 
 # FUNCTIONS
 
-# Load queries from file, one per line, skip blanks, honour max_queries limit
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     qs = [ln.strip() for ln in lines if ln.strip()]
@@ -113,7 +107,6 @@ def _build_checkpoint(records: list[dict], prev_qi: int, qi: int, elapsed: float
     }
 
 
-# Build per-query record: total URL count, per-engine URL counts from pools, timings
 def _build_record(query: str, pools: dict, timings: dict) -> dict:
     engine_url_counts = {eng: len(pool) for eng, pool in pools.items()}
     return {
@@ -124,7 +117,6 @@ def _build_record(query: str, pools: dict, timings: dict) -> dict:
     }
 
 
-# Render pipeline smoke report header (title, language, query counts)
 def _render_header(records: list[dict], language: str, ts: str) -> list[str]:
     return [
         f"# Pipeline Smoke Report -- {ts}",
@@ -136,7 +128,6 @@ def _render_header(records: list[dict], language: str, ts: str) -> list[str]:
     ]
 
 
-# Render lean summary table: query index, truncated query, total URLs in cache result
 def _render_summary(records: list[dict]) -> list[str]:
     L: list[str] = [
         "## Summary",
@@ -150,7 +141,6 @@ def _render_summary(records: list[dict]) -> list[str]:
     return L
 
 
-# Render per-query engine breakdown: one small table per query showing URLs / status / hint / ms
 def _render_per_query_engine_breakdown(records: list[dict]) -> list[str]:
     L: list[str] = ["## Per-Query Engine Breakdown", ""]
     for qi, r in enumerate(records, 1):
@@ -168,7 +158,6 @@ def _render_per_query_engine_breakdown(records: list[dict]) -> list[str]:
             n      = eu.get(eng, 0)
             reason = _STATUS_HINTS.get(status, "") if status != "OK" else ""
             rows.append((n, eng, status, reason, ms))
-        # Sort by n_urls desc, then engine name asc
         rows.sort(key=lambda x: (-x[0], x[1]))
         L.append("| Engine | URLs | Status | Reason | ms |")
         L.append("|--------|-----:|--------|--------|----|")
@@ -178,7 +167,6 @@ def _render_per_query_engine_breakdown(records: list[dict]) -> list[str]:
     return L
 
 
-# Render timing section — per-query table and aggregate stats
 def _render_timing_section(records: list[dict]) -> list[str]:
     all_total_ms = [r["timings"]["total_ms"] for r in records if r["timings"]]
     L: list[str] = [
@@ -211,7 +199,6 @@ def _render_timing_section(records: list[dict]) -> list[str]:
     return L
 
 
-# Render cumulative-wallclock checkpoint table at Q4/Q8/Q12/Q16/Q20 milestones
 def _render_timing_checkpoints(checkpoints: list[dict]) -> list[str]:
     if not checkpoints:
         return []
@@ -231,7 +218,6 @@ def _render_timing_checkpoints(checkpoints: list[dict]) -> list[str]:
 
 
 
-# Per-engine reliability baseline: full status breakdown, mean/p95 search_ms for OK entries
 def _render_engine_reliability(records: list[dict]) -> list[str]:
     engine_data = _collect_engine_data(records)
     if not engine_data:
@@ -258,10 +244,6 @@ def _render_engine_reliability(records: list[dict]) -> list[str]:
 
 
 def _collect_engine_data(records: list[dict]) -> dict[str, dict[str, Any]]:
-    # Collect per-engine: status counts, OK search_ms list. EMPTY_NO_RESULTS/EMPTY_NO_CONTAINER/
-    # EMPTY_CONSENT/EMPTY_BLOCK/EMPTY_CONCURRENT_RACE were removed with the guessed-verdict
-    # sub-statuses — every empty result now logs bare "EMPTY", tracked as its own key below so it
-    # is not miscounted into ERROR_OTHER by the `else "ERROR_OTHER"` fallback further down.
     STATUS_KEYS = [
         "OK", "EMPTY",
         "TIMEOUT_WATCHDOG", "TIMEOUT_NONCOOP", "TIMEOUT_HTTPX",
@@ -283,7 +265,6 @@ def _collect_engine_data(records: list[dict]) -> dict[str, dict[str, Any]]:
 
 
 def _reliability_header() -> list[str]:
-    # Header
     cols = [
         "Engine", "n",
         "OK%", "EMPTY%",
@@ -327,9 +308,7 @@ def _render_engine_row(eng: str, c: dict, n: int, ok_ms: list) -> str:
 
 
 def _top3_bottleneck(records: list[dict]) -> str:
-    # Bottleneck tracking
     bottleneck_counts: dict[str, int] = {}
-    # Top-3 bottleneck engines: which engine had highest search_ms most often per query
     for r in records:
         det = (r["timings"] or {}).get("engine_details", {})
         if not det:
@@ -340,7 +319,6 @@ def _top3_bottleneck(records: list[dict]) -> str:
     return ", ".join(f"{e} ({bottleneck_counts[e]}×)" for e in top3) if top3 else "—"
 
 
-# Write markdown report to md/<prefix>_<ts>.md, return path
 def _write_report(records: list[dict], language: str, checkpoints: list[dict], prefix: str = "pipeline_smoke") -> Path:
     ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"{prefix}_{ts}.md"

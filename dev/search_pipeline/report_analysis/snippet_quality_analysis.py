@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Snippet quality analysis — auto-discovers newest pipeline_smoke_*.md baseline."""
 
 # INFRASTRUCTURE
 import html
@@ -22,14 +21,12 @@ if not _smoke_candidates:
     raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
 SMOKE_REPORT = _smoke_candidates[0]
 
-# 8 raw engine sources + scholar_strip (derived) + og + meta
 ALL_SOURCES = [
     "og", "meta",
     "google", "duckduckgo", "mojeek", "lobsters",
     "google_scholar", "scholar_strip", "openalex", "crossref", "stack_exchange",
 ]
 
-# Engines that appear in per-engine snippet lines and the overlap matrix
 MATRIX_ENGINES = [
     "google", "duckduckgo", "mojeek", "lobsters",
     "google_scholar", "openalex", "crossref", "stack_exchange",
@@ -38,7 +35,6 @@ MATRIX_ENGINES = [
 
 # ORCHESTRATOR
 
-# Parse smoke report, compute all metrics, write report
 def run_analysis() -> None:
     records = parse_smoke_report(SMOKE_REPORT)
     n_s  = sum(len(r["snippets"]) for r in records)
@@ -65,14 +61,12 @@ def run_analysis() -> None:
 
 # FUNCTIONS
 
-# clean_len × lexical_density for one text (matches compute_source_stats formula)
 def _usefulness(text: str) -> float:
     if not text:
         return 0.0
     return len(strip_bloat(text)) * lexical_density(text)
 
 
-# Compute aggregate stats per snippet source across all records
 def compute_source_stats(records: list[dict]) -> dict:
     texts_by, total_by, empty_by = _collect_source_texts(records)
     return {src: _source_stat(src, texts_by, total_by, empty_by) for src in ALL_SOURCES}
@@ -92,7 +86,6 @@ def _collect_source_texts(records: list[dict]) -> tuple[dict, dict, dict]:
             if text:
                 texts_by[k].append(text)
                 if k == "google_scholar":
-                    # scholar_strip: unescape HTML entities then strip bloat (mirrors Rule 7)
                     stripped = strip_bloat(html.unescape(text))
                     total_by["scholar_strip"] += 1
                     if stripped:
@@ -138,7 +131,6 @@ def _source_stat(src: str, texts_by: dict, total_by: dict, empty_by: dict) -> di
     )
 
 
-# 8×8 engine co-occurrence: count (URL, query) pairs found by both engines
 def compute_overlap_matrix(records: list[dict]) -> dict:
     url_engines: dict[tuple, set] = defaultdict(set)
     matrix_set = set(MATRIX_ENGINES)
@@ -158,7 +150,6 @@ def compute_overlap_matrix(records: list[dict]) -> dict:
     return matrix
 
 
-# Per URL: pick source with highest usefulness (insertion-order tie-break), aggregate wins
 def compute_best_by_usefulness(records: list[dict]) -> tuple[dict, dict]:
     wins: dict[str, int]           = defaultdict(int)
     best_per_url: dict[tuple, str] = {}
@@ -181,7 +172,6 @@ def compute_best_by_usefulness(records: list[dict]) -> tuple[dict, dict]:
     return dict(wins), best_per_url
 
 
-# Win-count split by URL slot class (GENERAL / ACADEMIC / QA)
 def compute_per_class_breakdown(records: list[dict], best_per_url: dict) -> dict:
     breakdown: dict[str, dict[str, int]] = {
         "GENERAL":  defaultdict(int),
@@ -197,7 +187,6 @@ def compute_per_class_breakdown(records: list[dict], best_per_url: dict) -> dict
     return {k: dict(v) for k, v in breakdown.items()}
 
 
-# Render header metadata block
 def _render_header(ts: str, n_urls: int, total_wins: int) -> list[str]:
     return [
         f"# Snippet Quality Analysis — {ts}",
@@ -209,7 +198,6 @@ def _render_header(ts: str, n_urls: int, total_wins: int) -> list[str]:
     ]
 
 
-# Render Section 1 — per-source aggregated stats table
 def _render_source_stats(stats: dict) -> list[str]:
     L: list[str] = [
         "## 1. Per-Source Aggregated Stats",
@@ -236,7 +224,6 @@ def _render_source_stats(stats: dict) -> list[str]:
     return L
 
 
-# Render Section 2 — 8×8 engine overlap matrix
 def _render_overlap_matrix(overlap: dict) -> list[str]:
     L: list[str] = [
         "",
@@ -262,7 +249,6 @@ def _render_overlap_matrix(overlap: dict) -> list[str]:
     return L
 
 
-# Render Section 3 — best-by-usefulness winners table
 def _render_winners(wins: dict, total_wins: int, n_urls: int) -> list[str]:
     L: list[str] = [
         "",
@@ -281,7 +267,6 @@ def _render_winners(wins: dict, total_wins: int, n_urls: int) -> list[str]:
     return L
 
 
-# Render Section 4 — win-count split by URL slot class
 def _render_per_class_breakdown(breakdown: dict) -> list[str]:
     n_gen = sum(breakdown.get("GENERAL",  {}).values())
     n_ac  = sum(breakdown.get("ACADEMIC", {}).values())
@@ -311,7 +296,6 @@ def _render_per_class_breakdown(breakdown: dict) -> list[str]:
     return L
 
 
-# Render Section 5 — all URLs side-by-side snippet scores
 def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
     L: list[str] = [
         "",
@@ -363,7 +347,6 @@ def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
     return L
 
 
-# Render and write the markdown report
 def write_report(
     stats: dict, overlap: dict, records: list[dict],
     wins: dict, best_per_url: dict, breakdown: dict,

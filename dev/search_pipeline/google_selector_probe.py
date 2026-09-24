@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Google DOM selector probe — diagnoses why num=100 returns only 9-11 results."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -127,7 +126,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Execute count JS and parse result dict
 async def read_counts(tab) -> dict:
     raw = await tab.execute_script(_JS_COUNTS)
     val = _extract_value(raw)
@@ -139,7 +137,6 @@ async def read_counts(tab) -> dict:
         return {}
 
 
-# Execute structure JS and parse per-h3 entry list
 async def read_structure(tab) -> list:
     raw = await tab.execute_script(_JS_STRUCTURE)
     val = _extract_value(raw)
@@ -151,7 +148,6 @@ async def read_structure(tab) -> list:
         return []
 
 
-# Derive dominant hypothesis from counts
 def diagnose(counts: dict) -> tuple[str, str]:
     rso_h3   = counts.get("rso_h3", 0)
     div_g    = counts.get("div_g", 0)
@@ -183,7 +179,6 @@ def diagnose(counts: dict) -> tuple[str, str]:
     return label, detail
 
 
-# Write markdown report and return path
 def write_report(counts: dict, structure: list, url: str) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"google_selector_probe_{ts}.md"

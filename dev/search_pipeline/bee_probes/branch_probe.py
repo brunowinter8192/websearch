@@ -1,30 +1,4 @@
 #!/usr/bin/env python3
-"""Sleep-branch discriminator probe — Phase 3 bee investigation.
-
-Discriminates WHICH of the two asyncio.sleep branches inside RateLimiter.acquire()
-fires during zero_cascade queries (all 9 engines RATE_SKIP simultaneously):
-
-  backoff_sleep_attempt  — if now < self._backoff_until:  (rate_limiter.py line 36)
-  tokencap_sleep_attempt — if len(self._tokens) >= self._max_requests:  (line 47)
-
-Phase 2 confirmed A-sleep: all 9 engines enter acquire(), get lock, sleep, get cancelled
-at ~5001ms. Phase 2 inferred backoff-cascade but did NOT distinguish which branch fired.
-Phase 3 adds branch-level events to settle this.
-
-Structural discriminator: 6 engines have .backoff() call in engine source (google,
-google_scholar, lobsters, mojeek, duckduckgo, semantic_scholar). 4 do NOT (crossref,
-openalex, stack_exchange, open_library). Backoff-immune engines cannot enter the backoff
-branch unless an unknown code path calls .backoff() on their limiter.
-
-Usage:
-    ./venv/bin/python3 dev/search_pipeline/branch_probe.py [--max-queries N] [--smoke]
-
-    --smoke: 4-query dry-run. Prints per-engine detail to stderr. No report written.
-             Run before full probe to verify instrumentation is live.
-
-Output (full run only):
-    dev/search_pipeline/md/branch_probe_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -56,7 +30,6 @@ QUERIES_FILE = SCRIPT_DIR / "queries.txt"
 REPORT_DIR = SCRIPT_DIR / "md"
 FINDINGS_DIR = SCRIPT_DIR / "md"
 
-# 4 engines have NO .backoff() call in engine source — cannot enter backoff branch legitimately
 BACKOFF_IMMUNE = frozenset({"crossref", "openalex", "stack_exchange", "open_library"})
 
 
@@ -105,10 +78,6 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
     google_status = det.get("google", {}).get("status", "—")
     all_statuses = {k: v.get("status", "—") for k, v in det.items()}
     all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
-    # "captcha" (keyed on the removed EMPTY_BLOCK verdict) renamed to "empty" — the
-    # guessed-verdict-removal milestone collapsed EMPTY_BLOCK into bare "EMPTY", and
-    # engine_details (status+ms only) carries no diagnosis to reconstruct which kind of
-    # empty this was; an honest narrower label beats a familiar wrong one.
     category = (
         "empty" if google_status == "EMPTY"
         else "zero_cascade" if all_rate_skip
@@ -160,7 +129,6 @@ def _write_stop_note(query_records: list[dict], zero_n: int, min_expected: int) 
         "Instrumentation may be interfering. Data INVALID — do not proceed.",
         file=sys.stderr,
     )
-    # Write minimal note for audit trail
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     stop_path = REPORT_DIR / f"branch_probe_{ts_str}_STOP.md"

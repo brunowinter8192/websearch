@@ -1,28 +1,4 @@
 #!/usr/bin/env python3
-"""
-BM25 Sweep Probe vs Hard-Slot Baseline.
-
-Ranks the same deduplicated URL pool per query using:
-  A) Hard-Slot: _merge_and_rank from src.search.merge (12/6/2 class slots)
-  B) BM25 sweep: 16-config main grid (b x stopwords x doc_repr, k1 fixed at 1.2)
-               + 4-config k1 sensitivity sweep at default-other-knobs
-
-IDF handling: uniform IDF=1.0 per user design (query-word relevance is user-defined,
-not corpus-derived; stopword filter replaces IDF discrimination). Reduces BM25 to
-TF + length-normalization only.
-
-Implementation choice: BM25Uniform subclasses rank_bm25.BM25Okapi and overrides
-_calc_idf to set self.idf[word]=1.0 for all terms. Preferred over a custom 30-LOC
-implementation because _calc_idf is an explicit extension point in BM25Okapi and
-the override is 5 LOC. Library (rank_bm25) already in venv; k1/b tunable via
-constructor.
-
-Stopword list: ~45-word inline English set (determiners, prepositions, auxiliaries).
-NLTK (~180 words) not used — no dependency, and for short title+snippet text the
-marginal coverage gain of 180 vs 45 words is small.
-
-Output: dev/search_pipeline/md/bm25_sweep_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -71,7 +47,6 @@ STOPWORDS = frozenset({
     "does", "did", "will", "would",
 })
 
-# Main grid: 16 configs = 4 b x 2 sw x 2 doc_repr (k1 fixed at VANILLA_K1)
 BM25_MAIN_GRID = [
     {"b": b, "sw": sw, "repr": dr}
     for b  in [0.0, 0.5, 0.75, 1.0]
@@ -79,11 +54,9 @@ BM25_MAIN_GRID = [
     for dr in ["title+snippet", "title3x"]
 ]
 
-# k1 sensitivity: 4 configs at b=0.75, sw=on, repr=title+snippet
 BM25_K1_SWEEP = [{"k1": k1} for k1 in [0.5, 1.2, 2.0, 3.0]]
 
 
-# BM25 with uniform IDF=1.0; reduces to TF + length-normalization
 class BM25Uniform(BM25Okapi):
     def _calc_idf(self, nd):
         for word in nd:
@@ -156,7 +129,6 @@ async def _run_one_query(qi: int, query: str, selected: dict) -> tuple[str, dict
     )
 
 
-# Merge raw results by URL — Step 1 of _merge_and_rank extracted to avoid slot allocation
 def _build_pool(raw_results: list[SearchResult]) -> list[dict]:
     merged: dict[str, dict] = {}
     for r in raw_results:
@@ -181,19 +153,16 @@ def _build_pool(raw_results: list[SearchResult]) -> list[dict]:
     return list(merged.values())
 
 
-# Lowercase word-boundary tokenize; optionally strip stopwords
 def _tokenize(text: str, use_sw: bool) -> list[str]:
     tokens = re.findall(r"\b\w+\b", text.lower())
     return [t for t in tokens if t not in STOPWORDS] if use_sw else tokens
 
 
-# Build document text for BM25: title+snippet or title repeated 3x + snippet
 def _doc_repr(m: dict, style: str) -> str:
     t, s = m["title"], m["snippet"]
     return f"{t} {t} {t} {s}" if style == "title3x" else f"{t} {s}"
 
 
-# BM25 rank pool by query; return top-N as [(pool_dict, score), ...]
 def _bm25_rank(
     pool: list[dict], query: str, k1: float, b: float, use_sw: bool, repr_style: str
 ) -> list[tuple[dict, float]]:
@@ -205,12 +174,11 @@ def _bm25_rank(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         scores = bm25.get_scores(qtoks)
-    scores = np.nan_to_num(scores, nan=0.0)  # b=1.0 + empty-doc edge case
+    scores = np.nan_to_num(scores, nan=0.0)
     ranked = sorted(range(len(pool)), key=lambda i: -float(scores[i]))
     return [(pool[i], float(scores[i])) for i in ranked[:TOP_N]]
 
 
-# Run 16-config main grid (k1 fixed at VANILLA_K1)
 def _run_main_grid(pool: list[dict], query: str) -> list[dict]:
     results = []
     for cfg in BM25_MAIN_GRID:
@@ -219,7 +187,6 @@ def _run_main_grid(pool: list[dict], query: str) -> list[dict]:
     return results
 
 
-# Run 4-config k1 sensitivity sweep at default-other-knobs
 def _run_k1_sweep(pool: list[dict], query: str) -> list[dict]:
     results = []
     for cfg in BM25_K1_SWEEP:
@@ -228,7 +195,6 @@ def _run_k1_sweep(pool: list[dict], query: str) -> list[dict]:
     return results
 
 
-# Classify URL by contributing engines: ACADEMIC > QA > GENERAL
 def _classify(engines: list[str]) -> str:
     eng = set(engines)
     if eng & ACADEMIC:

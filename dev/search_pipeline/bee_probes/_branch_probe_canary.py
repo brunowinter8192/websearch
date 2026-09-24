@@ -6,7 +6,7 @@ from collections import defaultdict
 CANARY_INTERVAL_S = 0.1
 COLD_START_SKIP_S = 5.0
 
-_canary_samples: list[tuple[float, float]] = []  # (ts_mono, latency_ms)
+_canary_samples: list[tuple[float, float]] = []
 PROBE_START: float = 0.0
 
 
@@ -29,7 +29,6 @@ async def _stop_canary_monitor(stop_canary: asyncio.Event, canary_task: asyncio.
 
 
 async def _canary_monitor(stop: asyncio.Event) -> None:
-    """Pattern B canary — asyncio.sleep(0.1) actual elapsed, measures scheduling latency."""
     while not stop.is_set():
         t0 = time.monotonic()
         await asyncio.sleep(CANARY_INTERVAL_S)

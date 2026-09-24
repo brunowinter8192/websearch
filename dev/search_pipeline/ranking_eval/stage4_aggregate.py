@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-Stage 4 — Aggregate (value_eval_v2).
-
-Loads pool/methods/oracle JSONs from ts_dir, computes Jaccard overlap per method,
-writes per-pair eval MD and summary eval MD into ts_dir.
-
-Differences from value_eval_aggregate.py (v1 historical artifact):
-  - Output files written to ts_dir/ (co-located with pool/methods/oracle JSONs)
-  - No --ts-out flag (ts embedded in dir name)
-  - Reads pool.json v2 schema (pool_sizes dict; pool items may have engines/min_position, ignored)
-
-Smoke mode (--no-oracle): generates MDs without oracle section — verifies pool+methods
-pipeline integrity only.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/stage4_aggregate.py \\
-      --ts-dir dev/search_pipeline/runs/value_eval_v2_YYYYMMDD_HHmmss \\
-      [--no-oracle]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -70,19 +51,16 @@ def run_aggregate(ts_dir: Path, no_oracle: bool) -> None:
 
 # FUNCTIONS
 
-# Slug — must match stage1/stage3 _query_slug
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# Jaccard: |A ∩ B| / |A ∪ B|; 0.0 if both empty
 def _jaccard(a: list[str], b: list[str]) -> float:
     sa, sb = set(a), set(b)
     union  = sa | sb
     return len(sa & sb) / len(union) if union else 0.0
 
 
-# Load pool/methods/oracle JSONs; score overlaps; return result dict or None if files missing
 def _load_and_score_pair(
     ts_dir: Path, mode: str, query: str, no_oracle: bool
 ) -> dict | None:
@@ -100,18 +78,15 @@ def _load_and_score_pair(
     oracle_data = None
     if not no_oracle and oracle_path.exists():
         oracle_data = json.loads(oracle_path.read_text())
-        # Skip empty-pool pairs (undersized_pool=True AND pool_size=0)
         if oracle_data.get("undersized_pool") and oracle_data.get("pool_size", -1) == 0:
             oracle_data = None
 
-    # top_10 items may be dicts {"url": ...} (B1 format) or plain strings (B2 format)
     def _extract_url(item) -> str:
         return item["url"] if isinstance(item, dict) else item
 
     oracle_urls = [_extract_url(item) for item in oracle_data.get("top_10", [])] if oracle_data else []
     overlaps    = {key: _jaccard(oracle_urls, methods_data.get(key, [])) for key in METHOD_KEYS}
 
-    # pool_size: v2 schema stores in pool_sizes.filtered_capped; v1 stored top-level pool_size
     ps = pool_data.get("pool_sizes", {})
     pool_size = ps.get("filtered_capped", pool_data.get("pool_size", len(pool_data["pool"])))
 
@@ -129,7 +104,6 @@ def _load_and_score_pair(
     }
 
 
-# Write per-pair eval MD into ts_dir; return path
 def _write_query_md(result: dict, ts_dir: Path) -> Path:
     mode  = result["mode"]
     slug  = result["slug"]
@@ -163,7 +137,6 @@ def _render_query_header(result: dict, mode: str, query: str, mm: dict) -> list[
 
 
 def _render_pool_dump(result: dict) -> list[str]:
-    # Pool dump (oracle input)
     lines = ["## Pool (oracle input — url/title/snippet)", ""]
     for i, m in enumerate(result["pool"], 1):
         title   = (m.get("title")   or "").strip().replace("\n", " ")[:100]
@@ -173,7 +146,6 @@ def _render_pool_dump(result: dict) -> list[str]:
 
 
 def _render_oracle_selection(result: dict) -> list[str]:
-    # Oracle selection
     lines = ["## Oracle Selection", ""]
     if result["oracle_data"]:
         for i, item in enumerate(result["oracle_data"].get("top_10", []), 1):
@@ -186,7 +158,6 @@ def _render_oracle_selection(result: dict) -> list[str]:
 
 
 def _render_method_top10s(result: dict, mm: dict) -> list[str]:
-    # C-method Top-10s
     lines = ["## C-Method Top-10s", ""]
     for key in METHOD_KEYS:
         urls = result["methods"].get(key, [])
@@ -203,7 +174,6 @@ def _render_method_top10s(result: dict, mm: dict) -> list[str]:
 
 
 def _render_comparison(result: dict, mm: dict) -> list[str]:
-    # Comparison
     lines = ["## Comparison (Oracle vs Methods)", ""]
     if result["oracle_urls"]:
         lines += _comparison_with_oracle(result)
@@ -240,7 +210,6 @@ def _comparison_with_oracle(result: dict) -> list[str]:
 
 
 def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
-    # No oracle: show pool coverage table
     mps = mm.get("method_pool_sizes", {})
     lines = [
         "| Method | Pool size | Top-10 count | ms |",
@@ -257,7 +226,6 @@ def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
     return lines
 
 
-# Write summary eval MD into ts_dir; return path
 def _write_summary_md(results: list[dict], ts_dir: Path) -> Path:
     path       = ts_dir / "eval_summary.md"
     has_oracle = any(r["oracle_urls"] for r in results)
@@ -285,7 +253,6 @@ def _write_summary_md(results: list[dict], ts_dir: Path) -> Path:
 
 
 def _summary_per_mode_table(scored: list[dict]) -> list[str]:
-    # Per-mode table
     lines = ["## Per-Mode Mean Jaccard", ""]
     header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
     sep    = "|------|" + "---|" * len(METHOD_KEYS) + "--------|"
@@ -304,7 +271,6 @@ def _summary_per_mode_table(scored: list[dict]) -> list[str]:
 
 
 def _summary_overall_winner(scored: list[dict]) -> list[str]:
-    # Overall winner
     overall = {k: sum(r["overlaps"][k] for r in scored) / len(scored) for k in METHOD_KEYS}
     winner  = max(overall, key=overall.get)
     lines = [
@@ -321,7 +287,6 @@ def _summary_overall_winner(scored: list[dict]) -> list[str]:
 
 
 def _summary_mode_signals(scored: list[dict]) -> list[str]:
-    # Flag large-margin modes
     lines = ["## Mode-Specific Signals (margin ≥ 0.10 vs second-best)", ""]
     found_signal = False
     for mode in MODES:
@@ -344,7 +309,6 @@ def _summary_mode_signals(scored: list[dict]) -> list[str]:
 
 
 def _summary_smoke_coverage(results: list[dict]) -> list[str]:
-    # Smoke: coverage table
     lines = ["## Method Coverage (smoke check — no oracle)", ""]
     lines += [
         "| Mode | Query | Pool | C1 | C2 | C2' | C3 |",

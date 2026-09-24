@@ -1,14 +1,3 @@
-"""Engine-health audit over src/logs/query_log.jsonl.
-
-Aggregates per-engine OK/EMPTY/TIMEOUT/ERROR/RATE_SKIP counts and classifies
-each engine into one of: BROKEN / DEGRADED / SLOW / RATE_LIMITED / INSUFFICIENT / OK.
-
-Usage:
-    ./venv/bin/python dev/search_pipeline/engine_health_audit.py --last 100
-    ./venv/bin/python dev/search_pipeline/engine_health_audit.py --last 50 --since 2026-05-08T00:00
-    ./venv/bin/python dev/search_pipeline/engine_health_audit.py --engine google_scholar
-"""
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -44,7 +33,6 @@ def main() -> None:
 
 # FUNCTIONS
 
-# Parse CLI args: --last N, --since ISO_TIMESTAMP, --engine NAME
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Engine health audit over query_log.jsonl")
     ap.add_argument("--last", type=int, default=100, help="Analyse last N query records (default 100)")
@@ -53,7 +41,6 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
-# Load, slice, and filter records from the JSONL log
 def load_records(log_path: Path, last_n: int, since: str | None, engine_filter: str | None) -> list[dict]:
     if not log_path.exists():
         print(f"Log not found: {log_path}", file=sys.stderr)
@@ -70,12 +57,10 @@ def load_records(log_path: Path, last_n: int, since: str | None, engine_filter: 
     return records
 
 
-# Parse log ts field (Z-suffix UTC) to aware datetime
 def _parse_ts(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-# Build per-engine aggregate stats dict from a list of query records
 def aggregate_engine_stats(records: list[dict]) -> dict[str, dict]:
     counts: dict[str, Counter] = defaultdict(Counter)
     ok_ms: dict[str, list[int]] = defaultdict(list)
@@ -95,7 +80,6 @@ def aggregate_engine_stats(records: list[dict]) -> dict[str, dict]:
     for eng, c in counts.items():
         total = sum(c.values())
         ok = c.get("OK", 0)
-        # Sum all sub-statuses per bucket (tolerates EMPTY_*, TIMEOUT_*, ERROR_* sub-statuses)
         empty_count   = sum(v for k, v in c.items() if k.startswith("EMPTY"))
         timeout_count = sum(v for k, v in c.items() if k.startswith("TIMEOUT"))
         error_count   = sum(v for k, v in c.items() if k.startswith("ERROR"))
@@ -117,30 +101,22 @@ def aggregate_engine_stats(records: list[dict]) -> dict[str, dict]:
             "dom_fail": dom_fail,
             "avg_ms": avg_ms,
             "avg_results": avg_res,
-            "status_counts": dict(c),  # raw per-sub-status counter for classify_health
+            "status_counts": dict(c),
         }
     return stats
 
 
-# Classify a single engine's stats into (emoji, label) health flag
 def classify_health(s: dict) -> tuple[str, str]:
     if s["total"] < MIN_SAMPLES:
         return "⚪", "INSUFFICIENT"
     sc = s.get("status_counts", {})
 
-    # Sub-status-aware EMPTY rules (EMPTY_NO_CONTAINER/EMPTY_BLOCK/EMPTY_NO_RESULTS) were removed
-    # along with the query log's guessed-verdict sub-statuses — every empty result now logs a bare
-    # "EMPTY" carrying its own diagnosis snapshot instead, so no sub-status breakdown remains to
-    # bucket on here; see src/search/DOCS.md's diagnosis Gotcha for what replaced the distinction.
-
-    # TIMEOUT sub-status: PYDOLL-CANCEL-LEAK flag
     timeout_total = s["timeout"]
     if timeout_total >= 3:
         noncoop = sc.get("TIMEOUT_NONCOOP", 0)
         if noncoop / timeout_total > 0.10:
             return "⚠️", "FLAG (PYDOLL-CANCEL-LEAK)"
 
-    # Coarse success-rate rules (unchanged)
     if s["success_rate"] < SUCCESS_BROKEN:
         return "🔴", "BROKEN"
     if s["success_rate"] < SUCCESS_DEGRADED:
@@ -156,7 +132,6 @@ def classify_health(s: dict) -> tuple[str, str]:
     return "✅", "OK"
 
 
-# Build human-readable table string with per-engine rows and legend
 def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str | None, engine_filter: str | None) -> str:
     lines = []
     scope = f"last {n_records} records"
@@ -168,12 +143,10 @@ def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str
     lines.append(f"Thresholds: BROKEN<{int(SUCCESS_BROKEN*100)}%  DEGRADED<{int(SUCCESS_DEGRADED*100)}%  SLOW/RL sfail>{int(SFAIL_SLOW*100)}%  MIN_SAMPLES={MIN_SAMPLES}")
     lines.append("")
 
-    # Header
     col = f"{'Engine':<25}  {'Flag':<28}  {'OK':>4}  {'EMPTY':>5}  {'TO':>5}  {'ERR':>5}  {'RSKP':>5}  {'total':>5}  {'succ%':>6}  {'sfail%':>7}  {'avg_ms':>7}  {'avg_res':>8}"
     lines.append(col)
     lines.append("-" * len(col))
 
-    # Sort: worst first (BROKEN/INSUFFICIENT at top), then alphabetical within group
     def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
         eng, s = item
         emoji, label = classify_health(s)
@@ -194,7 +167,6 @@ def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str
     return "\n".join(lines)
 
 
-# Write report MD to md/ with timestamp; returns the path written
 def write_report(table_str: str, report_dir: Path, timestamp: str) -> Path:
     report_dir.mkdir(parents=True, exist_ok=True)
     path = report_dir / f"engine_health_{timestamp}.md"

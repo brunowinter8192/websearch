@@ -491,3 +491,1276 @@ navigate to engine search page via production browser (pydoll stealth, JS render
 Old Gotchas section:
 
 New engines must be added to `ENGINE_REGISTRY` in `inspect_engine_dom.py` before use — only `semantic_scholar` is configured; `google`, `google_scholar`, `duckduckgo`, `mojeek`, `lobsters` are TODO stubs. `md/semantic_scholar_20260508_*.md` are committed evidence reports (2026-05-08, diagnosed `div.cl-paper-row` selector drift → new selectors identified) — not throwaway output.
+
+
+# Phase 2 comment and docstring sweep (2026-09-24)
+
+Second half of this session. Scope: every `.py` under `dev/search_pipeline/` including all subfolders, `_lib/` and `inspections/` (108 files). Code standard: no comments, no docstrings; only the three section markers and a line-1 shebang remain.
+
+Measured before the sweep on the merged `integration` tip: 868 items (75 docstrings plus 793 comment lines, one item per docstring and per comment line). Triage result: 81 already documented elsewhere (deleted), 114 moved into this file (below), 673 self-evident (deleted). After the sweep: 0 comments, 0 docstrings, 0 `__doc__` uses.
+
+## Method
+
+- Removal was done by one script (tokenize for comments, ast for docstrings), not by hand. Trailing comments lose only the comment and the whitespace before it; full-line comments and docstring statements are deleted. Blank lines were normalised only at removal points: the blank runs around a removed block merge into the larger of the two, a removed block at the start of a body leaves no blank line, and one blank line follows the shebang when a module docstring was the next thing.
+- Proof that code is untouched: for every one of the 108 files `ast.dump` of the old file with docstring statements dropped equals `ast.dump` of the new file (0 mismatches). The only deliberate code change is below.
+- The one landmine: `grep __doc__` had a single hit, `inspections/inspect_engine_dom.py` (`argparse.ArgumentParser(description=__doc__)`). With the module docstring gone `__doc__` would be `None` and `--help` would lose its description line. The text became the constant `DESCRIPTION` (same string, byte for byte) next to the other module constants, and the parser reads it. The other 19 argparse scripts pass explicit `description=` strings and never read `__doc__`.
+- Heading comments that Phase 1 left directly above new `def` lines (for example `# Write markdown data report and return path` above the report writers) are covered: all comments went, none of them were kept.
+- Classification key: (a) substance already in a `DOCS.md`, in the Phase 1 salvage sections of this file, or in a process-docs entry of another area, or recorded verbatim under (b) of the same module; (b) a real non-obvious fact recorded nowhere else, moved below unedited; (c) self-evident (restates the name or code, section labels, format examples, task or bead labels).
+- No fact went into a `DOCS.md`; the format has no place for it and the facts below are per-module detail. The LOC headings in all `DOCS.md` files were updated to the new `wc -l` values.
+
+## Triage counts per module
+
+| Module | Items | (a) documented | (b) moved | (c) self-evident |
+|---|---|---|---|---|
+| `00_single_query.py` | 4 | 1 | 0 | 3 |
+| `01_google_smoke.py` | 4 | 1 | 0 | 3 |
+| `02_burst_smoke.py` | 11 | 1 | 0 | 10 |
+| `04_ddg_smoke.py` | 4 | 1 | 0 | 3 |
+| `05_search_smoke.py` | 12 | 1 | 0 | 11 |
+| `08_scholar_smoke.py` | 5 | 1 | 0 | 4 |
+| `09_openalex_smoke.py` | 4 | 1 | 0 | 3 |
+| `11_pipeline_smoke.py` | 22 | 8 | 0 | 14 |
+| `12_max_results_probe.py` | 9 | 0 | 5 | 4 |
+| `13_free_word_probe.py` | 12 | 1 | 0 | 11 |
+| `13_timing_ablation.py` | 14 | 1 | 0 | 13 |
+| `24_pydoll_teardown_verify.py` | 24 | 3 | 19 | 2 |
+| `_bm25_sweep_smoke_report.py` | 12 | 0 | 0 | 12 |
+| `_capture_sorry.py` | 10 | 1 | 2 | 7 |
+| `_google_fixture.py` | 1 | 0 | 1 | 0 |
+| `_lib/parse.py` | 11 | 1 | 1 | 9 |
+| `_lib/test_text.py` | 4 | 1 | 0 | 3 |
+| `_lib/text.py` | 7 | 0 | 2 | 5 |
+| `_rerank_probe_smoke_config.py` | 2 | 0 | 0 | 2 |
+| `_rerank_probe_smoke_gpu.py` | 4 | 0 | 0 | 4 |
+| `_rerank_probe_smoke_rank.py` | 6 | 0 | 1 | 5 |
+| `_rerank_probe_smoke_report.py` | 8 | 0 | 0 | 8 |
+| `bee_probes/_acquire_probe_analysis.py` | 3 | 0 | 0 | 3 |
+| `bee_probes/_acquire_probe_canary.py` | 2 | 0 | 0 | 2 |
+| `bee_probes/_acquire_probe_instrument.py` | 7 | 2 | 2 | 3 |
+| `bee_probes/_acquire_probe_report.py` | 1 | 0 | 0 | 1 |
+| `bee_probes/_branch_probe_analysis.py` | 3 | 0 | 0 | 3 |
+| `bee_probes/_branch_probe_canary.py` | 2 | 0 | 0 | 2 |
+| `bee_probes/_branch_probe_instrument.py` | 10 | 0 | 4 | 6 |
+| `bee_probes/_cdp_starvation_probe_canary.py` | 10 | 0 | 1 | 9 |
+| `bee_probes/_cdp_starvation_probe_findings.py` | 1 | 0 | 0 | 1 |
+| `bee_probes/_cdp_starvation_probe_instrument.py` | 8 | 0 | 5 | 3 |
+| `bee_probes/_cdp_starvation_probe_report.py` | 4 | 0 | 0 | 4 |
+| `bee_probes/acquire_probe.py` | 6 | 4 | 2 | 0 |
+| `bee_probes/branch_probe.py` | 7 | 4 | 2 | 1 |
+| `bee_probes/cdp_starvation_probe.py` | 10 | 5 | 2 | 3 |
+| `bm25_sweep_smoke.py` | 12 | 0 | 3 | 9 |
+| `browser_probes/25_startpage_probe.py` | 15 | 0 | 1 | 14 |
+| `browser_probes/26_brave_probe.py` | 11 | 0 | 1 | 10 |
+| `browser_probes/27_brave_headed_lane_probe.py` | 18 | 0 | 10 | 8 |
+| `browser_probes/28_bing_probe.py` | 14 | 0 | 3 | 11 |
+| `browser_probes/29_yandex_probe.py` | 12 | 0 | 1 | 11 |
+| `browser_probes/31_date_availability_probe.py` | 7 | 4 | 1 | 2 |
+| `browser_probes/_bing_probe_report.py` | 2 | 0 | 0 | 2 |
+| `browser_probes/_brave_headed_lane_probe_report.py` | 3 | 0 | 0 | 3 |
+| `browser_probes/_brave_probe_report.py` | 2 | 0 | 0 | 2 |
+| `browser_probes/_date_availability_probe_browser.py` | 2 | 2 | 0 | 0 |
+| `browser_probes/_date_availability_probe_nav.py` | 2 | 1 | 0 | 1 |
+| `browser_probes/_date_availability_probe_report.py` | 3 | 2 | 0 | 1 |
+| `browser_probes/_startpage_probe_report.py` | 2 | 0 | 0 | 2 |
+| `browser_probes/_yandex_probe_report.py` | 4 | 0 | 0 | 4 |
+| `domain_probes/19_books_probe.py` | 16 | 1 | 0 | 15 |
+| `domain_probes/20_docs_probe.py` | 1 | 1 | 0 | 0 |
+| `domain_probes/_docs_probe_report.py` | 12 | 0 | 0 | 12 |
+| `empty_classify_se.py` | 11 | 0 | 2 | 9 |
+| `google_selector_probe.py` | 5 | 0 | 1 | 4 |
+| `inspections/inspect_engine_dom.py` | 6 | 2 | 0 | 4 |
+| `no_google_burst_smoke.py` | 15 | 9 | 3 | 3 |
+| `pdf_probes/14_download_classify_probe.py` | 3 | 1 | 0 | 2 |
+| `pdf_probes/15_citation_pdf_followup.py` | 11 | 1 | 0 | 10 |
+| `pdf_probes/16_search_to_pdf_probe.py` | 19 | 1 | 0 | 18 |
+| `pdf_probes/_citation_pdf_followup_report.py` | 8 | 0 | 0 | 8 |
+| `pdf_probes/_download_classify_probe_classify.py` | 16 | 0 | 0 | 16 |
+| `pdf_probes/_download_classify_probe_pool.py` | 9 | 0 | 0 | 9 |
+| `pdf_probes/_download_classify_probe_report.py` | 8 | 0 | 0 | 8 |
+| `pdf_probes/_search_to_pdf_probe_report.py` | 7 | 0 | 0 | 7 |
+| `pydoll_fingerprint_probe.py` | 14 | 1 | 0 | 13 |
+| `ranking_eval/_single_query_pool_dump_report.py` | 9 | 0 | 0 | 9 |
+| `ranking_eval/_stage1_pool_fetch_report.py` | 10 | 5 | 2 | 3 |
+| `ranking_eval/_stage3_method_run_v3_cheap.py` | 7 | 0 | 1 | 6 |
+| `ranking_eval/_stage3_method_run_v3_gpu.py` | 19 | 0 | 0 | 19 |
+| `ranking_eval/bm25_capped_smoke.py` | 8 | 0 | 1 | 7 |
+| `ranking_eval/bm25_compare_smoke.py` | 4 | 0 | 1 | 3 |
+| `ranking_eval/bm25_idf_engine_smoke.py` | 8 | 0 | 1 | 7 |
+| `ranking_eval/clean_pool.py` | 7 | 0 | 4 | 3 |
+| `ranking_eval/pool_diff_v2_v3.py` | 10 | 1 | 4 | 5 |
+| `ranking_eval/pooling_probe.py` | 15 | 0 | 4 | 11 |
+| `ranking_eval/single_query_pool_dump.py` | 6 | 0 | 1 | 5 |
+| `ranking_eval/stage1_pool_fetch.py` | 10 | 0 | 1 | 9 |
+| `ranking_eval/stage3_method_run.py` | 18 | 0 | 1 | 17 |
+| `ranking_eval/stage3_method_run_v3.py` | 25 | 0 | 1 | 24 |
+| `ranking_eval/stage4_aggregate.py` | 18 | 0 | 4 | 14 |
+| `ranking_eval/stage4_aggregate_v3.py` | 10 | 0 | 1 | 9 |
+| `ranking_eval/value_eval_aggregate.py` | 17 | 0 | 3 | 14 |
+| `ranking_eval/value_eval_probe.py` | 22 | 0 | 3 | 19 |
+| `report_analysis/engine_distribution_analysis.py` | 14 | 0 | 0 | 14 |
+| `report_analysis/engine_health_audit.py` | 18 | 6 | 0 | 12 |
+| `report_analysis/inspect_query_log.py` | 6 | 0 | 1 | 5 |
+| `report_analysis/snippet_quality_analysis.py` | 17 | 0 | 1 | 16 |
+| `report_analysis/snippet_selection_simulator.py` | 10 | 0 | 0 | 10 |
+| `rerank_probe_smoke.py` | 19 | 1 | 0 | 18 |
+| `scholar_http_probe.py` | 15 | 4 | 3 | 8 |
+| `test_snippet_truncate.py` | 6 | 0 | 0 | 6 |
+| `with_google_decoupling_smoke.py` | 6 | 0 | 1 | 5 |
+| **total (94 files with items)** | **868** | **81** | **114** | **673** |
+
+Fourteen further files carried no comment or docstring.
+
+## Facts moved out of comments and docstrings, by module
+
+Text is verbatim from the old files (comment lines joined in order, docstrings with their own line breaks). Each entry is labelled `line` of the pre-sweep file.
+
+### `12_max_results_probe.py`
+
+Comment (line 32):
+
+```text
+# Per-engine max_results: high enough that post-fetch slice never binds; capped where engine hard-limits anyway
+```
+
+Comment (line 34-37):
+
+```text
+# num= capped server-side at 100; 100 avoids bot-signal of num=200
+# same as Google; Scholar renders max ~20
+# no count param — slice-only; page renders naturally
+# per_page= API param; documented ceiling is 200
+```
+
+### `24_pydoll_teardown_verify.py`
+
+Docstring (line 2):
+
+```text
+Verification script for TASK 1 (7u5) — deterministic pydoll tab teardown.
+
+Three tests:
+  1. Single hung tab (about:blank + never-resolving Promise) + kill_tab: wall ~= watchdog
+     (<8s), registry clean.
+  2. Single normal tab (about:blank, completes OK) + kill_tab: completes fine, registry clean.
+  3. Parallel batch of N=5 hung tabs via asyncio.gather (mirrors production fanout):
+     all 5 tabs cleaned deterministically, Target.getTargets count back to baseline,
+     wall ~= watchdog (NOT 5x65s).
+
+Hang simulation: about:blank + execute_script("return new Promise(function() {})",
+await_promise=True). Browser process stays fully responsive (contrast: chrome://hang stalls
+browser IPC too, making close_target itself slow — that's not the production scenario).
+
+Measurement: Target.getTargets via browser connection (CDP) as primary tab-count metric —
+reliable on macOS where pgrep --type=renderer reports 0 for headless Chrome.
+
+Usage (from project root):
+    ./venv/bin/python dev/search_pipeline/24_pydoll_teardown_verify.py
+
+Output: MD report to dev/search_pipeline/md/teardown_verify_<ts>.md + stdout summary.
+```
+
+Comment (line 44-45):
+
+```text
+# generous: watchdog(5s) + kill_tab overhead(< 3s)
+# mirrors 5-engine pydoll fanout
+```
+
+Comment (line 109-110):
+
+```text
+# Simulate TIMEOUT_NONCOOP: chrome://hang freezes renderer — same mechanism as production hang
+# With kill_tab fix: wall time should be ~WATCHDOG, not watchdog+60s
+```
+
+Comment (line 150-153):
+
+```text
+# about:blank load is instant; then a never-resolving JS Promise simulates
+# the production TIMEOUT_NONCOOP scenario (execute_script waiting for CDP
+# Runtime.evaluate response that never comes). Browser process stays responsive
+# so close_target via browser connection completes in <100ms after cancel.
+```
+
+Comment (line 223-224):
+
+```text
+# Count open CDP targets (tabs) via browser-level Target.getTargets — reliable on macOS headless
+# where pgrep --type=renderer returns 0. Filters to type="page" only (excludes service workers etc.)
+```
+
+Comment (line 232-234):
+
+```text
+# End-to-end: N=5 hung tabs via asyncio.gather — mirrors production 5-engine pydoll fanout.
+# All tabs hang on chrome://hang; watchdog fires on the gather; kill_tab in each finally.
+# Primary metric: CDP target count (via browser connection) back to baseline after gather.
+```
+
+Comment (line 282-286):
+
+```text
+# Navigate first so the renderer is healthy (browser IPC stays responsive).
+# Then execute a never-resolving Promise with await_promise=True — renderer
+# waits indefinitely on the Promise; browser process stays fully responsive
+# so close_target via browser connection completes instantly after cancel.
+# (chrome://hang hangs Chrome's IPC too, causing close_target itself to stall.)
+```
+
+### `_capture_sorry.py`
+
+Comment (line 59):
+
+```text
+# Build ChromiumOptions from config — mirrors 01_google_smoke.py
+```
+
+Comment (line 90):
+
+```text
+# Build JS fingerprint patch string — mirrors 01_google_smoke.py
+```
+
+### `_google_fixture.py`
+
+Docstring (line 1):
+
+```text
+Deterministic local fixture server for src/search/engines/google.py's redirect-resolution fix
+(process-docs/search_pipeline/ — google_goto_redirect_fix.md carries the investigation).
+
+Generated, not a trimmed copy of the real 816 KB saved page (dev/access_recovery/html/
+google_dom_probe_20260918_181820/best-noise-cancelling-headphones-2025_num10.html, gitignored,
+read directly from the absolute path during this milestone) — the same choice _fixture_site.py
+makes and for the same reason: the statement drives the page, not the other way around. The
+element chain, classes and attribute shapes below (div.MjjYud > div.A6K0A > div.N54PNb.BToiNc >
+div.kb0PBd.A9Y9g > div.yuRUbf > div.b8lM7 > span.V9tjod > a.zReHs[jsname=UWckNb][href^="/goto?
+url="] > h3.LC20lb, sibling div.kb0PBd.A9Y9g > div.VwiC3b > span.YrbPuc + text + a.vzmbzf) are
+copied verbatim from that real page's structure. Dropped: base64 inline <img> data URIs, the
+multi-KB inline <script>/<style> blocks, and Google's own chrome (login/policy/footer links,
+People Also Ask, ads, related searches) — none of it is read by google.py's parse JS before or
+after this fix.
+
+Unlike _fixture_site.py's one module-scoped server serving one fixed site to every test in its
+file, this fixture's four required test scenarios (8 happy results, 3 unhappy /goto cases mixed
+with happy ones, a duplicate-destination pair, zero results) each need genuinely different served
+content — so start_fixture_server here takes the result specs as a parameter and each test starts
+its own short-lived server, rather than mutating shared state via /_control/* between tests.
+
+/goto?url=<token> tokens are short semantic strings ("ok1", "dup_a"/"dup_b", "bad_status", ...),
+not realistic-looking base64 blobs — the real blob's bytes carry no recoverable meaning (see the
+process-docs entry), so an opaque readable token is equally faithful to what actually matters
+(a per-result opaque identifier) while being far easier to read in a test failure.
+```
+
+### `_lib/parse.py`
+
+Comment (line 116):
+
+```text
+# og | meta line — checked before generic engine pattern ("og" not in KNOWN_ENGINES)
+```
+
+### `_lib/text.py`
+
+Comment (line 30):
+
+```text
+# Bloat detection patterns (derived from Phase A eyeball of actual snippets)
+```
+
+Comment (line 52):
+
+```text
+# Remove Google doubled title+domain prefix (heuristic: maximize cut across all repeated-chunk matches)
+```
+
+### `_rerank_probe_smoke_rank.py`
+
+Comment (line 56):
+
+```text
+# Filter out empty/whitespace-only texts — reranker returns 400 on empty documents
+```
+
+### `bee_probes/_acquire_probe_instrument.py`
+
+Docstring (line 29):
+
+```text
+Wraps asyncio.Lock to record lock_attempt / lock_granted / lock_released|lock_stuck.
+
+    lock_stuck = lock.locked() is True after __aexit__ completes — Python 3.14 regression signal.
+    
+```
+
+Comment (line 50):
+
+```text
+# Distinguish correct release from stuck lock (Python 3.14 non-release hypothesis)
+```
+
+### `bee_probes/_branch_probe_instrument.py`
+
+Comment (line 10-12):
+
+```text
+# Monkey-patch RateLimiter.acquire BEFORE any src.search imports.
+# Full replacement (not wrapper) — byte-identical body to rate_limiter.py:acquire()
+# with branch-discriminator event-emits before each asyncio.sleep.
+```
+
+Docstring (line 34):
+
+```text
+Byte-identical to rate_limiter.py:acquire() + branch-discriminator event-emits.
+```
+
+### `bee_probes/_cdp_starvation_probe_canary.py`
+
+Comment (line 7):
+
+```text
+# exclude first N seconds from statistics (Chrome boot noise)
+```
+
+### `bee_probes/_cdp_starvation_probe_instrument.py`
+
+Comment (line 9-11):
+
+```text
+# --- Monkey-patch pydoll BEFORE importing src modules ---
+# Target: ConnectionHandler._process_single_message (connection_handler.py:244)
+# Called exactly once per CDP message in the receive loop.
+```
+
+Comment (line 26):
+
+```text
+# Pattern A: log callbacks blocking event loop > 50ms
+```
+
+Comment (line 28):
+
+```text
+# asyncio "Executing ... took Xs" log lines
+```
+
+### `bee_probes/acquire_probe.py`
+
+Docstring (line 2):
+
+```text
+RateLimiter.acquire() instrumentation probe — Phase 2 bee investigation.
+
+Discriminates three hypotheses for zero_cascade queries (all 9+ engines RATE_SKIP):
+  B:       enter=N                  — Task never scheduled by asyncio
+  A-lock:  enter=Y, lg=N, ~5000ms  — entered acquire() but blocked waiting for the lock
+  A-sleep: enter=Y, lg=Y, ~5000ms  — got lock, blocked on asyncio.sleep(backoff_s)
+  C:       enter=Y, exit_ok        — acquire() innocent, bug elsewhere
+
+Phase 1 REFUTED CDP starvation (event loop p99=1.4ms, 0 CDP events during cascade).
+New hypothesis: Python 3.14 asyncio.Lock non-release under CancelledError causes
+stale lock that blocks subsequent queries on same engine.
+
+Usage:
+    ./venv/bin/python3 dev/search_pipeline/acquire_probe.py [--max-queries N] [--smoke]
+
+    --smoke: 4-query dry-run, prints per-engine event detail to stderr, no report written.
+             Run first to verify instrumentation is live before full 20-query run.
+
+Output (full run only):
+    dev/search_pipeline/md/acquire_probe_<ts>.md
+```
+
+Comment (line 128):
+
+```text
+# Cascade expected: ≥5/20 based on Phase 1 baseline; for shorter smoke: 0 OK
+```
+
+### `bee_probes/branch_probe.py`
+
+Docstring (line 2):
+
+```text
+Sleep-branch discriminator probe — Phase 3 bee investigation.
+
+Discriminates WHICH of the two asyncio.sleep branches inside RateLimiter.acquire()
+fires during zero_cascade queries (all 9 engines RATE_SKIP simultaneously):
+
+  backoff_sleep_attempt  — if now < self._backoff_until:  (rate_limiter.py line 36)
+  tokencap_sleep_attempt — if len(self._tokens) >= self._max_requests:  (line 47)
+
+Phase 2 confirmed A-sleep: all 9 engines enter acquire(), get lock, sleep, get cancelled
+at ~5001ms. Phase 2 inferred backoff-cascade but did NOT distinguish which branch fired.
+Phase 3 adds branch-level events to settle this.
+
+Structural discriminator: 6 engines have .backoff() call in engine source (google,
+google_scholar, lobsters, mojeek, duckduckgo, semantic_scholar). 4 do NOT (crossref,
+openalex, stack_exchange, open_library). Backoff-immune engines cannot enter the backoff
+branch unless an unknown code path calls .backoff() on their limiter.
+
+Usage:
+    ./venv/bin/python3 dev/search_pipeline/branch_probe.py [--max-queries N] [--smoke]
+
+    --smoke: 4-query dry-run. Prints per-engine detail to stderr. No report written.
+             Run before full probe to verify instrumentation is live.
+
+Output (full run only):
+    dev/search_pipeline/md/branch_probe_<ts>.md
+```
+
+Comment (line 59):
+
+```text
+# 4 engines have NO .backoff() call in engine source — cannot enter backoff branch legitimately
+```
+
+### `bee_probes/cdp_starvation_probe.py`
+
+Docstring (line 2):
+
+```text
+CDP starvation probe — Pattern A (asyncio debug) + Pattern B (canary latency) + CDP event counter.
+
+Hypothesis: Chrome CDP event flooding during CAPTCHA navigation starves the asyncio event loop,
+causing all 9 engines' asyncio.wait_for(limiter.acquire(), 5.0) to time out simultaneously.
+Builds on prior zero-query diagnosis analysis.
+
+Usage:
+    ./venv/bin/python3 dev/search_pipeline/cdp_starvation_probe.py [--max-queries N]
+
+Output:
+    dev/search_pipeline/md/cdp_probe_<ts>.md
+```
+
+Comment (line 94):
+
+```text
+# All-RATE_SKIP = zero-cascade query (post-CAPTCHA starvation cascade)
+```
+
+### `bm25_sweep_smoke.py`
+
+Docstring (line 2):
+
+```text
+BM25 Sweep Probe vs Hard-Slot Baseline.
+
+Ranks the same deduplicated URL pool per query using:
+  A) Hard-Slot: _merge_and_rank from src.search.merge (12/6/2 class slots)
+  B) BM25 sweep: 16-config main grid (b x stopwords x doc_repr, k1 fixed at 1.2)
+               + 4-config k1 sensitivity sweep at default-other-knobs
+
+IDF handling: uniform IDF=1.0 per user design (query-word relevance is user-defined,
+not corpus-derived; stopword filter replaces IDF discrimination). Reduces BM25 to
+TF + length-normalization only.
+
+Implementation choice: BM25Uniform subclasses rank_bm25.BM25Okapi and overrides
+_calc_idf to set self.idf[word]=1.0 for all terms. Preferred over a custom 30-LOC
+implementation because _calc_idf is an explicit extension point in BM25Okapi and
+the override is 5 LOC. Library (rank_bm25) already in venv; k1/b tunable via
+constructor.
+
+Stopword list: ~45-word inline English set (determiners, prepositions, auxiliaries).
+NLTK (~180 words) not used — no dependency, and for short title+snippet text the
+marginal coverage gain of 180 vs 45 words is small.
+
+Output: dev/search_pipeline/md/bm25_sweep_<ts>.md
+```
+
+Comment (line 159):
+
+```text
+# Merge raw results by URL — Step 1 of _merge_and_rank extracted to avoid slot allocation
+```
+
+Comment (line 208):
+
+```text
+# b=1.0 + empty-doc edge case
+```
+
+### `browser_probes/25_startpage_probe.py`
+
+Docstring (line 2):
+
+```text
+Startpage go/no-go probe — empirically checks scrapeability of startpage.com from this IP.
+
+Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
+below is a copy of the shape used by src/search/browser.py, not a shared import.
+
+Historical note: Startpage was dropped previously at "0/30 results, root cause unclear".
+Empirical finding here: a direct GET to /sp/search?query=... (no prior homepage visit) returns
+a degraded empty shell with zero organic results and NO captcha/block marker — the request is
+missing the per-session `sc` token embedded in the homepage's search form. That silent-empty
+behavior is the most likely explanation for the historical 0/30. This probe instead drives the
+real homepage search form (load homepage -> set #q -> click .search-btn) to get a valid session
+token, then measures actual result count/quality/block behavior per query.
+```
+
+### `browser_probes/26_brave_probe.py`
+
+Docstring (line 2):
+
+```text
+Brave Search go/no-go probe — empirically checks the 3-condition gate for browser-scrape viability:
+real result rows + no PoW/CAPTCHA trigger + per-query wall latency consistently <= 5s, run one query
+at a time the way the production asyncio.gather pool would run each engine (no special-casing).
+
+Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup below
+is a copy of the shape used by src/search/browser.py, not a shared import.
+
+Background: Brave was previously dropped — PoW CAPTCHA across an 8-combination pydoll stealth matrix
+(best 10/30), Patchright-with-Chromium (slider CAPTCHA instead of PoW, 0/30), Camoufox/Firefox (7/30).
+Decisive killer was latency (10-15s/query on any CAPTCHA path). The untested angle per the stealth
+resume note was Patchright with a REAL Chrome binary (channel="chrome", headless) — tried here FIRST
+(see inline exploration below the module docstring in process-docs, not in this script) and found to
+still trigger a slider CAPTCHA in headless mode (title "Captcha - Brave Search") on the very first
+query, while the SAME real-Chrome binary succeeds headed (no CAPTCHA) — i.e. headless-ness itself is
+the dominant signal for Patchright+real-Chrome against Brave, not the Chromium-vs-Chrome binary
+identity the resume note suspected. Headed is not a viable production mode (server pipeline, no
+display), so that angle is closed without a production candidate.
+
+This probe instead runs the SECOND angle from scope: the pydoll stealth stack already used by the
+production engines (src/search/browser.py fingerprint patches), which in initial hand-testing reached
+Brave's results page headless WITHOUT a CAPTCHA — the opposite of the Patchright-headless outcome.
+That is the stack measured here across the full query set.
+```
+
+### `browser_probes/27_brave_headed_lane_probe.py`
+
+Docstring (line 2):
+
+```text
+Headed hard-engine lane probe (macOS) — Brave via headed-but-backgrounded Chrome.
+
+Self-contained: does NOT import src/ (dev-script isolation) — the pydoll session setup below
+follows the shape of src/search/browser.py, not a shared import.
+
+Background: dev/search_pipeline/26_brave_probe.py established that headless (both pydoll-stealth
+and Patchright+real-Chrome) trips Brave's PoW/CAPTCHA — pydoll-stealth got 4/10 clean before a
+persistent block, Patchright+real-Chrome was blocked immediately headless but passed HEADED. Xvfb
+is irrelevant here (Linux-only virtual-display trick; this Mac has a real screen). The lever tested
+in this probe: run the system Google Chrome HEADED (a real window renders) but BACKGROUNDED via
+macOS `open -g` so it never steals focus — pydoll connects to it over CDP exactly as if it had
+launched it directly.
+
+Launch mechanism (the actual novel piece of this probe):
+- pydoll's BrowserProcessManager accepts a `process_creator` callback: a function taking the full
+  launch command list (`[binary_location, "--remote-debugging-port=<port>", *other_args]`) and
+  returning a subprocess.Popen. Chrome(options) does not expose this via its constructor, so the
+  manager is swapped in AFTER construction, BEFORE start():
+      browser = Chrome(options)
+      browser._browser_process_manager = BrowserProcessManager(process_creator=_open_process_creator)
+      tab = await browser.start()
+- `_open_process_creator` drops the resolved binary_location (unused — `open -a` targets the app
+  bundle directly) and re-launches via:
+      open -g -n -a "Google Chrome" --args --remote-debugging-port=<port> --user-data-dir=<isolated dir> ...
+  `-g` = no foreground activation (no focus steal). `-n` = force a new instance (belt-and-suspenders;
+  the isolated --user-data-dir alone already forces a fresh process since Chrome's singleton check
+  is a lock file inside the profile dir).
+- `open -g` returns immediately, so the Popen handed back to pydoll is the short-lived `open`
+  wrapper, not Chrome itself — pydoll's own stop_process() has nothing to reap. Teardown is CDP
+  `browser.stop()` (Browser.close command — quits the whole isolated-profile Chrome instance since
+  it's the only window in that profile) PLUS an explicit `pkill -f user-data-dir=<isolated dir>`
+  safety net regardless of whether stop() succeeds.
+```
+
+Comment (line 56-57):
+
+```text
+# Dedicated, isolated profile — NOT the shared engine session dir (src/search/browser.py's
+# SESSION_DIR) — for block-isolation from production engines and to force a fresh Chrome instance.
+```
+
+Comment (line 149-150):
+
+```text
+# Launch the system Google Chrome headed-but-backgrounded via macOS `open -g` — the actual novel
+# launch mechanism this probe tests (see module docstring for the full rationale)
+```
+
+Comment (line 152):
+
+```text
+# drop resolved binary_location; `open -a` targets the app bundle directly
+```
+
+Comment (line 172):
+
+```text
+# options.headless left at its default False — headed is the whole point of this probe
+```
+
+Comment (line 178-180):
+
+```text
+# Stop the browser via CDP Browser.close, then a pkill safety net regardless of outcome — the
+# process_creator's Popen (the short-lived `open` wrapper) gives pydoll's own stop_process() nothing
+# real to reap, so the pkill is not optional cleanup, it's the actual teardown guarantee.
+```
+
+### `browser_probes/28_bing_probe.py`
+
+Docstring (line 2):
+
+```text
+Bing Search go/no-go probe — empirically checks scrapeability of bing.com for a SECOND,
+independent access path to the Bing web index (redundant to DuckDuckGo, which already surrogates
+the same index) — symmetric to google(direct)+startpage(surrogate).
+
+Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
+below is a copy of the shape used by src/search/browser.py, not a shared import.
+
+Historical note: Bing was dropped 2026-05-04 on COVERAGE grounds (DDG already IS Bing's index —
+no new URLs) and its old selector `#b_results .b_algo` had drifted. This probe answers a DIFFERENT
+question — scrapeability + latency for redundancy, not coverage — and re-derives the CURRENT DOM
+from scratch rather than trusting the old selector.
+
+Empirical finding: `#b_results .b_algo` had NOT actually drifted in the way the drop note implied —
+`li.b_algo` containers are still present and populated (10/page). What DID change/needs handling:
+Bing wraps every organic result href in a `bing.com/ck/a?...&u=<prefixed-base64>&...` tracking
+redirect (not present historically at prior evaluation, or not documented) — the destination URL
+must be unwrapped: parse the `u` query param, strip its 2-char prefix (observed as `a1`), then
+base64-urlsafe-decode (with padding) to get the real URL. A cookie/consent banner ("Microsoft und
+unsere Drittanbieter verwenden Cookies...") is present in the DOM but is NON-BLOCKING for scraping —
+it renders as an overlay alongside full results, not a gate (unlike Google's consent redirect or
+Startpage's homepage-token flow); no click/accept step is needed to read `li.b_algo` content.
+```
+
+Comment (line 203-204):
+
+```text
+# Unwrap Bing's `bing.com/ck/a?...&u=<prefixed-base64>&...` tracking redirect to the real
+# destination URL — the `u` param is base64url-encoded with a 2-char prefix (observed: "a1")
+```
+
+### `browser_probes/29_yandex_probe.py`
+
+Docstring (line 2):
+
+```text
+Yandex Search go/no-go probe — empirically checks scrapeability of yandex.com, one of the few
+remaining INDEPENDENT web indexes (own crawler, distinct from Google/Bing) — a genuine new-coverage
+candidate for the general axis, and a hard anti-bot target (Yandex SmartCaptcha), in the Brave league.
+
+Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
+below is a copy of the shape used by src/search/browser.py, not a shared import.
+
+Decision criterion (relaxed, per task): DROP only if there is truly no way through — blocked from
+the very first query, never a single usable result. A handful of clean hits before any eventual
+block is a CANDIDATE (real usage is 3-4 queries every few days — comfortably inside any clean
+window observed), same reasoning that landed Brave as a production candidate. Quality (relevance
+of results, especially for German/Western queries against a Russia-based index) is tracked as a
+SEPARATE axis from access/blocking.
+
+Empirical finding: `https://yandex.com/search/?text=<q>` (yandex.com, NOT yandex.ru) redirects to
+`&lr=<region_id>` (a region parameter, auto-detected from IP geolocation — no block, no consent
+step) and renders full results immediately. The old `li.serp-item` container selector is STILL the
+live shape (confirmed via direct DOM inspection) — title is `a.OrganicTitle-Link` (direct href, NO
+URL-wrapping/redirect unlike Bing's ck/a), snippet is `.OrganicText .OrganicTextContentSpan`.
+```
+
+### `browser_probes/31_date_availability_probe.py`
+
+Docstring (line 2):
+
+```text
+Date-availability probe — Milestone 2 measurement for the 8 DOM-scraped web engines
+(google, duckduckgo, mojeek, startpage, brave, bing, yandex, lobsters).
+
+Question: does the live result page carry a date, and if so how (dedicated element vs
+snippet-text-only vs nowhere)? Not a feature change — no src/ touched, no wiring.
+
+Self-contained: does NOT import src/ (dev-script isolation, matches 25/26/28/29/30_*_probe.py) —
+the pydoll Chrome session setup and each engine's navigation/wait/diagnose logic below are an
+inline copy of the CURRENT shape in src/search/browser.py + src/search/engines/*.py, not a
+shared import — the probe keeps measuring even if src/ changes underneath it later.
+
+Evidence capture, one JS pass per container (covers case 1 and case 2 together):
+  - <time> elements (tag + datetime attribute + text) -> dedicated-element evidence
+  - class/id tokens matching a WORD-BOUNDARY regex for date/time/age/publish/when/ago
+    (not a raw substring — substring would false-positive on 'update'/'candidate'/'validate')
+  - full container text (600 chars) -> snippet-text-only date-prefix evidence
+  - outerHTML head (3000 chars) -> structural context
+
+Pacing: self-imposed politeness gap between requests to the SAME engine — this script does NOT
+go through src/search/rate_limiter.py at all (self-contained), so there is no quota being
+respected here, just avoiding a rapid-fire burst against a live server. If an engine is non-OK
+across ALL primary queries, one retry follows a MINUTES-scale cooldown (not seconds) — a short
+gap cannot distinguish a probe-induced block from an engine that was already in a cooled-down
+state from unrelated earlier activity this session. google, duckduckgo, and brave are flagged
+up front as having returned 0 results in an EARLIER live run this session (unrelated to this
+probe) — a repeat non-OK on those three is annotated as pre-existing, not attributed to the probe.
+```
+
+### `empty_classify_se.py`
+
+Docstring (line 2):
+
+```text
+Classify 15 StackEx EMPTY queries from smoke_20260504_023641: SO probe + cross-site probe via httpx.
+```
+
+Comment (line 19):
+
+```text
+# (smoke_row, query) for all 15 StackEx EMPTY entries from smoke_20260504_023641
+```
+
+### `google_selector_probe.py`
+
+Docstring (line 2):
+
+```text
+Google DOM selector probe — diagnoses why num=100 returns only 9-11 results.
+```
+
+### `no_google_burst_smoke.py`
+
+Docstring (line 2):
+
+```text
+No-Google concurrent burst smoke — production ScholarEngine vs 8 production engines.
+
+Architectural discriminator test: does HTTP Scholar survive the concurrent multi-engine
+burst pattern when Google browser is absent?
+
+Engine set (9 total, no Google):
+  google_scholar (production HTTP), duckduckgo, mojeek, lobsters, crossref, openalex,
+  stack_exchange, semantic_scholar, open_library
+
+Queries: 12 canonical academic queries from ciw_concurrent_block_20260508.md
+(3 bursts × 4), reused for cross-test comparability.
+
+Import switched from ScholarHTTPProbe (dev probe) to ScholarEngine (production) 2026-05-09
+as part of bead searxng-f3i HTTP migration.
+
+Output: JSONL per-query records → dev/search_pipeline/jsonl/no_google_burst_<ts>.jsonl
+        Summary table → stderr
+```
+
+Comment (line 52-53):
+
+```text
+# Watchdog timeouts per engine (seconds) — this probe's own values, independent of
+# search_web.py's ENGINE_WATCHDOG_TIMEOUT (uniform 6.0s across all engines as of 2026-08-25)
+```
+
+### `ranking_eval/_stage1_pool_fetch_report.py`
+
+Comment (line 6-7):
+
+```text
+# NOTE: _STATUS_HINTS duplicated from 11_pipeline_smoke.py, keep in sync manually
+# until extracted to shared helper.
+```
+
+### `ranking_eval/_stage3_method_run_v3_cheap.py`
+
+Comment (line 11):
+
+```text
+# Cormack 2009
+```
+
+### `ranking_eval/bm25_capped_smoke.py`
+
+Docstring (line 2):
+
+```text
+BM25 per-engine top-K cap probe — 3 configs, top-10, 4 queries.
+
+Tests whether capping each engine's contribution to top-K URLs (where
+K = google result count for this query) before building the dedup pool
+improves BM25 result quality vs the uncapped full pool.
+
+Rationale: crossref/openalex return 200 results each — keyword-matched
+but often irrelevant. Google returns ~11 highly-curated results. Capping
+all engines to K~11 equalises engine contribution and removes the long
+tail of low-quality academic matches before BM25 scoring.
+
+Config matrix:
+  1. Hard-Slot   — _merge_and_rank baseline (12/6/2 slots)
+  2. BM25 UNCAPPED — BM25Uniform on full dedup pool
+  3. BM25 CAPPED   — BM25Uniform on pool built from top-K per engine
+     K = engine_stats['google']['result_count'] for this query;
+     fallback K=10 if google absent or returned 0.
+
+Report header per query shows:
+  raw=N, K=K, capped_pre_dedup=C, unique_capped=U, unique_full=F
+
+Imports: QUERIES, VANILLA_K1, STOPWORDS, _build_pool, _tokenize, _doc_repr,
+BM25Uniform from bm25_sweep_smoke.py (same directory).
+```
+
+### `ranking_eval/bm25_compare_smoke.py`
+
+Docstring (line 2):
+
+```text
+BM25 focused comparison — top-10 URL dumps for 5 configs side-by-side (stacked).
+
+Imports pool/ranking helpers from bm25_sweep_smoke.py (same directory).
+Runs 5 configs per query:
+  1. Hard-Slot baseline  — _merge_and_rank (12/6/2 slots)
+  2. Vanilla BM25        — k1=1.2, b=0.75, sw=on, repr=title+snippet
+  3. b=0 extreme         — k1=1.2, b=0.00, sw=on, repr=title+snippet (no length-norm)
+  4. b=1 extreme         — k1=1.2, b=1.00, sw=on, repr=title+snippet (full length-norm)
+  5. Title3x variant     — k1=1.2, b=0.75, sw=on, repr=title3x
+
+Output: dev/search_pipeline/md/bm25_compare_<ts>.md
+Top-10 per config (not 20) — keeps tables eyeball-readable.
+```
+
+### `ranking_eval/bm25_idf_engine_smoke.py`
+
+Docstring (line 2):
+
+```text
+BM25 IDF vs Engine-Weighting probe — 5 configs, top-10, 4 queries.
+
+Tests IDF and engine-count-inverse-weighting as separate and combined axes
+relative to the Vanilla BM25 baseline.
+
+Config matrix:
+  1. Hard-Slot         — _merge_and_rank baseline (12 General / 6 Academic / 2 QA)
+  2. Vanilla BM25      — BM25Uniform (no IDF, no weighting), b=0.75, k1=1.2
+  3. BM25 + IDF        — BM25Okapi (standard per-pool IDF), same params
+  4. BM25 + Weighting  — BM25Uniform × engine-count-inverse weight per URL
+  5. BM25+IDF+Weighting— BM25Okapi × engine-count-inverse weight per URL
+
+Engine-count-inverse weight for URL u:
+  wt(u) = sum(1.0 / engine_counts[e] for e in u.engines)
+  engine_counts[e] = number of raw results from engine e this query.
+  Multi-engine URLs accumulate summed weights; high-volume engines
+  (crossref=200, openalex=200) are naturally discounted vs low-volume
+  (google~11, mojeek~10). Weighted score = bm25_score × wt.
+
+Weighting applied to full pool (not truncated to 20 first) so re-ordering
+by weighting does not miss candidates outside vanilla top-20.
+
+Imports: QUERIES, VANILLA_K1, STOPWORDS, _build_pool, _tokenize, _doc_repr,
+BM25Uniform from bm25_sweep_smoke.py (same directory).
+```
+
+### `ranking_eval/clean_pool.py`
+
+Docstring (line 2):
+
+```text
+clean_pool.py — Filter helper + oracle cleanup for 7-engine eval.
+
+filter_pool(pool, drop_engines) removes drop_engines from each entry's
+engines+positions; drops URLs whose engines list becomes empty after filter.
+min_position is recomputed from remaining positions; falls back to original
+when positions is absent (v2 schema pool entries).
+
+When run as script: generates <pair>_oracle_v3clean.json for all 16 (mode × query)
+pairs in the v2 ts_dir, backfilling 4 loss pairs where google/semantic_scholar picks
+are unavailable after the engine filter.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/clean_pool.py [--v2-dir PATH]
+```
+
+Comment (line 36-38):
+
+```text
+# Hardcoded backfill picks per loss pair {mode_slug: [{url, rationale}]}
+# Selection criterion: canonical/authoritative source for the query, NOT SEO/listicle.
+# Each backfill pick was chosen from the filtered pool (min_position rank), engine provenance noted.
+```
+
+### `ranking_eval/pool_diff_v2_v3.py`
+
+Docstring (line 61):
+
+```text
+Return {engine: {ok: N, total: N}} from engine_report.md files — parse pool JSONs instead.
+```
+
+Comment (line 62-64):
+
+```text
+# Pool JSONs don't carry engine stats; we rebuild from per-pair pool.json google_count field
+# and from parsing engine_report.md files.
+# Simpler: read engine_report_summary.md text table per ts_dir.
+```
+
+### `ranking_eval/pooling_probe.py`
+
+Docstring (line 2):
+
+```text
+Capped-Pool Pooling Strategy Comparison — 4 configs, top-google_count each, 20 queries.
+
+Architecture (user-driven, bead searxng-g82):
+  Pool per query: each engine contributes at most google_count URLs (position <= google_count).
+  Pool bounded by 9 × google_count minus dedup overlap (~50-100 URLs per query).
+  Hard-stop: google_count == 0 → query SKIPPED, no fallback.
+  Output: top-google_count URLs per config.
+
+4 configs on the same capped pool:
+  C1 — Overlap-Count: sort (-n_engines, min_position) — structural signal only
+  C2 — BM25: BM25Uniform k1=1.2, b=0.75, sw=on, title+snippet
+  C3 — Cross-Encoder: Qwen3-Reranker-0.6B at port 8082, direct on full pool (no BM25 pre-filter)
+  C4 — Embedding-Cosine: Qwen3-Embedding-0.6B at port 8084, one-batch, cosine sort
+
+Services required (preset names: embedding-0.6b, reranker-0.6b):
+  Embedding:     http://127.0.0.1:8084/v1/embeddings
+  Cross-encoder: http://127.0.0.1:8082/v1/rerank
+
+Output:
+  dev/search_pipeline/md/pooling_probe_<ts>.md
+  dev/search_pipeline/jsonl/pooling_probe_<ts>.queries.jsonl
+
+All src/ dependencies routed through the already-committed dev/ modules that carry those imports.
+```
+
+Comment (line 96):
+
+```text
+# Cascade guard: >1 RATE_SKIP on same query → bee-fix regression, stop immediately
+```
+
+Comment (line 148):
+
+```text
+# Cross-encoder rerank with one retry on API error (500s are transient on llama-server)
+```
+
+Comment (line 239):
+
+```text
+# Pre-filter empty docs for C3/C4 API calls (reranker returns 400 on empty documents)
+```
+
+### `ranking_eval/single_query_pool_dump.py`
+
+Docstring (line 2):
+
+```text
+Single-Query Pool Dump — capped pool vs Top-N for 4 configs (bead searxng-g82).
+
+Sections: (1) per-engine raw  (2) full capped pool  (3) Top-N per config
+          (4) comparison matrix (every pool URL × 4 configs → rank or —)
+
+Hard-stop: google_count == 0 → exit. No fallback.
+Services: embedding port 8084 (Qwen3-0.6B) / reranker port 8082 (Qwen3-0.6B)
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/single_query_pool_dump.py [--query TEXT] [--output PATH]
+```
+
+### `ranking_eval/stage1_pool_fetch.py`
+
+Docstring (line 2):
+
+```text
+Stage 1 — Pool Fetch (value_eval_v3).
+
+Fetches results for 16 (mode, query) pairs (4 modes × 4 queries).
+Writes per-pair pool.json + engine_report.md, then engine_report_summary.md.
+
+No URL filter applied — C-methods (BM25, Cross-Encoder) handle topic relevance from
+title+snippet. Query modifier (+book / +pdf / +documentation) still biases engine results.
+
+pool.json schema:
+  pool      — oracle input + C1/C2'/C3: capped_pool sorted by URL, ALL fields
+               (url / title / snippet / engines / min_position / positions)
+  pool_full — C2 BM25 vanilla: full_pool (all deduped results) sorted by URL, ALL fields
+
+positions: {engine_name: rank} — per-engine position (additive v3 field; Methods 2-5 RRF).
+Invariants: set(engines)==set(positions.keys()), min_position==min(positions.values()).
+
+Oracle workers: read pool[*].{url, title, snippet} only — ignore engines/min_position/positions.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/stage1_pool_fetch.py [--smoke] [--ts-dir PATH]
+```
+
+### `ranking_eval/stage3_method_run.py`
+
+Docstring (line 2):
+
+```text
+Stage 3 — Method Run (value_eval_v2).
+
+Reads *_pool.json files from a Stage 1 ts_dir, runs 4 C-methods on each pool,
+writes per-pair methods.json.
+
+Methods:
+  C1  — Overlap-Count: sort (-n_engines, min_position) on pool (filt_capped)
+  C2  — BM25 vanilla (k1=1.2, b=0.75, sw=on, title+snippet) on pool_full (filt_pool)
+  C2' — BM25-Capped: BM25 on pool (filt_capped, same as oracle input)
+  C3  — Cross-Encoder rerank (Qwen3-Reranker, dynamic port via RAG server_manager)
+
+Requires reranker server running (or startable via RAG). Script exits with error
+if reranker cannot be reached after ensure_ready.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/stage3_method_run.py --ts-dir PATH [--smoke]
+```
+
+### `ranking_eval/stage3_method_run_v3.py`
+
+Docstring (line 2):
+
+```text
+Stage 3 v3 — 12-Method Run (Phase 13 eval).
+
+Reads *_pool.json (v3 schema, with positions field) from pool_dir, applies
+filter_pool(drop_engines={'google','semantic_scholar'}), then runs 12 methods
+per pair. Writes per-pair {mode}_{slug}_methods_v3.json to pool_dir.
+
+Methods:
+  M1  C1 Overlap-Count (no GPU)
+  M2  RRF post-bucket using positions field (no GPU)
+  M3  Structural URL Features — penalty scoring (no GPU)
+  M4  C2 BM25 vanilla on pool_full (no GPU)
+  M5  C2' BM25-Capped on pool (no GPU)
+  M6  C3 Cross-Encoder vanilla — also saves c3_scores for M8/M10
+  M7  C3 + Instruction-Prefix (same reranker model, new query prefix)
+  M8  RRF + C3 Hybrid — 0.5*norm(c3_scores) + 0.5*norm(rrf_scores), NO new GPU call
+  M9  SPLADE standalone — dot product on sparse vectors
+  M10 SPLADE + C3 Hybrid — 0.5*norm(c3_scores) + 0.5*norm(splade_scores), NO new GPU call
+  M11 Two-Stage C3 + LLM-Filter — C3 top-20 → generator-4b filter → top-10
+  M12 LLM-as-Selector direct — full filtered pool → generator-4b → top-10
+
+Execution order: M1-M5 (cheap), M6-M8 (reranker warm), M9-M10 (SPLADE warm), M11-M12 (generator).
+Per-GPU model group: pre-flight warmup on first query only; cold_ms tracked separately.
+
+Requires:
+  - reranker-0.6b running (M6, M7, M8, M10, M11): rag-cli server start reranker-0.6b
+  - splade running (M9, M10):                      rag-cli server start splade
+  - generator-4b running (M11, M12):               rag-cli server start generator-4b
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/stage3_method_run_v3.py \
+      --pool-dir dev/search_pipeline/runs/value_eval_v3_<ts> \
+      [--smoke]
+```
+
+### `ranking_eval/stage4_aggregate.py`
+
+Docstring (line 2):
+
+```text
+Stage 4 — Aggregate (value_eval_v2).
+
+Loads pool/methods/oracle JSONs from ts_dir, computes Jaccard overlap per method,
+writes per-pair eval MD and summary eval MD into ts_dir.
+
+Differences from value_eval_aggregate.py (v1 historical artifact):
+  - Output files written to ts_dir/ (co-located with pool/methods/oracle JSONs)
+  - No --ts-out flag (ts embedded in dir name)
+  - Reads pool.json v2 schema (pool_sizes dict; pool items may have engines/min_position, ignored)
+
+Smoke mode (--no-oracle): generates MDs without oracle section — verifies pool+methods
+pipeline integrity only.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/stage4_aggregate.py \
+      --ts-dir dev/search_pipeline/runs/value_eval_v2_YYYYMMDD_HHmmss \
+      [--no-oracle]
+```
+
+Comment (line 103):
+
+```text
+# Skip empty-pool pairs (undersized_pool=True AND pool_size=0)
+```
+
+Comment (line 107):
+
+```text
+# top_10 items may be dicts {"url": ...} (B1 format) or plain strings (B2 format)
+```
+
+Comment (line 114):
+
+```text
+# pool_size: v2 schema stores in pool_sizes.filtered_capped; v1 stored top-level pool_size
+```
+
+### `ranking_eval/stage4_aggregate_v3.py`
+
+Docstring (line 2):
+
+```text
+Stage 4 v3 — Aggregate (Phase 13, 12-method eval).
+
+Loads pool_v3/*_pool.json + pool_v3/*_methods_v3.json + oracle_dir/*_oracle_v3clean.json,
+computes Jaccard per method, writes per-pair eval MD and summary MD into pool_dir.
+
+Summary includes:
+  - Per-mode mean Jaccard (12 methods)
+  - Per-method latency statistics (mean, p50, p95, max, cold)
+  - Quality × Latency Pareto table (DOMINATED flagged)
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/stage4_aggregate_v3.py \
+      --pool-dir  dev/search_pipeline/runs/value_eval_v3_<ts> \
+      --oracle-dir dev/search_pipeline/runs/value_eval_v2_20260523_000156 \
+      [--no-oracle]
+```
+
+### `ranking_eval/value_eval_aggregate.py`
+
+Docstring (line 2):
+
+```text
+Value Eval Aggregator — Stage 4: per-pair MD + summary MD (bead searxng-g82).
+
+Loads pool/methods/oracle JSONs from ts_dir, computes Jaccard overlap per method,
+writes per-query MDs and one summary MD.
+
+Smoke mode (--no-oracle): generates MDs without oracle section — verifies pool+methods
+pipeline integrity only.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/value_eval_aggregate.py \
+      --ts-dir dev/search_pipeline/runs/value_eval_YYYYMMDD_HHmmss \
+      [--ts-out YYYYMMDD_HHmmss] [--no-oracle]
+```
+
+Comment (line 100):
+
+```text
+# Skip empty-pool pairs (undersized_pool=True AND pool_size=0) in scoring
+```
+
+Comment (line 104):
+
+```text
+# top_10 items may be dicts {"url":...} (B1 format) or plain strings (B2 format)
+```
+
+### `ranking_eval/value_eval_probe.py`
+
+Docstring (line 2):
+
+```text
+Value Eval Probe — Stage 1+2: pool fetch + C-method scoring (bead searxng-g82).
+
+Fetches results for each (mode, query) pair; saves pool.json (oracle input: url/title/snippet only,
+no scores) and methods.json (C1/C2/C2'/C3 Top-10 URLs) per pair.
+
+Methods:
+  C1  — Overlap-Count: sort (-n_engines, min_position)
+  C2  — BM25 vanilla (k1=1.2, b=0.75, sw=on, title+snippet) on full filtered pool
+  C2' — BM25-Capped: BM25 on capped pool (position ≤ google_count, then filtered)
+  C3  — Cross-Encoder rerank (Qwen3-Reranker-0.6B, port 8082) on full filtered pool
+
+Smoke mode (--smoke): one pair only (general × transformer attention mechanism),
+  then auto-runs Stage 4 aggregator with --no-oracle to verify the chain.
+
+Usage:
+  ./venv/bin/python dev/search_pipeline/value_eval_probe.py [--smoke] [--ts-dir PATH]
+```
+
+Comment (line 71):
+
+```text
+# --- URL filter data (mirrors src/search/{pdf_filter,book_whitelist,docs_filter}.py) ---
+```
+
+Comment (line 325):
+
+```text
+# Oracle sees capped+filtered pool sorted by URL (neutral ordering, ~40-80 URLs, practical to review)
+```
+
+### `report_analysis/inspect_query_log.py`
+
+Docstring (line 1):
+
+```text
+Inspect query_log.jsonl — summary stats over logged queries.
+
+Usage:
+  python dev/search_pipeline/inspect_query_log.py [--tail N] [--log-path PATH] [--all-types]
+
+Log path resolution: --log-path arg → SEARXNG_QUERY_LOG_PATH env var → src/logs/query_log.jsonl
+
+Record types in the log:
+  engine_run       — written by _query_engines_concurrent (always; probes write only this type)
+  workflow_summary — written by search_web_workflow (production only; includes total_wall_ms + preview)
+  (no record_type) — old-style entries; treated as workflow_summary (backward compat)
+
+Default mode: shows workflow_summary + old-style records only. Use --all-types to include engine_run.
+```
+
+### `report_analysis/snippet_quality_analysis.py`
+
+Comment (line 95):
+
+```text
+# scholar_strip: unescape HTML entities then strip bloat (mirrors Rule 7)
+```
+
+### `scholar_http_probe.py`
+
+Docstring (line 2):
+
+```text
+HTTP Scholar probe — architectural alternative to src/search/engines/scholar.py.
+
+Status: PROBE (not in production). Tests whether HTTP-based Scholar can survive
+concurrent multi-engine burst patterns when Google browser is absent.
+
+Lives in dev/ per documentation rule "dev/ vs src/ for Exploratory Rewrites" —
+production stays browser-based until empirical evidence converges on a known-good
+fix that addresses the actual production problem.
+
+Source: cherry-picked from commit 82bc88f (discarded pydoll-stealth-probe branch),
+modeled on SearXNG's `searx/engines/google_scholar.py`.
+
+Usage: imported by `dev/search_pipeline/no_google_burst_smoke.py`. Not invoked by
+production cli.py or ENGINES dict in search_web.py.
+```
+
+Comment (line 50):
+
+```text
+# CONSENT=YES+ bypasses Google's cookie-consent gate without browser interaction
+```
+
+Comment (line 53):
+
+```text
+# 6.0s — Scholar HTTP latency 1-5s range; matches crossref/open_library override in production
+```
+
+### `with_google_decoupling_smoke.py`
+
+Docstring (line 2):
+
+```text
+With-Google decoupling smoke — verifies Scholar is absent from default engine set.
+
+Tests the production _select_engines(None) path end-to-end:
+  - Google browser engine IS in the set
+  - google_scholar is NOT in engines_requested
+  - engines_excluded["google_scholar"] == "decoupled_from_google" in query log
+  - No status attributed to Scholar at all (it never fired)
+
+Runs 5 queries through search_web_workflow(query, engines=None) — the real production
+path — then reads the last 5 lines of query_log.jsonl to verify the exclusion machinery.
+
+Output: markdown summary → dev/search_pipeline/md/with_google_decoupling_<ts>.md
+```
+
+## Phase 2 verification
+
+Measured after the sweep, 2026-09-24:
+
+- AST plus tokenize scan over all 108 files (shebang on line 1 and the three markers exempt): 0 comments, 0 docstrings. `py_compile` of all 108 files passes.
+- Suite: `pytest dev/tests/ -q` 488 passed before the sweep (measured with the working tree stashed, after merging the current `integration`) and 488 passed after.
+- `--help` for the 20 argparse scripts, old tree versus new tree in separate copies: 14 byte-identical, including `inspections/inspect_engine_dom.py` with its description line. The other 6 (`16_search_to_pdf_probe`, `single_query_pool_dump`, `stage1_pool_fetch`, `stage3_method_run`, `stage3_method_run_v3`, `value_eval_probe`) do not import at baseline (see the import-failure table above) and print the same traceback in both trees; only the `line N` numbers inside the traceback moved because comment lines above the failing import are gone. Before running anything, every script's `__main__` block was read to confirm argparse runs first; no script without argparse was executed.
+- All Phase 1 rendered-output scenarios (the same 27 targets) rerun against the pre-Phase-1 snapshot: IDENTICAL. Path proof over 78 modules: unchanged (the one known `SESSION_DIR` difference from Phase 1).
+- All `DOCS.md` LOC headings re-derived from `wc -l`: 92 headings changed, 0 mismatches afterwards.

@@ -1,29 +1,3 @@
-"""Deterministic local fixture server for src/search/engines/google.py's redirect-resolution fix
-(process-docs/search_pipeline/ — google_goto_redirect_fix.md carries the investigation).
-
-Generated, not a trimmed copy of the real 816 KB saved page (dev/access_recovery/html/
-google_dom_probe_20260918_181820/best-noise-cancelling-headphones-2025_num10.html, gitignored,
-read directly from the absolute path during this milestone) — the same choice _fixture_site.py
-makes and for the same reason: the statement drives the page, not the other way around. The
-element chain, classes and attribute shapes below (div.MjjYud > div.A6K0A > div.N54PNb.BToiNc >
-div.kb0PBd.A9Y9g > div.yuRUbf > div.b8lM7 > span.V9tjod > a.zReHs[jsname=UWckNb][href^="/goto?
-url="] > h3.LC20lb, sibling div.kb0PBd.A9Y9g > div.VwiC3b > span.YrbPuc + text + a.vzmbzf) are
-copied verbatim from that real page's structure. Dropped: base64 inline <img> data URIs, the
-multi-KB inline <script>/<style> blocks, and Google's own chrome (login/policy/footer links,
-People Also Ask, ads, related searches) — none of it is read by google.py's parse JS before or
-after this fix.
-
-Unlike _fixture_site.py's one module-scoped server serving one fixed site to every test in its
-file, this fixture's four required test scenarios (8 happy results, 3 unhappy /goto cases mixed
-with happy ones, a duplicate-destination pair, zero results) each need genuinely different served
-content — so start_fixture_server here takes the result specs as a parameter and each test starts
-its own short-lived server, rather than mutating shared state via /_control/* between tests.
-
-/goto?url=<token> tokens are short semantic strings ("ok1", "dup_a"/"dup_b", "bad_status", ...),
-not realistic-looking base64 blobs — the real blob's bytes carry no recoverable meaning (see the
-process-docs entry), so an opaque readable token is equally faithful to what actually matters
-(a per-result opaque identifier) while being far easier to read in a test failure.
-"""
 # INFRASTRUCTURE
 import html as html_lib
 import http.server

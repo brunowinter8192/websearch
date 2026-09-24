@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""Yandex Search go/no-go probe — empirically checks scrapeability of yandex.com, one of the few
-remaining INDEPENDENT web indexes (own crawler, distinct from Google/Bing) — a genuine new-coverage
-candidate for the general axis, and a hard anti-bot target (Yandex SmartCaptcha), in the Brave league.
-
-Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
-below is a copy of the shape used by src/search/browser.py, not a shared import.
-
-Decision criterion (relaxed, per task): DROP only if there is truly no way through — blocked from
-the very first query, never a single usable result. A handful of clean hits before any eventual
-block is a CANDIDATE (real usage is 3-4 queries every few days — comfortably inside any clean
-window observed), same reasoning that landed Brave as a production candidate. Quality (relevance
-of results, especially for German/Western queries against a Russia-based index) is tracked as a
-SEPARATE axis from access/blocking.
-
-Empirical finding: `https://yandex.com/search/?text=<q>` (yandex.com, NOT yandex.ru) redirects to
-`&lr=<region_id>` (a region parameter, auto-detected from IP geolocation — no block, no consent
-step) and renders full results immediately. The old `li.serp-item` container selector is STILL the
-live shape (confirmed via direct DOM inspection) — title is `a.OrganicTitle-Link` (direct href, NO
-URL-wrapping/redirect unlike Bing's ck/a), snippet is `.OrganicText .OrganicTextContentSpan`.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -53,7 +33,6 @@ LATENCY_GATE_S = 5.0
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
 
-# Same query set as 26_brave_probe.py / 28_bing_probe.py (mixed axes, DE+EN)
 QUERIES = [
     ("beste kaffeemaschine test", "mainstream-de"),
     ("python asyncio tutorial", "docs-en"),
@@ -136,12 +115,10 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Kill stale Chrome processes using our session dir
 def _kill_stale_chrome() -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
 
 
-# Build Chrome options matching the production stealth-browser shape
 def _build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.headless = not os.environ.get("SEARXNG_HEADED")
@@ -155,7 +132,6 @@ def _build_options() -> ChromiumOptions:
     return options
 
 
-# Get or create the shared browser + a fresh tab per query
 async def _new_tab():
     global _browser
     if _browser is None:
@@ -165,7 +141,6 @@ async def _new_tab():
     return await _browser.new_tab()
 
 
-# Close a tab via browser-level Target.closeTarget
 async def _kill_tab(tab) -> None:
     global _browser
     target_id = getattr(tab, "_target_id", None)
@@ -181,7 +156,6 @@ async def _kill_tab(tab) -> None:
         _browser._tabs_opened.pop(target_id, None)
 
 
-# Cleanup browser on shutdown
 async def close_browser() -> None:
     global _browser
     if _browser is not None:
@@ -189,7 +163,6 @@ async def close_browser() -> None:
         _browser = None
 
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -197,7 +170,6 @@ def _extract_value(result):
         return None
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -208,7 +180,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Query DOM for li.serp-item containers and return result dicts (direct hrefs, no unwrap needed)
 async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -221,7 +192,6 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     return [item for item in items[:max_results] if item.get("url")]
 
 
-# Diagnose CAPTCHA/block trigger via title/body marker scan (EN + RU phrasing) + URL path check
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)
@@ -234,7 +204,6 @@ async def _diagnose(tab) -> dict:
     return diag
 
 
-# Run one query end-to-end (new tab -> go_to -> wait/diagnose -> kill tab), return a data record
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Google smoke test — invokes GoogleEngine().search() for 30 baseline queries."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -56,12 +55,10 @@ async def run_smoke_test() -> None:
 
 # FUNCTIONS
 
-# Load queries from file, one per line, skip blank lines
 def load_queries(path: Path) -> list[str]:
     return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-# Run one query, return record dict
 async def run_query(engine: GoogleEngine, query: str) -> dict:
     record: dict = {"query": query, "count": 0, "sample_urls": [], "status": "EMPTY", "elapsed_ms": 0}
     try:
@@ -75,7 +72,6 @@ async def run_query(engine: GoogleEngine, query: str) -> dict:
     return record
 
 
-# Write markdown report and return path
 def write_report(records: list[dict], report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"google_smoke_{ts}.md"

@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 
 from _docs_probe_config import ENGINE_NAMES, QUERIES, SUFFIX
 
-# H1-H13: (code, description, match_fn(host_no_www, path) -> bool)
 HEURISTICS: list[tuple[str, str, object]] = [
     ("H1",  "docs subdomain",        lambda h, p: h.startswith("docs.")),
     ("H2",  "readthedocs",           lambda h, p: ".readthedocs.io" in h),
@@ -34,7 +33,6 @@ MISS_SET_MIN = 2
 
 # FUNCTIONS
 
-# Write markdown report; return path
 def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"docs_probe_{ts}.md"
@@ -42,7 +40,6 @@ def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     return path
 
 
-# Assemble all 8 report sections
 def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     lines = [
         f"# Docs Domain Probe — {ts}",
@@ -65,7 +62,6 @@ def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     return lines
 
 
-# Section 2: Per-Query URL Listings
 def _section_url_listings(all_runs: dict) -> list[str]:
     lines = ["## Per-Query URL Listings", ""]
     for qi, base_query in enumerate(QUERIES, 1):
@@ -89,7 +85,6 @@ def _section_url_listings(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 3: Global Domain Frequency Table
 def _section_global_domain_freq(all_runs: dict) -> list[str]:
     eng_counters: dict[str, Counter] = {name: Counter() for name in ENGINE_NAMES}
     query_presence: dict[str, set] = defaultdict(set)
@@ -137,7 +132,6 @@ def _section_global_domain_freq(all_runs: dict) -> list[str]:
 
 
 
-# Section 4: Heuristic Coverage Matrix (H1-H13 + matches-none)
 def _section_heuristic_coverage_matrix(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
     total_urls = len(all_results)
@@ -195,7 +189,6 @@ def _count_heuristic_matches(all_results: list[dict]) -> tuple[dict, dict, int, 
     return h_totals, h_eng, none_total, none_eng
 
 
-# Section 5: Top-N Inspection Table (domain + heuristic codes + 3 sample paths)
 def _section_top_n_inspection(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
 
@@ -243,7 +236,6 @@ def _section_top_n_inspection(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 6: Miss Set Analysis (domains count ≥ MISS_SET_MIN that match no heuristic)
 def _section_miss_set_analysis(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
 
@@ -288,7 +280,6 @@ def _section_miss_set_analysis(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 7: Per-Engine Domain Distribution (top 15 per engine)
 def _section_per_engine_distribution(all_runs: dict) -> list[str]:
     eng_counters: dict[str, Counter] = {name: Counter() for name in ENGINE_NAMES}
     for results in all_runs.values():
@@ -313,7 +304,6 @@ def _section_per_engine_distribution(all_runs: dict) -> list[str]:
     return lines
 
 
-# Section 8: Run Stats
 def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     lines = ["## Run Stats", ""]
     lines += [
@@ -335,7 +325,6 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     return lines
 
 
-# Apply H1-H13; return list of matched HEURISTIC_KEYS (strips www. before matching)
 def _match_heuristics(url: str) -> list[str]:
     try:
         parsed = urlparse(url)
@@ -352,7 +341,6 @@ def _match_heuristics(url: str) -> list[str]:
         return []
 
 
-# Extract bare domain (strip www.) from URL for frequency counting
 def _domain(url: str) -> str:
     try:
         host = urlparse(url).netloc.lower()

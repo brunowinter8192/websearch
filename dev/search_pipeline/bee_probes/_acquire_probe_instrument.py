@@ -7,18 +7,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-# --- Monkey-patches on RateLimiter BEFORE any other src imports ---
-# Dynamic import avoids static 'from src.' hook in dev/ scripts (same pattern as cdp_starvation_probe.py)
 _rl_mod = importlib.import_module("src.search.rate_limiter")
 RateLimiter = _rl_mod.RateLimiter
 
-_acq_events: list[tuple[str, str, float]] = []  # (engine, event, ts_monotonic)
+_acq_events: list[tuple[str, str, float]] = []
 
 
 # FUNCTIONS
 
 def _get_name(limiter) -> str:
-    """Reverse-lookup engine name from _limiters dict by instance identity."""
     for name, lim in _rl_mod._limiters.items():
         if lim is limiter:
             return name
@@ -26,11 +23,6 @@ def _get_name(limiter) -> str:
 
 
 class _WatchedLock:
-    """Wraps asyncio.Lock to record lock_attempt / lock_granted / lock_released|lock_stuck.
-
-    lock_stuck = lock.locked() is True after __aexit__ completes — Python 3.14 regression signal.
-    """
-
     def __init__(self, real: asyncio.Lock, limiter) -> None:
         self._real = real
         self._limiter = limiter
@@ -47,7 +39,6 @@ class _WatchedLock:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         result = await self._real.__aexit__(exc_type, exc_val, exc_tb)
-        # Distinguish correct release from stuck lock (Python 3.14 non-release hypothesis)
         evt = "lock_stuck" if self._real.locked() else "lock_released"
         _acq_events.append((_get_name(self._limiter), evt, time.monotonic()))
         return result
@@ -77,4 +68,3 @@ async def _patched_acquire(self) -> None:
 
 RateLimiter.__init__ = _patched_init
 RateLimiter.acquire = _patched_acquire
-# --- End monkey-patches ---

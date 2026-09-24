@@ -1,27 +1,4 @@
 # INFRASTRUCTURE
-"""
-Verification script for TASK 1 (7u5) — deterministic pydoll tab teardown.
-
-Three tests:
-  1. Single hung tab (about:blank + never-resolving Promise) + kill_tab: wall ~= watchdog
-     (<8s), registry clean.
-  2. Single normal tab (about:blank, completes OK) + kill_tab: completes fine, registry clean.
-  3. Parallel batch of N=5 hung tabs via asyncio.gather (mirrors production fanout):
-     all 5 tabs cleaned deterministically, Target.getTargets count back to baseline,
-     wall ~= watchdog (NOT 5x65s).
-
-Hang simulation: about:blank + execute_script("return new Promise(function() {})",
-await_promise=True). Browser process stays fully responsive (contrast: chrome://hang stalls
-browser IPC too, making close_target itself slow — that's not the production scenario).
-
-Measurement: Target.getTargets via browser connection (CDP) as primary tab-count metric —
-reliable on macOS where pgrep --type=renderer reports 0 for headless Chrome.
-
-Usage (from project root):
-    ./venv/bin/python dev/search_pipeline/24_pydoll_teardown_verify.py
-
-Output: MD report to dev/search_pipeline/md/teardown_verify_<ts>.md + stdout summary.
-"""
 import asyncio
 import importlib
 import subprocess
@@ -30,19 +7,16 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Add project root to path so production modules are importable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-# Import production modules via importlib — avoids the `from src.` module-level
-# pattern restriction (this is an integration test of production code, not a dev probe)
 _browser_mod = importlib.import_module("src.search.browser")
 get_tab = _browser_mod.get_tab
 new_tab = _browser_mod.new_tab
 kill_tab = _browser_mod.kill_tab
 
 WATCHDOG = 5.0
-FAST_THRESHOLD_MS = 8000   # generous: watchdog(5s) + kill_tab overhead(< 3s)
-BATCH_N = 5                # mirrors 5-engine pydoll fanout
+FAST_THRESHOLD_MS = 8000
+BATCH_N = 5
 
 REPORT_DIR = Path(__file__).parent / "md"
 
@@ -94,7 +68,6 @@ async def pydoll_teardown_verify_workflow() -> None:
 
 # FUNCTIONS
 
-# Count Chrome renderer processes via pgrep --type=renderer flag in args
 def _count_renderers() -> int:
     result = subprocess.run(
         ["pgrep", "-c", "-f", "--type=renderer"],
@@ -106,8 +79,6 @@ def _count_renderers() -> int:
         return 0
 
 
-# Simulate TIMEOUT_NONCOOP: chrome://hang freezes renderer — same mechanism as production hang
-# With kill_tab fix: wall time should be ~WATCHDOG, not watchdog+60s
 async def _test_kill_tab_hung(lines: list) -> dict:
     lines.append("## Test 1 — hung tab (chrome://hang) with kill_tab in finally")
     lines.append("")
@@ -147,10 +118,6 @@ async def _run_hung_op(lines: list) -> tuple:
         tab = await new_tab()
         target_id_seen = getattr(tab, '_target_id', None)
         try:
-            # about:blank load is instant; then a never-resolving JS Promise simulates
-            # the production TIMEOUT_NONCOOP scenario (execute_script waiting for CDP
-            # Runtime.evaluate response that never comes). Browser process stays responsive
-            # so close_target via browser connection completes in <100ms after cancel.
             await tab.go_to("about:blank", timeout=5)
             await tab.execute_script(
                 "return new Promise(function() {})", await_promise=True
@@ -170,7 +137,6 @@ async def _run_hung_op(lines: list) -> tuple:
     return target_id_seen, timed_out, wall_ms
 
 
-# Baseline: normal tab, no hang — kill_tab should still work correctly
 async def _test_normal_tab_cleanup(lines: list) -> dict:
     lines.append("## Test 2 — normal tab (about:blank) with kill_tab in finally")
     lines.append("")
@@ -220,8 +186,6 @@ async def _test_normal_tab_cleanup(lines: list) -> dict:
     return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
 
 
-# Count open CDP targets (tabs) via browser-level Target.getTargets — reliable on macOS headless
-# where pgrep --type=renderer returns 0. Filters to type="page" only (excludes service workers etc.)
 async def _count_cdp_targets() -> int:
     if not _browser_mod._browser:
         return 0
@@ -229,9 +193,6 @@ async def _count_cdp_targets() -> int:
     return sum(1 for t in targets if t.get('type') == 'page')
 
 
-# End-to-end: N=5 hung tabs via asyncio.gather — mirrors production 5-engine pydoll fanout.
-# All tabs hang on chrome://hang; watchdog fires on the gather; kill_tab in each finally.
-# Primary metric: CDP target count (via browser connection) back to baseline after gather.
 async def _test_batch_parallel_hung(lines: list) -> dict:
     lines.append(f"## Test 3 — parallel batch ({BATCH_N}x hung Promise) via asyncio.gather")
     lines.append("")
@@ -279,11 +240,6 @@ async def _run_batch_hung(lines: list) -> tuple[list, bool, int]:
         tid = getattr(tab, '_target_id', None)
         collected_ids.append(tid)
         try:
-            # Navigate first so the renderer is healthy (browser IPC stays responsive).
-            # Then execute a never-resolving Promise with await_promise=True — renderer
-            # waits indefinitely on the Promise; browser process stays fully responsive
-            # so close_target via browser connection completes instantly after cancel.
-            # (chrome://hang hangs Chrome's IPC too, causing close_target itself to stall.)
             await tab.go_to("about:blank", timeout=5)
             await tab.execute_script(
                 "return new Promise(function() {})", await_promise=True

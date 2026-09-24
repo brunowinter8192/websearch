@@ -1,26 +1,4 @@
 #!/usr/bin/env python3
-"""Bing Search go/no-go probe — empirically checks scrapeability of bing.com for a SECOND,
-independent access path to the Bing web index (redundant to DuckDuckGo, which already surrogates
-the same index) — symmetric to google(direct)+startpage(surrogate).
-
-Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
-below is a copy of the shape used by src/search/browser.py, not a shared import.
-
-Historical note: Bing was dropped 2026-05-04 on COVERAGE grounds (DDG already IS Bing's index —
-no new URLs) and its old selector `#b_results .b_algo` had drifted. This probe answers a DIFFERENT
-question — scrapeability + latency for redundancy, not coverage — and re-derives the CURRENT DOM
-from scratch rather than trusting the old selector.
-
-Empirical finding: `#b_results .b_algo` had NOT actually drifted in the way the drop note implied —
-`li.b_algo` containers are still present and populated (10/page). What DID change/needs handling:
-Bing wraps every organic result href in a `bing.com/ck/a?...&u=<prefixed-base64>&...` tracking
-redirect (not present historically at prior evaluation, or not documented) — the destination URL
-must be unwrapped: parse the `u` query param, strip its 2-char prefix (observed as `a1`), then
-base64-urlsafe-decode (with padding) to get the real URL. A cookie/consent banner ("Microsoft und
-unsere Drittanbieter verwenden Cookies...") is present in the DOM but is NON-BLOCKING for scraping —
-it renders as an overlay alongside full results, not a gate (unlike Google's consent redirect or
-Startpage's homepage-token flow); no click/accept step is needed to read `li.b_algo` content.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -57,7 +35,6 @@ LATENCY_GATE_S = 5.0
 MAX_WAIT_CYCLES = 20
 WAIT_INTERVAL = 0.3
 
-# Same query set as 26_brave_probe.py (mixed axes, DE+EN)
 QUERIES = [
     ("beste kaffeemaschine test", "mainstream-de"),
     ("python asyncio tutorial", "docs-en"),
@@ -139,12 +116,10 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Kill stale Chrome processes using our session dir
 def _kill_stale_chrome() -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
 
 
-# Build Chrome options matching the production stealth-browser shape
 def _build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.headless = not os.environ.get("SEARXNG_HEADED")
@@ -158,7 +133,6 @@ def _build_options() -> ChromiumOptions:
     return options
 
 
-# Get or create the shared browser + a fresh tab per query
 async def _new_tab():
     global _browser
     if _browser is None:
@@ -168,7 +142,6 @@ async def _new_tab():
     return await _browser.new_tab()
 
 
-# Close a tab via browser-level Target.closeTarget
 async def _kill_tab(tab) -> None:
     global _browser
     target_id = getattr(tab, "_target_id", None)
@@ -184,7 +157,6 @@ async def _kill_tab(tab) -> None:
         _browser._tabs_opened.pop(target_id, None)
 
 
-# Cleanup browser on shutdown
 async def close_browser() -> None:
     global _browser
     if _browser is not None:
@@ -192,7 +164,6 @@ async def close_browser() -> None:
         _browser = None
 
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -200,8 +171,6 @@ def _extract_value(result):
         return None
 
 
-# Unwrap Bing's `bing.com/ck/a?...&u=<prefixed-base64>&...` tracking redirect to the real
-# destination URL — the `u` param is base64url-encoded with a 2-char prefix (observed: "a1")
 def _clean_url(href: str) -> str:
     if not href:
         return ""
@@ -218,7 +187,6 @@ def _clean_url(href: str) -> str:
         return href
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -229,7 +197,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Query DOM for li.b_algo containers and return result dicts with unwrapped URLs
 async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -248,7 +215,6 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     return out
 
 
-# Diagnose block/CAPTCHA trigger via title/body marker scan (EN + DE phrasing)
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)
@@ -261,7 +227,6 @@ async def _diagnose(tab) -> dict:
     return diag
 
 
-# Run one query end-to-end (new tab -> go_to -> wait/diagnose -> kill tab), return a data record
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",

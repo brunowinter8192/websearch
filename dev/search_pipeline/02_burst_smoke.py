@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Burst smoke test — N queries per burst via searxng-cli search_batch, one Chrome boot per burst."""
 
 # INFRASTRUCTURE
 import argparse
@@ -66,18 +65,15 @@ async def run_burst_smoke(queries_per_burst: int, cooldown: float, max_queries: 
 
 # FUNCTIONS
 
-# Load and return parsed config.yml
 def load_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-# Load queries from file, one per line, skip blank lines
 def load_queries(path: Path) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     return [line.strip() for line in lines if line.strip()]
 
 
-# Run one batch of queries via search_batch subprocess, return per-query result records
 async def run_batch(batch_queries: list[str], batch_idx: int) -> list[dict]:
     t0 = time.monotonic()
     batch_timeout = len(batch_queries) * QUERY_TIMEOUT_S
@@ -119,14 +115,12 @@ async def run_batch(batch_queries: list[str], batch_idx: int) -> list[dict]:
                 for q in batch_queries]
 
 
-# Build per-query record dict
 def _record(query, batch_idx, status, count, domains, search_ms, sample_results, note=""):
     return {"query": query, "batch": batch_idx, "status": status,
             "count": count, "domains": domains, "search_ms": search_ms,
             "sample_results": sample_results, "note": note}
 
 
-# Parse one result block from search_batch stdout: return (result_count, list of {url, snippet})
 def parse_stdout(block: str) -> tuple[int, list[dict]]:
     if "No results found for" in block:
         return 0, []
@@ -149,16 +143,13 @@ def parse_stdout(block: str) -> tuple[int, list[dict]]:
     return count, results
 
 
-# Derive status from count, domains, stderr content and exit code
 def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str:
     if returncode != 0:
         return "ERROR"
-    # Positive results: trust the count, ignore batch-shared stderr noise
     if count > 0:
         if count >= 8 and domains >= 5:
             return "OK"
         return "SUSPECT"
-    # No results: check stderr for the actual reason
     if "CAPTCHA detected" in stderr:
         return "CAPTCHA"
     if "Rate limited" in stderr:
@@ -168,7 +159,6 @@ def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str
     return "EMPTY"
 
 
-# Extract domain from URL string
 def _domain(url: str) -> str:
     try:
         return urlparse(url.strip()).netloc
@@ -176,7 +166,6 @@ def _domain(url: str) -> str:
         return ""
 
 
-# Write markdown report and return path
 def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
                  queries_per_burst, cooldown) -> Path:
     path = report_dir / f"burst_{ts}.md"

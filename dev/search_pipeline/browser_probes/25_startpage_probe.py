@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Startpage go/no-go probe — empirically checks scrapeability of startpage.com from this IP.
-
-Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup
-below is a copy of the shape used by src/search/browser.py, not a shared import.
-
-Historical note: Startpage was dropped previously at "0/30 results, root cause unclear".
-Empirical finding here: a direct GET to /sp/search?query=... (no prior homepage visit) returns
-a degraded empty shell with zero organic results and NO captcha/block marker — the request is
-missing the per-session `sc` token embedded in the homepage's search form. That silent-empty
-behavior is the most likely explanation for the historical 0/30. This probe instead drives the
-real homepage search form (load homepage -> set #q -> click .search-btn) to get a valid session
-token, then measures actual result count/quality/block behavior per query.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -137,12 +124,10 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Kill stale Chrome processes using our session dir
 def _kill_stale_chrome() -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
 
 
-# Build Chrome options matching the production stealth-browser shape
 def _build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.headless = not os.environ.get("SEARXNG_HEADED")
@@ -156,7 +141,6 @@ def _build_options() -> ChromiumOptions:
     return options
 
 
-# Get or create the shared browser + a fresh tab per query
 async def _new_tab():
     global _browser
     if _browser is None:
@@ -166,7 +150,6 @@ async def _new_tab():
     return await _browser.new_tab()
 
 
-# Close a tab via browser-level Target.closeTarget
 async def _kill_tab(tab) -> None:
     global _browser
     target_id = getattr(tab, "_target_id", None)
@@ -182,7 +165,6 @@ async def _kill_tab(tab) -> None:
         _browser._tabs_opened.pop(target_id, None)
 
 
-# Cleanup browser on shutdown
 async def close_browser() -> None:
     global _browser
     if _browser is not None:
@@ -190,7 +172,6 @@ async def close_browser() -> None:
         _browser = None
 
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -198,9 +179,6 @@ def _extract_value(result):
         return None
 
 
-# Drive the real homepage search form (native-setter input + real button click) to obtain
-# a valid per-session `sc` token; a direct GET to /sp/search?query=... skips this token and
-# silently returns zero results (empirically verified — see module docstring).
 async def _submit_search(tab, query: str) -> None:
     await tab.go_to(HOME_URL, timeout=10.0)
     await asyncio.sleep(1.5)
@@ -215,7 +193,6 @@ async def _submit_search(tab, query: str) -> None:
     await tab.execute_script("document.querySelector('button.search-btn').click();")
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -226,7 +203,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Query DOM for div.result containers and return result dicts
 async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -239,8 +215,6 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     return [item for item in items[:max_results] if item.get("url")]
 
 
-# Diagnose why Startpage returned zero div.result — distinguishes explicit block/captcha
-# markers from a bare degraded-shell page (loaded, no marker, no results, wrong URL path)
 async def _diagnose_empty(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)
@@ -259,7 +233,6 @@ async def _diagnose_empty(tab) -> dict:
     return diag
 
 
-# Run one query end-to-end, return a data record for the report
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",

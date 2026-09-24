@@ -1,9 +1,6 @@
-"""Shared text utilities for dev/search_pipeline analysis scripts."""
-
 # INFRASTRUCTURE
 import re
 
-# Combined EN + DE stopwords — no NLTK dependency
 STOPWORDS = {
     "a","about","above","after","again","all","also","although","among","an","and","any",
     "are","as","at","be","because","been","before","being","between","both","but","by",
@@ -27,7 +24,6 @@ STOPWORDS = {
     "weil","wenn","werden","wie","will","wir","wird","wo","wurde","zum","zur","zu",
 }
 
-# Bloat detection patterns (derived from Phase A eyeball of actual snippets)
 _BLOAT = [
     ("B1_url_breadcrumb",   re.compile(r'›')),
     ("B2_read_more",        re.compile(r'\bRead more\b')),
@@ -44,12 +40,10 @@ _BLOAT = [
 
 # FUNCTIONS
 
-# Return set of bloat indicator IDs that fire on text
 def detect_bloat(text: str) -> set[str]:
     return {name for name, pat in _BLOAT if pat.search(text)}
 
 
-# Remove Google doubled title+domain prefix (heuristic: maximize cut across all repeated-chunk matches)
 def _strip_doubled_prefix(text: str) -> str:
     if len(text) < 60:
         return text
@@ -68,7 +62,6 @@ def _strip_doubled_prefix(text: str) -> str:
     return text[best_cut:] if best_cut else text
 
 
-# Strip bloat patterns from text and return cleaned string
 def strip_bloat(text: str) -> str:
     text = _strip_doubled_prefix(text)
     text = re.sub(r'^Web results', '', text)
@@ -84,7 +77,6 @@ def strip_bloat(text: str) -> str:
     return ' '.join(text.split())
 
 
-# Ratio of unique non-stopword content words (≥3 chars) to all word tokens
 def lexical_density(text: str) -> float:
     words = re.findall(r'\b[a-zA-ZäöüÄÖÜßé]{3,}\b', text.lower())
     if not words:

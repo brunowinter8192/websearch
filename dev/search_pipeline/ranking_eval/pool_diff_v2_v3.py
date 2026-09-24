@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Pool diff — v2 vs v3 reference sets.
-
-Compares URL sets and engine counts for all 16 (mode × query) pairs between
-the v2 reference dir and a v3 ts_dir. Writes pool_diff_v2_vs_v3.md.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/pool_diff_v2_v3.py [--v3-dir PATH]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -47,7 +38,6 @@ def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# Load pool URLs from pool.json; return (set_of_urls, google_count, engine_stat_dict)
 def _load_pool(path: Path) -> tuple[set[str], int, dict]:
     d = json.loads(path.read_text(encoding="utf-8"))
     urls = {m["url"] for m in d["pool"]}
@@ -56,12 +46,7 @@ def _load_pool(path: Path) -> tuple[set[str], int, dict]:
     return urls, google_count, engine_stats
 
 
-# Load engine summary JSON for a ts_dir (engine_report_summary.md has no JSON — read each pool.json)
 def _engine_ok_counts(ts_dir: Path) -> dict[str, dict[str, int]]:
-    """Return {engine: {ok: N, total: N}} from engine_report.md files — parse pool JSONs instead."""
-    # Pool JSONs don't carry engine stats; we rebuild from per-pair pool.json google_count field
-    # and from parsing engine_report.md files.
-    # Simpler: read engine_report_summary.md text table per ts_dir.
     summary = ts_dir / "engine_report_summary.md"
     if not summary.exists():
         return {}
@@ -86,7 +71,6 @@ def _engine_ok_counts(ts_dir: Path) -> dict[str, dict[str, int]]:
     return result
 
 
-# Compute per-pair diff rows
 def _compute_rows(v3_dir: Path) -> list[dict]:
     rows = []
     for mode in MODES:
@@ -122,7 +106,6 @@ def _compute_rows(v3_dir: Path) -> list[dict]:
     return rows
 
 
-# Compute per-engine OK% for v2 and v3 from their summary MDs
 def _compute_engine_rows(v2_dir: Path, v3_dir: Path) -> list[dict]:
     v2_eng = _engine_ok_counts(v2_dir)
     v3_eng = _engine_ok_counts(v3_dir)
@@ -144,7 +127,6 @@ def _compute_engine_rows(v2_dir: Path, v3_dir: Path) -> list[dict]:
     return result
 
 
-# Write pool_diff_v2_vs_v3.md
 def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
     ok_rows  = [r for r in rows if "error" not in r]
 

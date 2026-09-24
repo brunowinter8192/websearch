@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""
-clean_pool.py — Filter helper + oracle cleanup for 7-engine eval.
-
-filter_pool(pool, drop_engines) removes drop_engines from each entry's
-engines+positions; drops URLs whose engines list becomes empty after filter.
-min_position is recomputed from remaining positions; falls back to original
-when positions is absent (v2 schema pool entries).
-
-When run as script: generates <pair>_oracle_v3clean.json for all 16 (mode × query)
-pairs in the v2 ts_dir, backfilling 4 loss pairs where google/semantic_scholar picks
-are unavailable after the engine filter.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/clean_pool.py [--v2-dir PATH]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -33,9 +18,6 @@ QUERIES = [
 ]
 DROP_ENGINES = {"google", "semantic_scholar"}
 
-# Hardcoded backfill picks per loss pair {mode_slug: [{url, rationale}]}
-# Selection criterion: canonical/authoritative source for the query, NOT SEO/listicle.
-# Each backfill pick was chosen from the filtered pool (min_position rank), engine provenance noted.
 _BACKFILL: dict[str, list[dict]] = {
     "general_transformer_attention_mechanis": [
         {
@@ -114,7 +96,6 @@ def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# Remove drop_engines from pool entries; drop URLs that become engine-less
 def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
     result = []
     for entry in pool:
@@ -131,7 +112,6 @@ def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
     return result
 
 
-# Load pool + oracle, compute survivors + backfill, write oracle_v3clean.json; return summary row
 def _process_pair(v2_dir: Path, mode: str, query: str, slug: str, pair_key: str) -> dict:
     pool_file   = next(v2_dir.glob(f"{pair_key}*_pool.json"),   None)
     oracle_file = next(v2_dir.glob(f"{pair_key}*_oracle.json"), None)
@@ -183,7 +163,6 @@ def _process_pair(v2_dir: Path, mode: str, query: str, slug: str, pair_key: str)
     }
 
 
-# Write oracle_v3clean_summary.md
 def _write_summary(v2_dir: Path, rows: list[dict]) -> None:
     loss_rows = [r for r in rows if "error" not in r and r["lost"]]
 

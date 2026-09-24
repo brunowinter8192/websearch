@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""
-With-Google decoupling smoke — verifies Scholar is absent from default engine set.
-
-Tests the production _select_engines(None) path end-to-end:
-  - Google browser engine IS in the set
-  - google_scholar is NOT in engines_requested
-  - engines_excluded["google_scholar"] == "decoupled_from_google" in query log
-  - No status attributed to Scholar at all (it never fired)
-
-Runs 5 queries through search_web_workflow(query, engines=None) — the real production
-path — then reads the last 5 lines of query_log.jsonl to verify the exclusion machinery.
-
-Output: markdown summary → dev/search_pipeline/md/with_google_decoupling_<ts>.md
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -37,7 +23,6 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_PATH = PROJECT_ROOT / "src" / "logs" / "query_log.jsonl"
 
-# 5 queries — enough to exercise the decoupling path; not a Scholar-quality smoke
 QUERIES = [
     "python asyncio concurrent programming",
     "machine learning gradient descent optimization",
@@ -84,14 +69,12 @@ async def run_smoke() -> None:
 
 # FUNCTIONS
 
-# Count current lines in query_log.jsonl; returns 0 if file absent
 def _count_log_lines() -> int:
     if not LOG_PATH.exists():
         return 0
     return sum(1 for _ in LOG_PATH.open(encoding="utf-8"))
 
 
-# Read and parse the last line of query_log.jsonl; returns {} on error
 def _read_last_log_entry() -> dict:
     if not LOG_PATH.exists():
         return {}
@@ -102,7 +85,6 @@ def _read_last_log_entry() -> dict:
         return {}
 
 
-# Verify a log entry satisfies the decoupling invariants; return result dict
 def _verify_log_entry(entry: dict, query: str) -> dict:
     engines_requested = entry.get("engines_requested", [])
     engines_excluded = entry.get("engines_excluded", {})
@@ -131,7 +113,6 @@ def _verify_log_entry(entry: dict, query: str) -> dict:
     }
 
 
-# Write markdown summary report
 def _write_report(records: list[dict], path: Path, log_lines_written: int) -> None:
     ts = path.stem.replace("with_google_decoupling_", "")
     pass_count = sum(1 for r in records if r["pass"])

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Capture Google /sorry/ block page — helper script (not a numbered experiment)."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -51,12 +50,10 @@ async def capture_sorry() -> None:
 
 # FUNCTIONS
 
-# Load and return parsed config.yml
 def load_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-# Build ChromiumOptions from config — mirrors 01_google_smoke.py
 def _build_options(cfg: dict) -> ChromiumOptions:
     bc = cfg["browser"]
     sc = cfg["stealth"]
@@ -87,7 +84,6 @@ def _build_options(cfg: dict) -> ChromiumOptions:
     return options
 
 
-# Build JS fingerprint patch string — mirrors 01_google_smoke.py
 def _build_js_patches(cfg: dict) -> str:
     patches = cfg["stealth"].get("js_patches", {})
     parts = []
@@ -130,7 +126,6 @@ def _build_js_patches(cfg: dict) -> str:
     return "\n\n".join(parts)
 
 
-# Inject SOCS consent cookie via CDP
 async def _inject_consent_cookie(tab, cfg: dict) -> None:
     cookie = cfg["google"]["consent_cookie"]
     await tab._execute_command(NetworkCommands.set_cookie(
@@ -143,7 +138,6 @@ async def _inject_consent_cookie(tab, cfg: dict) -> None:
     ))
 
 
-# Extract primitive value from pydoll execute_script result
 def _extract_scalar(result):
     if result is None:
         return None
@@ -160,7 +154,6 @@ def _extract_scalar(result):
     return str(result)
 
 
-# Start browser with fingerprint patches and consent cookie applied
 async def start_browser(cfg: dict) -> Chrome:
     session_dir = os.path.expanduser(cfg["browser"]["session_dir"])
     subprocess.run(["pkill", "-f", f"user-data-dir={session_dir}"], capture_output=True)
@@ -176,7 +169,6 @@ async def start_browser(cfg: dict) -> Chrome:
     return browser
 
 
-# Stop browser cleanly
 async def stop_browser(browser: Chrome) -> None:
     try:
         await browser.stop()
@@ -184,7 +176,6 @@ async def stop_browser(browser: Chrome) -> None:
         pass
 
 
-# Navigate to CAPTURE_URL, take screenshot and capture HTML
 async def navigate_and_capture(browser: Chrome, cfg: dict, ts: str):
     tab = await browser.new_tab()
     js = _build_js_patches(cfg)
@@ -205,7 +196,6 @@ async def navigate_and_capture(browser: Chrome, cfg: dict, ts: str):
     return url, title, html, png_path
 
 
-# Write sorry_<ts>.html and sorry_<ts>.md
 def write_outputs(url: str, title: str, html: str, png_path: Path, status: str, ts: str) -> None:
     html_path = HTML_DIR / f"sorry_{ts}.html"
     html_path.write_text(html, encoding="utf-8")

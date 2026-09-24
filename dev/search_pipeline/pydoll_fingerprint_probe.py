@@ -1,32 +1,15 @@
-"""
-Probe: measures pydoll/Chrome fingerprint against bot detection pages.
-
-Tests our current browser.py setup against bot.sannysoft.com — a page that
-runs JS checks and renders a table of PASS/FAIL results per fingerprint vector.
-
-Usage (from project root):
-    ./venv/bin/python dev/search_pipeline/pydoll_fingerprint_probe.py
-
-Output:
-    /tmp/pydoll_probe_sannysoft.png   — screenshot of full page
-    Prints JSON summary of pass/fail per check to stdout
-"""
-
 # INFRASTRUCTURE
 import asyncio
 import json
 import sys
 from pathlib import Path
 
-# Add project root to path so we can import src/
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.search.browser import new_tab, close_browser
 
 SANNYSOFT_URL = "https://bot.sannysoft.com/"
 SCREENSHOT_PATH = "/tmp/pydoll_probe_sannysoft.png"
 
-# JS that extracts the test table from bot.sannysoft.com
-# The page renders rows with class "passed" or "failed" in a <table>
 EXTRACT_RESULTS_JS = """
 (() => {
     const rows = document.querySelectorAll('table tr');
@@ -51,7 +34,6 @@ EXTRACT_RESULTS_JS = """
 })()
 """
 
-# JS to read specific high-signal navigator properties directly
 READ_NAVIGATOR_JS = """
 (() => {
     const props = {
@@ -83,7 +65,6 @@ READ_NAVIGATOR_JS = """
 })()
 """
 
-# JS to check permissions API for notifications
 CHECK_PERMISSIONS_JS = """
 (async () => {
     try {
@@ -98,7 +79,6 @@ CHECK_PERMISSIONS_JS = """
 # FUNCTIONS
 
 def _extract_value(result):
-    """Extract primitive value from CDP execute_script result dict."""
     try:
         return result["result"]["result"]["value"]
     except (KeyError, TypeError):
@@ -114,18 +94,15 @@ async def run_probe():
         print(f"[probe] Navigating to {SANNYSOFT_URL} ...")
         await tab.go_to(SANNYSOFT_URL)
 
-        # Wait for JS checks to complete
         print("[probe] Waiting 4s for JS detection checks to settle...")
         await asyncio.sleep(4)
 
-        # Screenshot
         print(f"[probe] Taking screenshot → {SCREENSHOT_PATH}")
         await tab.take_screenshot(SCREENSHOT_PATH)
         print(f"[probe] Screenshot saved.")
 
         table_results, nav_props, perm_state = await _read_probe_data(tab)
 
-        # Report
         passed, failed, unknown = _print_results_table(table_results)
         _print_navigator_reads(nav_props, perm_state)
         _print_key_signals(nav_props, perm_state, failed)
@@ -137,19 +114,16 @@ async def run_probe():
 # FUNCTIONS
 
 async def _read_probe_data(tab) -> tuple[list, dict, str]:
-    # Extract sannysoft results table
     print("[probe] Extracting sannysoft result table...")
     raw_table = await tab.execute_script(EXTRACT_RESULTS_JS)
     table_json = _extract_value(raw_table)
     table_results = json.loads(table_json) if table_json else []
 
-    # Direct navigator reads
     print("[probe] Reading navigator properties...")
     raw_nav = await tab.execute_script(READ_NAVIGATOR_JS)
     nav_json = _extract_value(raw_nav)
     nav_props = json.loads(nav_json) if nav_json else {}
 
-    # Permissions check (async JS)
     print("[probe] Checking permissions API...")
     raw_perm = await tab.execute_script(CHECK_PERMISSIONS_JS, await_promise=True)
     perm_state = _extract_value(raw_perm) or "error"
@@ -198,7 +172,6 @@ def _print_key_signals(nav_props: dict, perm_state: str, failed: list) -> None:
 
 
 def _print_json_summary(passed: list, failed: list, unknown: list, table_results: list, nav_props: dict, perm_state: str) -> None:
-    # Compact JSON summary for report
     summary = {
         "passed_count": len(passed),
         "failed_count": len(failed),

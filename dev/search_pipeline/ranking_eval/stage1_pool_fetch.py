@@ -1,26 +1,4 @@
 #!/usr/bin/env python3
-"""
-Stage 1 — Pool Fetch (value_eval_v3).
-
-Fetches results for 16 (mode, query) pairs (4 modes × 4 queries).
-Writes per-pair pool.json + engine_report.md, then engine_report_summary.md.
-
-No URL filter applied — C-methods (BM25, Cross-Encoder) handle topic relevance from
-title+snippet. Query modifier (+book / +pdf / +documentation) still biases engine results.
-
-pool.json schema:
-  pool      — oracle input + C1/C2'/C3: capped_pool sorted by URL, ALL fields
-               (url / title / snippet / engines / min_position / positions)
-  pool_full — C2 BM25 vanilla: full_pool (all deduped results) sorted by URL, ALL fields
-
-positions: {engine_name: rank} — per-engine position (additive v3 field; Methods 2-5 RRF).
-Invariants: set(engines)==set(positions.keys()), min_position==min(positions.values()).
-
-Oracle workers: read pool[*].{url, title, snippet} only — ignore engines/min_position/positions.
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/stage1_pool_fetch.py [--smoke] [--ts-dir PATH]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -37,10 +15,8 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-# From rerank_probe_smoke.py: browser lifecycle + engine fanout (re-exports from src/)
 from rerank_probe_smoke import close_browser, _query_engines_concurrent, _select_engines
 
-# From bm25_sweep_smoke.py: pool builder (merge raw results by URL)
 from bm25_sweep_smoke import _build_pool
 
 from _stage1_pool_fetch_report import _save_engine_report, _save_engine_summary
@@ -102,12 +78,10 @@ async def run_pool_fetch(smoke: bool, ts_dir_arg: Path | None) -> Path:
 
 # FUNCTIONS
 
-# Slug for file naming — must match stage3/stage4 _query_slug
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-# Build query_modifier_map for the given mode (None for general)
 def _modifier_map(mode: str) -> dict | None:
     if mode == "books": return {e: (lambda q: f"{q} book")          for e in _MODE_ENGINES}
     if mode == "pdf":   return {e: (lambda q: f"{q} pdf")           for e in _MODE_ENGINES}
@@ -115,12 +89,10 @@ def _modifier_map(mode: str) -> dict | None:
     return None
 
 
-# Cap raw results to position <= K then dedup into pool dicts
 def _build_capped_pool(raw_results: list, K: int) -> list[dict]:
     return _build_pool([r for r in raw_results if r.position <= K])
 
 
-# Attach positions: {engine: rank} to each pool entry from the matching raw_results slice
 def _attach_positions(raw_results: list, pool: list[dict]) -> None:
     pos_map: dict[str, dict[str, int]] = {}
     for r in raw_results:
@@ -132,7 +104,6 @@ def _attach_positions(raw_results: list, pool: list[dict]) -> None:
         m["positions"] = pos_map.get(m["url"], {})
 
 
-# Fetch + save pool.json + engine_report.md for one pair; return summary metadata
 async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> dict:
     qmm = _modifier_map(mode)
 
@@ -175,7 +146,6 @@ async def _run_one_pair(ts_dir: Path, mode: str, query: str, selected: dict) -> 
     }
 
 
-# Save pool.json — oracle input (pool) + C2 full pool (pool_full)
 def _save_pool_json(
     ts_dir: Path, mode: str, slug: str, query: str, fetched_ts: str,
     google_count: int, oracle_pool: list[dict], full_pool: list[dict],
@@ -199,7 +169,7 @@ def _save_pool_json(
         "pool_sizes": {
             "raw":             raw_count,
             "capped":          capped_count,
-            "filtered_capped": len(oracle_pool),  # = capped (no URL filter)
+            "filtered_capped": len(oracle_pool),
         },
         "pool":      [_item(m) for m in oracle_pool],
         "pool_full": [_item(m) for m in sorted(full_pool, key=lambda m: m["url"])],

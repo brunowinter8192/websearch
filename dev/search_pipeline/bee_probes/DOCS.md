@@ -11,7 +11,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 
 ## Modules
 
-### cdp_starvation_probe.py (153 LOC)
+### cdp_starvation_probe.py (132 LOC)
 
 **Purpose:** Phase 1 bee probe: tests whether asyncio event-loop starvation delays CDP events during engine cascades; always writes both outputs.
 **Reads:** `../queries.txt`.
@@ -19,7 +19,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** CLI only (`--max-queries`).
 **Calls out:** `src.search.browser`, `src.search.search_web`, the four `_cdp_starvation_probe_*` siblings.
 
-### _cdp_starvation_probe_canary.py (97 LOC)
+### _cdp_starvation_probe_canary.py (92 LOC)
 
 **Purpose:** Scheduling-latency canary task and five-bucket percentile stats for the CDP probe.
 **Reads:** none (owns `_canary_samples`).
@@ -27,7 +27,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `cdp_starvation_probe.py`, report and findings siblings.
 **Calls out:** stdlib only.
 
-### _cdp_starvation_probe_findings.py (173 LOC)
+### _cdp_starvation_probe_findings.py (172 LOC)
 
 **Purpose:** Fixed-path narrative findings document for the CDP probe, overwritten each run.
 **Reads:** none (records and report path as arguments).
@@ -35,7 +35,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `cdp_starvation_probe.py`.
 **Calls out:** instrument, canary and report siblings.
 
-### _cdp_starvation_probe_instrument.py (45 LOC)
+### _cdp_starvation_probe_instrument.py (40 LOC)
 
 **Purpose:** Passive instrumentation: pydoll message-timestamp monkeypatch plus asyncio slow-callback log handler.
 **Reads:** none (patches pydoll at import).
@@ -43,7 +43,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `cdp_starvation_probe.py`, report and findings siblings.
 **Calls out:** `pydoll.connection.connection_handler`.
 
-### _cdp_starvation_probe_report.py (211 LOC)
+### _cdp_starvation_probe_report.py (206 LOC)
 
 **Purpose:** Timestamped Markdown report for the CDP probe plus the threshold-based verdict classifier.
 **Reads:** none (arguments only).
@@ -51,7 +51,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `cdp_starvation_probe.py`, findings sibling.
 **Calls out:** instrument and canary siblings.
 
-### acquire_probe.py (170 LOC)
+### acquire_probe.py (144 LOC)
 
 **Purpose:** Phase 2 bee probe: instruments `RateLimiter.acquire()` to discriminate stale lock, backoff sleep and innocent acquire.
 **Reads:** none (live instrumented run).
@@ -59,7 +59,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** CLI only (`--max-queries`, `--smoke`).
 **Calls out:** `src.search.browser`, `src.search.search_web` (via importlib after the instrument), the five `_acquire_probe_*` siblings.
 
-### _acquire_probe_analysis.py (92 LOC)
+### _acquire_probe_analysis.py (89 LOC)
 
 **Purpose:** Per-query analysis for the acquire probe: query loading, event reduction, discriminator, aggregate ratios.
 **Reads:** `../queries.txt` path passed in.
@@ -67,7 +67,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`, report and findings siblings.
 **Calls out:** canary sibling.
 
-### _acquire_probe_canary.py (72 LOC)
+### _acquire_probe_canary.py (71 LOC)
 
 **Purpose:** Scheduling-latency canary and percentile stats for the acquire probe.
 **Reads:** none (owns `_canary_samples`).
@@ -83,7 +83,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`.
 **Calls out:** canary, analysis and report siblings.
 
-### _acquire_probe_instrument.py (80 LOC)
+### _acquire_probe_instrument.py (70 LOC)
 
 **Purpose:** Lock-watching `RateLimiter.__init__`/`acquire()` monkeypatch with enter/exit event emission, applied at import.
 **Reads:** none (patches `src.search.rate_limiter`).
@@ -99,7 +99,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`, findings sibling.
 **Calls out:** instrument, canary and analysis siblings.
 
-### branch_probe.py (196 LOC)
+### branch_probe.py (164 LOC)
 
 **Purpose:** Phase 3 bee probe: discriminates which `asyncio.sleep` branch in `RateLimiter.acquire()` fires; stops on failed cascade reproduction.
 **Reads:** none (live instrumented run).
@@ -107,7 +107,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** CLI only (`--max-queries`, `--smoke`).
 **Calls out:** `src.search.browser`, `src.search.search_web` (via importlib after the instrument), the five `_branch_probe_*` siblings.
 
-### _branch_probe_analysis.py (107 LOC)
+### _branch_probe_analysis.py (104 LOC)
 
 **Purpose:** Per-query analysis for the branch probe: limiter snapshots, event reduction, branch discriminator.
 **Reads:** `../queries.txt` path passed in; limiter state via the instrument sibling.
@@ -115,7 +115,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `branch_probe.py`.
 **Calls out:** instrument sibling.
 
-### _branch_probe_canary.py (76 LOC)
+### _branch_probe_canary.py (75 LOC)
 
 **Purpose:** Scheduling-latency canary and percentile stats for the branch probe.
 **Reads:** none (owns `_canary_samples`).
@@ -131,7 +131,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `branch_probe.py`.
 **Calls out:** canary and report siblings.
 
-### _branch_probe_instrument.py (68 LOC)
+### _branch_probe_instrument.py (58 LOC)
 
 **Purpose:** Byte-identical `RateLimiter.acquire()` replacement adding branch-discriminator event emission, applied at import.
 **Reads:** none (patches `src.search.rate_limiter`).

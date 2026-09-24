@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Free-word injection probe — measures how appending 'pdf' or 'book' shifts URL pool domain distribution."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -54,10 +53,8 @@ BROWSER_ENGINES = frozenset({"google", "google_scholar", "duckduckgo"})
 BROWSER_SLEEP_S = 1.0
 API_SLEEP_S = 0.5
 
-# PDF-relevant: literal .pdf path or known PDF-serving host
 PDF_HOSTS = frozenset({"arxiv.org", "doi.org", "dl.acm.org", "ieeexplore.ieee.org", "pmc.ncbi.nlm.nih.gov"})
 
-# Book-relevant: host-set + path-pattern rules (amazon /dp/, archive /details/, springer /book/, jstor)
 BOOK_HOSTS = frozenset({"thalia.de", "openlibrary.org", "books.google.com", "goodreads.com",
                         "gutenberg.org", "doabooks.org", "hathitrust.org"})
 
@@ -110,7 +107,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Write markdown report; return path
 def write_report(all_runs: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"free_word_injection_probe_{ts}.md"
@@ -118,7 +114,6 @@ def write_report(all_runs: dict, report_dir: Path) -> Path:
     return path
 
 
-# Assemble all report sections
 def _build_report(all_runs: dict, ts: str) -> list[str]:
     lines = [
         f"# Free-Word Injection Probe — {ts}",
@@ -133,7 +128,6 @@ def _build_report(all_runs: dict, ts: str) -> list[str]:
     return lines
 
 
-# Per-Variant URL Listings section
 def _url_listings(all_runs: dict) -> list[str]:
     lines = ["## Per-Variant URL Listings", ""]
     for qi, bq in enumerate(BASE_QUERIES, 1):
@@ -158,7 +152,6 @@ def _url_listings(all_runs: dict) -> list[str]:
     return lines
 
 
-# Domain Distribution Comparison section
 def _domain_distribution(all_runs: dict) -> list[str]:
     lines = ["## Domain Distribution Comparison", ""]
     for qi, bq in enumerate(BASE_QUERIES, 1):
@@ -202,7 +195,6 @@ def _domain_distribution(all_runs: dict) -> list[str]:
     return lines
 
 
-# Summary Insights section — top 5 bullets ranked by shift magnitude
 def _summary_insights(all_runs: dict) -> list[str]:
     lines = ["## Summary Insights", ""]
     candidates: list[tuple[int, str]] = []
@@ -242,7 +234,6 @@ def _summary_insights(all_runs: dict) -> list[str]:
     return lines
 
 
-# Aggregate domain counter + pdf/book counts for one run's result list
 def _stats(results: list[dict]) -> dict:
     domains = Counter(_domain(r["url"]) for r in results if _domain(r["url"]))
     return {
@@ -253,7 +244,6 @@ def _stats(results: list[dict]) -> dict:
     }
 
 
-# Extract bare domain (strip www. prefix) from URL
 def _domain(url: str) -> str:
     try:
         host = urlparse(url).netloc.lower()
@@ -262,7 +252,6 @@ def _domain(url: str) -> str:
         return ""
 
 
-# True if URL points to a PDF resource by path or known PDF-serving host
 def _is_pdf(url: str) -> bool:
     if urlparse(url).path.lower().endswith(".pdf"):
         return True
@@ -270,7 +259,6 @@ def _is_pdf(url: str) -> bool:
     return d in PDF_HOSTS or any(d.endswith("." + h) for h in PDF_HOSTS)
 
 
-# True if URL belongs to a book-distribution domain or matches a book-path pattern
 def _is_book(url: str) -> bool:
     d = _domain(url)
     if d in BOOK_HOSTS or any(d.endswith("." + h) for h in BOOK_HOSTS):

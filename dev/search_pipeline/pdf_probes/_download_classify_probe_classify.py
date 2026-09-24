@@ -34,7 +34,6 @@ PAYWALL_MARKERS = [
 
 # FUNCTIONS
 
-# Classify all URLs with httpx; return list of result dicts ordered as sampled_pool
 async def _classify_all(sampled_pool: list[tuple[str, str]]) -> list[dict]:
     limits = httpx.Limits(max_connections=GLOBAL_MAX_CONNECTIONS, max_keepalive_connections=GLOBAL_MAX_KEEPALIVE)
     domain_sems: dict[str, asyncio.Semaphore] = {}
@@ -60,7 +59,6 @@ async def _classify_all(sampled_pool: list[tuple[str, str]]) -> list[dict]:
     return [r for r in results if r is not None]
 
 
-# Semaphore-wrapped classify; writes result into results list at idx
 async def _classify_with_cap(
     client: httpx.AsyncClient,
     url: str,
@@ -78,7 +76,6 @@ async def _classify_with_cap(
     results[idx] = result
 
 
-# Core classification: apply transform, GET, sniff content-type + body
 async def _classify_url(client: httpx.AsyncClient, original_url: str, tier: str) -> dict:
     transformed_url = _apply_transform(original_url)
     fetch_url = transformed_url or original_url
@@ -103,7 +100,6 @@ async def _classify_url(client: httpx.AsyncClient, original_url: str, tier: str)
     return rec
 
 
-# Fresh result record for one URL, before fetch
 def _init_classify_record(original_url: str, transformed_url: str | None, tier: str) -> dict:
     return {
         "original_url": original_url,
@@ -120,7 +116,6 @@ def _init_classify_record(original_url: str, transformed_url: str | None, tier: 
     }
 
 
-# Status/content-type dispatch for one streamed response; mutates rec in place
 async def _classify_response(rec: dict, resp: httpx.Response) -> None:
     rec["status_code"] = resp.status_code
     rec["final_url"] = str(resp.url)
@@ -141,11 +136,9 @@ async def _classify_response(rec: dict, resp: httpx.Response) -> None:
         _classify_html_body(rec, body)
         return
 
-    # Non-PDF, non-HTML 200
     rec["outcome"] = "HTML_OK"
 
 
-# Single-pass read: accumulate up to HTML_READ_BYTES; check PDF magic on first bytes
 async def _read_response_body(resp: httpx.Response) -> bytes:
     body_chunks: list[bytes] = []
     bytes_read = 0
@@ -157,7 +150,6 @@ async def _read_response_body(resp: httpx.Response) -> bytes:
     return b"".join(body_chunks)
 
 
-# HTML-specific parsing: title, citation_pdf_url, paywall marker, outcome; mutates rec in place
 def _classify_html_body(rec: dict, body: bytes) -> None:
     try:
         body_str = body.decode("utf-8", errors="replace")
@@ -166,7 +158,6 @@ def _classify_html_body(rec: dict, body: bytes) -> None:
 
     rec["page_title"] = _extract_title(body_str)
 
-    # citation_pdf_url check
     m = re.search(
         r'<meta[^>]+name=["\']citation_pdf_url["\'][^>]+content=["\']([^"\']+)["\']',
         body_str, re.IGNORECASE,
@@ -180,7 +171,6 @@ def _classify_html_body(rec: dict, body: bytes) -> None:
         rec["has_citation_pdf_url"] = True
         rec["citation_pdf_url"] = m.group(1)[:200]
 
-    # Paywall marker check
     body_lower = body_str.lower()
     for marker in PAYWALL_MARKERS:
         if marker in body_lower:
@@ -195,22 +185,19 @@ def _classify_html_body(rec: dict, body: bytes) -> None:
         rec["outcome"] = "HTML_OK"
 
 
-# Apply Tier-1 URL transform; return transformed URL or None if no transform applies
 def _apply_transform(url: str) -> str | None:
     parsed = urlparse(url)
     domain = parsed.netloc.lower()
     if domain.startswith("www."):
         domain = domain[4:]
 
-    # arxiv.org: /abs/<id> or /html/<id> → /pdf/<id>
     if domain == "arxiv.org":
         path = parsed.path
         if re.match(r"^/(abs|html)/", path):
             new_path = re.sub(r"^/(abs|html)/", "/pdf/", path)
             return urlunparse(parsed._replace(path=new_path))
-        return None  # /pdf/ path — no transform needed, GET as-is
+        return None
 
-    # aclanthology.org: strip trailing slash → append .pdf (skip if already .pdf)
     if domain == "aclanthology.org":
         path = parsed.path
         if path.lower().endswith(".pdf"):
@@ -218,7 +205,6 @@ def _apply_transform(url: str) -> str | None:
         new_path = path.rstrip("/") + ".pdf"
         return urlunparse(parsed._replace(path=new_path))
 
-    # openreview.net: /forum?id=X → /pdf?id=X
     if domain == "openreview.net":
         if parsed.path == "/forum":
             return urlunparse(parsed._replace(path="/pdf"))
@@ -227,7 +213,6 @@ def _apply_transform(url: str) -> str | None:
     return None
 
 
-# Extract first <title>...</title> from HTML body; return None if not found
 def _extract_title(body: str) -> str | None:
     m = re.search(r"<title[^>]*>([^<]{1,300})</title>", body, re.IGNORECASE | re.DOTALL)
     if m:

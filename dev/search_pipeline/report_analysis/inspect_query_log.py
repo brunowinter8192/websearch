@@ -1,17 +1,3 @@
-"""Inspect query_log.jsonl — summary stats over logged queries.
-
-Usage:
-  python dev/search_pipeline/inspect_query_log.py [--tail N] [--log-path PATH] [--all-types]
-
-Log path resolution: --log-path arg → SEARXNG_QUERY_LOG_PATH env var → src/logs/query_log.jsonl
-
-Record types in the log:
-  engine_run       — written by _query_engines_concurrent (always; probes write only this type)
-  workflow_summary — written by search_web_workflow (production only; includes total_wall_ms + preview)
-  (no record_type) — old-style entries; treated as workflow_summary (backward compat)
-
-Default mode: shows workflow_summary + old-style records only. Use --all-types to include engine_run.
-"""
 import argparse
 import json
 import os
@@ -41,7 +27,6 @@ def main() -> None:
 
     all_records = [json.loads(l) for l in log_path.read_text().splitlines() if l.strip()]
 
-    # Separate by record_type; old records (no field) count as workflow_summary
     engine_run_records    = [r for r in all_records if r.get("record_type") == "engine_run"]
     workflow_records      = [r for r in all_records if r.get("record_type", "workflow_summary") != "engine_run"]
 
@@ -49,7 +34,6 @@ def main() -> None:
     print(f"Total lines  : {len(all_records)}  "
           f"(engine_run={len(engine_run_records)}, workflow_summary/old={len(workflow_records)})")
 
-    # Select working set
     records = all_records if args.all_types else workflow_records
     if args.tail:
         records = records[-args.tail:]
@@ -72,7 +56,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _print_timing_summary(records: list[dict]) -> None:
-    # Timing summary (only meaningful for workflow_summary / old records)
     summary_records = [r for r in records if r.get("record_type", "workflow_summary") != "engine_run"]
     if summary_records:
         total_wall = [r["total_wall_ms"] for r in summary_records]
@@ -83,7 +66,6 @@ def _print_timing_summary(records: list[dict]) -> None:
 
 
 def _print_status_hits(records: list[dict]) -> None:
-    # TIMEOUT / RATE_SKIP counts across selected records
     timeouts: Counter = Counter()
     rate_skips: Counter = Counter()
     for r in records:
@@ -97,7 +79,6 @@ def _print_status_hits(records: list[dict]) -> None:
 
 
 def _print_last_record(records: list[dict]) -> None:
-    # Last record detail
     prev = records[-1]
     rtype = prev.get("record_type", "old-style")
     print(f"\nLast record  : [{rtype}]  query={prev.get('query')}  ts={prev.get('ts')}")

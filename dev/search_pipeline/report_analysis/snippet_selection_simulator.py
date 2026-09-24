@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Snippet selection simulator — dry-run of new selection logic against existing smoke baseline."""
 
 # INFRASTRUCTURE
 import sys
@@ -20,12 +19,11 @@ if not _smoke_candidates:
     raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
 SMOKE_REPORT = _smoke_candidates[0]
 
-MIN_FLOOR = 40  # minimum clean_len for a non-floor snippet
+MIN_FLOOR = 40
 
 
 # ORCHESTRATOR
 
-# Run simulation over smoke report and write results
 def run_simulation() -> None:
     records = parse_smoke_report(SMOKE_REPORT)
     print(f"Parsed {len(records)} records", file=sys.stderr)
@@ -36,7 +34,6 @@ def run_simulation() -> None:
 
 # FUNCTIONS
 
-# Select best snippet under new logic; returns (source, raw_text, score, clean_len, floor_triggered) or None
 def _select_new(record: dict):
     candidates = {}
     if record["og"]:   candidates["og"]   = record["og"]
@@ -62,7 +59,6 @@ def _select_new(record: dict):
     return winner, strip_bloat(candidates[winner]), score, clean_len, floor_triggered
 
 
-# Extract aggregation totals from records × results pairs
 def _compute_aggregates(records: list[dict], results: list) -> tuple:
     no_content     = sum(1 for r in results if r is None)
     analyzed       = len(records) - no_content
@@ -84,7 +80,6 @@ def _compute_aggregates(records: list[dict], results: list) -> tuple:
     return no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n
 
 
-# Render report header metadata block
 def _render_header(ts: str) -> list[str]:
     return [
         f"# Snippet Selection Simulator — {ts}",
@@ -95,7 +90,6 @@ def _render_header(ts: str) -> list[str]:
     ]
 
 
-# Render Section 1 — summary counts and NEW source distribution tables
 def _render_summary(new_dist: dict, analyzed: int, no_content: int, floor_n: int,
                     per_class_total: dict, class_dist: dict) -> list[str]:
     L: list[str] = [
@@ -131,7 +125,6 @@ def _render_summary(new_dist: dict, analyzed: int, no_content: int, floor_n: int
     return L
 
 
-# Render Section 2 — per-query pick blocks (source, score, snippet preview)
 def _render_per_query_picks(records: list[dict], results: list) -> list[str]:
     L: list[str] = ["## 2. Per-Query Picks", ""]
     prev_qi = None
@@ -162,7 +155,6 @@ def _render_per_query_picks(records: list[dict], results: list) -> list[str]:
     return L
 
 
-# Render Section 3 — floor-triggered cases (all-below-MIN_FLOOR best-of-worst fallbacks)
 def _render_floor_cases(floor_records: list, floor_n: int) -> list[str]:
     if floor_n == 0:
         return ["## 3. Floor-Triggered Cases", "", "No floor-triggers in dataset.", ""]
@@ -178,7 +170,6 @@ def _render_floor_cases(floor_records: list, floor_n: int) -> list[str]:
     return L
 
 
-# Render and write the markdown report
 def write_report(records: list[dict], results: list) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"snippet_selection_{ts}.md"

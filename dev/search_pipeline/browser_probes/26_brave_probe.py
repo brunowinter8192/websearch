@@ -1,27 +1,4 @@
 #!/usr/bin/env python3
-"""Brave Search go/no-go probe — empirically checks the 3-condition gate for browser-scrape viability:
-real result rows + no PoW/CAPTCHA trigger + per-query wall latency consistently <= 5s, run one query
-at a time the way the production asyncio.gather pool would run each engine (no special-casing).
-
-Self-contained: does NOT import src/ (dev-script isolation) — the pydoll Chrome session setup below
-is a copy of the shape used by src/search/browser.py, not a shared import.
-
-Background: Brave was previously dropped — PoW CAPTCHA across an 8-combination pydoll stealth matrix
-(best 10/30), Patchright-with-Chromium (slider CAPTCHA instead of PoW, 0/30), Camoufox/Firefox (7/30).
-Decisive killer was latency (10-15s/query on any CAPTCHA path). The untested angle per the stealth
-resume note was Patchright with a REAL Chrome binary (channel="chrome", headless) — tried here FIRST
-(see inline exploration below the module docstring in process-docs, not in this script) and found to
-still trigger a slider CAPTCHA in headless mode (title "Captcha - Brave Search") on the very first
-query, while the SAME real-Chrome binary succeeds headed (no CAPTCHA) — i.e. headless-ness itself is
-the dominant signal for Patchright+real-Chrome against Brave, not the Chromium-vs-Chrome binary
-identity the resume note suspected. Headed is not a viable production mode (server pipeline, no
-display), so that angle is closed without a production candidate.
-
-This probe instead runs the SECOND angle from scope: the pydoll stealth stack already used by the
-production engines (src/search/browser.py fingerprint patches), which in initial hand-testing reached
-Brave's results page headless WITHOUT a CAPTCHA — the opposite of the Patchright-headless outcome.
-That is the stack measured here across the full query set.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -138,12 +115,10 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-# Kill stale Chrome processes using our session dir
 def _kill_stale_chrome() -> None:
     subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
 
 
-# Build Chrome options matching the production stealth-browser shape
 def _build_options() -> ChromiumOptions:
     options = ChromiumOptions()
     options.headless = not os.environ.get("SEARXNG_HEADED")
@@ -157,7 +132,6 @@ def _build_options() -> ChromiumOptions:
     return options
 
 
-# Get or create the shared browser + a fresh tab per query
 async def _new_tab():
     global _browser
     if _browser is None:
@@ -167,7 +141,6 @@ async def _new_tab():
     return await _browser.new_tab()
 
 
-# Close a tab via browser-level Target.closeTarget
 async def _kill_tab(tab) -> None:
     global _browser
     target_id = getattr(tab, "_target_id", None)
@@ -183,7 +156,6 @@ async def _kill_tab(tab) -> None:
         _browser._tabs_opened.pop(target_id, None)
 
 
-# Cleanup browser on shutdown
 async def close_browser() -> None:
     global _browser
     if _browser is not None:
@@ -191,7 +163,6 @@ async def close_browser() -> None:
         _browser = None
 
 
-# Extract primitive value from CDP execute_script result dict
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
@@ -199,7 +170,6 @@ def _extract_value(result):
         return None
 
 
-# Poll for result containers up to MAX_WAIT_CYCLES x WAIT_INTERVAL seconds, return True when found
 async def _wait_for_results(tab) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -210,7 +180,6 @@ async def _wait_for_results(tab) -> bool:
     return False
 
 
-# Query DOM for div[data-type="web"] containers and return result dicts
 async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     raw = await tab.execute_script(_JS_PARSE)
     value = _extract_value(raw)
@@ -223,7 +192,6 @@ async def _parse_results(tab, max_results: int = 10) -> list[dict]:
     return [item for item in items[:max_results] if item.get("url")]
 
 
-# Diagnose PoW/CAPTCHA trigger via title/body marker scan + pow-captcha help-link presence
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
     val = _extract_value(raw)
@@ -236,7 +204,6 @@ async def _diagnose(tab) -> dict:
     return diag
 
 
-# Run one query end-to-end (new tab -> go_to -> wait -> parse/diagnose -> kill tab), return a data record
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",

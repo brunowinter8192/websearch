@@ -9,7 +9,6 @@ from _cdp_starvation_probe_report import _derive_verdict
 
 # FUNCTIONS
 
-# Write findings narrative; return path
 def _write_findings(records: list[dict], report_path: Path, findings_dir: Path) -> Path:
     path = findings_dir / "01_probe.md"
     stats = _compute_stats(records)

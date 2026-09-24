@@ -1,12 +1,11 @@
 # INFRASTRUCTURE
 from pathlib import Path
 
-VANILLA_KEY = (0.75, True, "title+snippet")  # (b, sw, repr) — identifies vanilla in main grid
+VANILLA_KEY = (0.75, True, "title+snippet")
 
 
 # FUNCTIONS
 
-# Build markdown section + summary dict for one query
 def _build_query_section(
     query: str,
     pool: list[dict],
@@ -21,7 +20,6 @@ def _build_query_section(
     bm25_total_ms: int,
     classify,
 ) -> tuple[str, dict]:
-    # Locate vanilla config in grid
     vanilla_entry = next(
         r for r in grid_results
         if (r["cfg"]["b"], r["cfg"]["sw"], r["cfg"]["repr"]) == VANILLA_KEY
@@ -29,7 +27,6 @@ def _build_query_section(
     vanilla_urls = {doc["url"] for doc, _ in vanilla_entry["top20"]}
     hs_urls      = {r.url for r in hard_slot_top}
 
-    # Stability: URLs in Top-20 of ALL 16 configs
     all_url_sets = [{doc["url"] for doc, _ in r["top20"]} for r in grid_results]
     stable_urls  = set.intersection(*all_url_sets) if all_url_sets else set()
 
@@ -65,7 +62,6 @@ def _section_header(query: str, pool: list[dict], total_raw: int, engine_stats: 
 
 def _section_hard_slot(hard_slot_top: list, classify) -> list[str]:
     lines = []
-    # Section 1 — Hard-Slot table
     lines += [
         "### 1. Hard-Slot Baseline (12 General / 6 Academic / 2 QA)",
         "",
@@ -81,7 +77,6 @@ def _section_hard_slot(hard_slot_top: list, classify) -> list[str]:
 
 def _section_vanilla(vanilla_entry: dict) -> list[str]:
     lines = []
-    # Section 2 — Vanilla BM25 table
     lines += [
         "### 2. Vanilla BM25 (k1=1.2, b=0.75, stopwords=on, doc_repr=title+snippet)",
         "",
@@ -96,7 +91,6 @@ def _section_vanilla(vanilla_entry: dict) -> list[str]:
 
 def _section_main_grid(grid_results: list[dict], vanilla_urls: set, hs_urls: set) -> list[str]:
     lines = []
-    # Section 3 — Main-grid sensitivity table
     lines += [
         "### 3. Main-Grid Sensitivity (16 configs)",
         "",
@@ -116,7 +110,6 @@ def _section_main_grid(grid_results: list[dict], vanilla_urls: set, hs_urls: set
 
 def _section_k1(k1_results: list[dict], vanilla_urls: set) -> list[str]:
     lines = []
-    # Section 4 — k1 sensitivity table
     lines += [
         "### 4. k1 Sensitivity (b=0.75, sw=on, repr=title+snippet)",
         "",
@@ -132,7 +125,6 @@ def _section_k1(k1_results: list[dict], vanilla_urls: set) -> list[str]:
 
 def _section_stability(stable_urls: set) -> list[str]:
     lines = []
-    # Section 5 — Stability
     lines += [
         "### 5. Top-20 Stability across 16 Main-Grid Configs",
         "",
@@ -144,7 +136,6 @@ def _section_stability(stable_urls: set) -> list[str]:
 
 def _section_differences(hs_urls: set, vanilla_urls: set) -> list[str]:
     lines = []
-    # Section 6 — Differences Hard-Slot vs Vanilla BM25
     only_hs      = hs_urls - vanilla_urls
     only_vanilla = vanilla_urls - hs_urls
     overlap_hv   = _overlap(hs_urls, vanilla_urls)
@@ -190,7 +181,6 @@ def _query_summary(query: str, pool: list[dict], total_raw: int, stable_urls: se
     }
 
 
-# Write full markdown report: header + global summary + per-query sections
 def _write_report(
     sections: list[str], summaries: list[dict], path: Path, total_ms: int, top_n: int
 ) -> None:
@@ -226,6 +216,5 @@ def _write_report(
     path.write_text("\n\n---\n\n".join(all_parts), encoding="utf-8")
 
 
-# Count URL overlap between two URL sets
 def _overlap(a: set, b: set) -> int:
     return len(a & b)

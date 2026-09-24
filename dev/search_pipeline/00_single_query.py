@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Single-query debug runner — inline flow with DOM diagnostics."""
 
 import asyncio
 import importlib.util
@@ -73,7 +72,6 @@ async def _navigate_and_report(tab, search_url: str, rc: dict) -> None:
 
 
 async def _print_dom_snapshot(tab) -> None:
-    # DOM snapshot
     diag_js = """return JSON.stringify({
     consent_text: (document.body||{innerText:''}).innerText.indexOf('Before you continue') !== -1,
     rso_h3: document.querySelectorAll('#rso h3').length,
@@ -95,7 +93,6 @@ async def _print_dom_snapshot(tab) -> None:
 
 
 async def _print_h3_structure(tab) -> None:
-    # Per-h3 structure debug (first 3 h3s) — no IIFE, direct statements
     struct_js = """var _sh3s = document.querySelectorAll('#rso h3');
 var _sout = [];
 for (var _si = 0; _si < Math.min(_sh3s.length, 3); _si++) {
@@ -129,7 +126,6 @@ return JSON.stringify(_sout);"""
 
 
 async def _print_parsed_results(tab, gc: dict) -> None:
-    # Parse via smoke parse_js
     parse_js = gc["selectors"]["parse_js"]
     raw2 = await tab.execute_script(parse_js)
     val2 = _extract_scalar(raw2)

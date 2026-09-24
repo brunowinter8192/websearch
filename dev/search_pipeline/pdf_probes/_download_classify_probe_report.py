@@ -11,7 +11,6 @@ from _download_classify_probe_classify import (
 
 # FUNCTIONS
 
-# Write the markdown report; return path
 def _write_report(
     results: list[dict],
     sampled_pool: list[tuple[str, str]],
@@ -28,7 +27,6 @@ def _write_report(
     return path
 
 
-# Assemble all report sections; return list of lines
 def _build_report(
     results: list[dict],
     sampled_pool: list[tuple[str, str]],
@@ -50,7 +48,6 @@ def _build_report(
     return lines
 
 
-# Section 1 — Run Metadata
 def _section_metadata(
     results: list[dict],
     sampled_pool: list[tuple[str, str]],
@@ -91,7 +88,6 @@ def _section_metadata(
     ]
 
 
-# Section 2 — Per-Domain Aggregate Table
 def _section_domain_aggregate(results: list[dict]) -> list[str]:
     by_domain: dict[str, list[dict]] = defaultdict(list)
     for r in results:
@@ -130,7 +126,6 @@ def _section_domain_aggregate(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 3 — Tier-1 Transform Effectiveness
 def _section_tier1_transforms(results: list[dict]) -> list[str]:
     t1_results = [r for r in results if r["tier"] == "T1"]
     by_domain: dict[str, list[dict]] = defaultdict(list)
@@ -174,7 +169,6 @@ def _section_tier1_transforms(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 4 — HTML_HAS_PDF_LINK Sample (first 30)
 def _section_html_pdf_link_sample(results: list[dict]) -> list[str]:
     pdf_link_results = [r for r in results if r["outcome"] == "HTML_HAS_PDF_LINK"]
     lines = [
@@ -193,7 +187,6 @@ def _section_html_pdf_link_sample(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 5 — HTML_PAYWALL Sample (first 30)
 def _section_paywall_sample(results: list[dict]) -> list[str]:
     paywall_results = [r for r in results if r["outcome"] == "HTML_PAYWALL"]
     lines = [
@@ -212,7 +205,6 @@ def _section_paywall_sample(results: list[dict]) -> list[str]:
     return lines
 
 
-# Section 6 — Per-URL Detail Table
 def _section_per_url_detail(results: list[dict]) -> list[str]:
     sorted_results = sorted(results, key=lambda r: (_base_domain(r["original_url"]), r["original_url"]))
 

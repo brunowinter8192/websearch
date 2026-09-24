@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Docs domain probe — appends '+documentation' to 12 broad tech queries across Google, DDG.
-
-Evaluates H1-H13 heuristics against the raw URL pool to inform --docs CLI flag design.
-Generates: heuristic coverage matrix, top-domain inspection with H-codes, miss-set analysis.
-"""
 
 # INFRASTRUCTURE
 import asyncio

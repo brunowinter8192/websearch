@@ -11,7 +11,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 
 ## Modules
 
-### 00_single_query.py (159 LOC)
+### 00_single_query.py (155 LOC)
 
 **Purpose:** Single-query debug runner: hits one Google query via `01_google_smoke.py` helpers and prints DOM diagnostics to stdout.
 **Reads:** `config.yml`; query from `sys.argv[1]`.
@@ -19,7 +19,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `pydoll`; `01_google_smoke.py` (loaded via importlib).
 
-### 01_google_smoke.py (125 LOC)
+### 01_google_smoke.py (121 LOC)
 
 **Purpose:** Google production-mode smoke: `GoogleEngine().search()` per query, status OK/EMPTY.
 **Reads:** `queries.txt`.
@@ -27,7 +27,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI; loaded by `00_single_query.py` via importlib.
 **Calls out:** `src.search.engines.google`, `src.search.browser`.
 
-### 02_burst_smoke.py (284 LOC)
+### 02_burst_smoke.py (273 LOC)
 
 **Purpose:** Burst smoke against the production CLI: one `cli.py search_batch` subprocess per query batch.
 **Reads:** `config.yml`, `queries.txt`.
@@ -35,7 +35,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only (`--queries-per-burst`, `--cooldown`, `--max-queries`).
 **Calls out:** `cli.py` (subprocess), `yaml`.
 
-### 04_ddg_smoke.py (125 LOC)
+### 04_ddg_smoke.py (121 LOC)
 
 **Purpose:** DuckDuckGo production-mode smoke via `DuckDuckGoEngine`, same pattern as `01_google_smoke.py`.
 **Reads:** `queries.txt`.
@@ -43,7 +43,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.duckduckgo`, `src.search.browser`.
 
-### 05_search_smoke.py (235 LOC)
+### 05_search_smoke.py (223 LOC)
 
 **Purpose:** Multi-engine comparison smoke: per-engine fanout, merge by URL keeping per-engine snippets, bypassing `_merge_and_rank`.
 **Reads:** `queries.txt`.
@@ -51,7 +51,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only (`--engines`, `--max-queries`).
 **Calls out:** `src.search.browser`, `src.search.engines.{google,duckduckgo,scholar,openalex}`, `src.search.result`.
 
-### 08_scholar_smoke.py (134 LOC)
+### 08_scholar_smoke.py (129 LOC)
 
 **Purpose:** Google Scholar production-mode smoke with status taxonomy OK/EMPTY/SUSPECT/ERROR.
 **Reads:** `queries.txt`.
@@ -59,7 +59,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.scholar`, `src.search.browser`.
 
-### 09_openalex_smoke.py (121 LOC)
+### 09_openalex_smoke.py (117 LOC)
 
 **Purpose:** OpenAlex smoke over pure HTTP with status taxonomy OK/EMPTY/RATE_LIMITED/ERROR.
 **Reads:** `queries.txt`.
@@ -67,7 +67,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.openalex`.
 
-### 11_pipeline_smoke.py (391 LOC)
+### 11_pipeline_smoke.py (369 LOC)
 
 **Purpose:** Full-pipeline smoke through `search_web_workflow`; produces the baseline report other analysis scripts consume.
 **Reads:** `queries.txt`; cache via `cache_key`/`cache_read`.
@@ -75,7 +75,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only (`--max-queries`, `--language`, `--engine-timeout`, `--report-prefix`); output consumed by `report_analysis/`.
 **Calls out:** `src.search.browser`, `src.search.cache`, `src.search.search_web`.
 
-### 12_max_results_probe.py (173 LOC)
+### 12_max_results_probe.py (168 LOC)
 
 **Purpose:** Per-engine single-call ceiling probe: one high-`max_results` call per query, records count, latency, status.
 **Reads:** hardcoded 3-query set.
@@ -83,7 +83,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`.
 
-### 13_free_word_probe.py (289 LOC)
+### 13_free_word_probe.py (277 LOC)
 
 **Purpose:** Free-word injection probe: appends `pdf`/`book` to queries and measures domain-distribution shift across engines.
 **Reads:** hardcoded 3-query set.
@@ -91,7 +91,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`.
 
-### 13_timing_ablation.py (390 LOC)
+### 13_timing_ablation.py (377 LOC)
 
 **Purpose:** Timing ablation of status-quo versus aggressive polling and rate-limit config across four engines.
 **Reads:** hardcoded 3-query set.
@@ -99,7 +99,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.engines.{google,scholar,duckduckgo,openalex}`, `src.search.browser`, `src.search.rate_limiter`.
 
-### 24_pydoll_teardown_verify.py (312 LOC)
+### 24_pydoll_teardown_verify.py (268 LOC)
 
 **Purpose:** Integration test for `kill_tab` teardown: hung, normal and parallel-batch tab cases against real Chrome.
 **Reads:** none (self-contained hang simulation).
@@ -107,7 +107,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.browser` (via importlib), pydoll CDP.
 
-### _capture_sorry.py (233 LOC)
+### _capture_sorry.py (223 LOC)
 
 **Purpose:** Helper script capturing Google's `/sorry/` block page as HTML, screenshot and Markdown summary.
 **Reads:** `config.yml`.
@@ -115,7 +115,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `pydoll`, `yaml`.
 
-### _google_fixture.py (243 LOC)
+### _google_fixture.py (217 LOC)
 
 **Purpose:** Local HTTP fixture serving a Google-shaped results page and `/goto` redirect table for engine tests.
 **Reads:** none (in-memory specs).
@@ -123,7 +123,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `dev/tests/test_google_engine.py`.
 **Calls out:** stdlib only.
 
-### bm25_sweep_smoke.py (242 LOC)
+### bm25_sweep_smoke.py (208 LOC)
 
 **Purpose:** BM25 parameter sweep against the hard-slot baseline; base module for the `bm25_*` family and stage scripts.
 **Reads:** live pool fetch via production engines.
@@ -131,7 +131,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI; imported by `rerank_probe_smoke.py` and every `ranking_eval/` script that builds pools.
 **Calls out:** `src.search.{browser,merge,result,search_web}`, `rank_bm25`, `_bm25_sweep_smoke_report.py`.
 
-### _bm25_sweep_smoke_report.py (231 LOC)
+### _bm25_sweep_smoke_report.py (220 LOC)
 
 **Purpose:** Markdown report assembly for `bm25_sweep_smoke.py`: per-query sections and global summary.
 **Reads:** none (arguments only).
@@ -139,7 +139,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `bm25_sweep_smoke.py`.
 **Calls out:** none beyond stdlib.
 
-### rerank_probe_smoke.py (236 LOC)
+### rerank_probe_smoke.py (203 LOC)
 
 **Purpose:** URL-filter plus BM25-retrieve plus semantic-rerank probe, five configs side by side; base module for GPU-rerank scripts.
 **Reads:** hardcoded 20-query set.
@@ -155,7 +155,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `rerank_probe_smoke.py` and its siblings.
 **Calls out:** `bm25_sweep_smoke.py`.
 
-### _rerank_probe_smoke_gpu.py (51 LOC)
+### _rerank_probe_smoke_gpu.py (47 LOC)
 
 **Purpose:** Embedding and reranker service helpers: readiness check, embedding call, cross-encoder call, cosine.
 **Reads:** none (HTTP to local GPU services).
@@ -163,7 +163,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `rerank_probe_smoke.py`, `_rerank_probe_smoke_rank.py`.
 **Calls out:** `httpx`, `_rerank_probe_smoke_config.py`.
 
-### _rerank_probe_smoke_rank.py (132 LOC)
+### _rerank_probe_smoke_rank.py (126 LOC)
 
 **Purpose:** Per-config ranking stages for the rerank probe: URL filter, BM25, embedding rerank, cross-encoder rerank, capped BM25.
 **Reads:** none (arguments only).
@@ -171,7 +171,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `rerank_probe_smoke.py`.
 **Calls out:** `numpy`, `bm25_sweep_smoke.py`, config and gpu siblings.
 
-### _rerank_probe_smoke_report.py (232 LOC)
+### _rerank_probe_smoke_report.py (224 LOC)
 
 **Purpose:** Markdown report assembly for the rerank probe: per-query config tables and per-category summary.
 **Reads:** none (arguments only).
@@ -179,7 +179,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** `rerank_probe_smoke.py`.
 **Calls out:** `_rerank_probe_smoke_config.py`.
 
-### empty_classify_se.py (218 LOC)
+### empty_classify_se.py (207 LOC)
 
 **Purpose:** Classification probe for Stack Exchange EMPTY queries via direct httpx against stackoverflow and cross-site fallback.
 **Reads:** hardcoded query list.
@@ -187,7 +187,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `httpx`.
 
-### google_selector_probe.py (262 LOC)
+### google_selector_probe.py (257 LOC)
 
 **Purpose:** Google DOM-selector diagnostic: compares `#rso h3` matches with alternative selectors at `num=100`.
 **Reads:** live DOM fetch (hardcoded `QUERY`, `NUM`).
@@ -195,7 +195,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.browser`, `src.search.engines.google`.
 
-### no_google_burst_smoke.py (219 LOC)
+### no_google_burst_smoke.py (186 LOC)
 
 **Purpose:** No-Google concurrent burst smoke: production `ScholarEngine` against two other engines to test burst survival.
 **Reads:** hardcoded 12-query set.
@@ -203,7 +203,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `src.search.{status,status_timeout,status_error,browser}`, `src.search.engines.{duckduckgo,openalex,scholar}`.
 
-### pydoll_fingerprint_probe.py (219 LOC)
+### pydoll_fingerprint_probe.py (192 LOC)
 
 **Purpose:** Measures the production Chrome fingerprint against bot.sannysoft.com and prints pass/fail vectors.
 **Reads:** live page load.
@@ -211,7 +211,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.browser`.
 
-### scholar_http_probe.py (149 LOC)
+### scholar_http_probe.py (119 LOC)
 
 **Purpose:** Dev-only HTTP alternative to the browser Scholar engine: httpx plus lxml against scholar.google.com.
 **Reads:** live HTTP fetch.
@@ -219,7 +219,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** imported historically by `no_google_burst_smoke.py` (import now unused).
 **Calls out:** `httpx`, `lxml.html`, `src.search.{rate_limiter,result,status}`.
 
-### test_snippet_truncate.py (32 LOC)
+### test_snippet_truncate.py (26 LOC)
 
 **Purpose:** Standalone assertion script for `src.search.snippet._truncate` with four regression cases.
 **Reads:** none.
@@ -227,7 +227,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `src.search.snippet`.
 
-### with_google_decoupling_smoke.py (194 LOC)
+### with_google_decoupling_smoke.py (175 LOC)
 
 **Purpose:** Verifies Scholar is absent from the default engine set by inspecting the query log after five workflow runs.
 **Reads:** `src/logs/query_log.jsonl` (tail).

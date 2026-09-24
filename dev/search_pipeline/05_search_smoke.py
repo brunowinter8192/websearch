@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Multi-engine comparison smoke — per-engine fanout, preview fetch, comparison report."""
 
 # INFRASTRUCTURE
 import argparse
@@ -8,7 +7,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Ensure src.* imports resolve when run from project root
 import os
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -61,19 +59,16 @@ async def run_smoke(engine_names: list[str], max_queries: int | None) -> None:
 
 # FUNCTIONS
 
-# Load queries from file, one per line, honour max_queries limit
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     qs = [l.strip() for l in lines if l.strip()]
     return qs[:max_queries] if max_queries else qs
 
 
-# Run one query across all engines in parallel, fetch previews, return record dict
 async def _run_query(query: str, engines: dict) -> dict:
     tasks = [engine.search(query, "en", 10) for engine in engines.values()]
     per_engine = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Merge results by URL, preserving per-engine snippets
     merged: dict[str, dict] = {}
     for engine_name, results in zip(engines.keys(), per_engine):
         if isinstance(results, Exception):
@@ -83,21 +78,18 @@ async def _run_query(query: str, engines: dict) -> dict:
                 merged[r.url] = {"title": r.title, "snippets": {}, "preview": None}
             merged[r.url]["snippets"][engine_name] = r.snippet
 
-    # Build flat SearchResult list for preview fetching (URL-keyed, no engine field needed)
     flat = [
         SearchResult(url=url, title=data["title"], snippet="", engine="", position=i)
         for i, (url, data) in enumerate(merged.items())
     ]
     flat_with_previews = flat
 
-    # Write preview data back into merged dict
     preview_ok = 0
     for r in flat_with_previews:
         if r.preview and r.url in merged:
             merged[r.url]["preview"] = r.preview
             preview_ok += 1
 
-    # Per-engine result counts
     engine_counts = {}
     for engine_name, results in zip(engines.keys(), per_engine):
         engine_counts[engine_name] = len(results) if not isinstance(results, Exception) else 0
@@ -114,7 +106,6 @@ async def _run_query(query: str, engines: dict) -> dict:
     }
 
 
-# Write markdown comparison report, return file path
 def _write_report(records: list[dict], engine_names: list[str]) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"search_smoke_{ts}.md"
@@ -143,7 +134,6 @@ def _render_header(records: list[dict], engine_names: list[str], ts: str) -> lis
 
 
 def _render_summary_table(records: list[dict], engine_names: list[str]) -> list[str]:
-    # Build column headers dynamically
     engine_cols = " | ".join(f"{e.capitalize()}" for e in engine_names)
     header_sep = " | ".join("---" for _ in engine_names)
     lines = [
@@ -160,14 +150,12 @@ def _render_summary_table(records: list[dict], engine_names: list[str]) -> list[
 
 
 def _render_query_section(qi: int, r: dict, engine_names: list[str]) -> list[str]:
-    # Per-query detail sections
     lines = [f"## Query {qi}: {r['query']}", ""]
 
     if not r["merged"]:
         lines += ["*No results from any engine.*", ""]
         return lines
 
-    # Mini stats table
     lines += [
         "| Metric | Value |",
         "|--------|-------|",

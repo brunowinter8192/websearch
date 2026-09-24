@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Classify 15 StackEx EMPTY queries from smoke_20260504_023641: SO probe + cross-site probe via httpx."""
 
 # INFRASTRUCTURE
 import asyncio
@@ -16,7 +15,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 REPORT_DIR = SCRIPT_DIR / "md"
 API_URL = "https://api.stackexchange.com/2.3/search/advanced"
 
-# (smoke_row, query) for all 15 StackEx EMPTY entries from smoke_20260504_023641
 SE_EMPTY_QUERIES = [
     (3,  "fastapi websocket reconnect handler"),
     (10, "RLHF reinforcement learning human feedback"),
@@ -59,7 +57,6 @@ async def run_classify() -> None:
                 f"XS items={record['xs_items']} total={record['xs_total']} | {label}",
                 file=sys.stderr,
             )
-            # Polite pause between query pairs (already ~1s within probe_query, add more here)
             if idx < len(SE_EMPTY_QUERIES) - 1:
                 await asyncio.sleep(1.0)
 
@@ -71,7 +68,6 @@ async def run_classify() -> None:
 
 # FUNCTIONS
 
-# Probe one query: SO site then cross-site, return record dict
 async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> dict:
     record = _new_record(smoke_row, query)
 
@@ -104,7 +100,6 @@ def _new_record(smoke_row: int, query: str) -> dict:
 
 
 async def _probe_stackoverflow(client: httpx.AsyncClient, query: str, record: dict) -> bool:
-    # --- stackoverflow probe ---
     so_params = {**BASE_PARAMS, "q": query, "site": "stackoverflow"}
     try:
         resp = await client.get(API_URL, params=so_params)
@@ -126,7 +121,6 @@ async def _probe_stackoverflow(client: httpx.AsyncClient, query: str, record: di
 
 
 async def _probe_cross_site(client: httpx.AsyncClient, query: str, record: dict) -> None:
-    # --- cross-site (stackexchange network) probe ---
     xs_params = {**BASE_PARAMS, "q": query, "site": "stackexchange"}
     try:
         resp = await client.get(API_URL, params=xs_params)
@@ -135,14 +129,12 @@ async def _probe_cross_site(client: httpx.AsyncClient, query: str, record: dict)
             data = resp.json()
             record["xs_total"] = data.get("total", 0)
             record["xs_items"] = len(data.get("items", []))
-            # Update quota from latest response (more current)
             if data.get("quota_remaining") is not None:
                 record["quota_remaining"] = data["quota_remaining"]
     except Exception as e:
         record["notes"] += f" | XS request error: {e}"
 
 
-# Classify one record based on HTTP status and item counts
 def _classify(r: dict) -> str:
     if r["so_http"] in (429, 403):
         return "RATE_LIMITED"
@@ -159,7 +151,6 @@ def _classify(r: dict) -> str:
     return "UNKNOWN"
 
 
-# Tally classification counts
 def _summary_counts(records: list[dict]) -> dict:
     counts = {"ENGINE_EMPTY": 0, "ENGINE_NICHE": 0, "PIPELINE_BUG": 0, "RATE_LIMITED": 0, "BOT_BLOCK": 0, "UNKNOWN": 0}
     for r in records:
@@ -167,7 +158,6 @@ def _summary_counts(records: list[dict]) -> dict:
     return counts
 
 
-# Write markdown report and return path
 def write_report(records: list[dict]) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = REPORT_DIR / f"empty_classify_se_{ts}.md"
@@ -203,7 +193,6 @@ def write_report(records: list[dict]) -> Path:
             f"| {r['quota_remaining']} | {r['classification']} |"
         )
 
-    # Notes section for any non-trivial entries
     noted = [r for r in records if r.get("notes")]
     if noted:
         lines += ["", "## Notes", ""]

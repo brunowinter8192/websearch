@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Engine distribution analysis — auto-discovers newest pipeline_smoke_*.md baseline."""
 
 # INFRASTRUCTURE
 import re
@@ -20,7 +19,6 @@ if not _smoke_candidates:
     raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
 SMOKE_REPORT = _smoke_candidates[0]
 
-# Ordered: GENERAL engines first, then ACADEMIC, then QA (display column order)
 ENGINE_COLUMN_ORDER = [
     "google", "duckduckgo", "mojeek",
     "google_scholar", "openalex", "crossref",
@@ -44,7 +42,6 @@ CLASS_ENGINES = {
     "QA":       ["stack_exchange", "lobsters"],
 }
 
-# Short labels for table headers (mirrors snippet_quality_analysis.py)
 SHORT = {
     "google":         "google",
     "duckduckgo":     "ddg",
@@ -59,7 +56,6 @@ SHORT = {
 
 # ORCHESTRATOR
 
-# Parse smoke report, compute all metrics, write report
 def run_analysis() -> None:
     records    = parse_smoke_report(SMOKE_REPORT)
     print(f"Parsed {len(records)} records", file=sys.stderr)
@@ -73,7 +69,6 @@ def run_analysis() -> None:
 
 # FUNCTIONS
 
-# Compute per-engine slot counts: total / class breakdown / solo / overlap
 def compute_slot_counts(records: list[dict]) -> dict:
     counts = {
         eng: {"total": 0, "GENERAL": 0, "ACADEMIC": 0, "QA": 0, "solo": 0, "overlap": 0}
@@ -94,7 +89,6 @@ def compute_slot_counts(records: list[dict]) -> dict:
     return counts
 
 
-# Parse Per-Engine Status Aggregate table from smoke report tail
 def parse_status_aggregate(path: Path) -> dict:
     lines      = path.read_text(encoding="utf-8").splitlines()
     status: dict[str, dict] = {}
@@ -118,7 +112,6 @@ def parse_status_aggregate(path: Path) -> dict:
     return status
 
 
-# Compute actual/uniform/ok-adjusted share percentages and deltas per engine within class
 def compute_baselines(slot_counts: dict, status_agg: dict) -> dict:
     result: dict[str, dict] = {}
     for cls, engines in CLASS_ENGINES.items():
@@ -145,7 +138,6 @@ def compute_baselines(slot_counts: dict, status_agg: dict) -> dict:
     return result
 
 
-# Compute per-query engine slot count: sorted list of (qi, query_text, {engine: count})
 def compute_per_query_distribution(records: list[dict]) -> list[tuple]:
     qi_query:  dict[int, str]                     = {}
     qi_counts: dict[int, dict[str, int]]           = defaultdict(lambda: defaultdict(int))
@@ -158,7 +150,6 @@ def compute_per_query_distribution(records: list[dict]) -> list[tuple]:
     return [(qi, qi_query[qi], dict(qi_counts[qi])) for qi in sorted(qi_query)]
 
 
-# Render header metadata block
 def _render_header(ts: str, records: list[dict], per_query: list[tuple]) -> list[str]:
     return [
         f"# Engine Distribution Analysis — {ts}",
@@ -170,7 +161,6 @@ def _render_header(ts: str, records: list[dict], per_query: list[tuple]) -> list
     ]
 
 
-# Render Section 1 — per-engine slot-count total table with column-sum footer
 def _render_slot_counts(slot_counts: dict, records: list[dict], per_query: list[tuple]) -> list[str]:
     n_queries = len(per_query)
     gen_sum  = sum(slot_counts[e]["GENERAL"]  for e in ENGINE_COLUMN_ORDER)
@@ -207,7 +197,6 @@ def _render_slot_counts(slot_counts: dict, records: list[dict], per_query: list[
     return L
 
 
-# Render Section 2 — per-engine status aggregate (verbatim pass-through from smoke tail)
 def _render_status_aggregate(status_agg: dict) -> list[str]:
     L: list[str] = [
         "## 2. Per-Engine Status Aggregate",
@@ -224,7 +213,6 @@ def _render_status_aggregate(status_agg: dict) -> list[str]:
     return L
 
 
-# Render Section 3 — slot-share and baselines (three sub-tables by class)
 def _render_slot_share(baselines: dict) -> list[str]:
     L: list[str] = [
         "## 3. Slot-Share + Baselines",
@@ -254,7 +242,6 @@ def _render_slot_share(baselines: dict) -> list[str]:
     return L
 
 
-# Render Section 4 — per-query engine slot-count distribution matrix
 def _render_per_query_distribution(per_query: list[tuple]) -> list[str]:
     hdrs = " | ".join(SHORT[e] for e in ENGINE_COLUMN_ORDER)
     seps = "|".join("---:" for _ in ENGINE_COLUMN_ORDER)
@@ -276,7 +263,6 @@ def _render_per_query_distribution(per_query: list[tuple]) -> list[str]:
     return L
 
 
-# Render and write the markdown report
 def write_report(
     records:     list[dict],
     slot_counts: dict,

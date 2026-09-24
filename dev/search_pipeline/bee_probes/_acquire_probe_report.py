@@ -94,7 +94,7 @@ def _report_zero_cascade_detail(records: list[dict]) -> list[str]:
             q = r["query"][:28].replace("|", "\\|")
             for eng in sorted(r["eng_summary"]):
                 d = r["eng_summary"][eng]
-                yn = lambda b: "Y" if b else "N"  # noqa: E731
+                yn = lambda b: "Y" if b else "N"
                 lines.append(
                     f"| {q} | {eng} | {d['status']} "
                     f"| {yn(d['entered'])} | {yn(d['lock_granted'])} "

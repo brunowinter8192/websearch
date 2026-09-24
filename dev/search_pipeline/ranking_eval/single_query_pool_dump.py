@@ -1,16 +1,4 @@
 #!/usr/bin/env python3
-"""
-Single-Query Pool Dump — capped pool vs Top-N for 4 configs (bead searxng-g82).
-
-Sections: (1) per-engine raw  (2) full capped pool  (3) Top-N per config
-          (4) comparison matrix (every pool URL × 4 configs → rank or —)
-
-Hard-stop: google_count == 0 → exit. No fallback.
-Services: embedding port 8084 (Qwen3-0.6B) / reranker port 8082 (Qwen3-0.6B)
-
-Usage:
-  ./venv/bin/python dev/search_pipeline/single_query_pool_dump.py [--query TEXT] [--output PATH]
-"""
 
 # INFRASTRUCTURE
 import argparse
@@ -128,12 +116,10 @@ def _rank_all_configs(query: str, pool: list[dict], google_count: int) -> tuple:
     return c1_top, c2_scored, c3_scored, c4_scored, c1_ms, c2_ms, c3_ms, c4_ms
 
 
-# Filter raw_results to position <= google_count; dedup via _build_pool
 def _build_capped_pool(raw_results: list, google_count: int) -> list[dict]:
     return _build_pool([r for r in raw_results if r.position <= google_count])
 
 
-# Build url → {engine: position} lookup for Section 2 engine-position annotations
 def _build_url_engine_pos(raw_results: list, google_count: int) -> dict[str, dict[str, int]]:
     lookup: dict[str, dict[str, int]] = {}
     for r in raw_results:
@@ -144,12 +130,10 @@ def _build_url_engine_pos(raw_results: list, google_count: int) -> dict[str, dic
     return lookup
 
 
-# C1: sort pool by (-n_engines, min_position); return top_n
 def _rank_c1(pool: list[dict], top_n: int) -> list[dict]:
     return sorted(pool, key=lambda m: (-len(m["engines"]), m["min_position"]))[:top_n]
 
 
-# C3 cross-encoder rerank; returns [(doc, score), ...], one retry on API error
 def _ce_top_scored(
     query: str, texts_v: list[str], pool_v: list[dict], top_n: int
 ) -> list[tuple[dict, float]]:
@@ -166,7 +150,6 @@ def _ce_top_scored(
     return []
 
 
-# C4 embedding-cosine rerank; returns [(doc, score), ...], one retry on API error
 def _embed_top_scored(
     query: str, texts_v: list[str], pool_v: list[dict], top_n: int
 ) -> list[tuple[dict, float]]:

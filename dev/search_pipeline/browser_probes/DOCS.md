@@ -11,7 +11,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 
 ## Modules
 
-### 25_startpage_probe.py (292 LOC)
+### 25_startpage_probe.py (265 LOC)
 
 **Purpose:** Go/no-go probe for startpage.com scrapeability via the real homepage search form; ten queries, counts and block markers.
 **Reads:** none (live run).
@@ -19,7 +19,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, `_startpage_probe_report.py`.
 
-### _startpage_probe_report.py (131 LOC)
+### _startpage_probe_report.py (129 LOC)
 
 **Purpose:** Markdown report assembly for the Startpage probe: headline, selector findings, per-query table, samples, non-OK details.
 **Reads:** none (arguments only).
@@ -27,7 +27,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `25_startpage_probe.py`.
 **Calls out:** stdlib only.
 
-### 26_brave_probe.py (273 LOC)
+### 26_brave_probe.py (240 LOC)
 
 **Purpose:** Three-condition gate probe for Brave Search (real rows, no PoW/CAPTCHA, latency at most five seconds); result DROP.
 **Reads:** none (live run).
@@ -35,7 +35,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, `_brave_probe_report.py`.
 
-### _brave_probe_report.py (144 LOC)
+### _brave_probe_report.py (142 LOC)
 
 **Purpose:** Markdown report assembly for the Brave probe: verdict, headline, stack notes, per-query table.
 **Reads:** none (arguments only).
@@ -43,7 +43,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `26_brave_probe.py`.
 **Calls out:** stdlib only.
 
-### 27_brave_headed_lane_probe.py (271 LOC)
+### 27_brave_headed_lane_probe.py (222 LOC)
 
 **Purpose:** Headed-background Chrome lane probe (macOS `open -g`) against Brave PoW; result DROP, launch mechanism validated.
 **Reads:** none (live run).
@@ -51,7 +51,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll` (`BrowserProcessManager` override), macOS `open`, `_brave_headed_lane_probe_report.py`.
 
-### _brave_headed_lane_probe_report.py (155 LOC)
+### _brave_headed_lane_probe_report.py (152 LOC)
 
 **Purpose:** Markdown report assembly for the headed-lane probe: verdict, launch mechanism, headline, per-query table.
 **Reads:** none (arguments only).
@@ -59,7 +59,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `27_brave_headed_lane_probe.py`.
 **Calls out:** stdlib only.
 
-### 28_bing_probe.py (294 LOC)
+### 28_bing_probe.py (259 LOC)
 
 **Purpose:** Go/no-go probe for bing.com as a second Bing-index path, including unwrapping of `ck/a` tracking redirects; result CANDIDATE.
 **Reads:** none (live run).
@@ -67,7 +67,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, `_bing_probe_report.py`.
 
-### _bing_probe_report.py (145 LOC)
+### _bing_probe_report.py (143 LOC)
 
 **Purpose:** Markdown report assembly for the Bing probe: verdict, headline, selector findings, per-query table.
 **Reads:** none (arguments only).
@@ -75,7 +75,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `28_bing_probe.py`.
 **Calls out:** stdlib only.
 
-### 29_yandex_probe.py (267 LOC)
+### 29_yandex_probe.py (236 LOC)
 
 **Purpose:** Go/no-go probe for yandex.com as an independent-index candidate under a relaxed criterion; result CANDIDATE.
 **Reads:** none (live run).
@@ -83,7 +83,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, `_yandex_probe_report.py`.
 
-### _yandex_probe_report.py (178 LOC)
+### _yandex_probe_report.py (174 LOC)
 
 **Purpose:** Markdown report assembly for the Yandex probe: verdict, quality note, headline, findings, per-query table.
 **Reads:** none (arguments only).
@@ -91,7 +91,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `29_yandex_probe.py`.
 **Calls out:** stdlib only.
 
-### 31_date_availability_probe.py (174 LOC)
+### 31_date_availability_probe.py (140 LOC)
 
 **Purpose:** Measurement probe: whether eight DOM-scraped engines expose result dates as elements, snippet text, nowhere or unmeasurable.
 **Reads:** none (live run).
@@ -99,7 +99,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`, browser, nav and report siblings.
 
-### _date_availability_probe_browser.py (154 LOC)
+### _date_availability_probe_browser.py (151 LOC)
 
 **Purpose:** Inline pydoll session shape for the date probe: options, fingerprint patches, tab lifecycle, generic block diagnosis.
 **Reads:** none.
@@ -107,7 +107,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `31_date_availability_probe.py`, nav sibling.
 **Calls out:** `pydoll`.
 
-### _date_availability_probe_nav.py (152 LOC)
+### _date_availability_probe_nav.py (149 LOC)
 
 **Purpose:** Per-engine navigation, wait and diagnose flows for the eight engines plus container selectors.
 **Reads:** none.
@@ -115,7 +115,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `31_date_availability_probe.py`.
 **Calls out:** `pydoll`, browser sibling.
 
-### _date_availability_probe_report.py (92 LOC)
+### _date_availability_probe_report.py (88 LOC)
 
 **Purpose:** Raw-evidence Markdown report for the date probe, grouped per engine and record.
 **Reads:** none (arguments only).
