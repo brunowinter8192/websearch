@@ -317,3 +317,61 @@ Scan class abbreviations: PO = PRODUCES-OUTPUT, LO = LOG-ONLY, SP = SWALLOW-PASS
 - Not investigated: whether a prewarm failure leaves a stale `_browser` for the engines' retry (the
   engines connect to a port that refuses connections, which suggests it does). That is a lifecycle
   question for `browser.py`, not part of this triage.
+
+## Phase 4 step 2: approved removals applied to src/search/ (2026-09-24)
+
+Owner decisions (relayed by the orchestrator): remove all rows classified B-remove except
+`log_query`; keep `_prewarm_browser` and fix its message.
+
+- Removed with no replacement handler: `_extract_value` x7 and `_diagnose` x7 (google, bing, brave,
+  duckduckgo, mojeek, startpage, yandex), brave `_poll_state` and `_click_challenge_button`,
+  `cache.cache_read`, `document_status.start_document_status_capture` (16 handlers; 18 with
+  `_poll_state`/`_click`... counted as: 7 + 7 + 2 + 1 + 1 = 18).
+- `document_status.py` lost its now-unused `logging` import and `logger`.
+- Reclassified: `query_logger.log_query` B (weak B-remove) -> D best-effort telemetry, kept as is.
+- `_prewarm_browser` kept; WARNING now reads "browser engines are expected to fail individually,
+  non-browser engines still run: <error>".
+- Tests: new `dev/tests/test_search_control_flow_removals.py` (28 tests: `_extract_value` KeyError and
+  TypeError over 7 engines, `_diagnose` JSONDecodeError over 7 engines, brave poll/click,
+  `cache_read` corrupt file raises and missing file still `None`, propagated `KeyError`/
+  `JSONDecodeError` surfaces as `ERROR_PARSE` through `_engine_with_timing`, prewarm message).
+  `dev/tests/test_document_status.py`: the "degrades to an empty list" test became "propagates".
+- Suite: 492 passed before, 520 passed after.
+- Docs: `src/search/DOCS.md` and `src/search/engines/DOCS.md` updated (LOC headings, the two
+  now-false sentences, new REMOVED entries, the `log_query` and prewarm gotchas).
+
+### Finding during the run
+
+The first full suite run after the removals failed `test_brave_engine.py::
+test_marker_word_from_own_query_no_longer_discards_real_results` with `websockets InvalidStatus: HTTP
+500 "No such target id"` raised from `enable_network_events()`. That is the trigger the removed
+`start_document_status_capture` handler used to swallow: with a real headless Chrome in the test, arming
+the network listener can fail with a target-id race. It did not recur (test passes alone and in the
+next full run). The same suite had one brave-test failure at the very start of this session, which
+was most likely the same race surfacing as a wrong `document_status_chain`. So the trigger has been
+observed in tests, never in production logs (0 warnings in `cli.log` 2026-08-31..2026-09-24). It was
+not put back: the owner decision stands, and an occurrence in production will now show up as a
+recorded engine status. Successor: if brave tests flake with that error, the cause is a test-side
+tab-readiness race, not the removal.
+
+### Verification (real runs, 2026-09-24)
+
+Two `cli.py search_web` runs with different queries; every engine status from `query_log.jsonl`:
+
+| Query | google | duckduckgo | mojeek | openalex | startpage | brave | bing | yandex |
+|---|---|---|---|---|---|---|---|---|
+| python asyncio task cancellation semantics | OK 10 | OK 10 | OK 10 | OK 9 | OK 10 | OK 10 | OK 10 | OK 10 |
+| bosch akkuschrauber ersatzakku 18v kompatibel | OK 10 | OK 10 | OK 10 | EMPTY 0 (http 200) | OK 10 | OK 10 | OK 10 | OK 10 |
+
+No `ERROR_PARSE` and no `ERROR_OTHER`; no `drop_reason` set on any engine. The openalex EMPTY is a
+genuine empty API answer for a German product query (HTTP 200), not a failure. This verifies the
+absence of new failures on two healthy runs only; the removed handlers guarded conditions that were
+never seen in production, so a clean run cannot prove them harmless.
+
+## Recap (Phase 4 step 2, 2026-09-24)
+
+- Inventory against `integration` (`git diff integration --name-only --`): 15 files: this file, 4
+  new/changed test files (`test_search_control_flow_removals.py` new, `test_document_status.py`), 2
+  DOCS.md files, and 8 source files (`cache.py`, `document_status.py`, `search_web.py`, 7 engines
+  counted with `brave.py` two handlers; see git for exact list), plus the search_pipeline entry.
+- Correction to the bullet above: the removed-handler count is 18 (7 + 7 + 2 + 1 + 1), not 16.
