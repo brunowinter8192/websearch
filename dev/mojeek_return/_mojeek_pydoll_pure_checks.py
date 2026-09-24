@@ -15,6 +15,14 @@ from _mojeek_pydoll_probe_core import (
 # FUNCTIONS
 
 def run_pure_function_checks() -> None:
+    run_classifier_checks()
+    run_verdict_checks()
+    run_cookie_diff_checks()
+    run_payload_and_stats_checks()
+    run_carry_over_checks()
+
+
+def run_classifier_checks() -> None:
     boilerplate_at_start = {
         "result_link_count": 0, "block_marker_present": True,
         "in_flight_marker_present": False, "widget_present": True,
@@ -53,6 +61,9 @@ def run_pure_function_checks() -> None:
         and is_terminal_state(STATE_RESULTS)
         and is_terminal_state(STATE_BLOCKED),
     )
+
+
+def run_verdict_checks() -> None:
     check(
         "verdict separates challenged from unchallenged success",
         classify_query_verdict(True, STATE_RESULTS) == VERDICT_SUCCESS_CHALLENGED
@@ -70,9 +81,6 @@ def run_pure_function_checks() -> None:
         and cookie_is_session_scoped({})
         and not cookie_is_session_scoped({"expires": 1789669939.0}),
     )
-    run_cookie_diff_checks()
-    run_payload_and_stats_checks()
-    run_carry_over_checks()
 
 
 def run_carry_over_checks() -> None:

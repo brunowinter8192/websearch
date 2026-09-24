@@ -1,9 +1,12 @@
 # INFRASTRUCTURE
 import asyncio
+import functools
 import logging
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
+from patchright.async_api import async_playwright
 from pydoll.browser import Chrome
 from pydoll.browser.managers import BrowserProcessManager
 from pydoll.commands import TargetCommands
@@ -19,13 +22,36 @@ class BackgroundedBrowser:
     profile: str
     owned_pids: list[int]
     watchdog_task: asyncio.Task | None
+    executable_path: str
 
 
 # FUNCTIONS
 
-def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
+def _find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
+async def resolve_chromium_executable_path() -> str:
+    pw = await async_playwright().start()
+    try:
+        return pw.chromium.executable_path
+    finally:
+        await pw.stop()
+
+
+def resolve_chromium_bundle(executable_path: str) -> Path:
+    bundle = _find_app_bundle(executable_path)
+    if bundle is None:
+        raise RuntimeError(f"No .app bundle found above patchright's resolved executable: {executable_path}")
+    return bundle
+
+
+def _open_background_process_creator(bundle_path: Path, command: list[str]) -> subprocess.Popen:
     args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    open_cmd = ["open", "-g", "-n", "-a", str(bundle_path), "--args", *args]
     return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -76,12 +102,20 @@ async def launch_backgrounded_chrome(profile: str, options) -> BackgroundedBrows
     kill_by_profile(profile)
     await asyncio.sleep(0.5)
     anchor_pid = await asyncio.to_thread(_get_frontmost_pid)
+    executable_path = await resolve_chromium_executable_path()
+    bundle_path = resolve_chromium_bundle(executable_path)
+    options.binary_location = executable_path
     browser = Chrome(options)
-    browser._browser_process_manager = BrowserProcessManager(process_creator=_open_background_process_creator)
+    browser._browser_process_manager = BrowserProcessManager(
+        process_creator=functools.partial(_open_background_process_creator, bundle_path)
+    )
     await browser.start()
     owned_pids = _pids_for_profile(profile)
     watchdog_task = asyncio.create_task(_focus_steal_watchdog_by_pid(set(owned_pids), anchor_pid))
-    return BackgroundedBrowser(browser=browser, profile=profile, owned_pids=owned_pids, watchdog_task=watchdog_task)
+    return BackgroundedBrowser(
+        browser=browser, profile=profile, owned_pids=owned_pids,
+        watchdog_task=watchdog_task, executable_path=executable_path,
+    )
 
 
 async def close_tab(browser: Chrome, tab) -> None:

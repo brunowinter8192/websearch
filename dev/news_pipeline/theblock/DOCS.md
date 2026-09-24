@@ -59,35 +59,61 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Writes:** `probe_repo_cf_survey_reports/repo_cf_survey_<ts>.md`. Gitignored.
 **Called by:** CLI only.
 
-### probe_liveness.py (410 LOC)
+### probe_liveness.py (210 LOC)
 
 **Purpose:** Instrumented async liveness checker + concurrency sweep. Imports the 68 source URL lists from `probe_pool_size.py` (no re-typing). Modes: `--freeze` (fetch sources → write sorted, deduped `frozen_pool/{http,socks4,socks5}.txt`); `--sample N`/`--full` (check frozen pool via `curl_cffi.AsyncSession`); `--source monosans` (fetch live monosans JSON via `monosans_loader`, apply staleness filter, check without freeze); `--source curated` (fetch monosans+proxifly unified list via `curated_sources`, apply staleness filter, check without freeze). Classifies every dead proxy into a reason bucket, appends structured entry to `sweep_log.md`. After every run (all modes except `--freeze`), folds results into cumulative `logs/proxy_status_log.json` via `proxy_status_log.record_run()`. socks5 uses `socks5h://` (remote DNS through proxy). Timeout split: elapsed-time primary + libcurl message fallback + unknown on mismatch (version-drift signal). Staleness filter (`--source monosans`/`--source curated`): calls `proxy_status_log.partition_fresh(entries, window_s)`; `--recheck-window S` (default 3600) controls freshness threshold.
 **Reads:** `probe_pool_size` source lists; monosans/curated live sources; `frozen_pool/` (sample/full modes).
 **Writes:** `probe_liveness_logs/sweep_log.md` (tracked), `logs/proxy_status_log.json` (tracked, cumulative), `frozen_pool/` (gitignored, `--freeze`), `probe_liveness_logs/unknown_errors_*.log` (gitignored).
-**Called by:** CLI only.
+**Called by:** CLI only; `pipe_theblock.py` (imports `run_checks`).
+**Calls out:** `_probe_liveness_classify.py`, `_probe_liveness_report.py` (this directory).
 
-### source_tracker.py (283 LOC)
+### _probe_liveness_classify.py (119 LOC)
+
+**Purpose:** Single-proxy liveness check via `curl_cffi` and the mapping of request exceptions to dead-reason buckets.
+**Reads:** the icanhazip check URL through the proxy passed in.
+**Writes:** nothing — returns one result dict per proxy.
+**Called by:** `probe_liveness.py` only.
+**Calls out:** `curl_cffi`.
+
+### _probe_liveness_report.py (102 LOC)
+
+**Purpose:** Console summary, `sweep_log.md` entry and unknown-bucket log for a liveness run; owns the dead-bucket list.
+**Reads:** nothing — takes the result list as argument.
+**Writes:** `probe_liveness_logs/sweep_log.md`, `probe_liveness_logs/unknown_errors_*.log`, stdout.
+**Called by:** `probe_liveness.py` only.
+**Calls out:** none.
+
+### source_tracker.py (316 LOC)
 
 **Purpose:** Per-source attribution, cumulative scoreboard, and freshness tracking. Called once per pipe run via `update_and_flush()`. Reads `source_results` + `hp_to_sources` from `pipe_theblock.fetch_fresh_pool()`, computes per-source `checked`/`alive`/`cf_checked`/`cf_passed`/`unique_latest` counters. Merges run stats into `source_scoreboard.json`, re-renders `source_scoreboard.md`, diffs against `source_snapshots/` for freshness, appends to `freshness_log.md`.
 **Reads:** `pipe_theblock.fetch_fresh_pool()` output, `source_scoreboard.json`, `source_snapshots/`.
 **Writes:** `source_scoreboard.json` (tracked), `source_scoreboard.md` (tracked, rendered ranking), `freshness_log.md` (tracked, appended), `source_snapshots/` (gitignored).
 **Called by:** `pipe_theblock.py`. Not run standalone.
 
-### pipe_theblock.py (339 LOC)
+### pipe_theblock.py (355 LOC)
 
 **Purpose:** Full proxy pipeline — Stage 1 (neutral liveness, 5k sample @ conc 128) → Stage 2 (CF-pass check via curl_cffi chrome impersonation vs `sitemap_tbco_post_type_post_0.xml`, 200+valid-XML=pass) → Stage 3 (sitemap sub-URL discovery with sequential-exhaustion B-capture: drains ONE proxy until it 403/429s to record real B observations, then rotates — vs round-robin which never exhausts). Appends one funnel entry to `pipe_log.md` per run. Resume-safe: per-sub checkpoint JSONs in `cache/`.
 **Reads:** `curated_sources` fresh 68-source pool.
 **Writes:** `pipe_log.md` (tracked, appended), `cache/sub_*.json` (gitignored, per-sub checkpoint).
 **Called by:** CLI only. `./venv/bin/python dev/news_pipeline/theblock/pipe_theblock.py`.
+**Calls out:** `_pipe_theblock_cf.py` (this directory), `probe_liveness`, `probe_pool_size`, `probe_discovery`, `source_tracker`.
 
-### probe_curated_theblock_cf.py (151 LOC)
+### _pipe_theblock_cf.py (57 LOC)
+
+**Purpose:** CF-pass primitives of the pipe — chrome-impersonating GET through a proxy, XML marker check, threaded Stage 2 check.
+**Reads:** the CF check target through each proxy.
+**Writes:** stdout progress only.
+**Called by:** `pipe_theblock.py` only.
+**Calls out:** `curl_cffi`.
+
+### probe_curated_theblock_cf.py (169 LOC)
 
 **Purpose:** Standalone direct CF-pass probe on the monosans+proxifly curated list (no alive pre-filter; curl_cffi chrome impersonation; same gate as jhao104 Stage 2). Finding: 52/3477 = 1.496% overall CF-pass (http 0.944%, socks4 3.567% — leads 3.8×, socks5 0.698%); curated list 17.6× better than jhao104 scraped sources. Home-IP direct check: CF-reputation-clear (200 + XML).
 **Reads:** `curated_sources` monosans+proxifly list.
 **Writes:** `probe_curated_theblock_cf_reports/`. Gitignored.
 **Called by:** CLI only.
 
-### probe_curl_cffi_discriminator.py (261 LOC)
+### probe_curl_cffi_discriminator.py (292 LOC)
 
 **Purpose:** Discriminates an ambiguous 0/17202 monosans-pool result: re-tests the neutral pool with `curl_cffi impersonate=chrome` (correct browser JA3 vs monosans' rustls) against a real `/post/` sub-sitemap. Identifies which failure mode dominates: CF signature block, CF IP-reputation block, or stale pool. Finding: 80/425 (18.8%) pass → rustls was the blocker; curl_cffi-chrome passes CF; free-proxy loop viable for the discovery gap. Correct sub-URL pattern: `sitemap_tbco_post_type_post_N.xml` (not `post_N.xml`).
 **Reads:** neutral proxy pool, `sitemap_tbco_post_type_post_0.xml`.

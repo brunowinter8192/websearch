@@ -156,6 +156,20 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     primary_counts = Counter(r[0] for r in primary_results)
     pass_count = primary_counts.get("pass", 0)
 
+    cf_block, conn_err, timeout, other_http = failure_mode_counts(primary_counts)
+
+    lines = []
+    lines += build_header_lines(total)
+    lines += build_primary_lines(total, primary_counts, pass_count, elapsed_primary,
+                                 cf_block, conn_err, timeout, other_http)
+    lines += build_passing_lines(passing_proxies)
+    lines += build_secondary_lines(passing_proxies, secondary_results, elapsed_secondary)
+    lines += build_asn_lines(proxies, passing_proxies)
+    lines += build_verdict_lines(pass_count, cf_block, conn_err, timeout)
+
+    return "\n".join(lines) + "\n"
+
+def failure_mode_counts(primary_counts):
     # Failure mode breakdown
     cf_block   = primary_counts.get("fail_403", 0) + primary_counts.get("fail_429", 0)
     conn_err   = sum(v for k, v in primary_counts.items()
@@ -163,31 +177,9 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     timeout    = primary_counts.get("fail_timeout", 0)
     other_http = sum(v for k, v in primary_counts.items()
                      if k.startswith("fail_http_") or k == "fail_200_not_xml")
+    return cf_block, conn_err, timeout, other_http
 
-    # ASN distribution of passing proxies
-    passing_asns = Counter(
-        p["asn"]["autonomous_system_organization"]
-        for p in passing_proxies
-        if p.get("asn")
-    ) if passing_proxies else Counter()
-
-    # ASN distribution of neutral pool (to document DC-IP prior)
-    pool_asns = Counter(
-        p["asn"]["autonomous_system_organization"]
-        for p in proxies
-        if p.get("asn")
-    ).most_common(10)
-
-    # Verdict
-    if pass_count > 0:
-        verdict = "(a) — SIGNATURE was the blocker. curl_cffi-chrome passes; free proxy loop is viable."
-    elif cf_block > (conn_err + timeout) * 2:
-        verdict = "(b) — IP REPUTATION. Failures dominated by 403/429 CF blocks (not connection errors). curl_cffi cannot fix reputation blocks. Free approach DEAD => residential required."
-    elif (conn_err + timeout) > cf_block * 2:
-        verdict = "(c) — STALE POOL inconclusive. Failures dominated by connection errors/timeouts (proxy IPs dead), not CF responses. Cannot distinguish (a) from (b) without a fresher/larger pool."
-    else:
-        verdict = "(b/c ambiguous) — Mixed failure modes; neither CF-block nor stale-proxy clearly dominant."
-
+def build_header_lines(total):
     lines = []
     lines.append("# theblock.co curl_cffi-chrome Discriminator Run")
     lines.append(f"\nGenerated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
@@ -195,7 +187,11 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     lines.append(f"Primary target: `{TARGET_PRIMARY}`")
     lines.append(f"Secondary target: `{TARGET_SECONDARY}` (tested on passing proxies only)")
     lines.append(f"Concurrency: {CONCURRENCY}, timeout: {TIMEOUT}s/request")
+    return lines
 
+def build_primary_lines(total, primary_counts, pass_count, elapsed_primary,
+                        cf_block, conn_err, timeout, other_http):
+    lines = []
     lines.append("\n---")
     primary_label = TARGET_PRIMARY.split("/")[-1]
     lines.append(f"\n## Primary Results — `{primary_label}`")
@@ -213,7 +209,10 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     lines.append(f"| connection errors (refused/reset/SSL) | {conn_err} |")
     lines.append(f"| timeout | {timeout} |")
     lines.append(f"| other HTTP | {other_http} |")
+    return lines
 
+def build_passing_lines(passing_proxies):
+    lines = []
     if passing_proxies:
         lines.append("\n### Passing Proxies")
         lines.append(f"\n{len(passing_proxies)} proxies returned HTTP 200 + XML content:\n")
@@ -221,7 +220,10 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
             asn_org = p.get("asn", {}).get("autonomous_system_organization", "unknown")
             country = p.get("geolocation", {}).get("country", {}).get("iso_code", "??")
             lines.append(f"- `{proxy_url(p)}` — {asn_org} ({country})")
+    return lines
 
+def build_secondary_lines(passing_proxies, secondary_results, elapsed_secondary):
+    lines = []
     lines.append("\n---")
     lines.append("\n## Secondary Results — `sitemap_tbco_index.xml`")
     if secondary_results:
@@ -235,7 +237,24 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
         lines.append(f"\nIndex pass: {sec_pass} / {len(passing_proxies)}")
     else:
         lines.append("\nNot run (no proxies passed primary target).")
+    return lines
 
+def build_asn_lines(proxies, passing_proxies):
+    # ASN distribution of passing proxies
+    passing_asns = Counter(
+        p["asn"]["autonomous_system_organization"]
+        for p in passing_proxies
+        if p.get("asn")
+    ) if passing_proxies else Counter()
+
+    # ASN distribution of neutral pool (to document DC-IP prior)
+    pool_asns = Counter(
+        p["asn"]["autonomous_system_organization"]
+        for p in proxies
+        if p.get("asn")
+    ).most_common(10)
+
+    lines = []
     lines.append("\n---")
     lines.append("\n## ASN Context")
     lines.append("\n### Full pool ASN distribution (top 10 — confirming datacenter composition)")
@@ -250,12 +269,24 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
         lines.append("|---|---|")
         for org, count in passing_asns.most_common():
             lines.append(f"| {org} | {count} |")
+    return lines
 
+def build_verdict_lines(pass_count, cf_block, conn_err, timeout):
+    # Verdict
+    if pass_count > 0:
+        verdict = "(a) — SIGNATURE was the blocker. curl_cffi-chrome passes; free proxy loop is viable."
+    elif cf_block > (conn_err + timeout) * 2:
+        verdict = "(b) — IP REPUTATION. Failures dominated by 403/429 CF blocks (not connection errors). curl_cffi cannot fix reputation blocks. Free approach DEAD => residential required."
+    elif (conn_err + timeout) > cf_block * 2:
+        verdict = "(c) — STALE POOL inconclusive. Failures dominated by connection errors/timeouts (proxy IPs dead), not CF responses. Cannot distinguish (a) from (b) without a fresher/larger pool."
+    else:
+        verdict = "(b/c ambiguous) — Mixed failure modes; neither CF-block nor stale-proxy clearly dominant."
+
+    lines = []
     lines.append("\n---")
     lines.append("\n## Verdict")
     lines.append(f"\n**{verdict}**")
-
-    return "\n".join(lines) + "\n"
+    return lines
 
 if __name__ == "__main__":
     probe_curl_cffi_discriminator_workflow()

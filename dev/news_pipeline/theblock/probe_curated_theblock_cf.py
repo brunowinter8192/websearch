@@ -80,11 +80,17 @@ def write_report(proxies: list, results: list, proto_counts: Counter, concurrenc
     total = len(results)
     total_passed = len(passers)
 
-    # Per-protocol breakdown
-    proto_pass = Counter(proto for proto, _, ok in results if ok)
-    proto_fail = Counter(proto for proto, _, ok in results if not ok)
+    lines = build_config_and_results_lines(ts, concurrency, total, total_passed)
+    lines += build_protocol_lines(results, proto_counts)
+    lines += build_passing_lines(passers, total_passed)
+    lines += build_comparison_lines(total, total_passed)
 
-    lines = [
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
+def build_config_and_results_lines(ts: str, concurrency: int, total: int, total_passed: int) -> list[str]:
+    return [
         f"# Curated theblock CF-pass probe — {ts}",
         "",
         "## Run config",
@@ -103,6 +109,15 @@ def write_report(proxies: list, results: list, proto_counts: Counter, concurrenc
         f"| Passed CF gate | {total_passed} |",
         f"| Failed | {total - total_passed} |",
         f"| Overall pass rate | {total_passed/total*100:.3f}% |",
+    ]
+
+
+def build_protocol_lines(results: list, proto_counts: Counter) -> list[str]:
+    # Per-protocol breakdown
+    proto_pass = Counter(proto for proto, _, ok in results if ok)
+    proto_fail = Counter(proto for proto, _, ok in results if not ok)
+
+    lines = [
         "",
         "## Per-protocol breakdown",
         "",
@@ -115,8 +130,11 @@ def write_report(proxies: list, results: list, proto_counts: Counter, concurrenc
         n_fail = proto_fail[proto]
         rate = f"{n_pass/n_in*100:.3f}%" if n_in else "—"
         lines.append(f"| {proto} | {n_in} | {n_pass} | {n_fail} | {rate} |")
+    return lines
 
-    lines += [
+
+def build_passing_lines(passers: list, total_passed: int) -> list[str]:
+    lines = [
         "",
         "## Passing proxies",
         "",
@@ -130,17 +148,17 @@ def write_report(proxies: list, results: list, proto_counts: Counter, concurrenc
             lines.append(f"| {proto} | {hp} |")
     else:
         lines.append("None.")
+    return lines
 
-    lines += [
+
+def build_comparison_lines(total: int, total_passed: int) -> list[str]:
+    return [
         "",
         "## Comparison",
         "",
         f"jhao104 Stage 2 (http-only, scraped sources): 1/1177 = 0.085%",
         f"Curated (this run, all protocols): {total_passed}/{total} = {total_passed/total*100:.3f}%",
     ]
-
-    path.write_text("\n".join(lines) + "\n")
-    return path
 
 
 if __name__ == "__main__":

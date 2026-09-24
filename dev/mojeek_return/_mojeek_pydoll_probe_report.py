@@ -103,7 +103,15 @@ def _build_q2_section(phases: list) -> list[str]:
     unchallenged = [m for m in all_measurements if not m.challenge_served and m.total_ms is not None]
     challenged_totals = [m.total_ms for m in challenged]
     unchallenged_totals = [m.total_ms for m in unchallenged]
-    lines = [
+    lines = _q2_intro_lines()
+    lines += _q2_population_rows(challenged_totals, unchallenged_totals)
+    lines += _q2_split_lines(challenged)
+    lines += _q2_tab_lines(all_measurements)
+    return lines
+
+
+def _q2_intro_lines() -> list[str]:
+    return [
         "## Q2 — what does a challenged query cost in wall-clock time?",
         "",
         "Clock starts at the instruction before `tab.go_to(...)` and stops at the first poll at "
@@ -114,6 +122,10 @@ def _build_q2_section(phases: list) -> list[str]:
         "| Population | n | min | median | max | over 6.0s |",
         "|---|---|---|---|---|---|",
     ]
+
+
+def _q2_population_rows(challenged_totals: list, unchallenged_totals: list) -> list[str]:
+    lines = []
     for label, totals in (("challenged", challenged_totals), ("unchallenged", unchallenged_totals)):
         stats = summarize_durations(totals)
         over = count_over_budget(totals, ENGINE_WATCHDOG_BUDGET_MS)
@@ -121,7 +133,11 @@ def _build_q2_section(phases: list) -> list[str]:
             f"| {label} | {stats['n']} | {_fmt_ms(stats['min_ms'])} | {_fmt_ms(stats['median_ms'])} | "
             f"{_fmt_ms(stats['max_ms'])} | {over} |"
         )
-    lines += ["", "### Splits inside the challenged span", ""]
+    return lines
+
+
+def _q2_split_lines(challenged: list) -> list[str]:
+    lines = ["", "### Splits inside the challenged span", ""]
     for name, values in (
         ("navigation", [m.nav_ms for m in challenged]),
         ("widget in DOM", [m.widget_seen_ms for m in challenged]),
@@ -135,9 +151,13 @@ def _build_q2_section(phases: list) -> list[str]:
             f"- {name}: n={stats['n']}, min={_fmt_ms(stats['min_ms'])}ms, "
             f"median={_fmt_ms(stats['median_ms'])}ms, max={_fmt_ms(stats['max_ms'])}ms"
         )
+    return lines
+
+
+def _q2_tab_lines(all_measurements: list) -> list[str]:
     tab_stats = summarize_durations([m.new_tab_ms for m in all_measurements])
     kill_stats = summarize_durations([m.kill_tab_ms for m in all_measurements])
-    lines += [
+    return [
         "",
         f"- `new_tab()` around the span: n={tab_stats['n']}, median={_fmt_ms(tab_stats['median_ms'])}ms, "
         f"max={_fmt_ms(tab_stats['max_ms'])}ms",
@@ -148,7 +168,6 @@ def _build_q2_section(phases: list) -> list[str]:
         "not change it. The 'over 6.0s' column counts individual queries, not an average.",
         "",
     ]
-    return lines
 
 
 def _build_q3_section(phases: list, cookie_notes: list[str]) -> list[str]:

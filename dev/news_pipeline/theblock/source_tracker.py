@@ -61,46 +61,79 @@ def compute_run_stats(
     """Return per-source-url counters for this run."""
     src_proxies: dict[str, set[str]] = {r["url"]: r["proxies"] for r in source_results}
 
-    stats: dict[str, dict] = {
+    stats = _init_stats(src_proxies)
+
+    # unique_latest: proxies that belong exclusively to this source (not in any other)
+    _count_unique_latest(stats, src_proxies, hp_to_sources)
+
+    # checked: sampled proxies attributable to each source
+    _count_checked(stats, sample, hp_to_sources)
+
+    # alive: liveness-passing proxies attributable to each source
+    _count_alive(stats, liveness_results, hp_to_sources)
+
+    # cf_checked: neutral-alive proxies fed into Stage 2, per source
+    _count_proxy_urls(stats, neutral_alive, hp_to_sources, "cf_checked")
+
+    # cf_passed: CF-passing proxies per source
+    _count_proxy_urls(stats, cf_passing, hp_to_sources, "cf_passed")
+
+    return stats
+
+
+def _init_stats(src_proxies: dict[str, set[str]]) -> dict[str, dict]:
+    return {
         url: {"raw_unique": len(proxies), "checked": 0, "alive": 0,
               "cf_checked": 0, "cf_passed": 0, "unique_latest": 0}
         for url, proxies in src_proxies.items()
     }
 
-    # unique_latest: proxies that belong exclusively to this source (not in any other)
+
+def _count_unique_latest(
+    stats: dict[str, dict],
+    src_proxies: dict[str, set[str]],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
     for url, proxies in src_proxies.items():
         stats[url]["unique_latest"] = sum(
             1 for hp in proxies if len(hp_to_sources.get(hp, set())) == 1
         )
 
-    # checked: sampled proxies attributable to each source
+
+def _count_checked(
+    stats: dict[str, dict],
+    sample: list[tuple[str, str]],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
     for _proto, hp in sample:
         for src_url in hp_to_sources.get(hp, set()):
             if src_url in stats:
                 stats[src_url]["checked"] += 1
 
-    # alive: liveness-passing proxies attributable to each source
+
+def _count_alive(
+    stats: dict[str, dict],
+    liveness_results: list[dict],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
     for r in liveness_results:
         if r["alive"]:
             for src_url in hp_to_sources.get(r["host_port"], set()):
                 if src_url in stats:
                     stats[src_url]["alive"] += 1
 
-    # cf_checked: neutral-alive proxies fed into Stage 2, per source
-    for purl in neutral_alive:
+
+def _count_proxy_urls(
+    stats: dict[str, dict],
+    proxy_urls: list[str],
+    hp_to_sources: dict[str, set[str]],
+    field: str,
+) -> None:
+    for purl in proxy_urls:
         hp = purl.split("://")[1]
         for src_url in hp_to_sources.get(hp, set()):
             if src_url in stats:
-                stats[src_url]["cf_checked"] += 1
-
-    # cf_passed: CF-passing proxies per source
-    for purl in cf_passing:
-        hp = purl.split("://")[1]
-        for src_url in hp_to_sources.get(hp, set()):
-            if src_url in stats:
-                stats[src_url]["cf_passed"] += 1
-
-    return stats
+                stats[src_url][field] += 1
 
 
 def load_scoreboard() -> dict:
