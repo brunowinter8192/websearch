@@ -153,7 +153,7 @@ async def _prewarm_browser() -> None:
     try:
         await get_tab()
     except Exception as e:
-        logger.warning("Browser prewarm failed, engines will retry individually: %s", e)
+        logger.warning("Browser prewarm failed, browser engines are expected to fail individually, non-browser engines still run: %s", e)
 
 
 def _cap_pools(pools: dict) -> dict:

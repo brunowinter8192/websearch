@@ -132,10 +132,7 @@ class GoogleEngine(BaseEngine):
 # FUNCTIONS
 
 def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return result["result"]["result"]["value"]
 
 
 def _build_url(query: str, language: str, max_results: int) -> str:
@@ -284,9 +281,6 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     diag = {"title": "", "url": "", "ready_state": ""}
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     diag["marker"] = None
     return diag

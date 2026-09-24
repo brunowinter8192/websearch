@@ -1,11 +1,8 @@
 # INFRASTRUCTURE
-import logging
 import time
 
 from pydoll.protocol.network.events import NetworkEvent
 from pydoll.protocol.network.types import ResourceType
-
-logger = logging.getLogger(__name__)
 
 
 # FUNCTIONS
@@ -24,11 +21,8 @@ async def start_document_status_capture(tab) -> list[int]:
         if status is not None:
             status_chain.append(status)
 
-    try:
-        await tab.enable_network_events()
-        await tab.on(NetworkEvent.RESPONSE_RECEIVED, _on_response)
-    except Exception as e:
-        logger.warning("document-status capture setup failed (degrading to no observation): %s", e)
+    await tab.enable_network_events()
+    await tab.on(NetworkEvent.RESPONSE_RECEIVED, _on_response)
     return status_chain
 
 

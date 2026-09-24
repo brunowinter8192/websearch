@@ -89,10 +89,7 @@ class DuckDuckGoEngine(BaseEngine):
 # FUNCTIONS
 
 def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return result["result"]["result"]["value"]
 
 
 def _build_url(query: str) -> str:
@@ -156,10 +153,7 @@ async def _diagnose(tab) -> dict:
     val = _extract_value(raw)
     parsed = {"challenge_form_count": 0, "title": "", "url": "", "ready_state": ""}
     if val:
-        try:
-            parsed.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        parsed.update(json.loads(val))
     return {
         "marker": None,
         "challenge_form": bool(parsed.get("challenge_form_count", 0)),

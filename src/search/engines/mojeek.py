@@ -105,10 +105,7 @@ class MojeekEngine(BaseEngine):
 # FUNCTIONS
 
 def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
+    return result["result"]["result"]["value"]
 
 
 def _budget_deadline() -> float:
@@ -202,9 +199,6 @@ async def _diagnose(tab, trace: dict) -> dict:
         "challenge_widget": False, "challenge_state": None, "captcha_note": None,
     }
     if val:
-        try:
-            diag.update(json.loads(val))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        diag.update(json.loads(val))
     diag["challenge_triggered"] = trace.get("challenge_triggered", False)
     return diag
