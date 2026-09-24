@@ -1,3 +1,6 @@
+import json
+
+import httpx
 import pytest
 
 from src.crawler.seed_feeders_scope import FeederResult
@@ -6,7 +9,7 @@ from src.crawler.seed_feeders_navtree import (
     resolve_navigation_tree,
 )
 from src.crawler import seed_feeders
-from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _next_data_html, _rsc_html
+from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _next_data_html, _rsc_html
 
 
 def test_extract_payloads_detects_next_data_shape():
@@ -235,3 +238,38 @@ async def test_navtree_feeder_workflow_invalid_seed_url_is_failed_not_empty():
     assert result.ok is False
     assert result.urls == []
     assert result.error is not None
+
+
+def test_extract_payloads_malformed_next_data_raises():
+    html = '<html><script id="__NEXT_DATA__" type="application/json">{not json</script></html>'
+    with pytest.raises(json.JSONDecodeError):
+        extract_payloads(html)
+
+
+@pytest.mark.asyncio
+async def test_resolve_navigation_tree_network_error_on_seed_propagates():
+    client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
+    with pytest.raises(httpx.ConnectError):
+        await resolve_navigation_tree(client, "https://docs.example.com/")
+
+
+@pytest.mark.asyncio
+async def test_navtree_feeder_workflow_network_error_is_failed_with_error(monkeypatch):
+    client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: client)
+
+    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    assert result.ok is False
+    assert result.urls == []
+    assert "connection refused" in result.error
+
+
+@pytest.mark.asyncio
+async def test_navtree_feeder_workflow_malformed_next_data_is_failed_with_error(monkeypatch):
+    html = '<html><script id="__NEXT_DATA__" type="application/json">{not json</script></html>'
+    routes = {"https://docs.example.com/": _FakeResponse(200, text=html)}
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+
+    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    assert result.ok is False
+    assert result.error

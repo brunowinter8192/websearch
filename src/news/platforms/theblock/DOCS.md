@@ -37,12 +37,12 @@ Extra platform attributes (not in Protocol):
 
 ---
 
-### discover.py (161 LOC)
+### discover.py (155 LOC)
 
 **Purpose:** Sitemap-based article discovery. Fetches theblock sitemap index (direct httpx →
 proxy pool fallback), selects `post_type_post_*` sub-sitemaps by mode (`delta`/`full`/`sub:N`/`sub:A-B`),
 parses `<url>/<loc>/<lastmod>` blocks — no date filtering. Returns `[{url, lastmod}]` — NO
-`publication_date` (comes from JSON-LD post-fetch in cleanup).
+`publication_date` (comes from JSON-LD post-fetch in cleanup). The proxy-pool fallback triggers on the observed direct-fetch outcome (HTTP status other than 200 or no XML marker); a direct-fetch exception and an unparseable `lastmod` propagate (2026-09-24 Phase 4 pass).
 **Reads:** `https://www.theblock.co/sitemap_tbco_index.xml` + selected sub-sitemaps (network).
 **Writes:** nothing.
 **Called by:** `__init__.py:TheBlockPlatform.discover`.

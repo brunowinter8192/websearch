@@ -56,10 +56,7 @@ async def discover(timeframe: str = "30") -> list[dict]:
 def _parse_stop_date(timeframe: str) -> str:
     if timeframe == "full":
         return FULL_MODE_FLOOR
-    try:
-        n = int(timeframe)
-    except ValueError:
-        n = DEFAULT_DELTA_DAYS
+    n = DEFAULT_DELTA_DAYS if timeframe == "delta" else int(timeframe)
     floor = datetime.now(timezone.utc).date() - timedelta(days=n)
     return floor.isoformat()
 

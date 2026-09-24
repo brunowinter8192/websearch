@@ -13,11 +13,8 @@ _DIRECTIVE_RE = re.compile(r'^\s*(allow|disallow|sitemap)\s*:\s*(.+?)\s*$', re.I
 
 async def fetch_robots_txt(client: httpx.AsyncClient, base_url: str) -> str | None:
     robots_url = urljoin(base_url, "/robots.txt")
-    try:
-        response = await client.get(robots_url, timeout=HTTP_TIMEOUT_S,
-                                    headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    except httpx.HTTPError:
-        return None
+    response = await client.get(robots_url, timeout=HTTP_TIMEOUT_S,
+                                headers={"User-Agent": USER_AGENT}, follow_redirects=True)
     if response.status_code != 200:
         return None
     return response.text

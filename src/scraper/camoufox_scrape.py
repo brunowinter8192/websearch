@@ -92,16 +92,13 @@ def _ensure_no_focus_steal(executable_path: str | None) -> None:
 
 def _resolve_system_locale() -> str:
     if sys.platform == "darwin":
-        try:
-            result = subprocess.run(
-                ["defaults", "read", "-g", "AppleLocale"],
-                capture_output=True, text=True, timeout=5, check=True,
-            )
-            apple_locale = result.stdout.strip()
-            if apple_locale:
-                return apple_locale.replace("_", "-")
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        result = subprocess.run(
+            ["defaults", "read", "-g", "AppleLocale"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        apple_locale = result.stdout.strip()
+        if apple_locale:
+            return apple_locale.replace("_", "-")
     language_tag, _ = locale.getlocale()
     return language_tag.replace("_", "-") if language_tag else "en-US"
 

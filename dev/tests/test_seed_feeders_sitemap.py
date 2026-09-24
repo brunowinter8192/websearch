@@ -1,9 +1,13 @@
+import gzip
+from xml.etree import ElementTree
+
+import httpx
 import pytest
 
 from src.crawler.seed_feeders_scope import FeederResult
 from src.crawler.seed_feeders_sitemap import fetch_sitemap, parse_sitemap_xml, resolve_sitemap_urls
 from src.crawler import seed_feeders
-from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _xml
+from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _xml
 
 
 def test_parse_sitemap_xml_urlset():
@@ -30,9 +34,9 @@ def test_parse_sitemap_xml_sitemapindex():
     assert urls == ["https://example.com/sub1.xml", "https://example.com/sub2.xml"]
 
 
-def test_parse_sitemap_xml_malformed_returns_unknown():
-    kind, urls = parse_sitemap_xml(b"not xml at all <<<")
-    assert (kind, urls) == ("unknown", [])
+def test_parse_sitemap_xml_malformed_raises_parse_error():
+    with pytest.raises(ElementTree.ParseError):
+        parse_sitemap_xml(b"not xml at all <<<")
 
 
 def test_parse_sitemap_xml_unrelated_root_returns_unknown():
@@ -175,3 +179,38 @@ async def test_sitemap_feeder_workflow_drops_foreign_host_urls(monkeypatch):
 
     result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.urls == ["https://docs.example.com/a"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_sitemap_network_error_propagates():
+    client = _RaisingAsyncClient(httpx.ReadTimeout("read timed out"))
+    with pytest.raises(httpx.ReadTimeout):
+        await fetch_sitemap(client, "https://example.com/sitemap.xml")
+
+
+@pytest.mark.asyncio
+async def test_fetch_sitemap_corrupt_gz_raises():
+    client = _FakeAsyncClient({"https://example.com/sitemap.xml.gz": _FakeResponse(200, content=b"not gzip data")})
+    with pytest.raises(OSError):
+        await fetch_sitemap(client, "https://example.com/sitemap.xml.gz")
+
+
+@pytest.mark.asyncio
+async def test_fetch_sitemap_valid_gz_is_decompressed():
+    body = _xml("<urlset/>")
+    client = _FakeAsyncClient({"https://example.com/sitemap.xml.gz": _FakeResponse(200, content=gzip.compress(body))})
+    assert await fetch_sitemap(client, "https://example.com/sitemap.xml.gz") == body
+
+
+@pytest.mark.asyncio
+async def test_sitemap_feeder_workflow_non_xml_sitemap_is_failed_with_error(monkeypatch):
+    routes = {
+        "https://docs.example.com/robots.txt": _FakeResponse(404),
+        "https://docs.example.com/sitemap.xml": _FakeResponse(200, content=b"<html><body>app shell</body>"),
+    }
+    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+
+    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    assert result.ok is False
+    assert result.urls == []
+    assert result.error

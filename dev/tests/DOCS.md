@@ -117,7 +117,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/camoufox_scrape.py try_scrape_camoufox: acquisition-error states, urlsplit regression, markdown-conversion failure, document-status chain.
 
-### test_camoufox_scrape_output.py (168 LOC)
+### test_camoufox_scrape_output.py (188 LOC)
 
 **Purpose:** src/scraper/camoufox_scrape.py: calibration kwargs and config stamp, scrape_url_camoufox_workflow logging, output format.
 
@@ -150,7 +150,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/scraper/chromium_process.py: self-launch mechanics, live crawl4ai flag-parity guard, profile pid parsing, orphan reaping.
 
-### _seed_feeders_fakes.py (36 LOC)
+### _seed_feeders_fakes.py (51 LOC)
 
 **Purpose:** Shared fake httpx client and XML/HTML payload builders. Not collected by pytest.
 **Called by:** test_seed_feeders_robots.py, test_seed_feeders_sitemap.py, test_seed_feeders_navtree.py.
@@ -159,15 +159,15 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/crawler/seed_feeders_scope.py: normalize_url merge-vs-keep-distinct boundary and scope_and_dedup.
 
-### test_seed_feeders_robots.py (91 LOC)
+### test_seed_feeders_robots.py (110 LOC)
 
 **Purpose:** src/crawler/seed_feeders_robots.py: directive parsing, fetch with a fake client, feeder workflow.
 
-### test_seed_feeders_sitemap.py (177 LOC)
+### test_seed_feeders_sitemap.py (216 LOC)
 
 **Purpose:** src/crawler/seed_feeders_sitemap.py: sitemap parsing, nested index resolution, cycle guard, feeder workflow.
 
-### test_seed_feeders_navtree.py (237 LOC)
+### test_seed_feeders_navtree.py (275 LOC)
 
 **Purpose:** src/crawler/seed_feeders_navtree.py: payload detection, tree finding tiers, version union, feeder workflow.
 
@@ -235,7 +235,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/clean_pass.py _run_clean_pass: clean file write, bodyless URL union, raw files read-only.
 
-### test_theblock_discover.py (130 LOC)
+### test_theblock_discover.py (171 LOC)
 
 **Purpose:** src/news/platforms/theblock/discover.py: sub:A-B range selection and dispatch error paths.
 
@@ -243,9 +243,13 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [].
 
+### test_coindesk_stop_date.py (27 LOC)
+
+**Purpose:** src/news/platforms/coindesk/discover.py _parse_stop_date: full, explicit delta, integer days, unparseable value raises.
+
 ### test_log_janitor.py (92 LOC)
 
-**Purpose:** src/log_janitor.py: get_retention_days default and malformed-value behavior, JSONL and sidecar pruning, marker creation, recent-marker fast path, stale-marker re-run.
+**Purpose:** src/log_janitor.py get_retention_days: default and malformed-value behavior.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches four browser-launch names per test through an autouse fixture; every other state (module globals of the code under test, environment variables, log paths) is reset per test through `monkeypatch` and `tmp_path`.

@@ -1,6 +1,8 @@
+import httpx
 import pytest
 
-from src.news.platforms.theblock.discover import _subs_in_range, _sub_by_index
+from src.news.platforms.theblock import discover as theblock_discover
+from src.news.platforms.theblock.discover import _subs_in_range, _sub_by_index, _fetch_direct, _parse_url_blocks
 
 
 def _make_urls(indices: list[int]) -> list[str]:
@@ -128,3 +130,42 @@ def test_range_no_existing_sub_in_range_raises():
     with patch("src.news.platforms.theblock.discover._fetch_xml", return_value=fake_index):
         with pytest.raises(RuntimeError, match="matched no post_type_post"):
             asyncio.run(__import__("src.news.platforms.theblock.discover", fromlist=["discover"]).discover("sub:10-20"))
+
+
+class _FakeHttpResponse:
+    def __init__(self, status_code: int, content: bytes):
+        self.status_code = status_code
+        self.content = content
+
+
+def test_fetch_direct_403_without_xml_marker_returns_none_for_pool_fallback(monkeypatch):
+    monkeypatch.setattr(theblock_discover.httpx, "get", lambda *a, **kw: _FakeHttpResponse(403, b"<html>blocked</html>"))
+    assert _fetch_direct("https://www.theblock.co/sitemap_tbco_index.xml") is None
+
+
+def test_fetch_direct_200_with_xml_marker_returns_content(monkeypatch):
+    body = b'<?xml version="1.0"?><sitemapindex/>'
+    monkeypatch.setattr(theblock_discover.httpx, "get", lambda *a, **kw: _FakeHttpResponse(200, body))
+    assert _fetch_direct("https://www.theblock.co/sitemap_tbco_index.xml") == body
+
+
+def test_fetch_direct_network_exception_propagates(monkeypatch):
+    def _raise(*a, **kw):
+        raise httpx.ConnectError("connection refused")
+    monkeypatch.setattr(theblock_discover.httpx, "get", _raise)
+    with pytest.raises(httpx.ConnectError):
+        _fetch_direct("https://www.theblock.co/sitemap_tbco_index.xml")
+
+
+def _url_block(lastmod: str) -> bytes:
+    return f"<url><loc>https://www.theblock.co/post/1/a</loc><lastmod>{lastmod}</lastmod></url>".encode()
+
+
+def test_parse_url_blocks_reads_iso_lastmod():
+    results = _parse_url_blocks(_url_block("2026-06-15T10:00:00Z"))
+    assert [(u, m.isoformat()) for u, m in results] == [("https://www.theblock.co/post/1/a", "2026-06-15T10:00:00+00:00")]
+
+
+def test_parse_url_blocks_unparseable_lastmod_raises():
+    with pytest.raises(ValueError):
+        _parse_url_blocks(_url_block("not-a-date"))
