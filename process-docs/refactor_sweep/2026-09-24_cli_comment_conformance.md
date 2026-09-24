@@ -45,3 +45,21 @@ one dispatcher call per branch: `_dispatch_search_web`, `_dispatch_search_engine
 check lives in `_dispatch_scrape_url_chromium` as an early return before the workflow call (no
 sentinel, no shared `result` variable). `_write_discovery_output` moved below its caller for
 stepdown order. LOC heading 213 -> 218. Tests: 476 passed; all `--help` checks unchanged.
+
+## Recap (2026-09-24)
+
+Files changed versus `integration`: `cli.py`, `DOCS.md` (root), this file. Final state verified:
+cli.py 218 LOC (matches the DOCS.md heading), 476 tests passed before and after, `--help` of the CLI
+and all 5 subcommands exit 2 with the skill-pointer text.
+
+Lessons for a successor:
+- `sed -i` with BSD sed on macOS needs an explicit backup-suffix argument; a failed sed inside a
+  `;` chain does not stop the commit that follows. Use Edit for DOCS.md changes and check each
+  segment's own output.
+- A section-marker restructure of a file with import-time side effects is safe as long as only
+  function definitions move; the `sys.path` insert, logging setup and `src.*` imports stay in
+  their original order in INFRASTRUCTURE.
+- The orchestrator (`main`) must contain no logic at all: even a `urlparse` check or
+  `print(result[0].text)` belongs in a per-command dispatcher, with early returns instead of
+  sentinels.
+- Root DOCS.md is a real drift source for CLI flags: check the argparse wiring, not older DOCS text.
