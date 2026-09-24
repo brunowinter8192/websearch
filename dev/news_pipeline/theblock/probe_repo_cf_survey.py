@@ -40,13 +40,14 @@ def probe_repo_cf_survey_workflow() -> None:
     write_report_header(report_path, ts, repo_groups)
 
     print("\n[1/3] Fetching proxy lists...")
-    repo_proxies = asyncio.run(fetch_all_repos(repo_groups))
+    repo_proxies, failed_sources = asyncio.run(fetch_all_repos(repo_groups))
 
+    print(f"\nFailed sources: {len(failed_sources)}")
     print("\nRepo unique counts:")
     for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
         print(f"  {rk:<30} {len(proxies):>7,}")
 
-    write_fetch_summary(report_path, repo_proxies)
+    write_fetch_summary(report_path, repo_proxies, failed_sources)
 
     print(f"\n[2/3] CF-checking repos (sample={SAMPLE_SIZE}, concurrency={CONCURRENCY})...")
     repo_results = {}
@@ -108,36 +109,41 @@ def parse_proxy_line(line: str) -> str | None:
 
 
 async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
-                    protocol: str, url: str, is_mixed: bool) -> set:
+                    protocol: str, url: str, is_mixed: bool) -> tuple[set, str | None]:
     async with sem:
         try:
             r = await client.get(url, timeout=FETCH_TIMEOUT, follow_redirects=True)
             if r.status_code != 200:
-                return set()
+                return set(), f"HTTP {r.status_code}"
             result = set()
             for line in r.text.splitlines():
                 hp = parse_proxy_line(line)
                 if hp:
                     result.add((protocol, hp))
-            return result
-        except Exception:
-            return set()
+            return result, None
+        except Exception as e:
+            return set(), f"{type(e).__name__}: {str(e)[:100]}"
 
 
-async def fetch_all_repos(repo_groups: dict) -> dict:
+async def fetch_all_repos(repo_groups: dict) -> tuple[dict, list]:
     sem = asyncio.Semaphore(20)
     repo_proxies: dict[str, set] = defaultdict(set)
+    failed_sources: list[tuple[str, str, str, str]] = []
     async with httpx.AsyncClient() as client:
         tasks = []
         repo_keys = []
+        source_refs = []
         for rk, entries in repo_groups.items():
             for protocol, url, is_mixed in entries:
                 tasks.append(fetch_one(client, sem, protocol, url, is_mixed))
                 repo_keys.append(rk)
+                source_refs.append((protocol, url))
         results = await asyncio.gather(*tasks)
-    for rk, proxies in zip(repo_keys, results):
+    for rk, (protocol, url), (proxies, error) in zip(repo_keys, source_refs, results):
         repo_proxies[rk].update(proxies)
-    return dict(repo_proxies)
+        if error is not None:
+            failed_sources.append((rk, protocol, url, error))
+    return dict(repo_proxies), failed_sources
 
 
 def check_proxy(protocol: str, host_port: str) -> bool:
@@ -196,7 +202,7 @@ def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_fetch_summary(path: Path, repo_proxies: dict) -> None:
+def write_fetch_summary(path: Path, repo_proxies: dict, failed_sources: list) -> None:
     lines = [
         "## Fetch summary (unique proxies per repo)",
         "",
@@ -207,6 +213,13 @@ def write_fetch_summary(path: Path, repo_proxies: dict) -> None:
         protos = Counter(p for p, _ in proxies)
         proto_str = " ".join(f"{k}:{v}" for k, v in sorted(protos.items()))
         lines.append(f"| {rk} | {len(proxies):,} | {proto_str} |")
+    lines += ["", "### Failed sources", ""]
+    if failed_sources:
+        lines += ["| Repo | Protocol | URL | Error |", "|---|---|---|---|"]
+        for rk, protocol, url, error in failed_sources:
+            lines.append(f"| {rk} | {protocol} | {url} | {error} |")
+    else:
+        lines.append("None.")
     lines += ["", "---", ""]
     with open(path, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

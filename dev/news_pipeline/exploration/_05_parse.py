@@ -7,10 +7,7 @@ TIMELINE_BASE = "https://www.coindesk.com/api/v1/articles/timeline"
 # FUNCTIONS
 
 def parse_articles(body: bytes) -> list:
-    try:
-        data = json.loads(body)
-    except Exception:
-        return []
+    data = json.loads(body)
     articles = data if isinstance(data, list) else None
     if isinstance(data, dict):
         for v in data.values():

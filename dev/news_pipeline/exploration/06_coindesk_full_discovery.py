@@ -63,10 +63,7 @@ def full_discovery() -> None:
 # FUNCTIONS
 
 def parse_articles(body: bytes) -> list:
-    try:
-        data = json.loads(body)
-    except Exception:
-        return []
+    data = json.loads(body)
     articles = data if isinstance(data, list) else None
     if isinstance(data, dict):
         for v in data.values():
@@ -211,7 +208,7 @@ def process_batch(body: bytes, year_files: dict, seen_ids: set, year_counts: def
                    oldest_date, log_fh) -> dict:
     articles = parse_articles(body)
     if not articles:
-        log(log_fh, "Empty response — reached API bottom or parse failure. Stopping.")
+        log(log_fh, "Empty response — reached API bottom. Stopping.")
         return {"stop": True, "articles": None, "oldest_date": oldest_date, "added": 0}
 
     added, batch_oldest = write_batch_articles(articles, year_files, seen_ids, year_counts)

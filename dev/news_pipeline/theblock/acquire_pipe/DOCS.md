@@ -21,9 +21,9 @@ Production-candidate acquire pipeline for theblock.co content. Fetches a defined
 **Called by:** `p4_loop.run_loop`, `p6_buffer`, `p3_target`, `acquire_pipe.py`.
 **Calls out:** `proxy_status_log.proxy_key`.
 
-### p3_target.py (57 LOC)
+### p3_target.py (53 LOC)
 
-**Purpose:** Sitemap target builder. Fetches theblock index → parses 64 sub-sitemap `<loc>` URLs. Direct httpx GET first; falls back to proxy rotation on non-XML response (403, CF challenge, error). Proxy pool is caller-supplied (no internal pool load).
+**Purpose:** Sitemap target builder. Fetches theblock index → parses 64 sub-sitemap `<loc>` URLs. Direct httpx GET first; falls back to proxy rotation on a non-XML response (403, CF challenge); a network error raised by the direct GET propagates. Proxy pool is caller-supplied (no internal pool load).
 **Reads:** `THEBLOCK_INDEX` via httpx (direct) or `p1_fetch.fetch_url` (proxy fallback).
 **Writes:** returns `list[str]` of 64 sub-sitemap URLs.
 **Called by:** `acquire_pipe.py`.

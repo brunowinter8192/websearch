@@ -424,3 +424,266 @@ Line numbers refer to the files before this commit (`git show 42f96a5~1:<path>`)
   DOCS.md say pool order is preserved with no socks4-first sort. The docstring was the stale side.
 - `run_pipeline.py` carried `# searxng-cli/` on `PROJECT_ROOT` (leftover from the project rename).
 - The 21-vs-25 figure above.
+
+
+# Phase 4 - control-flow triage of dev/news_pipeline (2026-09-24, same session), step 1: classification only
+
+Scope: `dev/news_pipeline/` without `jhao104/` and `monosans_*`. Scan: the orchestrator's `exscan.py` classifier
+(copied into a session-private directory) run per handler: 113 handlers, 3 TRIPWIRE (not triaged), 110
+non-TRIPWIRE (101 PRODUCES-OUTPUT, 7 LOG-ONLY, 2 SWALLOW-FLOW). Every one of the 110 was read in its
+function, callers were followed where the return value decides what happens next. No code was changed in this step.
+
+## Classes and verdict rule used
+
+A status/report, B fallback, C silent swallow, D best-effort teardown, E input-shape outcome (definitions as
+given in the task). A B row is `B-keep` only if the triggering condition was observed AND the path is traceable;
+observation sources searched: `src/logs/` of the main checkout (`coindesk_pipeline_*.log`, `news_coindesk_*.log`,
+`news_theblock_*.log`, `cli.log*`; these are production-pipeline logs from June, none of them was written by the
+dev scripts of this directory), `dev/news_pipeline/**/md/` and the `05b_output` report, and the areas
+`news_pipeline`, `pooling`, `refactor_sweep` of process-docs.
+
+## Counts
+
+| Class | Count |
+|---|---|
+| A status/report | 45 |
+| B fallback | 24 (23 B-remove, 1 B-keep-needs-logging, 0 B-keep) |
+| C silent swallow | 1 |
+| D best-effort cleanup | 20 |
+| E input-shape | 20 |
+| total | 110 |
+
+## Findings that decide the B rows
+
+- **Precedent, same handler shape already removed from src/:** `refactor_sweep` entries of 2026-09-09 removed
+  (1) `parse_articles` returning `[]` on any JSON error (the stop message could not tell "API bottom" from "parse
+  failure") and (2) the stub `job.md` written when the riding reporter fails. The dev copies survive here:
+  `exploration/06_coindesk_full_discovery.py::parse_articles` (its stop message still says "reached API bottom or
+  parse failure"), `exploration/_05_parse.py::parse_articles`, and `_p2_watchdog._write_stall_job_md` with its
+  nested stub-write handler. No process-docs entry documents a real parse failure or reporter failure ever occurring.
+- **The `_extract_value` family** (`raw["result"]["result"]["value"]` -> `None`, then `json.loads` failure ->
+  `[]`/`{}`/`None`/`{"found": False, ...}`) exists in `01_coindesk_discover.py` and seven exploration modules. All
+  the JS snippets return an explicit value (`JSON.stringify(...)`, a number or a boolean), so a missing `value` key or
+  a non-JSON string means the evaluation itself went wrong, not that the page is empty. The defaults turn that into
+  "no articles" (the click loop then stops as a plateau) or "button gone" (`_03_capture.check_btn_state` default
+  `found: False` ends the traversal as if the feed ended). No log or report shows such a case. The daily runner
+  `run_pipeline.py` executes `01_coindesk_discover.py`, so its two handlers are not only exploration code.
+- **Observed condition behind the kept parts of `p3_target`/`probe_48h`:** production logs show the home IP getting
+  `403 Forbidden` on `sitemap_tbco_index.xml` (`news_theblock_20260618.log`), and the `news_pipeline` area records
+  the home-IP CF block. That covers the status-based path (which is not an except handler and is untouched). The
+  except arm only covers raised network errors, and none was found, hence the weak B-remove.
+
+## Rows (file paths relative to `dev/news_pipeline/`)
+
+| file:line | function | scan | class | verdict | evidence |
+|---|---|---|---|---|---|
+| 01_coindesk_discover.py:195 | teardown_chrome_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| 01_coindesk_discover.py:242 | kill_chrome_on_port | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| 01_coindesk_discover.py:253 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| 01_coindesk_discover.py:264 | extract_articles | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| 01_coindesk_discover.py:289 | parse_url_date | PRODUCES-OUTPUT | E | allow | URL without a valid /YYYY/MM/DD/ path or without the host is a real input shape; callers skip it or label it unknown |
+| 01_coindesk_discover.py:308 | _extract_section | PRODUCES-OUTPUT | E | allow | URL without a valid /YYYY/MM/DD/ path or without the host is a real input shape; callers skip it or label it unknown |
+| 01_coindesk_discover.py:231 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| 02_coindesk_scrape.py:73 | scrape_one_url | PRODUCES-OUTPUT | A | allow | exception becomes an explicit per-URL status (failed/error field) in the manifest and stderr |
+| 02b_coindesk_scrape_fresh_context.py:140 | _fetch_one | PRODUCES-OUTPUT | A | allow | exception becomes an explicit per-URL status (failed/error field) in the manifest and stderr |
+| coindesk_proxy_riding/_p2_fetch.py:59 | _fetch_one_url | PRODUCES-OUTPUT | A | allow | exception becomes an explicit per-URL status (failed/error field) in the manifest and stderr |
+| coindesk_proxy_riding/_p2_fetch.py:67 | _fetch_one_url | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| coindesk_proxy_riding/_p2_watchdog.py:81 | _write_stall_job_md | PRODUCES-OUTPUT | B | B-remove | stub job.md when write_riding_report fails; identical to the stub removed from src (abort_stub_removal); no reporter failure observed |
+| coindesk_proxy_riding/_p2_watchdog.py:55 | _drain_queue | SWALLOW-FLOW | E | allow | QueueEmpty is the loop terminator of a drain |
+| coindesk_proxy_riding/_p2_watchdog.py:99 | _write_stall_job_md | PRODUCES-OUTPUT | B | B-remove | stub job.md when write_riding_report fails; identical to the stub removed from src (abort_stub_removal); no reporter failure observed |
+| coindesk_proxy_riding/_test_tail_race_watchdog.py:46 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| coindesk_proxy_riding/p0_pool.py:203 | _try_source | PRODUCES-OUTPUT | A | allow | pool source failure recorded as ok=False in the returned sources list |
+| coindesk_proxy_riding/p0_pool.py:158 | fetch_with_retry | PRODUCES-OUTPUT | A | allow | bounded retry; last exception is re-raised after the final attempt (loud) |
+| coindesk_proxy_riding/p2_browser_rider.py:119 | _get_next_queue_url | PRODUCES-OUTPUT | E | allow | empty queue after a 10 s wait is the normal 'nothing left' outcome; loop checks all_resolved |
+| coindesk_proxy_riding/p2_browser_rider.py:255 | smoke | PRODUCES-OUTPUT | A | allow | smoke timeout printed as TIMEOUT and reported as partial results |
+| coindesk_proxy_riding/run_coindesk_riding.py:100 | _raise_fd_limit | PRODUCES-OUTPUT | A | allow | warning with the manual ulimit instruction on stderr |
+| coindesk_proxy_riding/smoke_stage1.py:46 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/smoke_stage1.py:49 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/smoke_stage1.py:149 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| coindesk_proxy_riding/test_cooldown_policy.py:46 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_cooldown_policy.py:49 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_sigint_report.py:40 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_sigint_report.py:43 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_sigint_report.py:156 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| coindesk_proxy_riding/test_sigint_report.py:190 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| coindesk_proxy_riding/test_tail_race.py:48 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_tail_race.py:51 | _run | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_watchdog.py:45 | _run_test | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_watchdog.py:48 | _run_test | PRODUCES-OUTPUT | A | allow | test runner: AssertionError/Exception becomes FAIL/ERROR line and a False result that sets the exit code |
+| coindesk_proxy_riding/test_watchdog.py:87 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| coindesk_proxy_riding/test_watchdog.py:124 | run | PRODUCES-OUTPUT | E | allow | test intercepts the patched os._exit (SystemExit) and asserts the recorded exit code |
+| exploration/01_coindesk_ui_probe.py:151 | parse_url_date | PRODUCES-OUTPUT | E | allow | URL without a valid /YYYY/MM/DD/ path or without the host is a real input shape; callers skip it or label it unknown |
+| exploration/01_coindesk_ui_probe.py:53 | probe_workflow | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/03_coindesk_backfill_traversal.py:263 | parse_url_date | PRODUCES-OUTPUT | E | allow | URL without a valid /YYYY/MM/DD/ path or without the host is a real input shape; callers skip it or label it unknown |
+| exploration/03_coindesk_backfill_traversal.py:289 | _extract_section | PRODUCES-OUTPUT | E | allow | URL without a valid /YYYY/MM/DD/ path or without the host is a real input shape; callers skip it or label it unknown |
+| exploration/03_coindesk_backfill_traversal.py:242 | teardown_backfill_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/03_coindesk_backfill_traversal.py:247 | teardown_backfill_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/04_coindesk_timeline_replay_probe.py:126 | teardown_replay_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/04_coindesk_timeline_replay_probe.py:131 | teardown_replay_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/05_coindesk_cursor_probe.py:111 | teardown_chrome_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/05_coindesk_cursor_probe.py:116 | teardown_chrome_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/05b_coindesk_warmth_probe.py:201 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/05b_coindesk_warmth_probe.py:294 | fetch_feedpage | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/05b_coindesk_warmth_probe.py:325 | subprocess_cold_test | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/05b_coindesk_warmth_probe.py:327 | subprocess_cold_test | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/05b_coindesk_warmth_probe.py:148 | teardown_chrome_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/05b_coindesk_warmth_probe.py:153 | teardown_chrome_session | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/05b_coindesk_warmth_probe.py:189 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| exploration/05b_coindesk_warmth_probe.py:245 | run_warmth_ladder | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/06_coindesk_full_discovery.py:68 | parse_articles | PRODUCES-OUTPUT | B | B-remove | same handler as the removed src coindesk parse_articles fallback: [] on any parse error is indistinguishable from API bottom |
+| exploration/06_coindesk_full_discovery.py:102 | fetch_feedpage | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/06_coindesk_full_discovery.py:330 | cursor_loop | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/_01_dom.py:178 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_01_dom.py:189 | inspect_containers | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_01_dom.py:200 | extract_articles | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_01_dom.py:221 | find_button | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_03_capture.py:166 | kill_chrome_on_port | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/_03_capture.py:173 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_03_capture.py:184 | extract_articles | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_03_capture.py:210 | check_btn_state | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_03_capture.py:158 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| exploration/_03_report.py:103 | _render_stage_b_projection | PRODUCES-OUTPUT | A | allow | projection error is written into the report text itself |
+| exploration/_04_capture.py:86 | kill_chrome_on_port | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/_04_capture.py:93 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_04_capture.py:78 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| exploration/_04_replay.py:28 | replay_httpx | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/_04_replay.py:38 | replay_curl_cffi | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/_04_replay.py:45 | extract_cursor | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/_04_replay.py:80 | count_articles | PRODUCES-OUTPUT | B | B-remove | count 0 for an unparseable 200 body looks like a genuine empty batch in the report; no such body observed |
+| exploration/_04_replay.py:94 | extract_json_sample | PRODUCES-OUTPUT | E | allow | optional diagnostic sample; absence is printed as no sample |
+| exploration/_04_replay.py:308 | inspect_cursor_source | PRODUCES-OUTPUT | A | allow | failure becomes a sentinel status (-1 / error field) that the report table prints |
+| exploration/_05_capture.py:94 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_05_capture.py:82 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| exploration/_05_parse.py:12 | parse_articles | PRODUCES-OUTPUT | B | B-remove | same handler as the removed src coindesk parse_articles fallback: [] on any parse error is indistinguishable from API bottom |
+| exploration/_06_capture.py:99 | _extract_value | PRODUCES-OUTPUT | B | B-remove | CDP/JSON unwrap failure becomes None/[]/{}/found=False, which callers read as 'no articles' or 'button gone'; no log shows such a failure ever happened |
+| exploration/_06_capture.py:87 | wait_for_ws_url | LOG-ONLY | E | allow | poll loop: 'not ready yet' is the expected outcome while Chrome starts; after the deadline TimeoutError is raised |
+| exploration/_06_capture.py:162 | browser_load_feed | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| exploration/_06_capture.py:167 | browser_load_feed | PRODUCES-OUTPUT | D | allow | best-effort teardown; failure printed, nothing downstream depends on it |
+| run_pipeline.py:97 | check_preconditions | PRODUCES-OUTPUT | A | allow | logged error plus explicit failure return; the caller aborts or skips the stage |
+| run_pipeline.py:146 | run_stage_discover | PRODUCES-OUTPUT | A | allow | logged error plus explicit failure return; the caller aborts or skips the stage |
+| run_pipeline.py:235 | _run | PRODUCES-OUTPUT | A | allow | logged error plus explicit failure return; the caller aborts or skips the stage |
+| run_pipeline.py:238 | _run | PRODUCES-OUTPUT | A | allow | logged error plus explicit failure return; the caller aborts or skips the stage |
+| scrape_isolation_smoke.py:126 | fetch_one | PRODUCES-OUTPUT | A | allow | smoke script prints a per-URL ERR line; a missing file shows as found=False in the review table |
+| scrape_isolation_smoke.py:149 | fetch_one | PRODUCES-OUTPUT | A | allow | smoke script prints a per-URL ERR line; a missing file shows as found=False in the review table |
+| theblock/_pipe_theblock_cf.py:24 | cf_get | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/_probe_liveness_classify.py:55 | check_proxy | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/_probe_liveness_classify.py:59 | check_proxy | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/_probe_liveness_classify.py:63 | check_proxy | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/acquire_pipe/box_lock.py:29 | cleanup_stale | PRODUCES-OUTPUT | D | allow | stale-sidecar cleanup is best effort; on failure the lock stays held (conservative), flock itself is the authority |
+| theblock/acquire_pipe/box_lock.py:36 | cleanup_stale | LOG-ONLY | D | allow | stale-sidecar cleanup is best effort; on failure the lock stays held (conservative), flock itself is the authority |
+| theblock/acquire_pipe/box_lock.py:38 | cleanup_stale | PRODUCES-OUTPUT | D | allow | stale-sidecar cleanup is best effort; on failure the lock stays held (conservative), flock itself is the authority |
+| theblock/acquire_pipe/box_lock.py:84 | _busy_message | PRODUCES-OUTPUT | A | allow | busy message says explicitly 'sidecar unreadable' |
+| theblock/acquire_pipe/p1_fetch.py:19 | fetch_url | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/acquire_pipe/p3_target.py:37 | _fetch_index_direct | PRODUCES-OUTPUT | B | B-remove | weak: direct fetch OK-or-proxy fallback path itself is observed (home IP 403) and printed; this except arm covers only raised network errors, none observed |
+| theblock/probe_48h_article_fetch.py:105 | _fetch_index_direct | PRODUCES-OUTPUT | B | B-remove | weak: direct fetch OK-or-proxy fallback path itself is observed (home IP 403) and printed; this except arm covers only raised network errors, none observed |
+| theblock/probe_48h_article_fetch.py:152 | _parse_url_blocks | SWALLOW-FLOW | C | remove | malformed lastmod silently drops the URL from the 48h delta list; no malformed lastmod observed |
+| theblock/probe_curated_theblock_cf.py:43 | check_proxy | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_curl_cffi_discriminator.py:111 | check_one | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_curl_cffi_discriminator.py:124 | run_checks | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_discovery.py:113 | load_sub_cache | PRODUCES-OUTPUT | B | B-remove | weak: self-heal refetch/skip on corrupt cache file, printed as WARNING; no corrupt cache observed |
+| theblock/probe_discovery.py:201 | _reconstruct_sub_urls_from_cache | PRODUCES-OUTPUT | B | B-remove | weak: self-heal refetch/skip on corrupt cache file, printed as WARNING; no corrupt cache observed |
+| theblock/probe_discovery.py:222 | fetch_news_sitemap | PRODUCES-OUTPUT | B | B-remove | weak: self-heal refetch/skip on corrupt cache file, printed as WARNING; no corrupt cache observed |
+| theblock/probe_pool_size.py:159 | fetch_source | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_pool_size.py:161 | fetch_source | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_repo_cf_survey.py:150 | check_proxy | PRODUCES-OUTPUT | A | allow | free-proxy failure is a normal outcome and is counted: status 0 / 'fail' / False / bucket, drives rotation or the Failed column |
+| theblock/probe_repo_cf_survey.py:123 | fetch_one | PRODUCES-OUTPUT | B | B-keep-needs-logging | failed source (non-200 or exception) returns set(), indistinguishable from an empty source; source failures are observed (pool_size reports 'Failed sources'), but nothing is recorded here |
+
+## Rows needing a decision
+
+B-remove (23): the 13 `_extract_value`-family rows, the 2 `parse_articles` rows, `_04_replay.py:80`, the 2
+`_p2_watchdog.py` stub rows (81 and the dependent 99), and the five weak ones (`p3_target.py:37`,
+`probe_48h_article_fetch.py:105`, `probe_discovery.py:113/201/222`).
+B-keep-needs-logging (1): `theblock/probe_repo_cf_survey.py:123`.
+C (1): `theblock/probe_48h_article_fetch.py:152`.
+Everything else is A, D or E and stays.
+
+
+# Phase 4 - control-flow triage of dev/news_pipeline, step 2: removals (2026-09-24, same session)
+
+The orchestrator approved all 23 B-remove rows, the B-keep-needs-logging row and the C row of the step 1 table.
+Code commit: "refactor: remove unobserved fallbacks and swallows in dev/news_pipeline". Handler count in the
+scope went from 113 to 90 (23 handlers deleted); the 79 PRODUCES-OUTPUT / 7 LOG-ONLY / 3 TRIPWIRE / 1
+SWALLOW-FLOW that remain are the A, D, E rows plus the two handlers described under "kept on purpose".
+
+## What changed, by row group
+
+- **`_extract_value` family (13 rows).** `_extract_value` is now a bare `return raw["result"]["result"]["value"]`
+  in `01_coindesk_discover.py`, `exploration/_01_dom.py`, `_03_capture.py`, `_04_capture.py`, `_05_capture.py`,
+  `_06_capture.py` and `05b_coindesk_warmth_probe.py` (7 handlers), and the `json.loads(val)` handlers that
+  turned a parse error into `[]`/`{}`/`None`/`{"found": False, "disabled": False}` are gone from
+  `01_coindesk_discover.extract_articles`, `_01_dom` (`inspect_containers`, `extract_articles`, `find_button`) and
+  `_03_capture` (`extract_articles`, `check_btn_state`) (6 handlers). Effect: a CDP result without the expected
+  shape raises `KeyError`/`TypeError`, a non-JSON value raises `json.JSONDecodeError`, and the click loop or the
+  daily `run_pipeline.py` discover stage stops with a traceback instead of reading it as end of feed / button gone.
+  The `if not val:` early returns in front of the `json.loads` calls are not handlers and were left alone: a
+  JS snippet that legitimately returns an empty string still yields the empty result.
+- **`parse_articles` (2 rows).** `exploration/06_coindesk_full_discovery.py` and `exploration/_05_parse.py` now do a
+  bare `json.loads(body)`. The stop message in `06`'s `process_batch` became "Empty response — reached API bottom.
+  Stopping." (same wording as the src fix of 2026-09-09, `git grep "parse failure"` finds nothing left).
+  `_04_replay.count_articles` also parses bare. (1 more row.)
+- **Stall stub (2 rows).** `_p2_watchdog._write_stall_job_md` no longer builds a hand-written `job.md`. What
+  stays, mirroring the src version: the `except Exception` around `write_riding_report` prints
+  `[watchdog] write_riding_report WARN: <exc>` and the caller still flushes stderr and calls `os._exit(1)`. The
+  `idle_s` parameter existed only for the stub and was removed from the function and its single caller; `idle_s`
+  is still printed by `_abort_stall` itself. A missing `job.md` after a stall abort is now the signal that the
+  reporter failed.
+- **Weak rows (5).** `p3_target._fetch_index_direct` and `probe_48h_article_fetch._fetch_index_direct` lost their
+  `except Exception` arm: a raised network error from the direct index GET now propagates (the non-200 / no-XML
+  path, which is the observed home-IP 403, still prints and falls back to the proxy rotation, unchanged).
+  `probe_discovery.load_sub_cache`, `_reconstruct_sub_urls_from_cache` and `fetch_news_sitemap` lost their
+  corrupt-cache handlers: a corrupt JSON cache file now raises `json.JSONDecodeError`.
+- **C row.** `probe_48h_article_fetch._parse_url_blocks` no longer skips a block whose `lastmod` is not ISO; the
+  `ValueError` propagates. The tz-naive-to-UTC handling stays.
+- **B-keep-needs-logging row.** `probe_repo_cf_survey.fetch_one` now returns `(proxies, error)` where error is
+  `HTTP <status>` or `<ExceptionType>: <first 100 chars>`; `fetch_all_repos` returns
+  `(repo_proxies, failed_sources)` with `(repo, protocol, url, error)` tuples; `write_fetch_summary` appends a
+  `### Failed sources` table (or `None.`) to the report and the workflow prints the failed-source count. The handler
+  itself stays (class A now): a failing source must not abort the survey of the other repos.
+
+## Kept on purpose
+
+- `_p2_watchdog._write_stall_job_md` keeps its `except Exception` (WARN only), because `_abort_stall` must reach
+  `os._exit(1)` even when the reporter fails; that is the tripwire shape src kept.
+- `probe_repo_cf_survey.fetch_one` keeps its `except Exception`, see above.
+
+## Proof
+
+- AST diff (`ast.unparse` old vs new per file, HEAD vs working tree): 15 files differ, and every changed line is one
+  of the edits above; the other 63 files of the scope are byte-identical to HEAD. No file changed outside the
+  listed rows (the survey diff also shows the changed signatures/call sites listed under its row).
+- `py_compile` of all 15 touched `.py` files (the commit has 20 files including the 5 DOCS.md): clean. The comment/docstring scan of the scope still prints nothing
+  (78 files, 0 hits).
+- Full suite `./venv/bin/python -m pytest dev/tests/ -q`: 492 passed before, 492 after (none of the touched
+  scripts is imported by `dev/tests/`).
+- Offline propagation checks, no network, no browser: `_extract_value({})` raises `KeyError` and
+  `_extract_value(None)` raises `TypeError` in all 6 modules that define it; `parse_articles(b"not json")` raises
+  `JSONDecodeError` in `06` and `_05_parse`; `count_articles(b"<html>")` raises; `load_sub_cache` and
+  `_reconstruct_sub_urls_from_cache` raise on a corrupt cache file; `_parse_url_blocks` raises `ValueError` on a bad
+  `lastmod` and still returns the parsed pair for a good one. For the survey, `fetch_all_repos` was run against a
+  stub client with an ok source, a 404 source and a raising source: the proxy sets are identical to the old
+  version's, and the two failures come back as `HTTP 404` and `RuntimeError: connection reset`; the rendered
+  fetch summary contains the Failed sources table (and `None.` when empty).
+- The offline scripts `coindesk_proxy_riding/test_sigint_report.py`, `test_tail_race.py`,
+  `test_cooldown_policy.py` exit 0 before and after; `test_watchdog.py` exits 1 before and after with identical
+  output (`module 'p2_browser_rider' has no attribute 'os'` in both tests): it patches an attribute that
+  `p2_browser_rider` no longer has, so it never reaches the stub and did not depend on it. Pre-existing, not
+  fixed here.
+
+## DOCS.md
+
+Six sentences adjusted where documented behaviour changed: `theblock/DOCS.md` (`probe_repo_cf_survey` writes a
+Failed sources table; `probe_48h_article_fetch` falls back on a non-XML response), `theblock/acquire_pipe/DOCS.md`
+(`p3_target`: network errors from the direct GET propagate), `coindesk_proxy_riding/DOCS.md` (`_p2_watchdog`: WARN
+only, no stub), root `DOCS.md` (`01_coindesk_discover`: unwrap/parse failures raise) and `exploration/DOCS.md`
+(`_05_parse`: non-JSON raises). Recap re-check: all LOC headings of the five DOCS.md files match `wc -l`
+(0 mismatches; 15 headings were updated, e.g. `_p2_watchdog.py` 100 -> 82, `probe_repo_cf_survey.py` 282 -> 295).
+
+## For a successor
+
+- The two `p3_target` / `probe_48h` direct-fetch arms were removed on the strength of "no raised network error
+  observed", while the status-based fallback next to them is observed. If a raised `httpx` error from the home
+  IP is ever seen in a real run, the fix is to log and fall back on that specific exception type, not to restore
+  a bare `except Exception`.
+- Rows with class A still lose the exception detail in several places (`cf_get` returns `(b"", 0)`,
+  `check_proxy` returns `False`): they are counted as failures, which is the intended outcome for free proxies, so
+  they were not touched.

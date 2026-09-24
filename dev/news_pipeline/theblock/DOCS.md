@@ -29,7 +29,7 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Called by:** `probe_liveness.py`, `curated_sources.py`, `acquire_pipe/p2_cooldown.py`, `acquire_pipe/p5_logger.py`.
 **Gotcha:** `load_cooled_at`/`mark_cooled_batch`/`_parse_proxy_key` functions were added then removed in a later iteration when cooldown reverted to in-memory; a `cooled_at` field may still appear in legacy log entries — `probe_liveness.py` never reads it.
 
-### probe_discovery.py (293 LOC)
+### probe_discovery.py (283 LOC)
 
 **Purpose:** Measures discovery coverage + URL taxonomy. Fetches the 64-sub sitemap union, news sitemap, RSS, and bounded UI crawl. Resume-safe via per-sub checkpoint files in `cache/`. CF behaviour: IP-level 403/429 fires after ~21 sequential sub-sitemap fetches.
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
@@ -52,11 +52,11 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Writes:** `probe_pool_size_reports/` — per-source counts + per-protocol bucket breakdown + global unique dedup vs baseline. Gitignored.
 **Called by:** CLI; `probe_repo_cf_survey.py` (imports source lists).
 
-### probe_repo_cf_survey.py (282 LOC)
+### probe_repo_cf_survey.py (295 LOC)
 
 **Purpose:** Ranks the source repos from `probe_pool_size.py` by CF-pass rate against theblock.co — samples `SAMPLE_SIZE=1250` per repo at `CONCURRENCY=50`, checks via curl_cffi chrome impersonation against the sitemap index. Produced the rank ordering `curated_sources.py` uses to decide the 13-repo backfill set (proxifly excluded at rank 15).
 **Reads:** proxy lists from `probe_pool_size.HTTP_SOURCES`/`SOCKS4_SOURCES`/`SOCKS5_SOURCES`.
-**Writes:** `probe_repo_cf_survey_reports/repo_cf_survey_<ts>.md`. Gitignored.
+**Writes:** `probe_repo_cf_survey_reports/repo_cf_survey_<ts>.md` (fetch summary includes a Failed sources table: repo, protocol, URL, error). Gitignored.
 **Called by:** CLI only.
 
 ### probe_liveness.py (192 LOC)
@@ -120,9 +120,9 @@ Discovery + proxy-pool infrastructure for scraping theblock.co past Cloudflare. 
 **Writes:** `probe_curl_cffi_discriminator_reports/`. Gitignored.
 **Called by:** CLI only.
 
-### probe_48h_article_fetch.py (167 LOC)
+### probe_48h_article_fetch.py (160 LOC)
 
-**Purpose:** 48h article delta probe — parallel wave-fetch design: shuffles full pool, fires in 128-proxy waves until first success (exhausts whole pool if needed), no sequential rotation, no cooldown. Flow: load backfill pool (22k) → index direct httpx, on fail `_fetch_parallel(INDEX_URL, pool, "xml")` → filter on `post_type_post`, pick highest trailing-number → `_fetch_parallel(sub_url, pool, "xml")` → parse `<url>` blocks (`<loc>` + `<lastmod>`) → filter `lastmod >= now − hours`; if `≥2` hits take 2, else take 2 newest by lastmod → `_fetch_parallel(url, pool, "html")` per article. `_fetch_parallel`: `pool[:]` shuffle → iterate 128-proxy waves → each wave `ThreadPoolExecutor` + `as_completed` early-return on first `ok=True` + `shutdown(wait=False, cancel_futures=True)`; returns `False, b""` only after all waves exhausted. Reuses `fetch_url`/`XML_MARKERS` from `acquire_pipe/p1_fetch.py`, `load_backfill_pool` from `curated_sources`.
+**Purpose:** 48h article delta probe — parallel wave-fetch design: shuffles full pool, fires in 128-proxy waves until first success (exhausts whole pool if needed), no sequential rotation, no cooldown. Flow: load backfill pool (22k) → index direct httpx, on a non-XML response `_fetch_parallel(INDEX_URL, pool, "xml")` → filter on `post_type_post`, pick highest trailing-number → `_fetch_parallel(sub_url, pool, "xml")` → parse `<url>` blocks (`<loc>` + `<lastmod>`) → filter `lastmod >= now − hours`; if `≥2` hits take 2, else take 2 newest by lastmod → `_fetch_parallel(url, pool, "html")` per article. `_fetch_parallel`: `pool[:]` shuffle → iterate 128-proxy waves → each wave `ThreadPoolExecutor` + `as_completed` early-return on first `ok=True` + `shutdown(wait=False, cancel_futures=True)`; returns `False, b""` only after all waves exhausted. Reuses `fetch_url`/`XML_MARKERS` from `acquire_pipe/p1_fetch.py`, `load_backfill_pool` from `curated_sources`.
 **Reads:** `curated_sources.load_backfill_pool()`, theblock sitemap.
 **Writes:** `probe_48h_output/article_0.html`, `article_1.html`. Gitignored.
 **Called by:** CLI only. `--hours` (float, default 48; `<2` hits fallback to 2 newest).

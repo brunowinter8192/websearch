@@ -41,7 +41,7 @@ def _abort_stall(state: RiderState, output_dir: Path, idle_s: float) -> None:
     fail_log = _write_remaining_urls_log(output_dir, idle_s, state.stall_timeout_s, queued, inflight)
     print(f"[watchdog] failure log → {fail_log}", file=sys.stderr)
 
-    _write_stall_job_md(state, output_dir, idle_s)
+    _write_stall_job_md(state, output_dir)
 
     sys.stderr.flush()
     os._exit(1)
@@ -73,28 +73,10 @@ def _write_remaining_urls_log(output_dir: Path, idle_s: float, stall_timeout_s: 
     return fail_log
 
 
-def _write_stall_job_md(state: RiderState, output_dir: Path, idle_s: float) -> None:
+def _write_stall_job_md(state: RiderState, output_dir: Path) -> None:
     try:
         from p4_reporter import write_riding_report
         write_riding_report(state, output_dir, state.t_job_start)
         print(f"[watchdog] job.md → {output_dir / 'job.md'}", file=sys.stderr)
     except Exception as exc:
         print(f"[watchdog] write_riding_report WARN: {exc}", file=sys.stderr)
-        try:
-            (output_dir / "job.md").write_text(
-                "\n".join([
-                    "# CoinDesk riding job — STALL ABORT",
-                    "",
-                    "termination: stall",
-                    f"idle_s: {idle_s:.0f}",
-                    f"n_ok: {state.n_ok}",
-                    f"n_regwall: {state.n_regwall}",
-                    f"n_failed: {state.n_failed}",
-                    f"n_connect_fail: {state.n_connect_fail}",
-                    "",
-                    f"Reporter error: {exc}",
-                ]),
-                encoding="utf-8",
-            )
-        except Exception as write_exc:
-            print(f"[watchdog] fallback job.md WARN: {write_exc}", file=sys.stderr)

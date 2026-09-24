@@ -75,10 +75,7 @@ def build_cursor_url(last_id: str, last_date: str) -> str:
 
 
 def count_articles(body: bytes) -> int:
-    try:
-        data = json.loads(body)
-    except Exception:
-        return 0
+    data = json.loads(body)
     if isinstance(data, list):
         return len(data)
     if isinstance(data, dict):

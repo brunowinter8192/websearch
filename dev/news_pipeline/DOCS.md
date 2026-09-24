@@ -15,9 +15,9 @@ Per-domain news scraping pipeline for the trading-bot data layer. CoinDesk → R
 **Writes:** `src/logs/coindesk_pipeline_YYYYMMDD.log` (per-stage counts + failure modes), `src/logs/coindesk_pipeline_last_run.txt` (on successful completion).
 **Called by:** CLI only. `./venv/bin/python dev/news_pipeline/run_pipeline.py`.
 
-### 01_coindesk_discover.py (360 LOC)
+### 01_coindesk_discover.py (354 LOC)
 
-**Purpose:** Discover CoinDesk articles via UI pagination on `/latest-crypto-news`. Background Chrome launched via `open -gna "Google Chrome" --args --remote-debugging-port=<PORT> ...` (macOS, no focus steal); pydoll connects via `Chrome().connect(ws_url)`. Clicks "More stories" until ≥3 articles older than 48h found (`PRE_48H_THRESHOLD=3`, `CUTOFF_DAYS=2`, `MAX_CLICK_ROUNDS=8` safety cap). `lastmod`/`publication_date` derived from URL's `/YYYY/MM/DD/` path → UTC midnight ISO string. Live-blog URLs filtered post-discovery via `_is_live_blog` (slug starts with `live-`). Chrome killed via `pkill -f remote-debugging-port=<PORT>` on cleanup.
+**Purpose:** Discover CoinDesk articles via UI pagination on `/latest-crypto-news`. Background Chrome launched via `open -gna "Google Chrome" --args --remote-debugging-port=<PORT> ...` (macOS, no focus steal); pydoll connects via `Chrome().connect(ws_url)`. Clicks "More stories" until ≥3 articles older than 48h found (`PRE_48H_THRESHOLD=3`, `CUTOFF_DAYS=2`, `MAX_CLICK_ROUNDS=8` safety cap). `lastmod`/`publication_date` derived from URL's `/YYYY/MM/DD/` path → UTC midnight ISO string. Live-blog URLs filtered post-discovery via `_is_live_blog` (slug starts with `live-`). A CDP result that cannot be unwrapped or parsed raises instead of reading as an empty feed. Chrome killed via `pkill -f remote-debugging-port=<PORT>` on cleanup.
 **Reads:** live CoinDesk site via pydoll DOM traversal (`_JS_EXTRACT`, `_JS_CLICK_BTN`, `_JS_COUNT` poll loop).
 **Writes:** `01_json/discover_<UTC-timestamp>.json` — list of `{url, lastmod, publication_date, title, section}` sorted by lastmod desc.
 **Called by:** `run_pipeline.py`, CLI.

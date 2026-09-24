@@ -38,9 +38,9 @@ Standalone dev suite for scraping CoinDesk article HTML at scale via rotating pr
 **Called by:** `p2_browser_rider.py` only.
 **Calls out:** `crawl4ai`.
 
-### _p2_watchdog.py (100 LOC)
+### _p2_watchdog.py (82 LOC)
 
-**Purpose:** Stall detection and abort-report writing — `_watchdog` polls for progress staleness; `_abort_stall` drains the queue, writes `remaining_urls.txt`, writes `job.md` (via a late import of `p4_reporter` to avoid a module-level cycle, falling back to a minimal stub on any reporter error), then `os._exit(1)`.
+**Purpose:** Stall detection and abort-report writing — `_watchdog` polls for progress staleness; `_abort_stall` drains the queue, writes `remaining_urls.txt`, writes `job.md` (via a late import of `p4_reporter` to avoid a module-level cycle, on a reporter error only a WARN line goes to stderr and no `job.md` is written), then `os._exit(1)`.
 **Reads:** nothing.
 **Writes:** `remaining_urls.txt`, `job.md` (on stall).
 **Called by:** `p2_browser_rider.py`, `test_watchdog.py` (via `p2_browser_rider`'s re-export).
