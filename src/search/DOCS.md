@@ -20,13 +20,21 @@ pydoll-based parallel web-search pipeline behind the `search_web` and `search_en
 
 ## Modules
 
-### search_web.py (409 LOC)
+### search_web.py (355 LOC)
 
-**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table (prefixed with a degraded-run notice once the error/timeout share of selected engines crosses a fixed threshold; it names each failing engine's shortened drop_reason and prints a repair line only for the observed browser-never-started signature), and caches the result.
+**Purpose:** Search orchestrator — fans out across 8 engines, builds and caps per-engine pools, formats a breakdown table (prefixed with the degraded-run notice from `degraded_notice.py`), and caches the result.
 **Reads:** query + params; per-engine caps in `ENGINE_MAX_RESULTS`; default set via `_DEFAULT_ENGINES`; `_BROWSER_ENGINES` (which of the 8 need `browser.py`'s Chrome).
 **Writes:** disk cache `~/.cache/websearch/<key>.json` (via cache_write); query log (via log_query).
 **Called by:** `cli.py` (search_web_workflow); dev scripts (fetch_search_results).
-**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `mcp.types.TextContent`; `engines/` (all 8 engine classes); `browser` (get_tab, kill_own_chrome); `cache` (cache_key, cache_write), `rate_limiter` (get_limiter), `merge` (build_engine_pools), `result` (SearchResult), `status`, `status_timeout`, `status_error`, `query_logger` (log_query).
+**Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`, `mcp.types.TextContent`; `engines/` (all 8 engine classes); `browser` (get_tab, kill_own_chrome); `cache` (cache_key, cache_write), `rate_limiter` (get_limiter), `merge` (build_engine_pools), `result` (SearchResult), `status`, `status_timeout`, `status_error`, `query_logger` (log_query), `degraded_notice` (_prepend_degraded_notice).
+
+### degraded_notice.py (61 LOC)
+
+**Purpose:** Builds the degraded-run notice prepended to the breakdown once the error/timeout share of selected engines crosses a fixed threshold; names each failing engine's shortened drop_reason and prints a repair line only for the observed browser-never-started signature.
+**Reads:** the per-engine `engine_stats` dict handed in (`status`, `drop_reason`).
+**Writes:** none (returns the text).
+**Called by:** `search_web.py` (`_prepend_degraded_notice`); `dev/tests/test_search_web_degraded_notice.py`.
+**Calls out:** `status_error`, `status_timeout`.
 
 ### merge.py (34 LOC)
 
