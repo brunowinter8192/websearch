@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""
+# INFRASTRUCTURE
+import argparse
+import difflib
+import json
+import re
+import statistics
+import sys
+from pathlib import Path
+
+DESCRIPTION = """
 analyze.py — Diff sweep candidate outputs against clean-raw baseline.
 
 For each (config, URL): compute line-set recall/precision/F1 vs clean-raw.
@@ -11,41 +20,29 @@ Usage:
     ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/analyze.py
     ./venv/bin/python dev/scrape_pipeline/04_overview_sweep/analyze.py --sweep <ts-dir>
 """
-# INFRASTRUCTURE
-import argparse
-import difflib
-import json
-import re
-import statistics
-import sys
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SWEEP_BASE = PROJECT_ROOT / "dev" / "scrape_pipeline" / "04_overview_sweep" / "sweep_data"
 CLEANRAW_BASE = PROJECT_ROOT / "dev" / "scrape_pipeline" / "03_cleanup" / "cleaned_data"
 
-# Shape mapping for Q24 URLs (manually classified — see SKILL Shape catalog)
 SHAPE_MAP = {
     "chuniversiteit.nl":           "Blog",
     "seirdy.one":                  "Blog",
     "justtothepoint.com":          "Blog",
     "www.contextractor.com":       "Blog",
-    "trafilatura.readthedocs.io":  "Blog",  # technical docs, but blog-like single-h1 structure
+    "trafilatura.readthedocs.io":  "Blog",
     "arxiv.org":                   "Paper-Landing",
     "doi.org":                     "Paper-Landing",
     "news.ycombinator.com":        "Forum-Thread",
     "github.com":                  "Repo-Heavy-Chrome",
     "www.libhunt.com":             "Index-Aggregator",
-    "adrien.barbaresi.eu":         "Index-Aggregator",  # tag page = aggregator
-    # SCRAPE-FAILURE class — excluded from analysis to not pollute metrics
+    "adrien.barbaresi.eu":         "Index-Aggregator",
     "webscraping.fyi":             "_excluded_scrape_failure",
     "downloads.webis.de":          "_excluded_pdf",
     "searchstudies.org":           "_excluded_pdf",
 }
 EXCLUDE_PREFIXES = ("_excluded_",)
 
-
-# ===================== ORCHESTRATOR =====================
 
 def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> None:
     print(f"sweep:    {sweep_dir}", file=sys.stderr)
@@ -65,7 +62,6 @@ def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> N
         config_metrics.append(agg)
         print(f"  {config_name:55s}  median F1: {agg['median_f1']:.3f}  min: {agg['min_f1']:.3f}  ({agg['analyzed_n']}/{agg['total_n']} URLs)", file=sys.stderr)
 
-    # Sort by median F1 desc
     config_metrics.sort(key=lambda c: c["median_f1"], reverse=True)
 
     report_path = sweep_dir / "_analysis.md"
@@ -73,10 +69,7 @@ def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> N
     print(f"\nReport: {report_path}", file=sys.stderr)
 
 
-# ===================== METRIC COMPUTATION =====================
-
 def analyze_config(config_dir: Path, cleanraw_by_url: dict, cfg_meta: dict) -> list:
-    """Compute per-URL recall/precision/F1 metrics for one config."""
     per_url = []
     for output in cfg_meta.get("outputs", []):
         url = output["url"]
@@ -110,8 +103,6 @@ def analyze_config(config_dir: Path, cleanraw_by_url: dict, cfg_meta: dict) -> l
 
 
 def line_set_metrics(candidate: str, cleanraw: str) -> tuple[float, float, float]:
-    """Line-level Jaccard-style recall/precision/F1. Lines are normalized
-    (lowercase + whitespace-collapsed). Empty lines and source-comment dropped."""
     cand_lines = normalize_lines(candidate)
     ref_lines = normalize_lines(cleanraw)
     if not ref_lines or not cand_lines:
@@ -126,8 +117,6 @@ def line_set_metrics(candidate: str, cleanraw: str) -> tuple[float, float, float
 
 
 def normalize_lines(text: str) -> set:
-    """Convert text to a set of normalized lines (lowercase, whitespace-collapsed,
-    non-empty, source-comment dropped)."""
     out = set()
     for line in text.splitlines():
         s = line.strip()
@@ -145,13 +134,11 @@ def aggregate_metrics(config_name: str, cfg_meta: dict, per_url: list) -> dict:
     precisions = [u["precision"] for u in valid]
     bytes_diffs = [u["bytes_diff"] for u in valid]
 
-    # Per-shape breakdown
     shape_groups = {}
     for u in valid:
         shape_groups.setdefault(u["shape"], []).append(u["f1"])
     shape_medians = {s: statistics.median(fs) for s, fs in shape_groups.items()}
 
-    # Failure count: status != "ok" or f1 < 0.3
     fail_count = sum(1 for u in per_url if u["status"] != "ok") + sum(1 for u in valid if u["f1"] < 0.3)
 
     return {
@@ -174,11 +161,7 @@ def aggregate_metrics(config_name: str, cfg_meta: dict, per_url: list) -> dict:
     }
 
 
-# ===================== HELPERS =====================
-
 def load_cleanraws(cleanraw_dir: Path) -> dict:
-    """Load all cleanraw files into url -> content dict, keyed via the
-    <!-- source: <url> --> header."""
     out = {}
     for f in cleanraw_dir.glob("*.md"):
         if f.name.startswith("_") or f.name == "02_raw_report.md":
@@ -203,8 +186,6 @@ def find_latest_dir(base: Path) -> Path:
         raise SystemExit(f"No subdirs in {base}")
     return candidates[-1]
 
-
-# ===================== REPORT =====================
 
 def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list, cleanraw_by_url: dict, drill_count: int) -> None:
     lines = _format_header_and_ranking(sweep_dir, cleanraw_dir, configs)
@@ -235,7 +216,6 @@ def _format_header_and_ranking(sweep_dir: Path, cleanraw_dir: Path, configs: lis
     return lines
 
 
-# Per-shape breakdown for top 10 configs
 def _format_per_shape_breakdown(configs: list) -> list:
     lines = [
         "",
@@ -263,7 +243,6 @@ def _format_per_shape_breakdown(configs: list) -> list:
     return lines
 
 
-# Drill-down: unified_diff for top-3 configs × representative URLs
 def _format_drill_down(configs: list, cleanraw_by_url: dict, sweep_dir: Path, drill_count: int) -> list:
     lines = ["", "## Diff Drill-Down — Top 3 Configs"]
     top3 = configs[:3]
@@ -295,20 +274,17 @@ def _format_drill_down(configs: list, cleanraw_by_url: dict, sweep_dir: Path, dr
 
 
 def pick_drill_urls(cleanraw_by_url: dict, n: int) -> list:
-    """Pick representative URLs across shapes for drill-down."""
     by_shape: dict[str, list] = {}
     for url in cleanraw_by_url.keys():
         s = url_shape(url)
         if s.startswith(EXCLUDE_PREFIXES):
             continue
         by_shape.setdefault(s, []).append(url)
-    # Take 1 URL per shape, up to n
     picks = []
     for shape, urls in by_shape.items():
         picks.append(sorted(urls)[0])
         if len(picks) >= n:
             break
-    # Additional from heavy shapes
     while len(picks) < n:
         for shape, urls in by_shape.items():
             if len(urls) > 1 and len(picks) < n:
@@ -319,12 +295,11 @@ def pick_drill_urls(cleanraw_by_url: dict, n: int) -> list:
         if len(picks) >= n:
             break
         else:
-            break  # avoid infinite loop
+            break
     return picks[:n]
 
 
 def generate_diff(config_name: str, sweep_dir: Path, url: str, cleanraw_by_url: dict) -> str:
-    """Generate a 30-line unified_diff snippet candidate vs cleanraw."""
     cleanraw = cleanraw_by_url.get(url, "")
     cand_path = next(
         (sweep_dir / config_name).glob(f"*{hashlib_md5(url)}*.md"),
@@ -349,10 +324,8 @@ def hashlib_md5(url: str) -> str:
     return h.md5(url.encode()).hexdigest()[:6]
 
 
-# ===================== CLI =====================
-
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("--sweep", default=None, help="Path to sweep_data/<ts>/ (default: latest)")
     parser.add_argument("--cleanraw", default=None, help="Path to cleaned_data/<ts>/ (default: latest)")
     parser.add_argument("--drill", type=int, default=4, help="Number of URLs for diff drill-down (default 4)")

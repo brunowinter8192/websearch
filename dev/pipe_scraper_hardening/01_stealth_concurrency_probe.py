@@ -11,13 +11,9 @@ from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-# Logic below mirrors src/crawler/pipe_scraper.py's per-domain pacing model verbatim
-# (dev/ scripts may not import from src/ — this is a dev-local copy, not the production module).
-# Sole addition: an enable_stealth toggle on BrowserConfig + exception-message capture for the
-# crash log, since production _scrape_one discards the exception text.
 
 URL_FILE = Path("dev/explore_pipeline/06_discovered_urls.txt")
-GAP_SECONDS = 300  # inter-run gap; WAF budget recovery is minutes not seconds (process-docs/pipe_scraper/)
+GAP_SECONDS = 300
 DOWNLOAD_DELAY = 1.0
 CONCURRENCY_PER_DOMAIN = 8
 PAGE_TIMEOUT_MS = 15000
@@ -29,7 +25,6 @@ OUTCOME_KEYS = ["ok", "waf_429", "http_error", "empty", "error"]
 
 # ORCHESTRATOR
 
-# Run baseline then enable_stealth=True variant back-to-back on the same URL set, compare, write report.
 async def probe_workflow() -> Path:
     urls = _load_urls()
     JSON_DIR.mkdir(parents=True, exist_ok=True)
@@ -53,17 +48,14 @@ async def probe_workflow() -> Path:
 
 # FUNCTIONS
 
-# Load the validated 316-URL pacing-model dataset
 def _load_urls() -> list[str]:
     return [ln.strip() for ln in URL_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
-# Derive safe filename from URL (mirrors pipe_scraper._url_to_filename)
 def _url_to_filename(url: str) -> str:
     slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
     slug = re.sub(r'_+', '_', slug).strip('_')[:100]
     return f"{slug}.md"
 
-# Return or create per-domain state entry (mirrors pipe_scraper._ensure_domain_state)
 def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
     if domain not in domain_states:
         domain_states[domain] = {
@@ -73,7 +65,6 @@ def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domai
         }
     return domain_states[domain]
 
-# Scrapy gate: wait until delay elapsed since lastseen (mirrors pipe_scraper._gate_domain)
 async def _gate_domain(state: dict, download_delay: float) -> None:
     async with state['lock']:
         jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
@@ -83,7 +74,6 @@ async def _gate_domain(state: dict, download_delay: float) -> None:
             await asyncio.sleep(jitter - gap)
         state['lastseen'] = time.time()
 
-# Scrape one URL: same gate/outcome logic as production, plus verbatim exception text for crash_log
 async def _scrape_one(
     crawler: AsyncWebCrawler,
     url: str,
@@ -127,7 +117,6 @@ async def _scrape_one(
     return {'url': url, 'wall_ms': wall_ms, 'bytes': byte_count,
             'status_code': status, 'outcome': outcome}
 
-# Scrape all URLs under one crawler with per-domain pacing; enable_stealth toggles BrowserConfig only
 async def _scrape_all(
     urls: list[str],
     output_dir: Path,
@@ -163,7 +152,6 @@ async def _scrape_all(
             crash_log.append(f"{urls[i]}: gather-level {type(r).__name__}: {r}")
     return results
 
-# Run one full pass (baseline or stealth) and time it
 async def _run_variant(label: str, urls: list[str], enable_stealth: bool) -> dict:
     output_dir = Path(f"/tmp/pipe_scraper_hardening_{label}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -176,18 +164,15 @@ async def _run_variant(label: str, urls: list[str], enable_stealth: bool) -> dic
     return {"label": label, "enable_stealth": enable_stealth, "results": results,
             "wall_s": wall_s, "crash_log": crash_log}
 
-# Count results per outcome bucket
 def _summarize(results: list[dict]) -> dict:
     return {k: sum(1 for r in results if r["outcome"] == k) for k in OUTCOME_KEYS}
 
-# Persist raw per-URL results for a run (separate from md/ reports)
 def _save_json(label: str, run: dict) -> None:
     path = JSON_DIR / f"01_{label}_results.json"
     payload = {"label": run["label"], "enable_stealth": run["enable_stealth"],
                "wall_s": run["wall_s"], "crash_log": run["crash_log"], "results": run["results"]}
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-# Build per-URL byte-count comparison stats
 def _byte_comparison(baseline_results: list[dict], stealth_results: list[dict]) -> dict:
     b_by_url = {r["url"]: r["bytes"] for r in baseline_results}
     s_by_url = {r["url"]: r["bytes"] for r in stealth_results}
@@ -203,7 +188,6 @@ def _byte_comparison(baseline_results: list[dict], stealth_results: list[dict]) 
         "max_abs_delta": max(diffs.values(), key=abs) if diffs else 0,
     }
 
-# Write the comparison report to dev/pipe_scraper_hardening/md/
 def _write_report(baseline: dict, stealth: dict) -> Path:
     b_summary = _summarize(baseline["results"])
     s_summary = _summarize(stealth["results"])

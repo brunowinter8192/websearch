@@ -5,7 +5,7 @@ Standalone direct-PDF-download prototype — no prod imports, no Crawl4AI. Evalu
 
 ## Modules
 
-### download.py (157 LOC)
+### download.py (151 LOC)
 
 **Purpose:** Takes `.pdf` URLs via positional args or `--input <smoke.md>` (parses all `.pdf` URLs across all queries). Downloads each via `requests.get(stream=True)` with Content-Type check. Filename resolution: Content-Disposition → URL basename → `download_<ts>.pdf`.
 **Reads:** `--input <path-to-search-md>` or direct URL args.

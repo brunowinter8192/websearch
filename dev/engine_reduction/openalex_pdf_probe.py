@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""OpenAlex PDF-URL availability probe — Milestone 1 measurement for the engine-reduction
-decision (keep exactly one specialised engine, openalex, made useful for the paper-download
-workflow).
-
-Question: on real agent queries, how often does an OpenAlex work carry a direct PDF URL
-(`best_oa_location.pdf_url`) vs a landing page only vs no OA location at all? Measurement only —
-no src/ touched, no wiring, no production behavior change.
-
-Plain httpx against `https://api.openalex.org/works`, per the vendor docs captured 2026-09-03:
-no `mailto` param (ignored since 2026-02), no API key, keyless budget $0.10/day at $0.001/call —
-7 queries fits comfortably. `_pick_url` below is a dev-script-isolation inline copy of the
-CURRENT src/search/engines/openalex.py::_pick_url logic (ids.arxiv > doi > id) — not a shared
-import, so the "chosen URL under current engine logic" column in the eyeball section keeps
-measuring even if src/ changes underneath it later.
-"""
 
 # INFRASTRUCTURE
 import asyncio
@@ -31,7 +16,6 @@ PER_PAGE = 100
 TOP_N = 10
 INTER_QUERY_DELAY_S = 1.0
 
-# Real agent queries from the query log (2026-08-20 to 2026-09-03), as given by the milestone spec
 QUERIES = [
     "WHO environmental noise guidelines European Region 2018",
     "WHO Night Noise Guidelines for Europe 2009 pdf",
@@ -42,7 +26,6 @@ QUERIES = [
     "clothing lifespan wears per garment replacement rate study",
 ]
 
-# 1-indexed query numbers for the detailed eyeball listing (title/type/chosen-URL/pdf_url)
 EYEBALL_QUERY_NUMS = {3, 6}
 
 
@@ -83,7 +66,6 @@ class RateLimitError(Exception):
     pass
 
 
-# Fetch raw work items from OpenAlex search API — per_page=100, no mailto, no key
 async def fetch_works(client: httpx.AsyncClient, query: str) -> list[dict]:
     params = {"search": query, "per_page": PER_PAGE}
     response = await client.get(API_URL, params=params)
@@ -93,7 +75,6 @@ async def fetch_works(client: httpx.AsyncClient, query: str) -> list[dict]:
     return response.json().get("results", [])
 
 
-# Dev-script-isolation inline copy of src/search/engines/openalex.py::_pick_url (ids.arxiv > doi > id)
 def _pick_url(work: dict) -> str:
     ids = work.get("ids") or {}
     arxiv = ids.get("arxiv")
@@ -105,7 +86,6 @@ def _pick_url(work: dict) -> str:
     return work.get("id", "")
 
 
-# Classify one work by its best_oa_location / pdf_url state
 def classify(work: dict) -> str:
     loc = work.get("best_oa_location")
     if loc is None:
@@ -115,7 +95,6 @@ def classify(work: dict) -> str:
     return "landing_only"
 
 
-# Build the per-query record: full-set + top-10 counts, type breakdown, eyeball rows
 def build_record(qi: int, query: str, works: list[dict]) -> dict:
     labels_full = [classify(w) for w in works]
     labels_top10 = labels_full[:TOP_N]
@@ -139,7 +118,6 @@ def build_record(qi: int, query: str, works: list[dict]) -> dict:
     return record
 
 
-# Build eyeball rows (title, type, chosen URL via inline _pick_url, best_oa_location.pdf_url)
 def build_eyeball_rows(works: list[dict]) -> list[dict]:
     rows = []
     for w in works:
@@ -152,8 +130,6 @@ def build_eyeball_rows(works: list[dict]) -> list[dict]:
         })
     return rows
 
-
-# --- Report ---
 
 def _build_per_query_table(records: list[dict]) -> list[str]:
     lines = [

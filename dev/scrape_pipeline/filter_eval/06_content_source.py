@@ -93,14 +93,12 @@ async def run_content_source_comparison(urls: list[str], label: str):
 
 # FUNCTIONS
 
-# Rate-limit parallel scrapes via semaphore
 async def scrape_with_semaphore(sem, crawler, url, domain_dir, index, total):
     async with sem:
         print(f"  [{index}/{total}] {url}")
         await scrape_and_save(crawler, url, domain_dir, index)
 
 
-# Scrape single URL with all configs in parallel and save MD files
 async def scrape_and_save(crawler, url: str, domain_dir: Path, index: int):
     slug = url_to_slug(url)
     filename = f"{index:02d}_{slug}.md"
@@ -118,7 +116,6 @@ async def scrape_and_save(crawler, url: str, domain_dir: Path, index: int):
     await asyncio.gather(*config_tasks)
 
 
-# Convert URL to filesystem-safe slug
 def url_to_slug(url: str) -> str:
     parsed = urlparse(url)
     path = parsed.path.strip("/")
@@ -131,7 +128,6 @@ def url_to_slug(url: str) -> str:
     return parts[:80]
 
 
-# Load URLs from a crawling report JSON, limited to MAX_URLS_PER_DOMAIN
 def load_urls_from_crawl_report(report_path: Path) -> list[str]:
     with open(report_path) as f:
         data = json.load(f)
@@ -139,13 +135,11 @@ def load_urls_from_crawl_report(report_path: Path) -> list[str]:
     return urls[:MAX_URLS_PER_DOMAIN]
 
 
-# Find latest crawl report for a domain label
 def find_crawl_report(label: str) -> Path | None:
     matches = sorted(CRAWL_REPORTS_DIR.glob(f"{label}_*.json"))
     return matches[-1] if matches else None
 
 
-# Find all crawl reports
 def find_all_crawl_reports() -> list[tuple[str, Path]]:
     reports = []
     for path in sorted(CRAWL_REPORTS_DIR.glob("*.json")):

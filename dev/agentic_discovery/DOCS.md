@@ -11,7 +11,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ## Modules
 
-### clean_web_searxng.py (285 LOC)
+### clean_web_searxng.py (218 LOC)
 
 **Purpose:** Remove navigation chrome and formatting artifacts from the `searxng` RAG collection (2076 files across 12 domain prefixes: searxng, crawl4ai, playwright, tor, anthropic, trafilatura, onetrust, cookieyes, web, paper, sitemaps, cookiebot).
 **Reads:** `*.md` files in `RAG/data/documents/searxng/` — all domain prefixes handled in one pass with per-domain header/footer strategies.
@@ -21,7 +21,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_anthropic.py (120 LOC)
+### clean_web_anthropic.py (100 LOC)
 
 **Purpose:** Fix formatting artifacts in Anthropic (platform.claude.com/docs) crawled pages.
 **Reads:** `anthropic__*.md` files in `RAG/data/documents/searxng/`.
@@ -31,7 +31,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_cookieyes.py (267 LOC)
+### clean_web_cookieyes.py (201 LOC)
 
 **Purpose:** Remove UI chrome from cookieyes.com/documentation pages.
 **Reads:** `cookieyes__*.md` files in `RAG/data/documents/searxng/`.
@@ -41,7 +41,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_onetrust.py (225 LOC)
+### clean_web_onetrust.py (182 LOC)
 
 **Purpose:** Remove UI chrome from developer.onetrust.com pages.
 **Reads:** `onetrust__*.md` files in `RAG/data/documents/searxng/`.
@@ -51,7 +51,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_Playwright.py (129 LOC)
+### clean_web_Playwright.py (98 LOC)
 
 **Purpose:** Remove Docusaurus chrome from Playwright docs pages (playwright.dev).
 **Reads:** `*.md` files in `RAG/data/documents/Playwright/`.
@@ -61,7 +61,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_rag_docs.py (299 LOC)
+### clean_web_rag_docs.py (215 LOC)
 
 **Purpose:** Remove site-generator chrome from Playwright, Crawl4AI, and Trafilatura docs in the RAG collection (`playwright__*`, `crawl4ai__*`, `trafilatura__*` files).
 **Reads:** Files matching the three prefixes in `RAG/data/documents/searxng/`.
@@ -71,7 +71,7 @@ Crawled `*.md` files under `RAG/data/documents/<searxng|Playwright>/` (a sibling
 
 ---
 
-### clean_web_tor.py (142 LOC)
+### clean_web_tor.py (120 LOC)
 
 **Purpose:** Remove navigation chrome and UI artifacts from support.torproject.org pages.
 **Reads:** `tor__*.md` files in `RAG/data/documents/searxng/`.

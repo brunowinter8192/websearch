@@ -1,29 +1,13 @@
-"""
-Cleanup script for support.torproject.org pages crawled via Crawl4AI.
-Removes navigation, footer, and UI chrome while preserving content and source comments.
-
-Patterns removed:
-1. Footer block: starts at "  * [Jobs](https://www.torproject.org/about/jobs/)" line
-   and continues through social media links, Copyleft notice, trademark, onion_pattern image
-2. "View for:" UI widget line (tab selector artifact)
-3. "Expand all Collapse all" UI widget line (glossary page)
-4. Leading blank lines between source comment and first heading (preserved to max 1)
-"""
-
 import re
 from pathlib import Path
 
 INPUT_DIR = Path(__file__).parent.parent.parent.parent / "RAG" / "data" / "documents" / "searxng"
 FILE_PATTERN = "tor__*.md"
 
-# Footer starts at the Jobs/localized-Jobs link line.
-# English: https://www.torproject.org/about/jobs/
-# Localized: https://www.torproject.org/de/about/jobs/ (language code prefix)
 FOOTER_START_PATTERN = re.compile(
     r"^\s*\*\s*\[[^\]]+\]\(https://www\.torproject\.org/(?:[a-z]{2}(?:-[A-Z]{2})?/)?about/jobs/\)"
 )
 
-# UI widget lines to remove entirely
 UI_WIDGET_LINES = {
     "View for: ",
     "View for:",
@@ -32,7 +16,6 @@ UI_WIDGET_LINES = {
 
 
 def clean_file(path: Path) -> tuple[int, int]:
-    """Clean a single file. Returns (chars_before, chars_after)."""
     text = path.read_text(encoding="utf-8")
     chars_before = len(text)
 
@@ -44,24 +27,20 @@ def clean_file(path: Path) -> tuple[int, int]:
         line = lines[i]
         stripped = line.rstrip("\n").rstrip("\r")
 
-        # Check for footer start — drop this line and everything after it
         if FOOTER_START_PATTERN.match(stripped):
-            # Remove trailing blank lines from already-collected output
             while output_lines and output_lines[-1].strip() == "":
                 output_lines.pop()
-            break  # discard rest of file
+            break
 
-        # Remove UI widget lines; for "View for:" also skip the following line (tab labels)
         if stripped in UI_WIDGET_LINES:
             i += 1
             if stripped in {"View for: ", "View for:"} and i < len(lines):
-                i += 1  # skip the OS/platform label line that follows
+                i += 1
             continue
 
         output_lines.append(line)
         i += 1
 
-    # Ensure file ends with a single newline
     result = "".join(output_lines)
     result = result.rstrip("\n") + "\n"
 
@@ -70,7 +49,6 @@ def clean_file(path: Path) -> tuple[int, int]:
 
 
 def _detect_patterns(lines_before: list) -> tuple[bool, bool, bool]:
-    # Track which patterns appear before cleaning
     has_footer = any(FOOTER_START_PATTERN.match(l) for l in lines_before)
     has_view_for = any(l.strip() in {"View for: ", "View for:"} for l in lines_before)
     has_expand = any("Expand all Collapse all" in l for l in lines_before)

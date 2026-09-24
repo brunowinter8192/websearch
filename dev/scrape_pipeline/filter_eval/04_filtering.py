@@ -56,7 +56,6 @@ CONFIGS = {
 DOMAINS_FILE = Path(__file__).parent.parent / "domains.txt"
 
 
-# Load URLs from domains.txt or use CLI argument
 def get_urls():
     if len(sys.argv) > 1:
         return [sys.argv[1]]
@@ -69,7 +68,6 @@ def get_urls():
     return urls
 
 
-# Check if code blocks preserved their whitespace
 def check_code_integrity(md: str) -> dict:
     in_code = False
     code_blocks = 0
@@ -89,7 +87,6 @@ def check_code_integrity(md: str) -> dict:
     return {"code_blocks": code_blocks, "mangled": mangled_blocks > 0}
 
 
-# Convert URL to filesystem-safe slug
 def url_to_slug(url: str) -> str:
     parsed = urlparse(url)
     path = parsed.path.strip("/")

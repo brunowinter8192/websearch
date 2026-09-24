@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""
-Prune test for the log_janitor algorithm — synthetic 14-day retention verification.
-Tests p1_log_janitor.py (dev mirror of src/log_janitor.py).
-
-Usage:
-    cd <project_root>
-    ./venv/bin/python dev/log_janitor/01_prune_test.py
-
-Expected output:
-    All assertions PASS, exits 0.
-"""
 # INFRASTRUCTURE
 import json
 import os
@@ -40,7 +29,6 @@ def prune_test_workflow() -> None:
 
 # FUNCTIONS
 
-# Run all three scenarios; return total failure count
 def run_tests(tmp_dir: Path) -> int:
     jsonl_path = tmp_dir / "query_log.jsonl"
     sidecar_dir = tmp_dir / "scrape_content"
@@ -85,7 +73,6 @@ def run_tests(tmp_dir: Path) -> int:
     return failures
 
 
-# Write synthetic JSONL: 2 entries 20d ago, 3 entries 2d ago
 def _make_jsonl(path: Path) -> None:
     now = datetime.now(timezone.utc)
     entries = [
@@ -98,7 +85,6 @@ def _make_jsonl(path: Path) -> None:
     path.write_text("\n".join(json.dumps(e) for e in entries) + "\n", encoding="utf-8")
 
 
-# Create sidecar dir: 2 old .md files (mtime set to 20d ago), 1 recent
 def _make_sidecars(sidecar_dir: Path) -> None:
     sidecar_dir.mkdir(parents=True, exist_ok=True)
     old_mtime = time.time() - 20 * 86400
@@ -109,7 +95,6 @@ def _make_sidecars(sidecar_dir: Path) -> None:
     (sidecar_dir / "recent.md").write_text("<!-- recent -->", encoding="utf-8")
 
 
-# Print PASS/FAIL label; return 0 on pass, 1 on fail
 def _check(label: str, condition: bool) -> int:
     print(f"  [{'PASS' if condition else 'FAIL'}] {label}")
     return 0 if condition else 1

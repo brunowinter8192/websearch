@@ -5,7 +5,7 @@ Iterative-discovery artifact from the session that produced the `scrape-cleanup`
 
 ## Modules
 
-### clean.py (334 LOC)
+### clean.py (269 LOC)
 
 **Purpose:** URL-spanning cleanup of raw scraped markdown for RAG indexing. Reads files from `02_raw_data/<ts>/`, applies pattern set (pre-h1 chrome strip, skip-link strip, sphinx anchor strip, tail chrome strip, blank-line collapse) plus site-specific handlers (GitHub issue title anchor, HN top-nav strip).
 **Reads:** `../02_raw_data/<ts>/` (scrape_pipeline root).

@@ -9,22 +9,20 @@ from _pipe_scrape_eval_common import REPORTS_DIR, compute_metrics, stratify
 
 # FUNCTIONS
 
-# Find plateau delay: minimum delay_s where bytes_p50 stops growing significantly (≤5% gain)
 def find_plateau_delay(sweep_rows: list[tuple]) -> float:
     bytes_values = [(delay, m['bytes_p50']) for delay, m, _ in sweep_rows]
-    best_delay = bytes_values[-1][0]  # fallback: highest tested delay
+    best_delay = bytes_values[-1][0]
     for i in range(len(bytes_values) - 1):
         curr_b = bytes_values[i][1]
         next_b = bytes_values[i + 1][1]
         if curr_b == 0:
             continue
-        if (next_b - curr_b) / curr_b <= 0.05:  # ≤5% gain → plateau reached at current delay
+        if (next_b - curr_b) / curr_b <= 0.05:
             best_delay = bytes_values[i][0]
             break
     return best_delay
 
 
-# Write Phase 2 report — delay sweep; return report path and chosen delay
 def write_phase2_report(sweep_rows: list[tuple], sample_n: int, concurrency: int) -> tuple[Path, float]:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
@@ -74,7 +72,6 @@ def write_phase2_report(sweep_rows: list[tuple], sample_n: int, concurrency: int
     return path, best_delay
 
 
-# Phase 2 — Delay sweep for content completeness at fixed concurrency=5
 async def phase2_delay_sweep(urls: list[str], concurrency: int = 5, sample_n: int = 30) -> float:
     sample = stratify(urls, sample_n)
     print(f"Phase 2: delay sweep — {len(sample)} stratified URLs, concurrency={concurrency}, timeout=15000ms")

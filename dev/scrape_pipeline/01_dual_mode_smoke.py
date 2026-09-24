@@ -14,7 +14,6 @@ QUERY_SECTION_RE = re.compile(r"^## Q(\d+): (.+)$")
 ENTRY_RE = re.compile(r"^(\d+)\. \*\*\[([A-Z?]+)\]\*\*")
 URL_LINE_RE = re.compile(r"^\s+URL: (https?://\S+)$")
 
-# Ordered by specificity — first match wins in detect_failure_type()
 FAILURE_SIGNALS = [
     ("PLUGIN_ROUTE_REQUIRED", "plugin_routed"),
     ("Cookie/consent wall detected", "cookie_wall"),
@@ -51,14 +50,12 @@ async def dual_mode_smoke_workflow(input_path: str, query_id: int, output_dir: s
 
 # FUNCTIONS
 
-# Parse smoke report MD: return query text and list of (pos, class_label, url)
 def parse_smoke_report(input_path: str, query_id: int) -> tuple[str, list[tuple[int, str, str]]]:
     lines = Path(input_path).read_text(encoding="utf-8").splitlines()
     query_text, start, end = find_query_section(lines, query_id)
     return query_text, extract_urls(lines, start, end)
 
 
-# Find start/end line indices for query N in smoke report
 def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
     start = -1
     query_text = ""
@@ -76,7 +73,6 @@ def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
     return query_text, start, len(lines)
 
 
-# Extract (pos, class_label, url) tuples from a query section's line range
 def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str, str]]:
     entries = []
     current_pos, current_class = None, None
@@ -93,7 +89,6 @@ def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str,
     return entries
 
 
-# Create output subdirs and return (mode1_dir, mode2_dir)
 def prepare_output_dirs(output_dir: str | None) -> tuple[Path, Path]:
     if output_dir is None:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -107,7 +102,6 @@ def prepare_output_dirs(output_dir: str | None) -> tuple[Path, Path]:
     return mode1_dir, mode2_dir
 
 
-# Run both modes for each URL sequentially, M1+M2 parallel per URL
 async def scrape_all_urls(
     url_entries: list[tuple[int, str, str]], mode1_dir: Path, mode2_dir: Path
 ) -> list[dict]:
@@ -121,7 +115,6 @@ async def scrape_all_urls(
     return results
 
 
-# Run Mode 1 (scrape_url_raw): saves file, returns result dict
 async def run_mode1(url: str, output_dir: Path) -> dict:
     cmd = [PYTHON, CLI, "scrape_url_raw", url, str(output_dir)]
     rc, stdout, _ = await run_subprocess_async(cmd, SUBPROCESS_TIMEOUT)
@@ -130,7 +123,6 @@ async def run_mode1(url: str, output_dir: Path) -> dict:
     return parse_mode1_result(stdout)
 
 
-# Run Mode 2 (scrape_url_chromium): captures stdout to file, returns result dict
 async def run_mode2(url: str, output_dir: Path) -> dict:
     cmd = [PYTHON, CLI, "scrape_url_chromium", url]
     rc, stdout, _ = await run_subprocess_async(cmd, SUBPROCESS_TIMEOUT)
@@ -141,7 +133,6 @@ async def run_mode2(url: str, output_dir: Path) -> dict:
     return parse_mode2_result(stdout, out_file)
 
 
-# Run subprocess asynchronously, return (returncode, stdout, stderr); rc=-1 on timeout
 async def run_subprocess_async(cmd: list, timeout: int) -> tuple[int, str, str]:
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -161,9 +152,6 @@ async def run_subprocess_async(cmd: list, timeout: int) -> tuple[int, str, str]:
         return -1, "", f"Timeout after {timeout}s"
 
 
-# Parse Mode 1 stdout: detect success ("Saved: ...") or failure
-# Crawl4AI emits [FETCH]/[SCRAPE]/[COMPLETE] progress lines to stdout before the
-# CLI output — use re.search(MULTILINE) rather than startswith().
 def parse_mode1_result(stdout: str) -> dict:
     m = re.search(r"^Saved: (.+?) \(", stdout, re.MULTILINE)
     if m:
@@ -186,8 +174,6 @@ def parse_mode1_result(stdout: str) -> dict:
     }
 
 
-# Parse Mode 2 stdout: detect success ("# Content from: ...") or failure
-# Same Crawl4AI stdout-prefix issue — search anywhere in stdout.
 def parse_mode2_result(stdout: str, out_file: Path) -> dict:
     marker = "# Content from: "
     idx = stdout.find(marker)
@@ -207,12 +193,11 @@ def parse_mode2_result(stdout: str, out_file: Path) -> dict:
         "status": failure,
         "bytes": len(stdout.encode("utf-8")),
         "garbage_type": failure,
-        "preview": stdout[-400:].strip(),  # tail of stdout — error msg is last line
+        "preview": stdout[-400:].strip(),
         "out_file": str(out_file),
     }
 
 
-# Return first matching failure label from FAILURE_SIGNALS, or "unknown_error"
 def detect_failure_type(text: str) -> str:
     for signal, label in FAILURE_SIGNALS:
         if signal in text:
@@ -220,14 +205,12 @@ def detect_failure_type(text: str) -> str:
     return "unknown_error"
 
 
-# Convert URL to safe filename with short hash suffix
 def sanitize_filename(url: str) -> str:
     slug = re.sub(r"[^\w]", "_", url)[:80]
     h = hashlib.md5(url.encode()).hexdigest()[:6]
     return f"{slug}_{h}"
 
 
-# Write the full comparison report, return its path
 def write_report(
     results: list, query_text: str, query_id: int, input_path: str,
     output_dir: Path, start_time: float, end_time: float,
@@ -253,7 +236,6 @@ def write_report(
     return report_path
 
 
-# Format the report header block
 def format_header(
     query_text: str, query_id: int, input_path: str, output_dir: Path,
     total: int, start_time: float, end_time: float,
@@ -273,7 +255,6 @@ def format_header(
     )
 
 
-# Format the 20-row summary table
 def format_summary_table(results: list) -> str:
     rows = ["## Summary Table\n",
             "| # | Class | URL | M1 status | M1 bytes | M2 status | M2 bytes | M2 garbage |",
@@ -290,7 +271,6 @@ def format_summary_table(results: list) -> str:
     return "\n".join(rows) + "\n\n---"
 
 
-# Format per-URL detail sections
 def format_per_url_details(results: list) -> str:
     lines = ["## Per-URL Details\n"]
     for r in results:
@@ -318,7 +298,6 @@ def format_per_url_details(results: list) -> str:
     return "\n".join(lines) + "---"
 
 
-# Format aggregate stats section
 def format_aggregate(
     results: list, m1_ok: list, m2_ok: list, m1_bytes: list, m2_failures: dict
 ) -> str:
@@ -343,13 +322,11 @@ def format_aggregate(
     return "\n".join(lines)
 
 
-# Print startup summary to stderr
 def log_start(query_id: int, query_text: str, url_count: int) -> None:
     print(f"dual_mode_smoke: Q{query_id} — {query_text}", file=sys.stderr)
     print(f"URLs to scrape: {url_count} (M1+M2 parallel per URL, sequential across URLs)", file=sys.stderr)
 
 
-# Print completion summary to stderr
 def log_completion(report_path: Path, runtime: float) -> None:
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Runtime: {runtime:.0f}s", file=sys.stderr)

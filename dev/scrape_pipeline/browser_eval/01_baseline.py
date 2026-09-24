@@ -28,7 +28,6 @@ async def run_baseline_suite():
 
 # FUNCTIONS
 
-# Load test domains from domains.txt
 def load_domains() -> list[str]:
     domains_file = Path(__file__).parent.parent / "domains.txt"
     domains = []
@@ -42,7 +41,6 @@ def load_domains() -> list[str]:
     return domains
 
 
-# Process single domain and save results
 async def process_single_domain(url: str) -> None:
     domain_name = extract_domain_name(url)
     print(f"\nProcessing: {domain_name}")
@@ -61,7 +59,6 @@ async def process_single_domain(url: str) -> None:
         print(f"Failed: Unexpected response format")
 
 
-# Extract clean domain name from URL for folder naming
 def extract_domain_name(url: str) -> str:
     parsed = urlparse(url)
     path_parts = [p for p in parsed.path.split('/') if p]
@@ -82,7 +79,6 @@ def extract_domain_name(url: str) -> str:
         return parsed.netloc.replace('.', '_')
 
 
-# Save baseline content and metadata
 def save_baseline(domain_name: str, url: str, content: str) -> None:
     baselines_dir = Path(__file__).parent / "01_baselines" / domain_name
     baselines_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +101,6 @@ def save_baseline(domain_name: str, url: str, content: str) -> None:
     print(f"  - Words: {metadata['word_count']}")
 
 
-# Get next iteration number for domain
 def get_next_iteration(baselines_dir: Path) -> int:
     existing_iterations = list(baselines_dir.glob("iteration_*.md"))
 
@@ -120,7 +115,6 @@ def get_next_iteration(baselines_dir: Path) -> int:
     return max(iteration_numbers) + 1
 
 
-# Create metadata dictionary
 def create_metadata(url: str, content: str, iteration_number: int) -> dict:
     return {
         "iteration": iteration_number,

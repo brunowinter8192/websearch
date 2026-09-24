@@ -40,7 +40,6 @@ def compare_all_baselines():
 
 # FUNCTIONS
 
-# Compare last two iterations for single domain
 def compare_domain_iterations(domain_dir: Path) -> dict | None:
     metadata_files = sorted(domain_dir.glob("metadata_*.json"))
 
@@ -92,13 +91,11 @@ def compare_domain_iterations(domain_dir: Path) -> dict | None:
     }
 
 
-# Load metadata from JSON file
 def load_metadata(metadata_file: Path) -> dict:
     with open(metadata_file, 'r') as f:
         return json.load(f)
 
 
-# Determine status based on percentage change
 def determine_status(char_percent: float, word_percent: float) -> str:
     max_change = max(abs(char_percent), abs(word_percent))
 
@@ -112,7 +109,6 @@ def determine_status(char_percent: float, word_percent: float) -> str:
         return "MAJOR_CHANGE"
 
 
-# Generate git-style diff between two iterations
 def generate_content_diff(domain_dir: Path, prev_iter: int, latest_iter: int) -> str:
     prev_content_file = domain_dir / f"iteration_{prev_iter:03d}.md"
     latest_content_file = domain_dir / f"iteration_{latest_iter:03d}.md"
@@ -134,7 +130,6 @@ def generate_content_diff(domain_dir: Path, prev_iter: int, latest_iter: int) ->
     return '\n'.join(diff)
 
 
-# Save comparison report to reports directory
 def save_comparison_report(results: list[dict]) -> None:
     reports_dir = Path(__file__).parent / "md"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -154,7 +149,6 @@ def save_comparison_report(results: list[dict]) -> None:
     print(f"\nReport saved: {report_file}")
 
 
-# Write single domain result to report file
 def write_domain_result(f, result: dict) -> None:
     f.write(f"\nDOMAIN: {result['domain']}\n")
     f.write("-" * 80 + "\n")

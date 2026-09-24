@@ -29,7 +29,6 @@ def download_workflow(urls: list[tuple[str, str]], overwrite: bool) -> None:
 
 # FUNCTIONS
 
-# Download one PDF; return (status, detail) — detail is filename+size on ok, error msg on fail
 def download_one(url: str, overwrite: bool) -> tuple[str, str]:
     try:
         response = requests.get(url, stream=True, timeout=30)
@@ -58,7 +57,6 @@ def download_one(url: str, overwrite: bool) -> tuple[str, str]:
     return "ok", f"{filename} ({size_str})"
 
 
-# Extract filename from Content-Disposition header, URL path, or timestamp fallback
 def extract_filename(response: requests.Response, url: str) -> str:
     cd = response.headers.get("Content-Disposition", "")
     if cd:
@@ -76,7 +74,6 @@ def extract_filename(response: requests.Response, url: str) -> str:
     return f"download_{int(time.time())}.pdf"
 
 
-# Write streamed response to file in CHUNK_SIZE blocks
 def write_pdf(response: requests.Response, filepath: Path) -> None:
     with open(filepath, "wb") as f:
         for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
@@ -84,14 +81,12 @@ def write_pdf(response: requests.Response, filepath: Path) -> None:
                 f.write(chunk)
 
 
-# Format byte count as human-readable KB or MB string
 def format_size(size_bytes: int) -> str:
     if size_bytes >= 1024 * 1024:
         return f"{size_bytes / (1024 * 1024):.1f} MB"
     return f"{size_bytes / 1024:.1f} KB"
 
 
-# Print per-URL results table to stdout
 def print_report(rows: list[tuple]) -> None:
     print()
     print("| # | Q | URL | File / Reason | Status |")
@@ -101,7 +96,6 @@ def print_report(rows: list[tuple]) -> None:
         print(f"| {i:2d} | {q_label} | {url_s} | {detail} | {status} |")
 
 
-# Parse all .pdf URLs from a smoke report MD across all queries
 def parse_pdf_urls(input_path: str) -> list[tuple[str, str]]:
     lines = Path(input_path).read_text(encoding="utf-8").splitlines()
     q_label = "?"

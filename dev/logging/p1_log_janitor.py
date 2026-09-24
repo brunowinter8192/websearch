@@ -8,12 +8,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_MARKER_MAX_AGE_SECS = 3600  # 1-hour fast-path window
+_MARKER_MAX_AGE_SECS = 3600
 
 
 # FUNCTIONS
 
-# Read SEARXNG_LOG_RETENTION_DAYS env, default 14
 def get_retention_days() -> int:
     try:
         return int(os.environ.get("SEARXNG_LOG_RETENTION_DAYS", 14))
@@ -21,7 +20,6 @@ def get_retention_days() -> int:
         return 14
 
 
-# Lazy 14-day prune of a JSONL log (ts field per line). On-write trigger; fail-soft
 def maybe_prune_jsonl(log_path: Path) -> None:
     marker = Path(str(log_path) + ".lastprune")
     if _is_recent(marker):
@@ -32,7 +30,6 @@ def maybe_prune_jsonl(log_path: Path) -> None:
         logger.warning("log_janitor: prune_jsonl failed for %s: %s", log_path, e)
 
 
-# Lazy 14-day prune of a sidecar directory (file-level, mtime-based). On-write trigger; fail-soft
 def maybe_prune_sidecars(sidecar_dir: Path) -> None:
     marker = sidecar_dir / ".lastprune"
     if _is_recent(marker):
@@ -43,7 +40,6 @@ def maybe_prune_sidecars(sidecar_dir: Path) -> None:
         logger.warning("log_janitor: prune_sidecars failed for %s: %s", sidecar_dir, e)
 
 
-# True if marker exists and was touched within the last hour
 def _is_recent(marker: Path) -> bool:
     try:
         return time.time() - marker.stat().st_mtime < _MARKER_MAX_AGE_SECS
@@ -51,7 +47,6 @@ def _is_recent(marker: Path) -> bool:
         return False
 
 
-# Filter JSONL lines older than retention window; atomic rewrite via .tmp; touch marker
 def _prune_jsonl(log_path: Path, marker: Path) -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(days=get_retention_days())
     kept = []
@@ -73,7 +68,6 @@ def _prune_jsonl(log_path: Path, marker: Path) -> None:
     marker.touch()
 
 
-# Unlink *.md files older than retention window; touch marker; log count deleted
 def _prune_sidecars(sidecar_dir: Path, marker: Path) -> None:
     cutoff_mtime = time.time() - get_retention_days() * 86400
     deleted = 0
