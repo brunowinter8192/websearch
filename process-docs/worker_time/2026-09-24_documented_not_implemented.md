@@ -44,6 +44,27 @@ Whether these lines change worker behaviour was not measured.
 Separately, the root cause of the substitution, `dev/_lib/browser_launch.py` hardcoding the real
 Chrome app, was dispatched in this session under `refactor_sweep`.
 
+## Observed on 2026-09-24 with five parallel workers
+
+- **Shared `/tmp` collisions.** Four of five workers (wsweep2, wcli, wgoogle, wnotice) reported
+  that a helper script they had written to a fixed path such as `/tmp/scan.py` was overwritten by
+  another worker mid-task. One verification printed another area's files before the worker
+  noticed. All four recovered by moving to a worker-unique directory (`/tmp/<worker>/`). Cost was
+  a re-run, not a wrong result, because each worker re-checked. A prompt line naming a
+  worker-unique scratch directory up front would avoid it.
+- **Scripted edits instead of Edit/Write.** Three workers (wsweep1, wgoogle, wcli) removed
+  hundreds of comments with a tokenize/AST script run through Bash instead of per-file Edit calls,
+  and reported it as a deviation. Each backed it with an `ast.dump` equality check per file
+  (old AST minus docstrings equals new AST). For a mechanical sweep across 100+ files this was the
+  faster path and the proof was stronger than a manual review would have been.
+- **Accidental live runs.** wsweep1 ran `--help` on 11 scripts to compare output; three had no
+  argparse and executed for real (live HTTP GETs, one pydoll Chrome on the shared
+  `~/.websearch/browser-session` profile, killed within a minute). The second-wave prompt added
+  "check that a script parses args before running it"; no worker ran a live probe after that.
+- **The three prompt lines from above** (hook rule named, stop-and-report on collision, evidence
+  for convention claims): no worker hit a hook refusal, so the stop-and-report line was never
+  tested. Workers did cite evidence (grep output, file paths) for convention claims unprompted.
+
 ## Open
 
 - A mechanism that makes a blocked instruction a reportable event, outside the prompt text.
