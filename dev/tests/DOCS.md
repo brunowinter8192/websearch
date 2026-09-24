@@ -243,9 +243,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** src/news/platforms/coindesk/timeline.py parse_articles: malformed body raises, article-less payload returns [].
 
-### test_log_janitor.py (14 LOC)
+### test_log_janitor.py (92 LOC)
 
-**Purpose:** src/log_janitor.py get_retention_days: default and malformed-value behavior.
+**Purpose:** src/log_janitor.py: get_retention_days default and malformed-value behavior, JSONL and sidecar pruning, marker creation, recent-marker fast path, stale-marker re-run.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches four browser-launch names per test through an autouse fixture; every other state (module globals of the code under test, environment variables, log paths) is reset per test through `monkeypatch` and `tmp_path`.
