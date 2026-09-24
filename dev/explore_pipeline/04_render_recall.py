@@ -52,7 +52,7 @@ async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
         print(f"\n{'=' * 60}")
         print(f"Strategy: {name}  (prefetch={cfg['prefetch']}, wait_until={cfg['wait_until']})")
         urls, elapsed = await discover_with_config(
-            SEED_URL, domain, max_pages, depth, None,
+            SEED_URL, domain, max_pages, depth,
             cfg["wait_until"], cfg["prefetch"],
         )
         stats = compute_recall(urls, gold)
@@ -87,14 +87,11 @@ def normalize_url(url: str) -> str:
 
 
 async def discover_with_config(url: str, domain: str, max_pages: int, depth: int,
-                               include_pattern: str | None, wait_until: str,
-                               use_prefetch: bool) -> tuple[list[str], float]:
+                               wait_until: str, use_prefetch: bool) -> tuple[list[str], float]:
     filters = [
         DomainFilter(allowed_domains=[domain]),
         ContentTypeFilter(allowed_types=["text/html"]),
     ]
-    if include_pattern:
-        filters.append(URLPatternFilter(patterns=[include_pattern], reverse=False))
 
     bfs = BFSDeepCrawlStrategy(
         max_depth=depth,
@@ -163,7 +160,7 @@ async def run_regression() -> list[dict]:
         for strat_name, cfg in [("A", a_cfg), ("C", c_cfg)]:
             print(f"  {label}/{strat_name} ...", end=" ", flush=True)
             urls, elapsed = await discover_with_config(
-                url, domain, max_pages, depth, None, cfg["wait_until"], cfg["prefetch"]
+                url, domain, max_pages, depth, cfg["wait_until"], cfg["prefetch"]
             )
             print(f"{len(urls)} URLs in {elapsed:.1f}s")
             rows.append({
