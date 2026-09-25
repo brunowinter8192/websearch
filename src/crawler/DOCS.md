@@ -10,7 +10,7 @@ URL discovery and the batch scrape step of the capture-and-index workflow. Disco
 
 - pipe_scraper.py: batch scrape entry.
 - discovery.py: discovery entry used by cli.py.
-- seed_feeders.py: the three feeder entries.
+- robots_feeder.py, sitemap_feeder.py, navtree_feeder.py: the three feeder entries.
 - seed_feeders_scope.py: shared feeder result type, URL normalization and host validation.
 
 ## Flow
@@ -83,28 +83,50 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper_records.py.
 **Calls out:** none.
 
-### seed_feeders.py (60 LOC)
+### robots_feeder.py (23 LOC)
 
-**Purpose:** The three feeder workflows (robots, sitemap, navigation tree); each returns a result object and turns orchestration failures into a not-ok result.
-**Reads:** live HTTP via one fresh client per workflow call.
+**Purpose:** Robots feeder workflow: paths from robots.txt scoped to the seed host; a failure becomes a not-ok result.
+**Reads:** live HTTP via one fresh client per call.
 **Writes:** none.
 **Called by:** discovery.py.
 **Calls out:** httpx.
+
+---
+
+### sitemap_feeder.py (30 LOC)
+
+**Purpose:** Sitemap feeder workflow: declared or conventional sitemaps resolved to URLs scoped to the seed host; a failure becomes a not-ok result.
+**Reads:** live HTTP via one fresh client per call.
+**Writes:** none.
+**Called by:** discovery.py.
+**Calls out:** httpx.
+
+---
+
+### navtree_feeder.py (22 LOC)
+
+**Purpose:** Navigation-tree feeder workflow: the site's own nav tree and versions resolved to URLs scoped to the seed host; a failure becomes a not-ok result.
+**Reads:** live HTTP via one fresh client per call.
+**Writes:** none.
+**Called by:** discovery.py.
+**Calls out:** httpx.
+
+---
 
 ### seed_feeders_constants.py (8 LOC)
 
 **Purpose:** Shared HTTP timeout, user agent, conventional sitemap paths and concurrency caps for the feeders.
 **Reads:** none.
 **Writes:** none.
-**Called by:** seed_feeders.py, seed_feeders_robots.py, seed_feeders_sitemap.py, seed_feeders_navtree.py.
+**Called by:** seed_feeders_robots.py, seed_feeders_sitemap.py, seed_feeders_navtree.py, sitemap_feeder.py.
 **Calls out:** none.
 
-### seed_feeders_scope.py (71 LOC)
+### seed_feeders_scope.py (84 LOC)
 
-**Purpose:** Feeder result type, URL normalization, host-only scoping with order-preserving dedup, and seed validation.
+**Purpose:** Feeder result type, URL normalization, host-only scoping with order-preserving dedup, seed validation, base URL and the guard that turns a feeder failure into a not-ok result.
 **Reads:** none.
 **Writes:** none.
-**Called by:** seed_feeders.py, discovery.py, pipe_scraper_acquisition.py.
+**Called by:** the three feeder modules, discovery.py, pipe_scraper_acquisition.py.
 **Calls out:** none (stdlib only).
 
 ### seed_feeders_robots.py (40 LOC)
@@ -112,7 +134,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Purpose:** Fetches robots.txt and parses Allow, Disallow and Sitemap directives.
 **Reads:** robots.txt over HTTP.
 **Writes:** none.
-**Called by:** seed_feeders.py.
+**Called by:** robots_feeder.py, sitemap_feeder.py.
 **Calls out:** httpx.
 
 ### seed_feeders_sitemap.py (69 LOC)
@@ -120,7 +142,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Purpose:** Fetches and parses sitemaps, resolving sitemap indexes recursively with bounded concurrency and cycle protection.
 **Reads:** sitemap documents over HTTP.
 **Writes:** none.
-**Called by:** seed_feeders.py.
+**Called by:** sitemap_feeder.py.
 **Calls out:** httpx.
 
 ### seed_feeders_navtree.py (267 LOC)
@@ -128,10 +150,10 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Purpose:** Detects a site's own frontend navigation tree in page payloads, walks it and unions every exposed version.
 **Reads:** the seed page and each version's root page over HTTP.
 **Writes:** none.
-**Called by:** seed_feeders.py.
+**Called by:** navtree_feeder.py.
 **Calls out:** httpx.
 
-### discovery.py (70 LOC)
+### discovery.py (72 LOC)
 
 **Purpose:** Discovery entry point: runs all three feeders concurrently and merges their output with the seed into one source-tagged URL set.
 **Reads:** feeder output only; fetches nothing itself.

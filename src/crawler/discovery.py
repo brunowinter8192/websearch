@@ -3,7 +3,9 @@ import asyncio
 import time
 from dataclasses import dataclass, field
 
-from src.crawler.seed_feeders import robots_feeder_workflow, sitemap_feeder_workflow, navtree_feeder_workflow
+from src.crawler.navtree_feeder import navtree_feeder_workflow
+from src.crawler.robots_feeder import robots_feeder_workflow
+from src.crawler.sitemap_feeder import sitemap_feeder_workflow
 from src.crawler.seed_feeders_scope import normalize_url, require_host
 
 _FEEDER_WORKFLOWS = (

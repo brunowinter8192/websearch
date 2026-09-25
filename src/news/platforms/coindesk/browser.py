@@ -12,7 +12,7 @@ import urllib.request
 import httpx
 from pydoll.browser import Chrome
 
-from src.search.cdp_value import extract_value
+from src.cdp_value import extract_value
 from src.news.platforms.coindesk.config import (
     TARGET_URL,
     CLICKS_REWARM,

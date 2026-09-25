@@ -27,14 +27,6 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** cli.py; dev scripts.
 **Calls out:** httpx, pydoll and websocket exceptions, mcp types.
 
-### cdp_value.py (3 LOC)
-
-**Purpose:** Unwraps the value field of a CDP script-evaluation result; the one shared copy for all engines and the CoinDesk browser module.
-**Reads:** the CDP result handed in.
-**Writes:** none.
-**Called by:** src/search/engines/ modules, src/news/platforms/coindesk/browser.py.
-**Calls out:** none.
-
 ### degraded_notice.py (61 LOC)
 
 **Purpose:** Builds the notice prepended to the breakdown when the error or timeout share of engines is high.

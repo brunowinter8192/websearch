@@ -3,6 +3,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
 LOG_DIR = PROJECT_ROOT / "src" / "logs"
+NEWS_DATA_ROOT = PROJECT_ROOT / "data" / "news"
 
 CDP_PORT_WAIT_TIMEOUT_S = 10.0
 FOCUS_STEAL_POLL_INTERVAL_S = 0.25

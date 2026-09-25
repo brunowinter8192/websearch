@@ -6,11 +6,11 @@ Namespace package holding one subdirectory per news source, each implementing th
 
 ## Public Interface
 
-`__init__.py` is empty. Each platform subpackage registers its implementation as a side effect of being imported by src/news/__main__.py.
+`__init__.py` is empty. Each platform subpackage exports its platform class; src/news/registry.py lists the classes.
 
 ## Flow
 
-The news entry point imports a platform subpackage, which instantiates and registers its implementation. The pipeline then looks the platform up by source name and drives discover, dedup, scrape and, for the proxy-pool engine, clean pass.
+The registry instantiates the platform class matching the source name. The workflow modules then drive the platform through discover, dedup, scrape and, for the proxy-pool engine, clean pass.
 
 ## Modules
 

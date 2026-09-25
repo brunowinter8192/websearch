@@ -11,7 +11,7 @@ from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
 
 from src.search.browser import new_tab, kill_tab
-from src.search.cdp_value import extract_value
+from src.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
 from src.search.selector_hits import collect_selector_hits
 from src.search.result import SearchResult

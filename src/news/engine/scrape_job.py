@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.news.pipeline_support import build_ok_manifest_entries
 from src.news.platform import Platform
 from src.news.engine.scrape import scrape_entries, RegwallGuardError
 
@@ -16,10 +17,21 @@ async def scrape_chunks_raw(
     platform: "Platform",
     log: logging.Logger,
 ) -> tuple[dict, list[dict], bool]:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    return await _scrape_chunks_until_abort(chunks, raw_dir, platform, log)
+
+
+# FUNCTIONS
+
+async def _scrape_chunks_until_abort(
+    chunks: list[list[dict]],
+    raw_dir: Path,
+    platform: "Platform",
+    log: logging.Logger,
+) -> tuple[dict, list[dict], bool]:
     totals = {"ok": 0, "regwall": 0, "empty": 0, "failed": 0}
     job_records: list[dict] = []
     regwall_abort = False
-    raw_dir.mkdir(parents=True, exist_ok=True)
     for ci, chunk in enumerate(chunks):
         chunk_job_records, aborted = await _scrape_one_chunk(
             ci, len(chunks), chunk, raw_dir, platform, log, totals,
@@ -30,8 +42,6 @@ async def scrape_chunks_raw(
             break
     return totals, job_records, regwall_abort
 
-
-# FUNCTIONS
 
 async def _scrape_one_chunk(
     ci:       int,
@@ -64,17 +74,9 @@ async def _scrape_one_chunk(
         totals[s] += n
     chunk_job_records = [{"t_chunk_start": t_chunk_start, **e} for e in manifest]
 
-    entries_by_url = {e["url"]: e for e in chunk}
-    ok_manifest_entries = [
-        {
-            "hash": e["hash"],
-            "url": e["url"],
-            "publication_date": entries_by_url.get(e["url"], {}).get("publication_date", ""),
-        }
-        for e in manifest if e.get("status") == "ok"
-    ]
-    _append_to_raw_manifest(raw_dir, ok_manifest_entries)
-    _update_blocked_urls(raw_dir, manifest, {"regwall": "regwall_urls.txt", "empty": "empty_urls.txt"})
+    ok_manifest_entries = build_ok_manifest_entries(chunk, manifest)
+    append_to_raw_manifest(raw_dir, ok_manifest_entries)
+    update_blocked_urls(raw_dir, manifest, {"regwall": "regwall_urls.txt", "empty": "empty_urls.txt"})
 
     log.info(
         f"  chunk {ci + 1}: ok={counts['ok']} "
@@ -83,7 +85,7 @@ async def _scrape_one_chunk(
     )
     return chunk_job_records, aborted
 
-def _append_to_raw_manifest(raw_dir: Path, ok_entries: list[dict]) -> None:
+def append_to_raw_manifest(raw_dir: Path, ok_entries: list[dict]) -> None:
     if not ok_entries:
         return
     manifest_path = raw_dir / "manifest.jsonl"
@@ -92,7 +94,7 @@ def _append_to_raw_manifest(raw_dir: Path, ok_entries: list[dict]) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-def _update_blocked_urls(raw_dir: Path, manifest: list[dict], status_filenames: dict[str, str]) -> None:
+def update_blocked_urls(raw_dir: Path, manifest: list[dict], status_filenames: dict[str, str]) -> None:
     for status, filename in status_filenames.items():
         new_urls = {e["url"] for e in manifest if e.get("status") == status}
         if not new_urls:

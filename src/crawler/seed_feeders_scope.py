@@ -1,5 +1,6 @@
 # INFRASTRUCTURE
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
@@ -16,6 +17,18 @@ class FeederResult:
 
 
 # FUNCTIONS
+
+async def run_guarded(collect: Callable[[str], Awaitable[FeederResult]], seed_url: str) -> FeederResult:
+    try:
+        return await collect(seed_url)
+    except Exception as exc:
+        return FeederResult(urls=[], ok=False, error=str(exc))
+
+
+def base_url(seed_url: str) -> str:
+    parsed = urlsplit(seed_url)
+    return f"{parsed.scheme}://{parsed.netloc}/"
+
 
 def normalize_url(url: str) -> str:
     parsed = urlsplit(url)

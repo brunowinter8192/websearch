@@ -2,7 +2,7 @@
 
 ## Role
 
-Root of the source tree. config.py, log_janitor.py and death_pipe.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news) live one level down, each with its own DOCS.md.
+Root of the source tree. config.py, cdp_value.py, log_janitor.py and death_pipe.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news) live one level down, each with its own DOCS.md.
 
 ## Public Interface
 
@@ -14,12 +14,22 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 
 ## Modules
 
-### config.py (23 LOC)
+### config.py (24 LOC)
 
 **Purpose:** Constants shared by two or more modules with identical meaning; single-module constants stay in their module.
 **Reads:** nothing.
 **Writes:** nothing.
 **Called by:** src/search/browser.py, src/scraper/chromium_process.py, src/scraper/chromium_scrape.py, src/news/pipeline.py, src/news/pipeline_support.py, src/news/engine and src/news/platforms modules.
+**Calls out:** none.
+
+---
+
+### cdp_value.py (3 LOC)
+
+**Purpose:** Unwraps the value field of a CDP script-evaluation result; the one shared copy for all engines and the CoinDesk browser module.
+**Reads:** the CDP result handed in.
+**Writes:** none.
+**Called by:** src/search/engines/ modules, src/news/platforms/coindesk/browser.py.
 **Calls out:** none.
 
 ---

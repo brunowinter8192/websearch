@@ -2,15 +2,15 @@
 
 ## Role
 
-The Block platform implementation using the proxy-pool scrape engine (no browser) and its own RAG collection. Discovery is sitemap-based; the publication date arrives only after fetch. Imported for its registration side effect by src/news/__main__.py; nothing else imports it.
+The Block platform implementation using the proxy-pool scrape engine (no browser) and its own RAG collection. Discovery is sitemap-based; the publication date arrives only after fetch. Instantiated by src/news/registry.py; nothing else imports it.
 
 ## Public Interface
 
-`__init__.py` exports the platform class and registers an instance at import. The class subclasses the platform protocol and inherits its declared defaults for the optional attributes the pipeline reads directly; a legacy dedup-mode attribute is unused.
+`__init__.py` exports the platform class. The class subclasses the platform protocol and inherits its declared defaults for the optional attributes the pipeline reads directly; a legacy dedup-mode attribute is unused.
 
 ## Flow
 
-Sitemap index fetched directly, via the proxy pool when the direct fetch does not yield XML; sub-sitemaps are selected by mode and parsed into URL and lastmod entries. After the proxy engine fetches raw HTML, the clean pass extracts the JSON-LD article body, converts it to markdown and sets the publication date on the entry. Proxy-pool fetch and loader helpers come from `src/news/engine/proxy_pool/`; the package `__init__.py` composes config, discover and cleanup and registers with `src/news/registry.py`.
+Sitemap index fetched directly, via the proxy pool when the direct fetch does not yield XML; sub-sitemaps are selected by mode and parsed into URL and lastmod entries. After the proxy engine fetches raw HTML, the clean pass extracts the JSON-LD article body, converts it to markdown and sets the publication date on the entry. Proxy-pool fetch and loader helpers come from `src/news/engine/proxy_pool/`; the package `__init__.py` composes config, discover and cleanup.
 
 ## Modules
 
@@ -38,12 +38,12 @@ Sitemap index fetched directly, via the proxy pool when the direct fetch does no
 **Called by:** `__init__.py`, which exposes it as the platform's cleanup method that src/news/clean_pass.py invokes.
 **Calls out:** crawl4ai html2text.
 
-### __init__.py (30 LOC)
+### __init__.py (27 LOC)
 
-**Purpose:** The platform class wrapping config, discovery and cleanup; registers itself on import.
+**Purpose:** The platform class wrapping config, discovery and cleanup.
 **Reads:** none of its own.
-**Writes:** the registry entry.
-**Called by:** src/news/__main__.py (side-effect import).
+**Writes:** none.
+**Called by:** src/news/registry.py.
 **Calls out:** none.
 
 ## State

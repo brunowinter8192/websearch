@@ -10,7 +10,7 @@ Per-engine search implementations. Each module is one engine (a `name` constant 
 
 ## Flow
 
-Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. The fan-out in src/search acquires a rate-limiter token (limits live in `src/search/rate_limiter.py`) before calling the engine. Engines use `src/search/browser.py`, `cdp_value.py`, `document_status.py` and `selector_hits.py`, and return `src/search/result.py` types.
+Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. The fan-out in src/search acquires a rate-limiter token (limits live in `src/search/rate_limiter.py`) before calling the engine. Engines use `src/search/browser.py`, `src/cdp_value.py`, `document_status.py` and `selector_hits.py`, and return `src/search/result.py` types.
 
 ## Modules
 

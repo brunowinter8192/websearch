@@ -14,7 +14,7 @@ import src.search.engines.startpage as startpage_mod
 import src.search.engines.yandex as yandex_mod
 import src.search.search_web as search_web
 from src.search import status_error as SE
-from src.search.cdp_value import extract_value
+from src.cdp_value import extract_value
 
 ENGINE_MODULES = [google_mod, bing_mod, brave_mod, duckduckgo_mod, mojeek_mod, startpage_mod, yandex_mod]
 ENGINE_IDS = [m.__name__.rsplit(".", 1)[-1] for m in ENGINE_MODULES]

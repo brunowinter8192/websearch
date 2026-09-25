@@ -30,7 +30,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 **Called by:** src/news/pipeline.py, src/news/clean_pass.py.
 **Calls out:** none (stdlib only).
 
-### scrape_job.py (104 LOC)
+### scrape_job.py (106 LOC)
 
 **Purpose:** Chunked raw-only scrape orchestration for scrape-only mode, plus shared raw-persist helpers.
 **Reads:** entry chunks and platform configuration.
