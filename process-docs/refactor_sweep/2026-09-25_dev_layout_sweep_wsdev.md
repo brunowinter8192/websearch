@@ -176,3 +176,9 @@ Round 4 found no defects; these items were needed for a real zero.
 - **R4-D1.** The glyphs quoted in the first emoji entry of this file are replaced by descriptions; a scan of this file finds none.
 - **Tests.** `test_dev_drop_reporting.py` grew from 28 to 46: proxy checks in all four modules (count, unexpected error aborts), the six polls (last error reported, malformed reply aborts), `extract_cursor`, the audit unparse tripwire. Against a copy of integration 45 fail and 1 passes (the `_06` poll already aborted on a malformed reply); on the branch all 46 pass.
 - **Proofs (against integration d225306).** Layout scan 0 on 337 files; collect-only ids identical except the 46 new tests (default 724, browser 12, all 736); `run_strands.sh` `strands=71 skipped=1 failed=0`, 705 passes; pyflakes 166 lines in both trees; import snapshot differs only by the removed `_close_browser_quietly`; 47 of 48 sandbox runs identical (same `--help` path wrap); `docs-drift-check` 0.
+
+## Recap (silent handlers and emojis task, 2026-09-25)
+
+Files versus integration (d225306): dev scripts with narrowed or removed handlers and trace lines, 20 scripts without glyphs, `dev/news_pipeline/theblock/proxy_rejections.py`, `dev/tests/test_dev_drop_reporting.py` (46 tests), `dev/refactor_sweep/` scans 11 to 13 with reports and `glyph_replacements.json`, dev DOCS.md files (LOC headings, new module entries), this file. Merge state: integration unchanged, merge is a no-op.
+
+For a successor: run `11_silent_handler_scan.py`, `12_emoji_scan.py` and `13_glyph_diff_check.py` after any dev change; the tests run the dev functions in child interpreters and can be pointed at another tree with `DEV_TREE=<path>` to prove they fail on the old code. Open: browser-driving scripts and the real network path of the proxy checks have no runtime proof; tracked generated reports and scraped data keep their glyphs by decision.
