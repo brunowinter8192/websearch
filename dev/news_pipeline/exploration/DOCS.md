@@ -67,7 +67,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `_02_quick.py`, `_02_depth.py`.
 **Calls out:** none.
 
-### 03_coindesk_backfill_traversal.py (341 LOC)
+### 03_coindesk_backfill_traversal.py (346 LOC)
 
 **Purpose:** Uncapped browser-driven backfill of the latest-news page reusing production discovery Chrome machinery, with stop rules for button gone, disabled, or plateau.
 **Reads:** Live CoinDesk site.
@@ -187,7 +187,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `05b_coindesk_warmth_probe.py`.
 **Calls out:** none.
 
-### 06_coindesk_full_discovery.py (362 LOC)
+### 06_coindesk_full_discovery.py (379 LOC)
 
 **Purpose:** Full discovery run combining browser capture and cursor loop, writing articles per year with checkpoint resume and rewarm fallback.
 **Reads:** Live CoinDesk site and timeline API.

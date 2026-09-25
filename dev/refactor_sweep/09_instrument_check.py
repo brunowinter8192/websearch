@@ -45,11 +45,6 @@ def check_cdp() -> dict:
     return {"patched": handler._process_single_message is instrument._patched_process_msg}
 
 
-def install_if_present(module, name: str) -> None:
-    if hasattr(module, name):
-        getattr(module, name)()
-
-
 def check_rate_limiter(probe: str) -> dict:
     instrument = importlib.import_module(f"_{probe}_probe_instrument")
     importlib.import_module("src.search.search_web")
@@ -58,6 +53,11 @@ def check_rate_limiter(probe: str) -> dict:
     kinds = {name: type(lim._lock).__name__ for name, lim in sorted(limiters.items())}
     events = asyncio.run(acquire_once(limiters["bing"], instrument))
     return {"lock_types": kinds, "acquire_patched": limiters["bing"].acquire.__func__.__name__, "events": events}
+
+
+def install_if_present(module, name: str) -> None:
+    if hasattr(module, name):
+        getattr(module, name)()
 
 
 async def acquire_once(limiter, instrument) -> list[list]:

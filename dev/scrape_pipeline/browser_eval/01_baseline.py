@@ -20,7 +20,7 @@ async def run_baseline_suite():
 
     await _run_domain_baselines(domains)
 
-    _print_line(domains)
+    _print_suite_completed(domains)
 
 
 # FUNCTIONS
@@ -48,7 +48,7 @@ async def _run_domain_baselines(domains):
         await process_single_domain(url)
 
 
-def _print_line(domains):
+def _print_suite_completed(domains):
     print("=" * 80)
     print(f"Baseline suite completed: {len(domains)} domains processed")
 

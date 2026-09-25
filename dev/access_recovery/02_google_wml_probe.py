@@ -45,8 +45,7 @@ def run_probe() -> None:
     wml_run_dir = _compute_wml_run_dir(run_ts)
     wml_run_dir.mkdir(parents=True, exist_ok=True)
 
-    records = []
-    _run_query_variants(queries, wml_run_dir, records)
+    records = _run_query_variants(queries, wml_run_dir)
 
     report_path = write_report(records, run_ts)
     counts = _count_outcomes(records)
@@ -65,7 +64,8 @@ def _compute_wml_run_dir(run_ts):
     return wml_run_dir
 
 
-def _run_query_variants(queries, wml_run_dir, records):
+def _run_query_variants(queries, wml_run_dir):
+    records = []
     for qi, q in enumerate(queries):
         print(f"[{qi + 1}/{len(queries)}] ({q['axis']}) {q['query']}", file=sys.stderr)
         record = run_query(q["query"], q["axis"], wml_run_dir)
@@ -78,6 +78,7 @@ def _run_query_variants(queries, wml_run_dir, records):
         if qi < len(queries) - 1:
             print(f"  (pacing {NAV_DELAY_S}s before next request)", file=sys.stderr)
             time.sleep(NAV_DELAY_S)
+    return records
 
 
 def write_report(records: list[dict], run_ts: str) -> Path:

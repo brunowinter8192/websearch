@@ -112,7 +112,7 @@ def statement_violations(stmt: ast.stmt) -> list[str]:
     if isinstance(stmt, ast.Expr):
         return expression_violations(stmt.value, False)
     if isinstance(stmt, (ast.Assign, ast.AnnAssign)):
-        return expression_violations(stmt.value, False) if stmt.value is not None else []
+        return assignment_violations(stmt)
     if isinstance(stmt, ast.Return):
         return expression_violations(stmt.value, False) if stmt.value is not None else []
     if isinstance(stmt, ast.If):
@@ -172,28 +172,13 @@ def class_hoistable(cls: ast.ClassDef, defs: dict, future: bool) -> bool:
     return True
 
 
-def expression_violations(expr: ast.AST, condition: bool) -> list[str]:
-    if isinstance(expr, (ast.Name, ast.Constant)):
-        return []
-    if isinstance(expr, ast.Call):
-        found = expression_violations(expr.func, False)
-        for arg in expr.args:
-            found += expression_violations(arg, False)
-        for kw in expr.keywords:
-            found += expression_violations(kw.value, False)
-        return found
-    if isinstance(expr, (ast.Await, ast.Starred, ast.Attribute)):
-        return expression_violations(expr.value, False)
-    if isinstance(expr, ast.Subscript):
-        return expression_violations(expr.value, False) + expression_violations(expr.slice, False)
-    if isinstance(expr, (ast.Tuple, ast.List, ast.Set)):
-        return [v for e in expr.elts for v in expression_violations(e, False)]
-    if isinstance(expr, ast.Dict):
-        parts = [k for k in expr.keys if k is not None] + list(expr.values)
-        return [v for e in parts for v in expression_violations(e, False)]
-    if condition:
-        return condition_violations(expr)
-    return [type(expr).__name__]
+def assignment_violations(stmt: ast.stmt) -> list[str]:
+    value = stmt.value
+    if value is None:
+        return ["BareAnnotation"]
+    if isinstance(value, (ast.Constant, ast.List, ast.Dict, ast.Tuple, ast.Set, ast.Subscript)):
+        return [f"Literal{type(value).__name__}"]
+    return expression_violations(value, False)
 
 
 def read_marker_lines(source: str) -> list[tuple[int, str]]:
@@ -235,16 +220,28 @@ def loaded_names(nodes: list[ast.AST]) -> dict[str, int]:
     return found
 
 
-def condition_violations(expr: ast.AST) -> list[str]:
-    if isinstance(expr, ast.Compare):
-        parts = [expr.left] + list(expr.comparators)
-    elif isinstance(expr, ast.BoolOp):
-        parts = list(expr.values)
-    elif isinstance(expr, ast.UnaryOp) and isinstance(expr.op, ast.Not):
-        parts = [expr.operand]
-    else:
-        return [type(expr).__name__]
-    return [v for e in parts for v in expression_violations(e, True)]
+def expression_violations(expr: ast.AST, condition: bool) -> list[str]:
+    if isinstance(expr, (ast.Name, ast.Constant)):
+        return []
+    if isinstance(expr, ast.Call):
+        found = expression_violations(expr.func, False)
+        for arg in expr.args:
+            found += expression_violations(arg, False)
+        for kw in expr.keywords:
+            found += expression_violations(kw.value, False)
+        return found
+    if isinstance(expr, (ast.Await, ast.Starred, ast.Attribute)):
+        return expression_violations(expr.value, False)
+    if isinstance(expr, ast.Subscript):
+        return expression_violations(expr.value, False) + expression_violations(expr.slice, False)
+    if isinstance(expr, (ast.Tuple, ast.List, ast.Set)):
+        return [v for e in expr.elts for v in expression_violations(e, False)]
+    if isinstance(expr, ast.Dict):
+        parts = [k for k in expr.keys if k is not None] + list(expr.values)
+        return [v for e in parts for v in expression_violations(e, False)]
+    if condition:
+        return condition_violations(expr)
+    return [type(expr).__name__]
 
 
 def definition_time_parts(node: ast.AST, future_annotations: bool) -> list[ast.AST]:
@@ -257,6 +254,18 @@ def definition_time_parts(node: ast.AST, future_annotations: bool) -> list[ast.A
         else:
             parts.append(stmt)
     return parts
+
+
+def condition_violations(expr: ast.AST) -> list[str]:
+    if isinstance(expr, ast.Compare):
+        parts = [expr.left] + list(expr.comparators)
+    elif isinstance(expr, ast.BoolOp):
+        parts = list(expr.values)
+    elif isinstance(expr, ast.UnaryOp) and isinstance(expr.op, ast.Not):
+        parts = [expr.operand]
+    else:
+        return [type(expr).__name__]
+    return [v for e in parts for v in expression_violations(e, True)]
 
 
 def function_head_parts(func: ast.AST, future_annotations: bool) -> list[ast.AST]:

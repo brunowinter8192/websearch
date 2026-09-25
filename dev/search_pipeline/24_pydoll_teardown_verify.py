@@ -33,7 +33,7 @@ async def pydoll_teardown_verify_workflow() -> None:
     lines.append("## Setup")
     await get_tab()
     browser_state = _compute_browser_state()
-    _append_lines(lines, browser_state)
+    _append_browser_started(lines, browser_state)
     lines.append("")
 
     r1 = await _test_kill_tab_hung(lines)
@@ -52,7 +52,7 @@ async def pydoll_teardown_verify_workflow() -> None:
     lines.append("")
     lines.append("### Interpretation")
     lines.append("")
-    _append_lines_2(lines)
+    _append_interpretation(lines)
 
     report_path.write_text("\n".join(lines))
     _print_report(report_path, r1, r2, r3, overall)
@@ -75,7 +75,7 @@ def _compute_browser_state():
     return browser_state
 
 
-def _append_lines(lines, browser_state):
+def _append_browser_started(lines, browser_state):
     lines.append(f"Browser started: `_browser` = {browser_state}")
 
 
@@ -210,7 +210,7 @@ def _append_overall(lines, overall):
     lines.append(f"**Overall: {'PASS' if overall else 'FAIL'}**")
 
 
-def _append_lines_2(lines):
+def _append_interpretation(lines):
     lines.append(f"- Old behavior (tab.close): each hung tab adds ~60s; batch of {BATCH_N} = up to {BATCH_N}×65s worst case")
     lines.append(f"- New behavior (kill_tab): batch wall ~= watchdog ({WATCHDOG}s) — all {BATCH_N} tabs killed in parallel")
     lines.append(f"- T3 CDP targets Δ = 0 → no orphaned targets after batch teardown")

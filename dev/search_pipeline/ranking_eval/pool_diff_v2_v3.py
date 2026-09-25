@@ -33,11 +33,16 @@ def main() -> None:
         candidates = sorted(DATA_DIR.glob("value_eval_v3_*"), reverse=True)
         if not candidates:
             raise SystemExit("No value_eval_v3_* dir found in runs/")
-        v3_dir = candidates[0]
+        v3_dir = _compute_v3_dir(candidates)
     pool_diff_workflow(v3_dir)
 
 
 # FUNCTIONS
+
+def _compute_v3_dir(candidates):
+    v3_dir = candidates[0]
+    return v3_dir
+
 
 def pool_diff_workflow(v3_dir: Path) -> None:
     rows     = _compute_rows(v3_dir)

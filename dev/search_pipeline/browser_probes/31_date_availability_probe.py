@@ -11,8 +11,6 @@ from _date_availability_probe_browser import _extract_value, _kill_tab, _new_tab
 from _date_availability_probe_nav import CONTAINER_SELECTOR, nav_funcs
 from _date_availability_probe_report import write_report
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -32,9 +30,9 @@ QUERIES = [
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    records = []
-    await _run_engines(records)
+    records = await _run_engines()
 
     report_path = write_report(records, REPORT_DIR, QUERIES, RETRY_COOLDOWN_S)
     _print_report(report_path)
@@ -42,7 +40,12 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def _run_engines(records):
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+async def _run_engines():
+    records = []
     try:
         for engine in CONTAINER_SELECTOR:
             print(f"=== {engine} ===", file=sys.stderr)
@@ -64,6 +67,7 @@ async def _run_engines(records):
             await asyncio.sleep(INTER_ENGINE_DELAY_S)
     finally:
         await close_browser()
+    return records
 
 
 def _print_report(report_path):

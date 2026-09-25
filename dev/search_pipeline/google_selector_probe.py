@@ -15,8 +15,6 @@ from src.search.engines.google import (
     _inject_socs_cookie, _build_url, _wait_for_results, _extract_value,
 )
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 REPORT_DIR = SCRIPT_DIR / "md"
 QUERY = "python asyncio"
 NUM = 100
@@ -103,6 +101,7 @@ return JSON.stringify(_out);
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     url = _build_url(QUERY, "en", NUM)
     _print_url(url)
@@ -116,6 +115,10 @@ async def run_probe() -> None:
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
 
 def _print_url(url):
     print(f"URL: {url}", file=sys.stderr)

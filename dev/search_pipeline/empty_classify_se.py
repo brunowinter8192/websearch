@@ -44,8 +44,7 @@ BASE_PARAMS = {
 
 async def run_classify() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    records = []
-    await _classify_queries(records)
+    records = await _classify_queries()
 
     report_path = write_report(records)
     counts = _summary_counts(records)
@@ -54,7 +53,8 @@ async def run_classify() -> None:
 
 # FUNCTIONS
 
-async def _classify_queries(records):
+async def _classify_queries():
+    records = []
     async with httpx.AsyncClient(timeout=20.0) as client:
         for idx, (smoke_row, query) in enumerate(SE_EMPTY_QUERIES):
             print(f"[{idx + 1}/15] smoke#{smoke_row}: {query}", file=sys.stderr)
@@ -68,6 +68,7 @@ async def _classify_queries(records):
             )
             if idx < len(SE_EMPTY_QUERIES) - 1:
                 await asyncio.sleep(1.0)
+    return records
 
 
 def write_report(records: list[dict]) -> Path:

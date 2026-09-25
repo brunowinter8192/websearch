@@ -55,9 +55,8 @@ async def main():
 
     browser_config = BrowserConfig(headless=True, verbose=False)
     semaphore = asyncio.Semaphore(PARALLEL_URLS)
-    results = {}
 
-    await _open_crawler(browser_config, semaphore, results, urls)
+    results = await _open_crawler(browser_config, semaphore, urls)
 
     _run_browser_checks(urls, results)
 
@@ -72,13 +71,15 @@ def get_urls():
     return JS_TEST_URLS
 
 
-async def _open_crawler(browser_config, semaphore, results, urls):
+async def _open_crawler(browser_config, semaphore, urls):
+    results = {}
     async with AsyncWebCrawler(config=browser_config) as crawler:
         tasks = [
             scrape_url_configs(semaphore, crawler, url, results)
             for url in urls
         ]
         await asyncio.gather(*tasks)
+    return results
 
 
 def _run_browser_checks(urls, results):

@@ -19,7 +19,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** `run_coindesk_riding.py`, `p2_browser_rider.py`, `_p2_state.py`.
 **Calls out:** none.
 
-### p2_browser_rider.py (297 LOC)
+### p2_browser_rider.py (334 LOC)
 
 **Purpose:** Core riding pool orchestrator: browser instances, rider tasks distributed across them, per-URL proxy context with burn and fail rotation.
 **Reads:** Proxy pool via `p0_pool.py`, URL queue.
@@ -99,7 +99,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** CLI only.
 **Calls out:** `matplotlib`.
 
-### smoke_stage1.py (121 LOC)
+### smoke_stage1.py (125 LOC)
 
 **Purpose:** Stage 1 mini live-run smoke validating the production riding package.
 **Reads:** The production riding package; a few inventory URLs.

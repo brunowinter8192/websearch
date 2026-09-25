@@ -51,8 +51,7 @@ async def main() -> int:
     new_js = _compute_new_js()
     browser = await _start_browser()
     lines = _compute_lines()
-    failures = 0
-    failures = await _compare_engines(browser, old_js, new_js, failures, lines)
+    failures = await _compare_engines(browser, old_js, new_js, lines)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     _write_report(stamp, lines)
@@ -85,7 +84,8 @@ def _compute_lines():
     return lines
 
 
-async def _compare_engines(browser, old_js, new_js, failures, lines):
+async def _compare_engines(browser, old_js, new_js, lines):
+    failures = 0
     try:
         for name in ENGINES:
             old_items = await _run(browser, HTML[name], old_js[name])

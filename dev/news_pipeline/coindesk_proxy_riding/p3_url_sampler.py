@@ -26,7 +26,7 @@ def main() -> None:
     _print_sampled_urls(urls)
 
     year_dist: Counter = Counter()
-    _print_sampled_urls_2(urls, year_dist)
+    _count_years(urls, year_dist)
 
     print("Year distribution:")
     _print_year_distribution(year_dist)
@@ -48,7 +48,7 @@ def _print_sampled_urls(urls):
     print(f"Sampled {len(urls)} URLs")
 
 
-def _print_sampled_urls_2(urls, year_dist):
+def _count_years(urls, year_dist):
     for u in urls:
         for part in u.split("/"):
             if part.isdigit() and 2015 <= int(part) <= 2027:

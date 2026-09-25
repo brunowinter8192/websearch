@@ -12,8 +12,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
 from src.search.engines.openalex import OpenAlexEngine
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 QUERIES_FILE = SCRIPT_DIR / "queries.txt"
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -21,13 +19,13 @@ REPORT_DIR = SCRIPT_DIR / "md"
 # ORCHESTRATOR
 
 async def run_smoke_test() -> None:
+    _configure_logging()
     queries = load_queries(QUERIES_FILE)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     engine = OpenAlexEngine()
-    records = []
 
-    await _run_queries(queries, engine, records)
+    records = await _run_queries(queries, engine)
 
     report_path = write_report(records, REPORT_DIR)
     ok_count = _compute_ok_count(records)
@@ -36,11 +34,16 @@ async def run_smoke_test() -> None:
 
 # FUNCTIONS
 
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
 def load_queries(path: Path) -> list[str]:
     return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-async def _run_queries(queries, engine, records):
+async def _run_queries(queries, engine):
+    records = []
     for qi, query in enumerate(queries):
         print(f"[{qi + 1}/{len(queries)}] {query}", file=sys.stderr)
         t0 = time.monotonic()
@@ -52,6 +55,7 @@ async def _run_queries(queries, engine, records):
             f"  → {record['status']} | {record['count']} results | {elapsed:.1f}s",
             file=sys.stderr,
         )
+    return records
 
 
 def write_report(records: list[dict], report_dir: Path) -> Path:

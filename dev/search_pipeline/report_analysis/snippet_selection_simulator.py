@@ -13,18 +13,14 @@ from _lib.parse import parse_smoke_report
 from _lib.text  import strip_bloat, lexical_density
 
 REPORT_DIR = SCRIPT_DIR / "md"
-_smoke_candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
-if not _smoke_candidates:
-    raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
-SMOKE_REPORT = _smoke_candidates[0]
-
 MIN_FLOOR = 40
 
 
 # ORCHESTRATOR
 
 def run_simulation() -> None:
-    records = parse_smoke_report(SMOKE_REPORT)
+    smoke_report = _latest_smoke_report()
+    records = parse_smoke_report(smoke_report)
     _print_parsed_records(records)
     results = _compute_results(records)
     path = write_report(records, results)
@@ -111,7 +107,7 @@ def _render_header(ts: str) -> list[str]:
     return [
         f"# Snippet Selection Simulator — {ts}",
         "",
-        f"Source: `{SMOKE_REPORT.name}`  ",
+        f"Source: `{_latest_smoke_report().name}`  ",
         f"Logic: highest `clean_len × lex_density`; MIN_FLOOR={MIN_FLOOR} chars (best-of-worst if all below).",
         "",
     ]
@@ -195,6 +191,13 @@ def _render_floor_cases(floor_records: list, floor_n: int) -> list[str]:
             "",
         ]
     return L
+
+
+def _latest_smoke_report() -> Path:
+    candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
+    if not candidates:
+        raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
+    return candidates[0]
 
 
 if __name__ == "__main__":

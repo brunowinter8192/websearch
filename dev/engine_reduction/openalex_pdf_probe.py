@@ -32,9 +32,7 @@ EYEBALL_QUERY_NUMS = {3, 6}
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    records = []
-    error = None
-    error = await _probe_works(error, records)
+    error, records = await _probe_works()
 
     report_path = write_report(records, error)
     _print_report(report_path)
@@ -44,7 +42,9 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def _probe_works(error, records):
+async def _probe_works():
+    error = None
+    records = []
     async with httpx.AsyncClient(timeout=10.0) as client:
         for qi, query in enumerate(QUERIES, 1):
             print(f"[{qi}/{len(QUERIES)}] {query}", file=sys.stderr)
@@ -63,7 +63,7 @@ async def _probe_works(error, records):
             )
             if qi < len(QUERIES):
                 await asyncio.sleep(INTER_QUERY_DELAY_S)
-    return error
+    return error, records
 
 
 def write_report(records: list[dict], error: str | None) -> Path:

@@ -26,8 +26,7 @@ SIMULATED_USER_PROFILE = profile_dir("simulated-user-chrome")
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    record = {}
-    await _run_parallel_check(record)
+    record = await _run_parallel_check()
 
     report_path = write_report(record)
     _print_report(report_path)
@@ -35,7 +34,8 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def _run_parallel_check(record):
+async def _run_parallel_check():
+    record = {}
     try:
         record["baseline_chrome_running"] = any_chrome_running()
         record["frontmost_before_sim"] = get_frontmost_app()
@@ -56,6 +56,7 @@ async def _run_parallel_check(record):
         await asyncio.sleep(0.5)
         record["session_dir_processes_after_teardown"] = count_processes_for(SESSION_DIR)
         record["sim_user_processes_after_teardown"] = count_processes_for(SIMULATED_USER_PROFILE)
+    return record
 
 
 def write_report(record: dict) -> Path:

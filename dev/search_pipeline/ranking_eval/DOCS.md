@@ -43,7 +43,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 **Called by:** CLI (`--ts-dir`, `--ts-out`, `--no-oracle`).
 **Calls out:** stdlib only.
 
-### pool_diff_v2_v3.py (245 LOC)
+### pool_diff_v2_v3.py (250 LOC)
 
 **Purpose:** Pool diff: URL overlap and per-engine reliability between a v2 reference dir and a v3 run across sixteen pairs.
 **Reads:** `../runs/value_eval_v2_<ts>/` (hardcoded), v3 dir via `--v3-dir` or newest.

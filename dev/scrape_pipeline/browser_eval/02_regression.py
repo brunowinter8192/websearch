@@ -21,13 +21,12 @@ def compare_all_baselines():
         print("No domain baselines found. Run run_baseline.py first.")
         return
 
-    _print_line()
+    _print_top_rule()
     print("BASELINE COMPARISON REPORT")
     _print_header_rule()
 
-    all_results = []
 
-    _compare_domains(domain_dirs, all_results)
+    all_results = _compare_domains(domain_dirs)
 
     save_comparison_report(all_results)
 
@@ -46,7 +45,7 @@ def _compute_domain_dirs(baselines_dir):
     return domain_dirs
 
 
-def _print_line():
+def _print_top_rule():
     print("=" * 80)
 
 
@@ -54,11 +53,13 @@ def _print_header_rule():
     print("=" * 80)
 
 
-def _compare_domains(domain_dirs, all_results):
+def _compare_domains(domain_dirs):
+    all_results = []
     for domain_dir in sorted(domain_dirs):
         result = compare_domain_iterations(domain_dir)
         if result:
             all_results.append(result)
+    return all_results
 
 
 def save_comparison_report(results: list[dict]) -> None:

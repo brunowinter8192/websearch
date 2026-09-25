@@ -35,7 +35,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `probe_liveness.py`, `curated_sources.py`, `acquire_pipe/p2_cooldown.py`, `acquire_pipe/p5_logger.py`.
 **Calls out:** none.
 
-### probe_discovery.py (305 LOC)
+### probe_discovery.py (307 LOC)
 
 **Purpose:** Measures discovery coverage and URL taxonomy over sitemap union, news sitemap, RSS, and a bounded UI crawl, resume-safe via per-sub checkpoints.
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
@@ -123,7 +123,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** `curl_cffi`.
 
-### probe_curl_cffi_discriminator.py (327 LOC)
+### probe_curl_cffi_discriminator.py (335 LOC)
 
 **Purpose:** Discriminates an ambiguous zero-pass result by retesting the neutral pool with browser-impersonating curl_cffi.
 **Reads:** The neutral proxy pool and a real sub-sitemap.

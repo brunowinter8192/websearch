@@ -17,11 +17,8 @@ def main():
         _print_no_files_matched()
         return
 
-    total_before = 0
-    total_after = 0
-    processed = 0
 
-    total_before, total_after, processed = _clean_files(files, total_before, total_after, processed)
+    total_before, total_after, processed = _clean_files(files)
 
     reduction = _compute_reduction(total_before, total_after)
     _print_files_processed(processed, total_before, total_after, reduction)
@@ -33,7 +30,10 @@ def _print_no_files_matched():
     print(f"No files matched {PATTERN} in {INPUT_DIR}")
 
 
-def _clean_files(files, total_before, total_after, processed):
+def _clean_files(files):
+    processed = 0
+    total_after = 0
+    total_before = 0
     for path in files:
         original = path.read_text(encoding="utf-8")
         cleaned = clean_file(original)

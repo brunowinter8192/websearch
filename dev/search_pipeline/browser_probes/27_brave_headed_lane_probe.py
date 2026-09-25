@@ -14,8 +14,6 @@ from pydoll.browser.managers import BrowserProcessManager
 
 from _brave_headed_lane_probe_report import write_report
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -77,9 +75,9 @@ _browser = None
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    records = []
-    await _run_queries(records)
+    records = await _run_queries()
 
     report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
     ok_count = _compute_ok_count(records)
@@ -90,7 +88,12 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def _run_queries(records):
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+async def _run_queries():
+    records = []
     try:
         await _start_headed_background_browser()
         for qi, (query, axis) in enumerate(QUERIES):
@@ -106,6 +109,7 @@ async def _run_queries(records):
             )
     finally:
         await _stop_headed_background_browser()
+    return records
 
 
 def _compute_ok_count(records):

@@ -13,11 +13,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 from _lib.parse import KNOWN_ENGINES, parse_smoke_report
 
 REPORT_DIR = SCRIPT_DIR / "md"
-_smoke_candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
-if not _smoke_candidates:
-    raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
-SMOKE_REPORT = _smoke_candidates[0]
-
 ENGINE_COLUMN_ORDER = [
     "google", "duckduckgo", "mojeek",
     "google_scholar", "openalex", "crossref",
@@ -56,10 +51,11 @@ SHORT = {
 # ORCHESTRATOR
 
 def run_analysis() -> None:
-    records    = parse_smoke_report(SMOKE_REPORT)
+    smoke_report = _latest_smoke_report()
+    records    = parse_smoke_report(smoke_report)
     _print_parsed_records(records)
     slot_counts = compute_slot_counts(records)
-    status_agg  = parse_status_aggregate(SMOKE_REPORT)
+    status_agg  = parse_status_aggregate(smoke_report)
     baselines   = compute_baselines(slot_counts, status_agg)
     per_query   = compute_per_query_distribution(records)
     path = write_report(records, slot_counts, status_agg, baselines, per_query)
@@ -181,7 +177,7 @@ def _render_header(ts: str, records: list[dict], per_query: list[tuple]) -> list
     return [
         f"# Engine Distribution Analysis — {ts}",
         "",
-        f"Source: `{SMOKE_REPORT.name}`  ",
+        f"Source: `{_latest_smoke_report().name}`  ",
         f"URL records parsed: {len(records)}  ",
         f"Queries: {len(per_query)}",
         "",
@@ -228,7 +224,7 @@ def _render_status_aggregate(status_agg: dict) -> list[str]:
     L: list[str] = [
         "## 2. Per-Engine Status Aggregate",
         "",
-        f"Quoted through from `{SMOKE_REPORT.name}` — no recomputation.",
+        f"Quoted through from `{_latest_smoke_report().name}` — no recomputation.",
         "",
         "| Engine | OK | EMPTY | TIMEOUT | ERROR |",
         "|--------|---:|------:|--------:|------:|",
@@ -288,6 +284,13 @@ def _render_per_query_distribution(per_query: list[tuple]) -> list[str]:
         L.append(f"| {qi} | {q_short} | {cells} | {row_sum} |")
     L.append("")
     return L
+
+
+def _latest_smoke_report() -> Path:
+    candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
+    if not candidates:
+        raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
+    return candidates[0]
 
 
 if __name__ == "__main__":

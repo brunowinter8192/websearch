@@ -36,8 +36,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     server, thread, port = start_probe_server()
     base_url = _compute_base_url(port)
-    results = {}
-    await _measure_configs(results, base_url, server, thread)
+    results = await _measure_configs(base_url, server, thread)
 
     orphans = check_orphans()
     report_path = write_report(results, orphans)
@@ -51,7 +50,8 @@ def _compute_base_url(port):
     return base_url
 
 
-async def _measure_configs(results, base_url, server, thread):
+async def _measure_configs(base_url, server, thread):
+    results = {}
     try:
         for cfg in CONFIGS:
             print(f"=== {cfg['label']} ===", file=sys.stderr)
@@ -63,6 +63,7 @@ async def _measure_configs(results, base_url, server, thread):
     finally:
         stop_probe_server(server, thread)
         kill_by_profile(OCCLUDER_PROFILE)
+    return results
 
 
 def check_orphans() -> list[str]:

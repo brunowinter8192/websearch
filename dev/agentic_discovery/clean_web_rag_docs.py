@@ -16,45 +16,42 @@ _TRAFILATURA_ANCHOR_RE = re.compile(r'\[#\]\([^)]*"Link to this heading"\)')
 # ORCHESTRATOR
 
 def main():
-    patterns = ["playwright__*.md", "crawl4ai__*.md", "trafilatura__*.md"]
-    all_files = []
-    _collect_pattern_files(patterns, all_files)
+    all_files = _collect_pattern_files()
 
     if not all_files:
         _print_no_matching_files()
         return
 
-    domain_stats: dict[str, list] = {
-        "playwright": [0, 0, 0, 0],
-        "crawl4ai":   [0, 0, 0, 0],
-        "trafilatura":[0, 0, 0, 0],
-    }
 
-    _accumulate_domain_stats(all_files, domain_stats)
+    domain_stats = _accumulate_domain_stats(all_files)
 
     total_before = _compute_total_before(domain_stats)
     total_after = _compute_total_after(domain_stats)
     reduction = _compute_reduction(total_after, total_before)
 
-    _print_line(all_files)
+    _print_files_processed_header(all_files)
     print()
     _print_domain_stats(domain_stats)
     print()
-    _print_total_chars_before(total_before, total_after, reduction)
+    _print_totals_footer(total_before, total_after, reduction)
 
 
 # FUNCTIONS
 
-def _collect_pattern_files(patterns, all_files):
+def _collect_pattern_files():
+    all_files = []
+    patterns = ['playwright__*.md', 'crawl4ai__*.md', 'trafilatura__*.md']
     for pattern in patterns:
         all_files.extend(sorted(INPUT_DIR.glob(pattern)))
+    return all_files
 
 
 def _print_no_matching_files():
     print(f"No matching files found in {INPUT_DIR}")
 
 
-def _accumulate_domain_stats(all_files, domain_stats):
+def _accumulate_domain_stats(all_files):
+    domain_stats: dict[str, list] = {'playwright': [0, 0, 0, 0], 'crawl4ai': [0, 0, 0, 0], 'trafilatura': [0, 0, 0, 0]}
     for path in all_files:
         name = path.name
         if name.startswith("playwright__"):
@@ -71,6 +68,7 @@ def _accumulate_domain_stats(all_files, domain_stats):
         s[2] += after
         if before != after:
             s[3] += 1
+    return domain_stats
 
 
 def _compute_total_before(domain_stats):
@@ -88,7 +86,7 @@ def _compute_reduction(total_after, total_before):
     return reduction
 
 
-def _print_line(all_files):
+def _print_files_processed_header(all_files):
     print("=" * 60)
     print(f"FILES PROCESSED: {len(all_files)} total")
 
@@ -100,7 +98,7 @@ def _print_domain_stats(domain_stats):
               f"{before:,} → {after:,} chars ({dom_reduction:.1f}% reduction)")
 
 
-def _print_total_chars_before(total_before, total_after, reduction):
+def _print_totals_footer(total_before, total_after, reduction):
     print(f"TOTAL chars before: {total_before:,}")
     print(f"TOTAL chars after:  {total_after:,}")
     print(f"TOTAL reduction:    {reduction:.1f}%")

@@ -45,11 +45,15 @@ def main() -> None:
     args = parser.parse_args()
     install_instrument()
     if args.smoke and args.max_queries is None:
-        args.max_queries = 4
+        _apply_smoke_query_limit(args)
     asyncio.run(run_branch_probe(args.max_queries, args.smoke))
 
 
 # FUNCTIONS
+
+def _apply_smoke_query_limit(args):
+    args.max_queries = 4
+
 
 async def run_branch_probe(max_queries: int | None, smoke: bool) -> None:
     _start_probe_clock()

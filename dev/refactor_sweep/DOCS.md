@@ -11,16 +11,6 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ## Modules
 
-### _layout_lib.py (271 LOC)
-
-**Purpose:** Shared AST helpers: marker reading, definition-time dependency analysis, orchestrator purity check, reference graph, node fingerprints.
-**Reads:** source text passed in; `git ls-files` for the file list.
-**Writes:** nothing.
-**Called by:** 01_layout_scan.py, 02_relayout.py, 03_ast_equivalence.py, 04_import_snapshot.py, 06_extract_orchestrator.py, 07_inline_equivalence.py, _extract_plan.py.
-**Calls out:** none.
-
----
-
 ### _extract_plan.py (242 LOC)
 
 **Purpose:** Plans the extraction: finds impure statements in an orchestrator, groups them, and computes helper parameters and returned names.
@@ -31,7 +21,17 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 01_layout_scan.py (199 LOC)
+### _layout_lib.py (280 LOC)
+
+**Purpose:** Shared AST helpers: marker reading, definition-time dependency analysis, orchestrator purity check, reference graph, node fingerprints.
+**Reads:** source text passed in; `git ls-files` for the file list.
+**Writes:** nothing.
+**Called by:** 01_layout_scan.py, 02_relayout.py, 03_ast_equivalence.py, 04_import_snapshot.py, 06_extract_orchestrator.py, 07_inline_equivalence.py, _extract_plan.py.
+**Calls out:** none.
+
+---
+
+### 01_layout_scan.py (209 LOC)
 
 **Purpose:** Scans every tracked dev module for layout findings and writes the report.
 **Reads:** tracked `dev/**/*.py`.
@@ -71,6 +71,16 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
+### 05_fix_doc_loc.py (47 LOC)
+
+**Purpose:** Rewrites the LOC numbers in module headings of all dev DOCS.md files from the actual line counts.
+**Reads:** `dev/**/DOCS.md` and the documented modules.
+**Writes:** the DOCS.md files.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
 ### 06_extract_orchestrator.py (303 LOC)
 
 **Purpose:** Moves statements with logic out of an orchestrator body into named helper functions and lifts logic in a main guard into a function.
@@ -81,7 +91,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 07_inline_equivalence.py (259 LOC)
+### 07_inline_equivalence.py (346 LOC)
 
 **Purpose:** Inlines every extraction helper back into its caller and compares the result with the merge-base function.
 **Reads:** git objects and working tree.
@@ -91,7 +101,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 08_run_compare.py (128 LOC)
+### 08_run_compare.py (133 LOC)
 
 **Purpose:** Runs sandbox-safe dev scripts in a base tree and a current tree and compares exit code, output and written files.
 **Reads:** two tree copies, a script list.
@@ -111,11 +121,11 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 05_fix_doc_loc.py (47 LOC)
+### 10_sink_literals.py (267 LOC)
 
-**Purpose:** Rewrites the LOC numbers in module headings of all dev DOCS.md files from the actual line counts.
-**Reads:** `dev/**/DOCS.md` and the documented modules.
-**Writes:** the DOCS.md files.
+**Purpose:** Moves literal initialisations out of an orchestrator by hoisting constants or pushing accumulators into the helper that fills them.
+**Reads:** tracked `dev/**/*.py` (not `dev/tests/`).
+**Writes:** the rewritten modules when `--apply` is given; stdout otherwise.
 **Called by:** CLI only.
 **Calls out:** none.
 

@@ -11,7 +11,7 @@ Probe URLs -> Crawl4AI scrape -> inspection or prototype validation -> markdown 
 
 ## Modules
 
-### 07_result_inspect.py (116 LOC)
+### 07_result_inspect.py (117 LOC)
 
 **Purpose:** Enumerates all metadata fields of a crawl result across normal, 404, and consent-heavy pages.
 **Reads:** Hardcoded 3-URL probe set.

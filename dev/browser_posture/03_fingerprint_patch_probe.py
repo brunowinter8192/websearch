@@ -80,8 +80,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     server, thread, port = start_probe_server()
     artifact_url = _compute_artifact_url(port)
-    results = {}
-    await _check_variants(results, artifact_url, server, thread)
+    results = await _check_variants(artifact_url, server, thread)
 
     orphans = check_orphans()
     report_path = write_report(results, orphans, REPORT_DIR, VARIANTS, HARDCODED_PROPS)
@@ -95,7 +94,8 @@ def _compute_artifact_url(port):
     return artifact_url
 
 
-async def _check_variants(results, artifact_url, server, thread):
+async def _check_variants(artifact_url, server, thread):
+    results = {}
     try:
         for variant in VARIANTS:
             print(f"=== {variant['label']} ===", file=sys.stderr)
@@ -104,6 +104,7 @@ async def _check_variants(results, artifact_url, server, thread):
         results["headless_reference"] = await run_headless_reference(artifact_url)
     finally:
         stop_probe_server(server, thread)
+    return results
 
 
 def check_orphans() -> list[str]:

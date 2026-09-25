@@ -17,8 +17,6 @@ from src.search.engines.duckduckgo import DuckDuckGoEngine
 from src.search.engines.openalex import OpenAlexEngine
 from src.search.browser import close_browser
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 REPORT_DIR = SCRIPT_DIR / "md"
 
 QUERIES = [
@@ -49,17 +47,12 @@ ENGINE_NOTES = {
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    engines = [
-        ("google",         GoogleEngine()),
-        ("google_scholar", ScholarEngine()),
-        ("duckduckgo",     DuckDuckGoEngine()),
-        ("openalex",       OpenAlexEngine()),
-    ]
+    engines = _compute_engines()
 
-    records = []
-    await _run_engines(engines, records)
+    records = await _run_engines(engines)
 
     report_path = write_report(records, REPORT_DIR)
     _print_report(report_path)
@@ -67,7 +60,22 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def _run_engines(engines, records):
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _compute_engines():
+    engines = [
+        ("google",         GoogleEngine()),
+        ("google_scholar", ScholarEngine()),
+        ("duckduckgo",     DuckDuckGoEngine()),
+        ("openalex",       OpenAlexEngine()),
+    ]
+    return engines
+
+
+async def _run_engines(engines):
+    records = []
     try:
         for engine_name, engine in engines:
             max_r = ENGINE_MAX[engine_name]
@@ -85,6 +93,7 @@ async def _run_engines(engines, records):
                     await asyncio.sleep(sleep_s)
     finally:
         await close_browser()
+    return records
 
 
 def write_report(records: list[dict], report_dir: Path) -> Path:

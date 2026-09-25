@@ -14,8 +14,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent.parent))
 
 from src.search.browser import new_tab, close_browser
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 DESCRIPTION = "DOM inspection tool — diagnose engine selector drift. Run when engine returns persistent EMPTY/TIMEOUT."
 
 ENGINE_REGISTRY = {
@@ -95,6 +93,7 @@ return JSON.stringify(_attrs);"""
 # ORCHESTRATOR
 
 def main() -> None:
+    _configure_logging()
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("engine", choices=list(ENGINE_REGISTRY))
     parser.add_argument("query")
@@ -105,6 +104,10 @@ def main() -> None:
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
 
 async def run_inspection(engine_name: str, query: str, wait_s: float) -> None:
     cfg = ENGINE_REGISTRY.get(engine_name, {})

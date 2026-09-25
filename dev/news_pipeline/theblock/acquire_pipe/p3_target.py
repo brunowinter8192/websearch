@@ -18,7 +18,7 @@ _LOC_RE        = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 def build_sitemap_target(pool: list | None = None) -> list[str]:
     content = _fetch_index_direct()
     if content is None:
-        content = _compute_content(content, pool)
+        content = _fetch_via_proxy(pool)
     return _parse_loc_urls(content)
 
 
@@ -32,9 +32,8 @@ def _fetch_index_direct() -> bytes | None:
     return None
 
 
-def _compute_content(content, pool):
-    content = _fetch_index_via_proxy(pool if pool is not None else [])
-    return content
+def _fetch_via_proxy(pool):
+    return _fetch_index_via_proxy(pool if pool is not None else [])
 
 
 def _parse_loc_urls(content: bytes) -> list[str]:

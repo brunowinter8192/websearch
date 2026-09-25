@@ -22,7 +22,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 
 ---
 
-### 01_launch_latency_probe.py (270 LOC)
+### 01_launch_latency_probe.py (271 LOC)
 
 **Purpose:** Measures launch and navigation latency and timer-throttling drift across headed and headless flag configurations.
 **Reads:** nothing; serves its own local target.
@@ -32,7 +32,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 
 ---
 
-### 02_parallel_chrome_probe.py (202 LOC)
+### 02_parallel_chrome_probe.py (203 LOC)
 
 **Purpose:** Determines what a backgrounded headed launch on the production shared profile does while another Chrome instance is running.
 **Reads:** nothing.
@@ -42,7 +42,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 
 ---
 
-### 03_fingerprint_patch_probe.py (193 LOC)
+### 03_fingerprint_patch_probe.py (194 LOC)
 
 **Purpose:** Per-block keep or drop evidence for the since-removed fingerprint patches under headed mode.
 **Reads:** nothing; serves its own local page.
@@ -102,7 +102,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 
 ---
 
-### 05_cdp_headed_probe.py (210 LOC)
+### 05_cdp_headed_probe.py (215 LOC)
 
 **Purpose:** Measures the self-launch-then-connect route for the chromium lane with a stage-labelled frontmost-app poll.
 **Reads:** nothing; serves its own local page.

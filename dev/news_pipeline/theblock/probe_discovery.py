@@ -67,9 +67,7 @@ def probe_discovery_workflow():
                           rss_urls, rss_rate_limited, ui_urls, ui_status)
     write_report(report)
 
-    total   = sub_stats["sub_count"]
-    fetched = sub_stats["fetched"]
-    remain  = sub_stats["remaining"]
+    total, fetched, remain = _read_sub_counts(sub_stats)
     status = _compute_status(remain)
     _print_report_written(fetched, total, status)
 
@@ -192,6 +190,10 @@ def fetch_ui_crawl():
 def write_report(content):
     with open(REPORT_PATH, "w") as f:
         f.write(content)
+
+
+def _read_sub_counts(sub_stats):
+    return sub_stats["sub_count"], sub_stats["fetched"], sub_stats["remaining"]
 
 
 def _compute_status(remain):

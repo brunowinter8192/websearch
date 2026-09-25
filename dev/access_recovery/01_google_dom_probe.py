@@ -16,8 +16,6 @@ from _dom import (
 )
 from _report import write_report, count_outcomes
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
 HTML_DIR = SCRIPT_DIR / "html"
@@ -33,16 +31,15 @@ NUM_VARIANTS = [100, 10]
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     queries = _load_queries()
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     html_run_dir = _compute_html_run_dir(run_ts)
     html_run_dir.mkdir(parents=True, exist_ok=True)
 
-    records = []
-    nav_index = 0
     total_navs = _compute_total_navs(queries)
-    await _run_navigations(queries, nav_index, total_navs, html_run_dir, records)
+    records = await _run_navigations(queries, total_navs, html_run_dir)
 
     report_path = write_report(records, run_ts, REPORT_DIR, NUM_VARIANTS, NAV_DELAY_S)
     outcome_counts = count_outcomes(records)
@@ -50,6 +47,10 @@ async def run_probe() -> None:
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
 
 def _load_queries() -> list[dict]:
     with open(QUERIES_PATH, encoding="utf-8") as f:
@@ -66,7 +67,9 @@ def _compute_total_navs(queries):
     return total_navs
 
 
-async def _run_navigations(queries, nav_index, total_navs, html_run_dir, records):
+async def _run_navigations(queries, total_navs, html_run_dir):
+    nav_index = 0
+    records = []
     try:
         for qi, q in enumerate(queries):
             for num in NUM_VARIANTS:
@@ -84,6 +87,7 @@ async def _run_navigations(queries, nav_index, total_navs, html_run_dir, records
                     await asyncio.sleep(NAV_DELAY_S)
     finally:
         await close_browser()
+    return records
 
 
 def _print_report(report_path, outcome_counts):

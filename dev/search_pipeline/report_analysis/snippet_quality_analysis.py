@@ -15,11 +15,6 @@ from _lib.parse import KNOWN_ENGINES, parse_smoke_report
 from _lib.text  import strip_bloat, lexical_density, detect_bloat
 
 REPORT_DIR   = SCRIPT_DIR / "md"
-_smoke_candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
-if not _smoke_candidates:
-    raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
-SMOKE_REPORT = _smoke_candidates[0]
-
 ALL_SOURCES = [
     "og", "meta",
     "google", "duckduckgo", "mojeek", "lobsters",
@@ -35,7 +30,8 @@ MATRIX_ENGINES = [
 # ORCHESTRATOR
 
 def run_analysis() -> None:
-    records = parse_smoke_report(SMOKE_REPORT)
+    smoke_report = _latest_smoke_report()
+    records = parse_smoke_report(smoke_report)
     n_s = _compute_sample_count(records)
     n_og = _compute_og_count(records)
     n_m = _compute_meta_count(records)
@@ -245,7 +241,7 @@ def _render_header(ts: str, n_urls: int, total_wins: int) -> list[str]:
     return [
         f"# Snippet Quality Analysis — {ts}",
         "",
-        f"Source: `{SMOKE_REPORT.name}`  ",
+        f"Source: `{_latest_smoke_report().name}`  ",
         f"URL records parsed: {n_urls}  ",
         f"URLs with ≥1 non-empty source: {total_wins}",
         "",
@@ -399,6 +395,13 @@ def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
             L.append("*no content*")
         L.append("")
     return L
+
+
+def _latest_smoke_report() -> Path:
+    candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
+    if not candidates:
+        raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
+    return candidates[0]
 
 
 if __name__ == "__main__":

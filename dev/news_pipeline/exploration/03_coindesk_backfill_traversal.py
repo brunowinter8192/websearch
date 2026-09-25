@@ -49,16 +49,21 @@ def main() -> None:
     parser.add_argument("--full", action="store_true", help="Stage B: uncapped run (no click limit)")
     parser.add_argument("--cap", type=int, default=None, metavar="N", help="Override click cap (default: STAGE_A_CAP=400)")
     args = parser.parse_args()
+    cap = _resolve_cap(args)
+    asyncio.run(backfill_workflow(stage_a_cap=cap))
+
+
+# FUNCTIONS
+
+def _resolve_cap(args):
     if args.full:
         cap = None
     elif args.cap is not None:
         cap = args.cap
     else:
         cap = STAGE_A_CAP
-    asyncio.run(backfill_workflow(stage_a_cap=cap))
+    return cap
 
-
-# FUNCTIONS
 
 async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

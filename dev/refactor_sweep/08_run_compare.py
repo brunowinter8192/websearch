@@ -26,7 +26,7 @@ NORMALISERS = [
 def run_compare_workflow() -> None:
     args = parse_args()
     scripts = read_list(Path(args.list))
-    trees = [Path(args.base_tree).resolve(), Path(args.cur_tree).resolve()]
+    trees = _compute_trees(args)
     base_results, cur_results = _run_pool(scripts, trees)
     verdicts = compare_results(scripts, base_results, cur_results)
     write_report(Path(args.out), verdicts)
@@ -47,6 +47,11 @@ def parse_args() -> argparse.Namespace:
 
 def read_list(path: Path) -> list[str]:
     return [line.strip() for line in path.read_text(encoding="utf-8").split("\n") if line.strip()]
+
+
+def _compute_trees(args):
+    trees = [Path(args.base_tree).resolve(), Path(args.cur_tree).resolve()]
+    return trees
 
 
 def _run_pool(scripts, trees):

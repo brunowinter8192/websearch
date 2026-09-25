@@ -11,7 +11,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ## Modules
 
-### clean_web_searxng.py (228 LOC)
+### clean_web_searxng.py (233 LOC)
 
 **Purpose:** Remove navigation chrome and formatting artifacts across all domain prefixes of the searxng RAG collection in one pass.
 **Reads:** Markdown files of the searxng collection.
@@ -61,7 +61,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_rag_docs.py (255 LOC)
+### clean_web_rag_docs.py (253 LOC)
 
 **Purpose:** Remove site-generator chrome from Playwright, Crawl4AI, and Trafilatura docs in the searxng collection.
 **Reads:** Files with those three prefixes.

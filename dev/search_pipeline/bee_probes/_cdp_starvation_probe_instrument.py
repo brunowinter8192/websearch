@@ -33,6 +33,8 @@ def _install_asyncio_log_capture() -> None:
 
 
 def install_process_msg_patch() -> None:
+    if not hasattr(_CH, "_process_single_message"):
+        raise RuntimeError("pydoll ConnectionHandler no longer has _process_single_message: nothing to patch")
     _CH._process_single_message = _patched_process_msg
 
 

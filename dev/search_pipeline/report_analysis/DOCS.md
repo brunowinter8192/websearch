@@ -11,7 +11,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 
 ## Modules
 
-### engine_distribution_analysis.py (294 LOC)
+### engine_distribution_analysis.py (297 LOC)
 
 **Purpose:** Per-engine slot-count and slot-share analysis over the newest pipeline-smoke baseline.
 **Reads:** newest `../md/pipeline_smoke_*.md`.
@@ -19,7 +19,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 **Called by:** CLI only.
 **Calls out:** none.
 
-### snippet_quality_analysis.py (405 LOC)
+### snippet_quality_analysis.py (408 LOC)
 
 **Purpose:** Per-source bloat and lexical-density analysis of snippets from the newest pipeline-smoke baseline.
 **Reads:** newest `../md/pipeline_smoke_*.md`.
@@ -27,7 +27,7 @@ Scripts read the newest `../md/pipeline_smoke_*.md` (or `src/logs/query_log.json
 **Called by:** CLI only.
 **Calls out:** none.
 
-### snippet_selection_simulator.py (201 LOC)
+### snippet_selection_simulator.py (204 LOC)
 
 **Purpose:** Dry-run of snippet selection over the smoke baseline: scores each source, picks the best, reports floor cases.
 **Reads:** newest `../md/pipeline_smoke_*.md`.

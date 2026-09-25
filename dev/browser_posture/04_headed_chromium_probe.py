@@ -41,9 +41,7 @@ async def run_probe() -> None:
     original_lsuielement = read_lsuielement(plist_path)
     codesign_before = read_codesign_status(bundle_path)
 
-    run_c = None
-    codesign_after = None
-    codesign_after, run_c, plist_end_state, plist_format_restored = await _run_plist_variants(plist_path, original_bytes, codesign_after, bundle_path, run_c)
+    codesign_after, run_c, plist_end_state, plist_format_restored = await _run_plist_variants(plist_path, original_bytes, bundle_path)
 
     orphans = check_orphans()
     report_path = write_report(
@@ -60,7 +58,9 @@ def _compute_plist_path(bundle_path):
     return plist_path
 
 
-async def _run_plist_variants(plist_path, original_bytes, codesign_after, bundle_path, run_c):
+async def _run_plist_variants(plist_path, original_bytes, bundle_path):
+    codesign_after = None
+    run_c = None
     try:
         set_lsuielement(plist_path, True, original_bytes)
         codesign_after = read_codesign_status(bundle_path)

@@ -13,12 +13,8 @@ def main():
         _print_no_md_files()
         return
 
-    total_before = 0
-    total_after = 0
-    processed = 0
-    skipped = 0
 
-    total_before, total_after, skipped, processed = _clean_files(md_files, total_before, total_after, skipped, processed)
+    total_before, total_after, skipped, processed = _clean_files(md_files)
 
     reduction = _compute_reduction(total_after, total_before)
     _print_files_processed_cleaned(processed, skipped, total_before, total_after, reduction)
@@ -30,7 +26,11 @@ def _print_no_md_files():
     print(f"No .md files found in {INPUT_DIR}")
 
 
-def _clean_files(md_files, total_before, total_after, skipped, processed):
+def _clean_files(md_files):
+    skipped = 0
+    processed = 0
+    total_after = 0
+    total_before = 0
     for path in md_files:
         before, after = clean_file(path)
         total_before += before

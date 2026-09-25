@@ -26,9 +26,8 @@ async def run_result_inspection():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = _compute_report_path(timestamp)
 
-    sections = ["# Crawl4AI Result Object Inspection\n"]
 
-    await _inspect_urls(sections)
+    sections = await _inspect_urls()
 
     report_path.write_text("\n".join(sections), encoding="utf-8")
     _print_report(report_path)
@@ -41,13 +40,15 @@ def _compute_report_path(timestamp):
     return report_path
 
 
-async def _inspect_urls(sections):
+async def _inspect_urls():
+    sections = ['# Crawl4AI Result Object Inspection\n']
     for i, (label, url) in enumerate(TEST_URLS):
         print(f"Inspecting [{label}]: {url}")
         section = await inspect_url(label, url)
         sections.append(section)
         if i < len(TEST_URLS) - 1:
             await asyncio.sleep(2)
+    return sections
 
 
 def _print_report(report_path):

@@ -15,10 +15,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.search.search_web import search_web_workflow
 from src.search.browser import close_browser
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 REPORT_DIR = SCRIPT_DIR / "md"
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 LOG_PATH = PROJECT_ROOT / "src" / "logs" / "query_log.jsonl"
 
@@ -34,6 +31,8 @@ QUERIES = [
 # ORCHESTRATOR
 
 async def run_smoke() -> None:
+    _configure_logging()
+    _prepare_report_dir()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = _compute_report_path(ts)
 
@@ -41,9 +40,8 @@ async def run_smoke() -> None:
     print(file=sys.stderr)
 
     log_line_before = _count_log_lines()
-    records = []
 
-    await _run_queries(records)
+    records = await _run_queries()
 
     log_lines_written = _compute_log_lines_written(log_line_before)
     _write_report(records, report_path, log_lines_written)
@@ -52,6 +50,14 @@ async def run_smoke() -> None:
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _prepare_report_dir() -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def _compute_report_path(ts):
     report_path = REPORT_DIR / f"with_google_decoupling_{ts}.md"
@@ -63,7 +69,8 @@ def _print_smoke_with_google(report_path):
     print(f"Report: {report_path}", file=sys.stderr)
 
 
-async def _run_queries(records):
+async def _run_queries():
+    records = []
     try:
         for qi, query in enumerate(QUERIES):
             print(f"[{qi + 1}/{len(QUERIES)}] {query}", file=sys.stderr)
@@ -78,6 +85,7 @@ async def _run_queries(records):
             print(f"  → {status_symbol} | scholar_in_requested={result['scholar_in_requested']} | excluded_correct={result['excluded_correct']} | {elapsed_ms}ms", file=sys.stderr)
     finally:
         await close_browser()
+    return records
 
 
 def _compute_log_lines_written(log_line_before):

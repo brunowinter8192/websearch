@@ -24,10 +24,7 @@ from src.search.engines.openalex import OpenAlexEngine
 
 from src.search.engines.scholar import ScholarEngine
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 REPORT_DIR = SCRIPT_DIR / "jsonl"
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 WATCHDOG: dict[str, float] = {
     "google_scholar": 6.0,
@@ -53,20 +50,17 @@ QUERIES = [
 # ORCHESTRATOR
 
 async def run_smoke() -> None:
+    _configure_logging()
+    _prepare_report_dir()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_path = _compute_report_path(ts)
 
-    engines = {
-        "google_scholar": ScholarEngine(),
-        "duckduckgo": DuckDuckGoEngine(),
-        "openalex": OpenAlexEngine(),
-    }
+    engines = _compute_engines()
 
     _print_smoke_9_engines(report_path)
     print(file=sys.stderr)
 
-    records = []
-    await _run_burst_queries(engines, records, report_path)
+    records = await _run_burst_queries(engines, report_path)
 
     _print_summary(records)
     _print_report_written(report_path)
@@ -74,9 +68,26 @@ async def run_smoke() -> None:
 
 # FUNCTIONS
 
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _prepare_report_dir() -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+
 def _compute_report_path(ts):
     report_path = REPORT_DIR / f"no_google_burst_{ts}.jsonl"
     return report_path
+
+
+def _compute_engines():
+    engines = {
+        "google_scholar": ScholarEngine(),
+        "duckduckgo": DuckDuckGoEngine(),
+        "openalex": OpenAlexEngine(),
+    }
+    return engines
 
 
 def _print_smoke_9_engines(report_path):
@@ -84,7 +95,8 @@ def _print_smoke_9_engines(report_path):
     print(f"Report: {report_path}", file=sys.stderr)
 
 
-async def _run_burst_queries(engines, records, report_path):
+async def _run_burst_queries(engines, report_path):
+    records = []
     try:
         for qi, query in enumerate(QUERIES):
             burst = qi // 4 + 1
@@ -101,6 +113,7 @@ async def _run_burst_queries(engines, records, report_path):
                 f.write(json.dumps(record) + "\n")
     finally:
         await close_browser()
+    return records
 
 
 def _print_summary(records: list[dict]) -> None:

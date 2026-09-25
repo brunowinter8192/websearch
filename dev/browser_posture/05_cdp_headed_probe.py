@@ -34,10 +34,7 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     bundle_path = resolve_chromium_1228_bundle()
 
-    focus_samples: list[tuple[str, str]] = []
-    stage = {"name": "reference_launch"}
-    stop_event = asyncio.Event()
-    poll_task = asyncio.create_task(focus_poll_loop(focus_samples, stage, stop_event))
+    focus_samples, stage, stop_event, poll_task = _start_focus_poll()
 
     print("Reference: patchright-driven headed launch (probe 04 Run B shape)", file=sys.stderr)
     reference = await capture_reference_cmdline()
@@ -58,11 +55,12 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_event: asyncio.Event) -> None:
-    while not stop_event.is_set():
-        app = await asyncio.to_thread(get_frontmost_app)
-        samples.append((stage["name"], app))
-        await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
+def _start_focus_poll():
+    focus_samples: list[tuple[str, str]] = []
+    stage = {"name": "reference_launch"}
+    stop_event = asyncio.Event()
+    poll_task = asyncio.create_task(focus_poll_loop(focus_samples, stage, stop_event))
+    return focus_samples, stage, stop_event, poll_task
 
 
 async def capture_reference_cmdline() -> dict:
@@ -122,6 +120,13 @@ async def _run_cdp_headed_check(bundle_path, user_data_dir, stage, stop_event, p
 def _print_report(report_path, orphans):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Orphans after run: {len(orphans)}", file=sys.stderr)
+
+
+async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        app = await asyncio.to_thread(get_frontmost_app)
+        samples.append((stage["name"], app))
+        await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
 
 
 def find_chrome_descendant() -> psutil.Process | None:

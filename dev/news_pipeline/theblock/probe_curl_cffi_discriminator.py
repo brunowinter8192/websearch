@@ -28,7 +28,8 @@ def probe_curl_cffi_discriminator_workflow():
 
     _print_loading_proxy_pool()
     proxies = load_proxies()
-    _print_pool_proxies_http(proxies)
+    _print_pool_summary(proxies)
+    _print_primary_header()
     start = time.time()
     primary_results = run_checks(proxies, TARGET_PRIMARY)
     elapsed_primary = _compute_elapsed_primary(start)
@@ -36,16 +37,7 @@ def probe_curl_cffi_discriminator_workflow():
 
     passing_proxies = _compute_passing_proxies(proxies, primary_results)
 
-    secondary_results = []
-    if passing_proxies:
-        _print_secondary_passing_proxies(passing_proxies)
-        start2 = time.time()
-        secondary_results = run_checks(passing_proxies, TARGET_SECONDARY)
-        elapsed_secondary = _compute_elapsed_secondary(start2)
-        _print_secondary_elapsed(elapsed_secondary)
-    else:
-        print("\nNo passing proxies on primary — skipping secondary target.")
-        elapsed_secondary = 0.0
+    secondary_results, elapsed_secondary = _run_secondary_probe(passing_proxies)
 
     report_path = _compute_report_path(ts)
     report = build_report(proxies, primary_results, passing_proxies, secondary_results,
@@ -64,33 +56,15 @@ def load_proxies():
     return json.loads(PROXIES_JSON.read_text())
 
 
-def _print_pool_proxies_http(proxies):
+def _print_pool_summary(proxies):
     print(f"Pool: {len(proxies)} proxies (http {sum(1 for p in proxies if p['protocol']=='http')}, "
           f"socks4 {sum(1 for p in proxies if p['protocol']=='socks4')}, "
           f"socks5 {sum(1 for p in proxies if p['protocol']=='socks5')})")
 
+
+def _print_primary_header():
     print(f"\n=== PRIMARY: {TARGET_PRIMARY} ===")
     print(f"Concurrency {CONCURRENCY}, timeout {TIMEOUT}s ...")
-
-
-def run_checks(entries, target):
-    results = [None] * len(entries)
-    done = 0
-    with ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:
-        futures = {executor.submit(check_one, e, target): i
-                   for i, e in enumerate(entries)}
-        for fut in as_completed(futures):
-            idx = futures[fut]
-            try:
-                results[idx] = fut.result()
-            except Exception as e:
-                results[idx] = (f"fail_unexpected:{type(e).__name__}", -1)
-            done += 1
-            if done % 50 == 0 or done == len(entries):
-                sys.stdout.write(f"\r  {done}/{len(entries)} checked  ")
-                sys.stdout.flush()
-    print()
-    return results
 
 
 def _compute_elapsed_primary(start):
@@ -107,17 +81,18 @@ def _compute_passing_proxies(proxies, primary_results):
     return passing_proxies
 
 
-def _print_secondary_passing_proxies(passing_proxies):
-    print(f"\n=== SECONDARY: {TARGET_SECONDARY} ({len(passing_proxies)} passing proxies) ===")
-
-
-def _compute_elapsed_secondary(start2):
-    elapsed_secondary = time.time() - start2
-    return elapsed_secondary
-
-
-def _print_secondary_elapsed(elapsed_secondary):
-    print(f"Done in {elapsed_secondary:.0f}s")
+def _run_secondary_probe(passing_proxies):
+    secondary_results = []
+    if passing_proxies:
+        _print_secondary_passing_proxies(passing_proxies)
+        start2 = time.time()
+        secondary_results = run_checks(passing_proxies, TARGET_SECONDARY)
+        elapsed_secondary = _compute_elapsed_secondary(start2)
+        _print_secondary_elapsed(elapsed_secondary)
+    else:
+        print("\nNo passing proxies on primary — skipping secondary target.")
+        elapsed_secondary = 0.0
+    return secondary_results, elapsed_secondary
 
 
 def _compute_report_path(ts):
@@ -149,16 +124,37 @@ def _print_report(report_path):
     print(f"\nReport: {report_path}")
 
 
-def check_one(entry, target):
-    purl = proxy_url(entry)
-    proxies_dict = {"http": purl, "https": purl}
-    try:
-        s = cffi_requests.Session(impersonate="chrome")
-        r = s.get(target, proxies=proxies_dict, timeout=TIMEOUT)
-        s.close()
-        return classify_response(r)
-    except Exception as e:
-        return classify_exception(e)
+def run_checks(entries, target):
+    results = [None] * len(entries)
+    done = 0
+    with ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:
+        futures = {executor.submit(check_one, e, target): i
+                   for i, e in enumerate(entries)}
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            try:
+                results[idx] = fut.result()
+            except Exception as e:
+                results[idx] = (f"fail_unexpected:{type(e).__name__}", -1)
+            done += 1
+            if done % 50 == 0 or done == len(entries):
+                sys.stdout.write(f"\r  {done}/{len(entries)} checked  ")
+                sys.stdout.flush()
+    print()
+    return results
+
+
+def _print_secondary_passing_proxies(passing_proxies):
+    print(f"\n=== SECONDARY: {TARGET_SECONDARY} ({len(passing_proxies)} passing proxies) ===")
+
+
+def _compute_elapsed_secondary(start2):
+    elapsed_secondary = time.time() - start2
+    return elapsed_secondary
+
+
+def _print_secondary_elapsed(elapsed_secondary):
+    print(f"Done in {elapsed_secondary:.0f}s")
 
 
 def failure_mode_counts(primary_counts):
@@ -281,6 +277,18 @@ def build_verdict_lines(pass_count, cf_block, conn_err, timeout):
     lines.append("\n## Verdict")
     lines.append(f"\n**{verdict}**")
     return lines
+
+
+def check_one(entry, target):
+    purl = proxy_url(entry)
+    proxies_dict = {"http": purl, "https": purl}
+    try:
+        s = cffi_requests.Session(impersonate="chrome")
+        r = s.get(target, proxies=proxies_dict, timeout=TIMEOUT)
+        s.close()
+        return classify_response(r)
+    except Exception as e:
+        return classify_exception(e)
 
 
 def proxy_url(entry):

@@ -26,12 +26,7 @@ def main():
     if not args.input and not args.urls:
         parser.error("provide at least one URL or --input <smoke.md>")
 
-    url_list: list[tuple[str, str]] = []
-
-    if args.input:
-        url_list.extend(parse_pdf_urls(args.input))
-
-    _download_all(args, url_list)
+    url_list = _collect_urls(args)
 
     if not url_list:
         print("No PDF URLs to download.", file=sys.stderr)
@@ -41,6 +36,28 @@ def main():
 
 
 # FUNCTIONS
+
+def _collect_urls(args) -> list[tuple[str, str]]:
+    url_list: list[tuple[str, str]] = []
+    if args.input:
+        url_list.extend(parse_pdf_urls(args.input))
+    url_list.extend(_pdf_url_rows(args.urls))
+    return url_list
+
+
+def download_workflow(urls: list[tuple[str, str]], overwrite: bool) -> None:
+    print(f"PDFs to download: {len(urls)} → {OUTPUT_DIR}", file=sys.stderr)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for i, (q_label, url) in enumerate(urls, 1):
+        status, detail = download_one(url, overwrite)
+        rows.append((i, q_label, url, detail, status))
+        indicator = "✓" if status == "ok" else "✗"
+        print(f"  [{i:02d}/{len(urls)}] {indicator} {url[:80]}", file=sys.stderr)
+
+    print_report(rows)
+
 
 def parse_pdf_urls(input_path: str) -> list[tuple[str, str]]:
     lines = Path(input_path).read_text(encoding="utf-8").splitlines()
@@ -63,26 +80,14 @@ def parse_pdf_urls(input_path: str) -> list[tuple[str, str]]:
     return results
 
 
-def _download_all(args, url_list):
-    for url in args.urls:
+def _pdf_url_rows(urls: list[str]) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for url in urls:
         if not url.endswith(".pdf"):
             print(f"skipped: {url} — not a .pdf URL", file=sys.stderr)
         else:
-            url_list.append(("—", url))
-
-
-def download_workflow(urls: list[tuple[str, str]], overwrite: bool) -> None:
-    print(f"PDFs to download: {len(urls)} → {OUTPUT_DIR}", file=sys.stderr)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    rows = []
-    for i, (q_label, url) in enumerate(urls, 1):
-        status, detail = download_one(url, overwrite)
-        rows.append((i, q_label, url, detail, status))
-        indicator = "✓" if status == "ok" else "✗"
-        print(f"  [{i:02d}/{len(urls)}] {indicator} {url[:80]}", file=sys.stderr)
-
-    print_report(rows)
+            rows.append(("—", url))
+    return rows
 
 
 def download_one(url: str, overwrite: bool) -> tuple[str, str]:

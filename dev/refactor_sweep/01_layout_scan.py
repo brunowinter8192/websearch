@@ -132,7 +132,17 @@ def placement_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list
             found.append(f"STATEMENT_OUTSIDE_INFRASTRUCTURE line {node.lineno} section {section}")
         elif uses_unhoistable_definition(node, defs, future):
             found.append(f"INFRASTRUCTURE_USES_LOCAL_FUNCTION line {node.lineno}")
+        elif not is_declaration(node):
+            found.append(f"INFRASTRUCTURE_HOLDS_LOGIC line {node.lineno} {type(node).__name__}")
     return found
+
+
+def is_declaration(node: ast.stmt) -> bool:
+    if isinstance(node, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+        return True
+    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+        return ast.unparse(node.value.func) in ("sys.path.insert", "sys.path.append")
+    return False
 
 
 def entry_findings(tree: ast.Module, markers: list[tuple[int, str]], kind: str) -> list[str]:

@@ -6,8 +6,6 @@ import time
 from pathlib import Path
 
 _WORKTREE = Path(__file__).parents[3]
-if str(_WORKTREE) not in sys.path:
-    sys.path.insert(0, str(_WORKTREE))
 
 MAIN_CHECKOUT = Path(__file__).parents[6]
 INVENTORY_DIR = MAIN_CHECKOUT / "data" / "news" / "coindesk" / "inventory"
@@ -19,11 +17,17 @@ VALID_STATUSES = {"ok", "failed"}
 # ORCHESTRATOR
 
 def main() -> None:
+    _ensure_worktree_on_path()
     _run_stage1_checks()
     print("ALL PASS")
 
 
 # FUNCTIONS
+
+def _ensure_worktree_on_path() -> None:
+    if str(_WORKTREE) not in sys.path:
+        sys.path.insert(0, str(_WORKTREE))
+
 
 def _run_stage1_checks():
     try:

@@ -21,6 +21,25 @@ HAND_EDITED = {
     "dev/scrape_pipeline/p1_pipe_scraper.py": "async-with gather moved to _scrape_all, exception replacement moved to _replace_exceptions",
     "dev/search_pipeline/google_selector_probe.py": "try/finally page probe moved to _probe_page; its early return becomes return None and the caller returns on None",
     "dev/news_pipeline/theblock/probe_repo_cf_survey.py": "per-repo check loop moved to _check_repos",
+    "dev/news_pipeline/coindesk_proxy_riding/p2_browser_rider.py": "nested async smoke function split into _smoke and eight single-purpose helpers",
+    "dev/search_pipeline/13_free_word_probe.py": "query loop split into _run_variant, _query_engine, _append_rows, _engine_sleep_s",
+    "dev/search_pipeline/domain_probes/19_books_probe.py": "query loop split into _run_query, _query_engine, _append_rows",
+    "dev/search_pipeline/domain_probes/20_docs_probe.py": "query loop split into _run_query, _query_engine, _append_rows; report write and browser close moved to two finally helpers",
+    "dev/scrape_pipeline/05_paper_mode/download.py": "url collection moved to _collect_urls and _pdf_url_rows",
+    "dev/agentic_discovery/clean_web_searxng.py": "argument read moved to _read_test_file_argument",
+    "dev/news_pipeline/exploration/03_coindesk_backfill_traversal.py": "cap if-chain moved to _resolve_cap",
+    "dev/news_pipeline/theblock/probe_curl_cffi_discriminator.py": "secondary probe branch moved to _run_secondary_probe; pool summary and primary header split",
+    "dev/browser_posture/05_cdp_headed_probe.py": "focus poll setup moved to _start_focus_poll",
+    "dev/news_pipeline/theblock/probe_discovery.py": "sub_stats reads moved to _read_sub_counts",
+    "dev/search_pipeline/report_analysis/engine_distribution_analysis.py": "smoke report lookup moved from INFRASTRUCTURE into _latest_smoke_report, called first by the orchestrator",
+    "dev/search_pipeline/report_analysis/snippet_quality_analysis.py": "smoke report lookup moved from INFRASTRUCTURE into _latest_smoke_report, called first by the orchestrator",
+    "dev/search_pipeline/report_analysis/snippet_selection_simulator.py": "smoke report lookup moved from INFRASTRUCTURE into _latest_smoke_report, called first by the orchestrator",
+    "dev/news_pipeline/coindesk_proxy_riding/smoke_stage1.py": "conditional sys.path setup moved into _ensure_worktree_on_path, called first by main",
+    "dev/news_pipeline/theblock/acquire_pipe/p3_target.py": "dead parameter removed, helper renamed _fetch_via_proxy",
+    "dev/agentic_discovery/clean_web_rag_docs.py": "print helpers renamed to state what they print",
+    "dev/scrape_pipeline/browser_eval/01_baseline.py": "print helper renamed",
+    "dev/scrape_pipeline/browser_eval/02_regression.py": "print helper renamed",
+    "dev/search_pipeline/24_pydoll_teardown_verify.py": "append helpers renamed",
     "dev/news_pipeline/coindesk_proxy_riding/analyze_write_times.py": "_repo_root inlined into the _ROOT constant (both branches returned p.parent)",
     "dev/news_pipeline/coindesk_proxy_riding/p3_url_sampler.py": "_repo_root inlined into the INVENTORY_DIR constant",
     "dev/search_pipeline/browser_probes/_date_availability_probe_nav.py": "NAV_FUNCS dict became the function nav_funcs, its user 31_date_availability_probe.py calls it",
@@ -122,9 +141,12 @@ def compare_function(name: str, old: ast.AST, new: ast.AST, helpers: dict, old_t
         return [f"class {name} differs"]
     problems: list[str] = []
     inlined = copy.deepcopy(new)
-    inlined.body = inline_block(inlined.body, helpers, problems)
+    inlined.body = normalise_literals(inline_block(inlined.body, helpers, problems))
     expected = copy.deepcopy(old)
-    expected.body = drop_hoisted_imports(expected.body, new_tree)
+    expected.body = normalise_literals(drop_module_constants(drop_hoisted_imports(expected.body, new_tree), new_tree))
+    moved = moved_infra_statements(old_tree)
+    if moved and [ast.dump(x) for x in inlined.body[:len(moved)]] == [ast.dump(x) for x in moved]:
+        expected.body = moved + expected.body
     if ast.dump(inlined) != ast.dump(expected):
         problems.append(f"{name}: inlined body differs from base")
     return problems
@@ -150,7 +172,7 @@ def compare_guard(old: ast.Module, new: ast.Module, helpers: dict) -> list[str]:
 def compare_remaining(old: ast.Module, new: ast.Module, changed: set, helper_names: set) -> list[str]:
     old_fp = Counter(ast.dump(n) for n in old.body if node_kept(n, changed, old))
     new_fp = Counter(ast.dump(n) for n in new.body if node_kept(n, changed | helper_names, new))
-    only_old = old_fp - new_fp
+    only_old = old_fp - new_fp - Counter(ast.dump(n) for n in moved_infra_statements(old))
     only_new = new_fp - old_fp - hoisted_import_dumps(old)
     found = []
     if only_old:
@@ -175,9 +197,47 @@ def inline_block(stmts: list, helpers: dict, problems: list) -> list:
     return out
 
 
+def normalise_literals(body: list) -> list:
+    out = list(body)
+    for index in reversed(range(len(out))):
+        target = literal_assign_name(out[index])
+        if target is None:
+            continue
+        user = next((j for j in range(index + 1, len(out)) if uses_name(out[j], target)), None)
+        if user is not None and user > index + 1:
+            out.insert(user - 1, out.pop(index))
+    out = sort_literal_runs(out)
+    for stmt in out:
+        if isinstance(stmt, ast.If):
+            stmt.body = normalise_literals(stmt.body)
+            stmt.orelse = normalise_literals(stmt.orelse)
+    return out
+
+
 def drop_hoisted_imports(body: list, new_tree: ast.Module) -> list:
     module_imports = {ast.dump(n) for n in new_tree.body if isinstance(n, (ast.Import, ast.ImportFrom))}
     return [s for s in body if not (isinstance(s, (ast.Import, ast.ImportFrom)) and ast.dump(s) in module_imports)]
+
+
+def drop_module_constants(body: list, new_tree: ast.Module) -> list:
+    constants = {n.targets[0].id: ast.dump(n.value) for n in new_tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)}
+    kept = []
+    for stmt in body:
+        name = literal_assign_name(stmt)
+        if name is not None and name in constants and constants[name] == ast.dump(stmt.value):
+            continue
+        kept.append(stmt)
+    return kept
+
+
+def moved_infra_statements(old_tree: ast.Module) -> list:
+    found = []
+    for node in old_tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            text = ast.unparse(node.value.func)
+            if text == "logging.basicConfig" or text == "REPORT_DIR.mkdir":
+                found.append(copy.deepcopy(node))
+    return found
 
 
 def node_kept(node: ast.AST, skip: set, tree: ast.Module) -> bool:
@@ -225,6 +285,33 @@ def inline_call(stmt: ast.stmt, call: ast.Call, helpers: dict, problems: list) -
     if unused:
         problems.append(f"{helper.name}: unused parameters {unused}")
     return inline_block(body, helpers, problems)
+
+
+def uses_name(stmt: ast.stmt, name: str) -> bool:
+    return any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(stmt))
+
+
+def sort_literal_runs(body: list) -> list:
+    out: list = []
+    run: list = []
+    for stmt in body:
+        if literal_assign_name(stmt) is not None:
+            run.append(stmt)
+            continue
+        out += sorted(run, key=literal_assign_name) + [stmt]
+        run = []
+    return out + sorted(run, key=literal_assign_name)
+
+
+def literal_assign_name(stmt: ast.stmt) -> str | None:
+    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+        target, value = stmt.targets[0].id, stmt.value
+    elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name) and stmt.value is not None:
+        target, value = stmt.target.id, stmt.value
+    else:
+        return None
+    pure = all(isinstance(n, (ast.Constant, ast.List, ast.Dict, ast.Tuple, ast.Set, ast.Load)) for n in ast.walk(value))
+    return target if pure else None
 
 
 def target_names(stmt: ast.stmt) -> list[str]:

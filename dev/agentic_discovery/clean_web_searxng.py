@@ -72,9 +72,7 @@ def main():
         print("No .md files found.")
         sys.exit(0)
 
-    test_file = None
-    if len(sys.argv) > 1:
-        test_file = sys.argv[1]
+    test_file = _read_test_file_argument()
 
     total_before, total_after, processed, skipped, prefix_counts = _process_files(files, test_file)
 
@@ -87,6 +85,13 @@ def main():
 
 def _print_error_input_directory():
     print(f"ERROR: Input directory not found: {INPUT_DIR}")
+
+
+def _read_test_file_argument() -> str | None:
+    test_file = None
+    if len(sys.argv) > 1:
+        test_file = sys.argv[1]
+    return test_file
 
 
 def _process_files(files: list, test_file: str | None) -> tuple[int, int, int, int, dict]:

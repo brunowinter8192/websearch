@@ -27,7 +27,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `p3_target.py`, `p4_loop.py`, `p6_buffer.py`, `acquire_pipe.py`.
 **Calls out:** none.
 
-### p3_target.py (55 LOC)
+### p3_target.py (54 LOC)
 
 **Purpose:** Sitemap target builder: fetches the theblock index and parses sub-sitemap URLs, direct first with proxy fallback.
 **Reads:** The theblock sitemap index.

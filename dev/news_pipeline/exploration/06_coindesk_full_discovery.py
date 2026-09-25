@@ -50,30 +50,35 @@ def _compute_log_path(ts):
 
 def _discover_into_log(log_path, ts) -> bool:
     with open(log_path, "w", encoding="utf-8", buffering=1) as log_fh:
-        log(log_fh, f"=== CoinDesk Full Discovery start {ts} ===")
-        log(log_fh, f"Stop date: {STOP_DATE} | Delay: {CALL_DELAY}s | Rewarm every: {REWARM_EVERY}s")
-
-        log(log_fh, "Browser warmup …")
-        headers, start_url, first_body = asyncio.run(browser_load_feed(CLICKS_WARMUP, log_fh))
-        if first_body is None:
-            log(log_fh, "FATAL: browser warmup failed — aborting.")
-            return False
-        log(log_fh, f"Warmup done. First URL: {start_url}")
-
-        results = cursor_loop(headers, start_url, first_body, log_fh)
-
-        write_report(OUTPUT_DIR / f"discovery_{ts}.md", results, ts, STOP_DATE)
-        log(log_fh, f"Report written.")
-        log(log_fh, (
-            f"=== DONE | calls={results['ok_calls']} articles={results['total_articles']}"
-            f" oldest={results['oldest_date']} rewarms={results['rewarm_count']}"
-            f" fallbacks={results['fallback_count']} ==="
-        ))
-    return True
+        return _discover(log_fh, ts)
 
 
 def _print_log(log_path):
     print(f"Log → {log_path}")
+
+
+def _discover(log_fh, ts) -> bool:
+    _log_start(log_fh, ts)
+    log(log_fh, "Browser warmup …")
+    headers, start_url, first_body = asyncio.run(browser_load_feed(CLICKS_WARMUP, log_fh))
+    if first_body is None:
+        log(log_fh, "FATAL: browser warmup failed — aborting.")
+        return False
+    _log_warmup_done(log_fh, start_url)
+    results = cursor_loop(headers, start_url, first_body, log_fh)
+    write_report(_discovery_report_path(ts), results, ts, STOP_DATE)
+    log(log_fh, "Report written.")
+    _log_done(log_fh, results)
+    return True
+
+
+def _log_start(log_fh, ts) -> None:
+    log(log_fh, f"=== CoinDesk Full Discovery start {ts} ===")
+    log(log_fh, f"Stop date: {STOP_DATE} | Delay: {CALL_DELAY}s | Rewarm every: {REWARM_EVERY}s")
+
+
+def _log_warmup_done(log_fh, start_url) -> None:
+    log(log_fh, f"Warmup done. First URL: {start_url}")
 
 
 def cursor_loop(headers: dict, start_url: str, first_body: bytes, log_fh) -> dict:
@@ -121,6 +126,18 @@ def cursor_loop(headers: dict, start_url: str, first_body: bytes, log_fh) -> dic
         "avg_elapsed": avg_elapsed,
         "wall_seconds": round(time.monotonic() - state["t_start"], 0),
     }
+
+
+def _discovery_report_path(ts) -> Path:
+    return OUTPUT_DIR / f"discovery_{ts}.md"
+
+
+def _log_done(log_fh, results) -> None:
+    log(log_fh, (
+        f"=== DONE | calls={results['ok_calls']} articles={results['total_articles']}"
+        f" oldest={results['oldest_date']} rewarms={results['rewarm_count']}"
+        f" fallbacks={results['fallback_count']} ==="
+    ))
 
 
 def run_cursor_iteration(state: dict, year_files: dict, seen_ids: set, log_fh) -> bool:

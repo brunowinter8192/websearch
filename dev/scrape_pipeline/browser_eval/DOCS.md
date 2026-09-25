@@ -19,7 +19,7 @@ Test domains -> production scrape saved as numbered iterations -> regression dif
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 02_regression.py (195 LOC)
+### 02_regression.py (196 LOC)
 
 **Purpose:** Diffs the last two iterations per domain and classifies changes by magnitude.
 **Reads:** `01_baselines/`.
@@ -27,7 +27,7 @@ Test domains -> production scrape saved as numbered iterations -> regression dif
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 03_browser.py (135 LOC)
+### 03_browser.py (136 LOC)
 
 **Purpose:** Compares content yield across browser wait-strategy configurations for JS-heavy sites.
 **Reads:** Hardcoded domain set or a CLI URL.
