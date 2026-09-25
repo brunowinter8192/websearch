@@ -5,7 +5,7 @@ import time
 
 # FUNCTIONS
 
-def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
+def ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
     if domain not in domain_states:
         domain_states[domain] = {
             'lastseen': 0.0,
@@ -14,7 +14,7 @@ def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domai
         }
     return domain_states[domain]
 
-async def _gate_domain(state: dict, download_delay: float) -> None:
+async def gate_domain(state: dict, download_delay: float) -> None:
     async with state['lock']:
         jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
         now = time.time()

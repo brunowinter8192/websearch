@@ -20,9 +20,9 @@ from src.scraper.scrape_logger import log_scrape, write_sidecar
 from src import death_pipe
 from src.config import CDP_PORT_WAIT_TIMEOUT_S
 from src.scraper.chromium_process import (
-    TOTAL_SCRAPE_BUDGET_S, _build_self_launch_flags,
-    _focus_steal_watchdog, _kill_by_profile, _pids_on_profile, _reap_orphaned_scrapes,
-    _resolve_chromium_bundle_path, _self_launch_chrome, _wait_for_devtools_port,
+    TOTAL_SCRAPE_BUDGET_S, build_self_launch_flags,
+    focus_steal_watchdog, kill_by_profile, pids_on_profile, reap_orphaned_scrapes,
+    resolve_chromium_bundle_path, self_launch_chrome, wait_for_devtools_port,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ def _build_run_config() -> CrawlerRunConfig:
 
 
 async def try_scrape(url: str) -> tuple[str, dict]:
-    await asyncio.to_thread(_reap_orphaned_scrapes)
+    await asyncio.to_thread(reap_orphaned_scrapes)
     run_config = _build_run_config()
     budget_s = TOTAL_SCRAPE_BUDGET_S
     _empty_meta: dict = {
@@ -148,14 +148,14 @@ async def try_scrape(url: str) -> tuple[str, dict]:
 async def _acquire_cdp_headed(
     url: str, run_config: CrawlerRunConfig, empty_meta: dict, budget_s: float,
 ) -> tuple[str, dict]:
-    flags = _build_self_launch_flags(BrowserConfig(enable_stealth=True))
-    bundle_path = await _resolve_chromium_bundle_path()
+    flags = build_self_launch_flags(BrowserConfig(enable_stealth=True))
+    bundle_path = await resolve_chromium_bundle_path()
     user_data_dir = tempfile.mkdtemp(prefix="scrape-url-cdp-")
-    watchdog_task = asyncio.create_task(_focus_steal_watchdog(bundle_path.stem))
+    watchdog_task = asyncio.create_task(focus_steal_watchdog(bundle_path.stem))
     try:
-        _self_launch_chrome(bundle_path, user_data_dir, flags)
-        port = await asyncio.to_thread(_wait_for_devtools_port, user_data_dir, CDP_PORT_WAIT_TIMEOUT_S)
-        pids = await asyncio.to_thread(_pids_on_profile, user_data_dir)
+        self_launch_chrome(bundle_path, user_data_dir, flags)
+        port = await asyncio.to_thread(wait_for_devtools_port, user_data_dir, CDP_PORT_WAIT_TIMEOUT_S)
+        pids = await asyncio.to_thread(pids_on_profile, user_data_dir)
         death_pipe.spawn_watchdog(pids, cleanup_dir=user_data_dir)
         browser_config = BrowserConfig(
             cdp_url=f"http://127.0.0.1:{port}",
@@ -180,7 +180,7 @@ async def _acquire_cdp_headed(
             await watchdog_task
         except asyncio.CancelledError:
             pass
-        await asyncio.to_thread(_kill_by_profile, user_data_dir)
+        await asyncio.to_thread(kill_by_profile, user_data_dir)
         shutil.rmtree(user_data_dir, ignore_errors=True)
 
 

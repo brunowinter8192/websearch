@@ -31,7 +31,7 @@ def _find_app_bundle(executable_path: str) -> Path | None:
     return None
 
 
-async def _resolve_chromium_bundle_path() -> Path:
+async def resolve_chromium_bundle_path() -> Path:
     pw = await async_playwright().start()
     try:
         executable_path = pw.chromium.executable_path
@@ -43,7 +43,7 @@ async def _resolve_chromium_bundle_path() -> Path:
     return bundle
 
 
-def _build_self_launch_flags(browser_config: BrowserConfig) -> list[str]:
+def build_self_launch_flags(browser_config: BrowserConfig) -> list[str]:
     flags = list(ManagedBrowser.build_browser_flags(browser_config))
     if browser_config.viewport_width and browser_config.viewport_height:
         flags.append(f"--window-size={browser_config.viewport_width},{browser_config.viewport_height}")
@@ -83,7 +83,7 @@ def _activate_app(app_name: str) -> None:
         _warn_osascript_once("activate", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
 
 
-async def _focus_steal_watchdog(app_name: str) -> None:
+async def focus_steal_watchdog(app_name: str) -> None:
     last_other_app = await asyncio.to_thread(_get_frontmost_app)
     while True:
         current = await asyncio.to_thread(_get_frontmost_app)
@@ -95,7 +95,7 @@ async def _focus_steal_watchdog(app_name: str) -> None:
         await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
 
 
-def _self_launch_chrome(bundle_path: Path, user_data_dir: str, flags: list[str]) -> None:
+def self_launch_chrome(bundle_path: Path, user_data_dir: str, flags: list[str]) -> None:
     open_cmd = [
         "open", "-g", "-n", "-a", str(bundle_path), "--args",
         "--remote-debugging-port=0", f"--user-data-dir={user_data_dir}",
@@ -105,7 +105,7 @@ def _self_launch_chrome(bundle_path: Path, user_data_dir: str, flags: list[str])
     subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
+def wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
     port_file = Path(user_data_dir) / "DevToolsActivePort"
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
@@ -117,20 +117,20 @@ def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
     raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
 
 
-def _pids_on_profile(user_data_dir: str) -> list[int]:
+def pids_on_profile(user_data_dir: str) -> list[int]:
     result = subprocess.run(
         ["pgrep", "-f", f"user-data-dir={user_data_dir}"], capture_output=True, text=True
     )
     return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
 
 
-def _kill_by_profile(user_data_dir: str) -> None:
-    pids = _pids_on_profile(user_data_dir)
+def kill_by_profile(user_data_dir: str) -> None:
+    pids = pids_on_profile(user_data_dir)
     if pids:
         death_pipe.terminate_then_kill(pids, timeout_s=3.0)
 
 
-def _reap_orphaned_scrapes() -> None:
+def reap_orphaned_scrapes() -> None:
     candidate_pids = _pids_matching_scrape_profiles()
     now = time.time()
     orphaned_pids = []

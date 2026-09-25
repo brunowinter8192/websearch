@@ -21,7 +21,7 @@ from src.news.platforms.coindesk.config import (
 )
 from src.news.platforms.coindesk.browser import browser_load_feed
 from src.news.platforms.coindesk.timeline import parse_articles, build_cursor_url, fetch_feedpage, try_rewarm
-from src.news.platforms.coindesk.shards import _append_to_shard, load_discover
+from src.news.platforms.coindesk.shards import append_to_shard, load_discover
 
 
 # ORCHESTRATOR
@@ -132,7 +132,7 @@ def _process_batch(
         is_new = entry["url"] not in seen_urls
         if is_new:
             seen_urls.add(entry["url"])
-            _append_to_shard(entry, year_files, discover_dir)
+            append_to_shard(entry, year_files, discover_dir)
         all_entries.append({**entry, "_new": is_new})
         d = entry["publication_date"][:10] if entry["publication_date"] else ""
         if d and (stats.oldest_date is None or d < stats.oldest_date):

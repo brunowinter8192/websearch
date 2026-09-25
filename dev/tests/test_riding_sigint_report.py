@@ -97,7 +97,7 @@ def _make_state(tmp_dir: Path) -> object:
 
 def test_abort_interrupted_sigint() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.abort import _abort_interrupted
+    from src.news.engine.proxy_riding.abort import abort_interrupted
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -111,7 +111,7 @@ def test_abort_interrupted_sigint() -> None:
             state = _make_state(tmp_dir)
             with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit):
                 try:
-                    _abort_interrupted(state, signal.SIGINT)
+                    abort_interrupted(state, signal.SIGINT)
                 except SystemExit as exc:
                     exit_calls.append(exc.code)
             return state
@@ -131,7 +131,7 @@ def test_abort_interrupted_sigint() -> None:
 
 def test_abort_interrupted_sigterm() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.abort import _abort_interrupted
+    from src.news.engine.proxy_riding.abort import abort_interrupted
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
@@ -145,7 +145,7 @@ def test_abort_interrupted_sigterm() -> None:
             state = _make_state(tmp_dir)
             with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit):
                 try:
-                    _abort_interrupted(state, signal.SIGTERM)
+                    abort_interrupted(state, signal.SIGTERM)
                 except SystemExit as exc:
                     exit_calls.append(exc.code)
             return state

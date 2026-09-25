@@ -18,9 +18,9 @@ from src.news.engine.proxy_riding.state import (
     PAGE_TIMEOUT_MS, STALL_TIMEOUT_S, POOL_REFRESH_INTERVAL_S,
 )
 from src.news.engine.proxy_riding.fetch import (
-    _fetch_one_url, _classify_connect_fail, _write_raw, _url_hash,
+    fetch_one_url, classify_connect_fail, write_raw, url_hash,
 )
-from src.news.engine.proxy_riding.abort import _abort_done, _abort_interrupted, _abort_stall
+from src.news.engine.proxy_riding.abort import abort_done, abort_interrupted, abort_stall
 
 
 @dataclass
@@ -66,8 +66,8 @@ async def run_riding_pool(
     state.n_slots    = n_slots
 
     loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT,  _abort_interrupted, state, signal.SIGINT)
-    loop.add_signal_handler(signal.SIGTERM, _abort_interrupted, state, signal.SIGTERM)
+    loop.add_signal_handler(signal.SIGINT,  abort_interrupted, state, signal.SIGINT)
+    loop.add_signal_handler(signal.SIGTERM, abort_interrupted, state, signal.SIGTERM)
 
     crawlers = [AsyncWebCrawler(config=BrowserConfig(headless=True, verbose=False)) for _ in range(n_browsers)]
     await asyncio.gather(*[c.start() for c in crawlers])
@@ -156,7 +156,7 @@ async def _fetch_and_build_job(
     state.in_flight_urls.add(url)
     t_url_abs = datetime.now(timezone.utc)
 
-    status, char_count, markdown_len, elapsed, html, err = await _fetch_one_url(
+    status, char_count, markdown_len, elapsed, html, err = await fetch_one_url(
         crawler, url, pstr, state.page_timeout_ms,
     )
     state.in_flight -= 1
@@ -164,7 +164,7 @@ async def _fetch_and_build_job(
 
     progress.positions.append((url, status, round(elapsed, 2)))
     job = JobRecord(
-        url=url, url_hash=_url_hash(url),
+        url=url, url_hash=url_hash(url),
         status=status, char_count=char_count, markdown_len=markdown_len,
         elapsed_s=round(elapsed, 2), error=err, file=None,
         t_start=t_url_abs, ride_position=ride_pos, proxy_str=pstr,
@@ -216,7 +216,7 @@ def _apply_ok_result(
 ) -> str:
     if url not in state.done_urls:
         state.done_urls.add(url)
-        out      = _write_raw(_url_hash(url), html, state.output_dir)
+        out      = write_raw(url_hash(url), html, state.output_dir)
         job.file = str(out)
         state.n_ok += 1
         progress.ride_ok += 1
@@ -247,7 +247,7 @@ def _apply_connect_fail_result(
     state.n_connect_fail += 1
     _maybe_requeue(state, url, dequeued)
     progress.cf_broke = True
-    state.connect_fail_records.append((round(elapsed, 3), _classify_connect_fail(err)))
+    state.connect_fail_records.append((round(elapsed, 3), classify_connect_fail(err)))
     print(f"[slot {slot_id}] CF  rotating", file=sys.stderr)
     return "break"
 
@@ -330,10 +330,10 @@ async def _watchdog(
         if state.all_resolved:
             if state.in_flight == 0:
                 return
-            _abort_done(state)
+            abort_done(state)
         idle = time.monotonic() - state.last_progress_mono
         if idle > state.stall_timeout_s:
-            _abort_stall(state, idle)
+            abort_stall(state, idle)
 
 
 async def _teardown_pool(loop, watchdog: asyncio.Task, crawlers: list) -> None:

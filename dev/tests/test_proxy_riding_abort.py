@@ -30,7 +30,7 @@ def test_abort_stall_writes_no_job_md_on_reporter_failure(tmp_path, monkeypatch,
     monkeypatch.setattr(abort_mod.os, "_exit", lambda code: exit_codes.append(code))
 
     state = _make_state(tmp_path)
-    abort_mod._abort_stall(state, idle_s=123.0)
+    abort_mod.abort_stall(state, idle_s=123.0)
 
     assert exit_codes == [1]
     assert not (state.job_dir / "job.md").exists()

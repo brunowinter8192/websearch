@@ -25,7 +25,7 @@ def _strip_doubled_prefix(text: str) -> str:
     return text[best_cut:] if best_cut else text
 
 
-def _strip_bloat(text: str) -> str:
+def strip_bloat(text: str) -> str:
     text = html.unescape(text)
     text = _strip_doubled_prefix(text)
     text = re.sub(r'^Web results', '', text)
@@ -41,7 +41,7 @@ def _strip_bloat(text: str) -> str:
     return ' '.join(text.split())
 
 
-def _truncate(text: str, max_len: int) -> str:
+def truncate(text: str, max_len: int) -> str:
     if len(text) <= max_len:
         return text
     sub  = text[:max_len]

@@ -3,7 +3,7 @@ from src.crawler.pipe_scrape_logger import log_pipe_scrape
 
 # FUNCTIONS
 
-def _log_pipe_record(
+def log_pipe_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, diagnosis: dict,
     landed_url: str | None = None,
@@ -23,7 +23,7 @@ def _log_pipe_record(
         "config_hash": run_ctx["config_hash"], "config": run_ctx["config"],
     })
 
-def _log_pipe_camoufox_record(
+def log_pipe_camoufox_record(
     run_ctx: dict, ts: str, url: str, domain: str,
     status: int | None, byte_count: int, wall_ms: int, meta: dict,
 ) -> None:

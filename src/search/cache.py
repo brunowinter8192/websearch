@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from src.search.result import SearchResult
-from src.search.snippet import _strip_bloat, _truncate, MAX_SNIPPET_LEN
+from src.search.snippet import strip_bloat, truncate, MAX_SNIPPET_LEN
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def format_engine_pool(pool: list[dict], engine_name: str, query: str) -> str:
             lines.append(f"   Date: {date}")
         raw = entry.get("snippet") or ""
         if raw:
-            snippet = _truncate(_strip_bloat(raw), MAX_SNIPPET_LEN)
+            snippet = truncate(strip_bloat(raw), MAX_SNIPPET_LEN)
             if snippet:
                 lines.append(f"   Snippet: {snippet}")
         lines.append("")

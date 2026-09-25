@@ -110,13 +110,13 @@ def test_busy_message_reports_holder(lock_dir):
 
 def test_onward_link_identity_logs_malformed_url(caplog):
     with caplog.at_level(logging.WARNING, logger="src.crawler.pipe_scraper_acquisition"):
-        assert pipe_scraper_acquisition._onward_link_identity("http://[bad") is None
+        assert pipe_scraper_acquisition.onward_link_identity("http://[bad") is None
     assert any("malformed URL" in m for m in caplog.messages)
 
 
 def test_onward_link_identity_hostless_stays_silent(caplog):
     with caplog.at_level(logging.DEBUG, logger="src.crawler.pipe_scraper_acquisition"):
-        assert pipe_scraper_acquisition._onward_link_identity("mailto:a@b.test") is None
+        assert pipe_scraper_acquisition.onward_link_identity("mailto:a@b.test") is None
     assert caplog.messages == []
 
 

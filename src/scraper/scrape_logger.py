@@ -15,7 +15,7 @@ def _sanitize_ts(ts: str) -> str:
     return ts.replace(":", "-")
 
 
-def _url_slug(url: str) -> str:
+def url_slug(url: str) -> str:
     slug = re.sub(r'^https?://', '', url)
     slug = re.sub(r'[^a-zA-Z0-9]', '-', slug)
     slug = re.sub(r'-+', '-', slug)
@@ -28,7 +28,7 @@ def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> st
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
     log_path = Path(env) if env else DEFAULT_LOG_PATH
     sidecar_dir = log_path.parent / "scrape_content"
-    filename = f"{_sanitize_ts(ts)}_{_url_slug(url)}.md"
+    filename = f"{_sanitize_ts(ts)}_{url_slug(url)}.md"
     header = (
         f"<!-- url: {url} -->\n"
         f"<!-- ts: {ts} -->\n"

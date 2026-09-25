@@ -9,7 +9,7 @@ from src.news.engine.proxy_riding.state import RiderState
 
 # FUNCTIONS
 
-def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
+def compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     jobs  = state.job_records
     rides = state.ride_records
 

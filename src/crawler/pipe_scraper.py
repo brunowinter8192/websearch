@@ -9,11 +9,11 @@ from crawl4ai import AsyncWebCrawler
 
 from src.scraper.chromium_scrape import hash_config
 from src.crawler.pipe_scraper_constants import DOWNLOAD_DELAY, CONCURRENCY_PER_DOMAIN, CAMOUFOX_CONCURRENCY_PER_DOMAIN
-from src.crawler.pipe_scraper_config import _build_configs, _extract_pipe_config_stamp
-from src.crawler.pipe_scraper_acquisition import _scrape_one, _scrape_one_camoufox
+from src.crawler.pipe_scraper_config import build_configs, extract_pipe_config_stamp
+from src.crawler.pipe_scraper_acquisition import scrape_one, scrape_one_camoufox
 from src.crawler.pipe_scraper_report import (
-    _domain_from_urls, _write_tmp_report, _print_summary, _collect_onward_links,
-    _write_onward_links_file,
+    domain_from_urls, write_tmp_report, print_summary, collect_onward_links,
+    write_onward_links_file,
 )
 
 # ORCHESTRATOR
@@ -32,11 +32,11 @@ async def scrape_urls_workflow(
     results = await _scrape_all(urls, output_dir, download_delay, concurrency_per_domain,
                                  engine, block_images, headed)
     wall_s = time.time() - t0
-    domain = _domain_from_urls(urls)
-    onward_links = _collect_onward_links(urls, results, engine)
-    _print_summary(results, wall_s, onward_links)
-    _write_tmp_report(domain, results)
-    _write_onward_links_file(domain, onward_links)
+    domain = domain_from_urls(urls)
+    onward_links = collect_onward_links(urls, results, engine)
+    print_summary(results, wall_s, onward_links)
+    write_tmp_report(domain, results)
+    write_onward_links_file(domain, onward_links)
     return results
 
 
@@ -59,13 +59,13 @@ async def _scrape_all(
     if engine == "camoufox":
         run_ctx = {"run_id": str(uuid.uuid4())}
         raw = await asyncio.gather(
-            *[_scrape_one_camoufox(url, domain_states, download_delay, resolved_concurrency,
+            *[scrape_one_camoufox(url, domain_states, download_delay, resolved_concurrency,
                                     output_dir, run_ctx, block_images)
               for url in urls],
         )
     else:
-        browser_cfg, run_cfg = _build_configs(headed=headed)
-        config_stamp = _extract_pipe_config_stamp(browser_cfg, run_cfg, download_delay, resolved_concurrency)
+        browser_cfg, run_cfg = build_configs(headed=headed)
+        config_stamp = extract_pipe_config_stamp(browser_cfg, run_cfg, download_delay, resolved_concurrency)
         run_ctx = {
             "run_id": str(uuid.uuid4()),
             "config_hash": hash_config(config_stamp),
@@ -73,7 +73,7 @@ async def _scrape_all(
         }
         async with AsyncWebCrawler(config=browser_cfg) as crawler:
             raw = await asyncio.gather(
-                *[_scrape_one(crawler, url, run_cfg, domain_states,
+                *[scrape_one(crawler, url, run_cfg, domain_states,
                               download_delay, resolved_concurrency, output_dir, run_ctx)
                   for url in urls],
             )

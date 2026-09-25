@@ -4,8 +4,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.scraper.scrape_logger import DEFAULT_LOG_PATH, _url_slug
-from src.crawler.pipe_scraper_acquisition import _url_to_filename
+from src.scraper.scrape_logger import DEFAULT_LOG_PATH, url_slug
+from src.crawler.pipe_scraper_acquisition import url_to_filename
 
 RAG_CLI_COLLECTIONS_ROOT = Path(
     "/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents"
@@ -56,7 +56,7 @@ def _index_one(url: str, sidecar_dir: Path, collection: str, collection_dir: Pat
         if sidecar_path is None:
             return IndexOutcome(url, "no_sidecar", "")
         content = _sidecar_content(sidecar_path)
-        filename = _url_to_filename(url)
+        filename = url_to_filename(url)
         byte_count = _write_collection_file(collection_dir, filename, url, content)
         ok, detail = _run_rag_cli_index(collection, filename)
         if ok:
@@ -67,7 +67,7 @@ def _index_one(url: str, sidecar_dir: Path, collection: str, collection_dir: Pat
 
 
 def _find_sidecar(url: str, sidecar_dir: Path) -> Path | None:
-    slug = _url_slug(url)
+    slug = url_slug(url)
     matches = sorted(sidecar_dir.glob(f"*_{slug}.md"))
     return matches[-1] if matches else None
 
