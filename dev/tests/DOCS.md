@@ -251,11 +251,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/news/engine/dedup.py`: exclude-URL precedence and publication-date fallback.
 
-### test_theblock_clean_pass.py (124 LOC)
+### test_theblock_clean_pass.py (122 LOC)
 
 **Purpose:** `src/news/clean_pass.py`: clean file write, bodyless URL union, raw files read-only.
 
-### test_theblock_discover.py (216 LOC)
+### test_theblock_discover.py (208 LOC)
 
 **Purpose:** `src/news/platforms/theblock/discover.py`: range selection and dispatch error paths.
 

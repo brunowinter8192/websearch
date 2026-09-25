@@ -11,7 +11,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ## Modules
 
-### _layout_lib.py (291 LOC)
+### _layout_lib.py (271 LOC)
 
 **Purpose:** Shared AST helpers: marker reading, definition-time dependency analysis, orchestrator purity check, reference graph, node fingerprints.
 **Reads:** source text passed in; `git ls-files` for the file list.
@@ -31,7 +31,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 01_layout_scan.py (198 LOC)
+### 01_layout_scan.py (199 LOC)
 
 **Purpose:** Scans every tracked dev module for layout findings and writes the report.
 **Reads:** tracked `dev/**/*.py`.
@@ -41,7 +41,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 02_relayout.py (336 LOC)
+### 02_relayout.py (338 LOC)
 
 **Purpose:** Rewrites dev modules into marker layout by reordering top-level nodes, aborting on unsafe cases and verifying node equality.
 **Reads:** tracked `dev/**/*.py`.
@@ -81,7 +81,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 07_inline_equivalence.py (247 LOC)
+### 07_inline_equivalence.py (259 LOC)
 
 **Purpose:** Inlines every extraction helper back into its caller and compares the result with the merge-base function.
 **Reads:** git objects and working tree.
@@ -96,6 +96,16 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 **Purpose:** Runs sandbox-safe dev scripts in a base tree and a current tree and compares exit code, output and written files.
 **Reads:** two tree copies, a script list.
 **Writes:** the report path given by `--out`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 09_instrument_check.py (69 LOC)
+
+**Purpose:** Prints lock types, patched method and recorded events of a bee-probe instrument module for comparison between two trees.
+**Reads:** a tree copy given by `--tree`.
+**Writes:** JSON to stdout.
 **Called by:** CLI only.
 **Calls out:** none.
 

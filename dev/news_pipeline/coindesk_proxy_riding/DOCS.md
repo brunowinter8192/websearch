@@ -51,7 +51,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** `p2_browser_rider.py`.
 **Calls out:** none.
 
-### p3_url_sampler.py (139 LOC)
+### p3_url_sampler.py (131 LOC)
 
 **Purpose:** Proportional URL sampler over the CoinDesk inventory shards with a per-year floor.
 **Reads:** The CoinDesk inventory shards in the main repo's data folder.
@@ -91,7 +91,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** CLI only.
 **Calls out:** none.
 
-### analyze_write_times.py (263 LOC)
+### analyze_write_times.py (251 LOC)
 
 **Purpose:** Reconstructs riding throughput from raw file modification times when the job report is missing.
 **Reads:** The raw HTML directory.

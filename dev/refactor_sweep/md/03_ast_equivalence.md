@@ -2,9 +2,9 @@
 
 base: 7bb68ff2199531fdd4487e716526db4f600cde6d
 
-files compared: 291
-top-level node multiset identical: 172
-top-level node multiset differs: 119
+files compared: 292
+top-level node multiset identical: 167
+top-level node multiset differs: 125
 
 ## Files that differ
 
@@ -137,8 +137,8 @@ top-level node multiset differs: 119
 - only in current: main, _add_arguments, _print_done_article_s
 
 ### dev/news_pipeline/coindesk_proxy_riding/analyze_write_times.py
-- only in base: main
-- only in current: main, _compute_since, _print_png
+- only in base: _repo_root, Assign@25, main
+- only in current: Assign@12, main, _compute_since, _print_png
 
 ### dev/news_pipeline/coindesk_proxy_riding/p0_pool.py
 - only in base: load_backfill_pool
@@ -149,8 +149,8 @@ top-level node multiset differs: 119
 - only in current: Import@16, main, _import_pool_loader, _import_url_sampler, _run_rider_smoke, If@296
 
 ### dev/news_pipeline/coindesk_proxy_riding/p3_url_sampler.py
-- only in base: If@95
-- only in current: Import@5, ImportFrom@6, main, _print_sampled_urls, _print_sampled_urls_2, _print_year_distribution, _compute_out, _print_written_to, If@138
+- only in base: _repo_root, Assign@19, If@95
+- only in current: Import@5, ImportFrom@6, Assign@8, main, _print_sampled_urls, _print_sampled_urls_2, _print_year_distribution, _compute_out, _print_written_to, If@130
 
 ### dev/news_pipeline/coindesk_proxy_riding/run_coindesk_riding.py
 - only in base: _run
@@ -360,17 +360,29 @@ top-level node multiset differs: 119
 - only in base: capture_sorry
 - only in current: capture_sorry, _capture_page, _compute_status, _print_status
 
+### dev/search_pipeline/bee_probes/_acquire_probe_instrument.py
+- only in base: Assign@69, Assign@70
+- only in current: install_instrument
+
+### dev/search_pipeline/bee_probes/_branch_probe_instrument.py
+- only in base: Assign@58
+- only in current: install_instrument
+
+### dev/search_pipeline/bee_probes/_cdp_starvation_probe_instrument.py
+- only in base: Assign@20
+- only in current: install_process_msg_patch
+
 ### dev/search_pipeline/bee_probes/acquire_probe.py
-- only in base: If@133
-- only in current: main, If@146
+- only in base: ImportFrom@13, If@133
+- only in current: ImportFrom@12, main, If@147
 
 ### dev/search_pipeline/bee_probes/branch_probe.py
-- only in base: If@153
-- only in current: main, If@166
+- only in base: ImportFrom@14, If@153
+- only in current: ImportFrom@13, main, If@167
 
 ### dev/search_pipeline/bee_probes/cdp_starvation_probe.py
-- only in base: If@125
-- only in current: main, If@134
+- only in base: ImportFrom@13, If@125
+- only in current: ImportFrom@12, main, If@135
 
 ### dev/search_pipeline/browser_probes/25_startpage_probe.py
 - only in base: run_probe
@@ -393,8 +405,12 @@ top-level node multiset differs: 119
 - only in current: run_probe, _run_queries, _compute_ok_count, _compute_block_count, _compute_under_gate, _print_report
 
 ### dev/search_pipeline/browser_probes/31_date_availability_probe.py
-- only in base: run_probe
-- only in current: run_probe, _run_engines, _print_report
+- only in base: ImportFrom@12, run_probe, run_engine_query
+- only in current: ImportFrom@11, run_probe, _run_engines, _print_report, run_engine_query
+
+### dev/search_pipeline/browser_probes/_date_availability_probe_nav.py
+- only in base: Assign@145
+- only in current: nav_funcs
 
 ### dev/search_pipeline/browser_probes/altcha_trigger_probe.py
 - only in base: If@394
@@ -475,6 +491,14 @@ top-level node multiset differs: 119
 ### dev/search_pipeline/with_google_decoupling_smoke.py
 - only in base: run_smoke
 - only in current: run_smoke, _compute_report_path, _print_smoke_with_google, _run_queries, _compute_log_lines_written, _compute_pass_count, _print_result_checks_passed
+
+### dev/tests/test_theblock_clean_pass.py
+- only in base: Assign@19, Assign@20
+- only in current: Assign@13, Assign@14
+
+### dev/tests/test_theblock_discover.py
+- only in base: _make_urls, Assign@15
+- only in current: Assign@8
 
 ### dev/url_discovery/01_resume_state_probe.py
 - only in base: url_discovery_probe_workflow

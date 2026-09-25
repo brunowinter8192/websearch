@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _cdp_starvation_probe_instrument import _cdp_ts, SLOW_CB_THRESHOLD_S, _install_asyncio_log_capture
+from _cdp_starvation_probe_instrument import _cdp_ts, SLOW_CB_THRESHOLD_S, _install_asyncio_log_capture, install_process_msg_patch
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -35,6 +35,7 @@ def main() -> None:
     parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
                         help="Limit to first N queries (default: all from queries.txt)")
     args = parser.parse_args()
+    install_process_msg_patch()
     asyncio.run(run_cdp_probe(args.max_queries))
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _acquire_probe_instrument import _acq_events
+from _acquire_probe_instrument import _acq_events, install_instrument
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true",
                         help="4-query dry-run: verify instrumentation live, no report written")
     args = parser.parse_args()
+    install_instrument()
     if args.smoke and args.max_queries is None:
         args.max_queries = 4
     asyncio.run(run_acquire_probe(args.max_queries, args.smoke))

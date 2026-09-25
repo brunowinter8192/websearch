@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from _date_availability_probe_browser import _extract_value, _kill_tab, _new_tab, close_browser
-from _date_availability_probe_nav import CONTAINER_SELECTOR, NAV_FUNCS
+from _date_availability_probe_nav import CONTAINER_SELECTOR, nav_funcs
 from _date_availability_probe_report import write_report
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
@@ -78,7 +78,7 @@ async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> d
     tab = await _new_tab()
     t0 = time.monotonic()
     try:
-        ok, diag = await NAV_FUNCS[engine](tab, query)
+        ok, diag = await nav_funcs()[engine](tab, query)
         if ok:
             evidence = await _dump_date_evidence(tab, engine)
             record["container_count"] = evidence["count"]

@@ -9,6 +9,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 _HERE = Path(__file__).resolve()
+_ROOT = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=_HERE.parent, text=True).strip()).parent
+_DEFAULT_RAW_DIR = _ROOT / "data" / "news" / "coindesk" / "raw"
 
 _REPORT_DIR = _HERE.parent / "png"
 _POOL_REFRESH_MIN = 30
@@ -158,16 +160,6 @@ def _print_png(out):
     print(f"PNG: {out}")
 
 
-def _repo_root() -> Path:
-    out = subprocess.check_output(
-        ["git", "rev-parse", "--git-common-dir"],
-        cwd=_HERE.parent,
-        text=True,
-    ).strip()
-    p = Path(out)
-    return p.parent if p.name in (".git", "worktrees") or ".git" in str(p) else p.parent
-
-
 def _parse_since(s: str) -> float:
     local_tz = datetime.now().astimezone().tzinfo
     dt = datetime.strptime(s, "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
@@ -253,10 +245,6 @@ def _build_output_path(stats: dict) -> Path:
     date_tag  = stats["t0_local"].strftime("%Y%m%d")
     since_tag = f"_since{stats['since_label'].replace(' ', 'T').replace(':', '')}" if stats["since_label"] else ""
     return _REPORT_DIR / f"raw_write_times_{date_tag}{since_tag}.png"
-
-
-_ROOT = _repo_root()
-_DEFAULT_RAW_DIR = _ROOT / "data" / "news" / "coindesk" / "raw"
 
 
 if __name__ == "__main__":

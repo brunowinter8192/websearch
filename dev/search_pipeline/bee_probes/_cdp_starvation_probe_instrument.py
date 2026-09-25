@@ -18,11 +18,6 @@ _slow_cb_events: list[str] = []
 
 # FUNCTIONS
 
-async def _patched_process_msg(self, raw_message: str) -> None:
-    _cdp_ts.append(time.monotonic())
-    return await _orig_process_msg(self, raw_message)
-
-
 def _install_asyncio_log_capture() -> None:
     class _SlowCBHandler(logging.Handler):
         def emit(self, record: logging.LogRecord) -> None:
@@ -37,4 +32,10 @@ def _install_asyncio_log_capture() -> None:
     aio_log.addHandler(h)
 
 
-_CH._process_single_message = _patched_process_msg
+def install_process_msg_patch() -> None:
+    _CH._process_single_message = _patched_process_msg
+
+
+async def _patched_process_msg(self, raw_message: str) -> None:
+    _cdp_ts.append(time.monotonic())
+    return await _orig_process_msg(self, raw_message)

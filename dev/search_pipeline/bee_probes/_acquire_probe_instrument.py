@@ -19,6 +19,13 @@ _orig_acquire = RateLimiter.acquire
 
 # FUNCTIONS
 
+def install_instrument() -> None:
+    RateLimiter.__init__ = _patched_init
+    RateLimiter.acquire = _patched_acquire
+    for limiter in _rl_mod._limiters.values():
+        limiter._lock = _WatchedLock(limiter._lock, limiter)
+
+
 def _patched_init(self, *args, **kwargs) -> None:
     _orig_init(self, *args, **kwargs)
     self._lock = _WatchedLock(self._lock, self)
@@ -62,7 +69,3 @@ def _get_name(limiter) -> str:
         if lim is limiter:
             return name
     return "unknown"
-
-
-RateLimiter.__init__ = _patched_init
-RateLimiter.acquire = _patched_acquire

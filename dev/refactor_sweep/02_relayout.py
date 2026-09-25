@@ -14,7 +14,6 @@ from _layout_lib import (
     definition_time_deps,
     has_future_annotations,
     invert_graph,
-    late_statements,
     is_main_guard,
     list_dev_files,
     loaded_names,
@@ -22,6 +21,7 @@ from _layout_lib import (
     node_span,
     resolve_entry,
     stray_comment_lines,
+    uses_unhoistable_definition,
 )
 
 SCRIPT_DIR = Path(__file__).parent
@@ -108,10 +108,9 @@ def build_plan(tree: ast.Module, lines: list[str], rel: str) -> dict:
     defs = collect_defs(body)
     future = has_future_annotations(tree)
     entry = resolve_entry(guard, defs, rel, "\n".join(lines))
-    late = late_statements(infra, defs, future)
-    early = [n for n in infra if n not in late]
-    hoisted = hoist_classes(early, defs, future)
-    infra_order = merge_hoisted(early, hoisted, defs, future)
+    reject_import_time_use(infra, defs, future)
+    hoisted = hoist_classes(infra, defs, future)
+    infra_order = merge_hoisted(infra, hoisted, defs, future)
     functions = [n for name, n in defs.items() if n not in hoisted and name != entry]
     order = order_functions(functions, defs, entry, future)
     return {
@@ -119,7 +118,6 @@ def build_plan(tree: ast.Module, lines: list[str], rel: str) -> dict:
         "lines": lines,
         "body": body,
         "infra": infra_order,
-        "late": late,
         "orchestrator": defs.get(entry),
         "functions": order,
         "guard": guard,
@@ -134,8 +132,6 @@ def assemble(plan: dict) -> str:
         sections.append("# ORCHESTRATOR\n\n" + node_text(plan["orchestrator"], plan["lines"]))
     if plan["functions"]:
         sections.append("# FUNCTIONS\n\n" + function_block(plan))
-    if plan["late"]:
-        sections.append(infra_block(plan, "late"))
     text = "\n\n\n".join(sections) + "\n"
     if plan["guard"] is not None:
         text += "\n\n" + node_text(plan["guard"], plan["lines"]) + "\n"
@@ -168,6 +164,12 @@ def collect_defs(body: list[ast.stmt]) -> dict[str, ast.AST]:
                 raise RelayoutAbort(f"duplicate definition {node.name}")
             defs[node.name] = node
     return defs
+
+
+def reject_import_time_use(infra: list, defs: dict, future: bool) -> None:
+    for node in infra:
+        if uses_unhoistable_definition(node, defs, future):
+            raise RelayoutAbort(f"module statement line {node.lineno} uses a function of this module at import time")
 
 
 def hoist_classes(infra: list, defs: dict, future: bool) -> set:

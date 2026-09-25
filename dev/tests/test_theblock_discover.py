@@ -5,15 +5,10 @@ import pytest
 from src.news.platforms.theblock import discover as theblock_discover
 from src.news.platforms.theblock.discover import _subs_in_range, _sub_by_index, _fetch_direct, _parse_url_blocks
 
+_ALL_URLS = [f"https://www.theblock.co/sitemap_tbco_post_type_post_{i}.xml" for i in range(27)]
+
 
 # FUNCTIONS
-
-def _make_urls(indices: list[int]) -> list[str]:
-    return [
-        f"https://www.theblock.co/sitemap_tbco_post_type_post_{i}.xml"
-        for i in indices
-    ]
-
 
 def test_range_selects_correct_subs():
     result = _subs_in_range(_ALL_URLS, 24, 26)
@@ -211,6 +206,3 @@ class _FakeHttpResponse:
 
 def _url_block(lastmod: str) -> bytes:
     return f"<url><loc>https://www.theblock.co/post/1/a</loc><lastmod>{lastmod}</lastmod></url>".encode()
-
-
-_ALL_URLS = _make_urls(list(range(27)))

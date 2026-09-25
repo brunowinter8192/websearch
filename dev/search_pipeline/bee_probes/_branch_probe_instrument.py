@@ -17,6 +17,10 @@ _pre_snapshots: list[dict] = []
 
 # FUNCTIONS
 
+def install_instrument() -> None:
+    RateLimiter.acquire = _replacement_acquire
+
+
 async def _replacement_acquire(self) -> None:
     name = _get_name(self)
     _acq_events.append((name, "enter", time.monotonic(), None))
@@ -53,6 +57,3 @@ def _get_name(limiter) -> str:
         if lim is limiter:
             return name
     return "unknown"
-
-
-RateLimiter.acquire = _replacement_acquire

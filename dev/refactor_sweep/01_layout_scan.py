@@ -16,7 +16,7 @@ from _layout_lib import (
     guard_entry,
     has_future_annotations,
     invert_graph,
-    late_statements,
+    uses_unhoistable_definition,
     is_main_guard,
     list_dev_files,
     node_span,
@@ -115,10 +115,9 @@ def marker_order_findings(markers: list[tuple[int, str]]) -> list[str]:
 def placement_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list[str]:
     found = []
     defs = {n.name: n for n in tree.body if isinstance(n, DEF_TYPES)}
-    infra = [n for n in tree.body if not isinstance(n, DEF_TYPES) and not is_main_guard(n)]
-    late = late_statements(infra, defs, has_future_annotations(tree))
+    future = has_future_annotations(tree)
     for node in tree.body:
-        if is_main_guard(node) or node in late:
+        if is_main_guard(node):
             continue
         section = section_at(node_span(node)[0], markers)
         if isinstance(node, FUNC_TYPES):
@@ -131,6 +130,8 @@ def placement_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list
                 found.append(f"NO_MARKER_FOR_DEF {node.name}")
         elif section != "INFRASTRUCTURE":
             found.append(f"STATEMENT_OUTSIDE_INFRASTRUCTURE line {node.lineno} section {section}")
+        elif uses_unhoistable_definition(node, defs, future):
+            found.append(f"INFRASTRUCTURE_USES_LOCAL_FUNCTION line {node.lineno}")
     return found
 
 

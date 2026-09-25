@@ -107,7 +107,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `31_date_availability_probe.py`, nav sibling.
 **Calls out:** `pydoll`.
 
-### _date_availability_probe_nav.py (149 LOC)
+### _date_availability_probe_nav.py (150 LOC)
 
 **Purpose:** Per-engine navigation, wait and diagnose flows for the eight engines plus container selectors.
 **Reads:** none.

@@ -5,6 +5,12 @@ from pathlib import Path
 import json
 from collections import Counter
 
+INVENTORY_DIR = (
+    (Path(__file__).parent / subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"], capture_output=True, text=True, cwd=Path(__file__).parent, check=True,
+    ).stdout.strip()).resolve().parent / "data" / "news" / "coindesk" / "inventory"
+)
+
 SAMPLE_YEARS = list(range(2017, 2027))
 
 SAMPLE_YEARS = list(range(2017, 2027))
@@ -64,17 +70,6 @@ def _print_written_to(out):
     print(f"Written to {out}")
 
 
-def _repo_root() -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True, text=True,
-        cwd=Path(__file__).parent,
-        check=True,
-    )
-    git_common_dir = (Path(__file__).parent / result.stdout.strip()).resolve()
-    return git_common_dir.parent
-
-
 def _load_year_lines() -> dict[int, list[str]]:
     year_lines: dict[int, list[str]] = {}
     for year in SAMPLE_YEARS:
@@ -130,9 +125,6 @@ def _draw_sample(
             urls.append(url)
     rng.shuffle(urls)
     return urls
-
-
-INVENTORY_DIR = _repo_root() / "data" / "news" / "coindesk" / "inventory"
 
 
 if __name__ == "__main__":

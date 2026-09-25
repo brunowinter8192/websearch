@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _branch_probe_instrument import _acq_events, _pre_snapshots
+from _branch_probe_instrument import _acq_events, _pre_snapshots, install_instrument
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -43,6 +43,7 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true",
                         help="4-query dry-run: verify instrumentation, no report written")
     args = parser.parse_args()
+    install_instrument()
     if args.smoke and args.max_queries is None:
         args.max_queries = 4
     asyncio.run(run_branch_probe(args.max_queries, args.smoke))

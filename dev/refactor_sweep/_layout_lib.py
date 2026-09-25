@@ -89,22 +89,6 @@ def stray_comment_lines(source: str, spans: list[tuple[int, int]]) -> list[int]:
     return stray
 
 
-def late_statements(infra: list, defs: dict, future: bool) -> list:
-    late: list = []
-    late_names: set[str] = set()
-    changed = True
-    while changed:
-        changed = False
-        for node in infra:
-            if node in late:
-                continue
-            if set(loaded_names([node])) & late_names or uses_unhoistable_definition(node, defs, future):
-                late.append(node)
-                late_names |= stored_names(node)
-                changed = True
-    return [n for n in infra if n in late]
-
-
 def resolve_entry(guard: ast.If | None, defs: dict, rel: str, source: str) -> str | None:
     if rel.startswith("dev/tests/"):
         return None
@@ -112,6 +96,16 @@ def resolve_entry(guard: ast.If | None, defs: dict, rel: str, source: str) -> st
     if entry in defs and isinstance(defs[entry], FUNC_TYPES):
         return entry
     return existing_orchestrator(defs, source)
+
+
+def uses_unhoistable_definition(node: ast.AST, defs: dict, future: bool) -> bool:
+    for name in loaded_names([node]):
+        if name not in defs:
+            continue
+        target = defs[name]
+        if not isinstance(target, ast.ClassDef) or not class_hoistable(target, defs, future):
+            return True
+    return False
 
 
 def statement_violations(stmt: ast.stmt) -> list[str]:
@@ -136,20 +130,6 @@ def statement_violations(stmt: ast.stmt) -> list[str]:
 def body_refs(node: ast.AST, defined: set[str]) -> dict[str, int]:
     names = loaded_names([node])
     return {n: line for n, line in names.items() if n in defined and n != getattr(node, "name", None)}
-
-
-def uses_unhoistable_definition(node: ast.AST, defs: dict, future: bool) -> bool:
-    for name in loaded_names([node]):
-        if name not in defs:
-            continue
-        target = defs[name]
-        if not isinstance(target, ast.ClassDef) or not class_hoistable(target, defs, future):
-            return True
-    return False
-
-
-def stored_names(node: ast.AST) -> set[str]:
-    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
 
 
 def guard_entry(guard: ast.If) -> str | None:
@@ -184,6 +164,14 @@ def existing_orchestrator(defs: dict, source: str) -> str | None:
     return found[0] if len(found) == 1 else None
 
 
+def class_hoistable(cls: ast.ClassDef, defs: dict, future: bool) -> bool:
+    for dep in definition_time_deps(cls, set(defs), future):
+        target = defs[dep]
+        if not isinstance(target, ast.ClassDef) or not class_hoistable(target, defs, future):
+            return False
+    return True
+
+
 def expression_violations(expr: ast.AST, condition: bool) -> list[str]:
     if isinstance(expr, (ast.Name, ast.Constant)):
         return []
@@ -206,14 +194,6 @@ def expression_violations(expr: ast.AST, condition: bool) -> list[str]:
     if condition:
         return condition_violations(expr)
     return [type(expr).__name__]
-
-
-def class_hoistable(cls: ast.ClassDef, defs: dict, future: bool) -> bool:
-    for dep in definition_time_deps(cls, set(defs), future):
-        target = defs[dep]
-        if not isinstance(target, ast.ClassDef) or not class_hoistable(target, defs, future):
-            return False
-    return True
 
 
 def read_marker_lines(source: str) -> list[tuple[int, str]]:
@@ -241,18 +221,6 @@ def node_span(node: ast.AST) -> tuple[int, int]:
     return start, node.end_lineno
 
 
-def condition_violations(expr: ast.AST) -> list[str]:
-    if isinstance(expr, ast.Compare):
-        parts = [expr.left] + list(expr.comparators)
-    elif isinstance(expr, ast.BoolOp):
-        parts = list(expr.values)
-    elif isinstance(expr, ast.UnaryOp) and isinstance(expr.op, ast.Not):
-        parts = [expr.operand]
-    else:
-        return [type(expr).__name__]
-    return [v for e in parts for v in expression_violations(e, True)]
-
-
 def definition_time_deps(node: ast.AST, defined: set[str], future_annotations: bool) -> set[str]:
     names = loaded_names(definition_time_parts(node, future_annotations))
     return {n for n in names if n in defined and n != getattr(node, "name", None)}
@@ -265,6 +233,18 @@ def loaded_names(nodes: list[ast.AST]) -> dict[str, int]:
             if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load):
                 found[sub.id] = min(found.get(sub.id, sub.lineno), sub.lineno)
     return found
+
+
+def condition_violations(expr: ast.AST) -> list[str]:
+    if isinstance(expr, ast.Compare):
+        parts = [expr.left] + list(expr.comparators)
+    elif isinstance(expr, ast.BoolOp):
+        parts = list(expr.values)
+    elif isinstance(expr, ast.UnaryOp) and isinstance(expr.op, ast.Not):
+        parts = [expr.operand]
+    else:
+        return [type(expr).__name__]
+    return [v for e in parts for v in expression_violations(e, True)]
 
 
 def definition_time_parts(node: ast.AST, future_annotations: bool) -> list[ast.AST]:

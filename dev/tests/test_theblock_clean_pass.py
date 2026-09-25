@@ -10,6 +10,8 @@ from src.news.platforms.theblock import TheBlockPlatform
 
 GOOD_URL = "https://www.theblock.co/post/12345/good-article"
 BODYLESS_URL = "https://www.theblock.co/post/99999/bodyless-article"
+GOOD_HASH = hashlib.sha256(GOOD_URL.encode()).hexdigest()[:12]
+BODYLESS_HASH = hashlib.sha256(BODYLESS_URL.encode()).hexdigest()[:12]
 
 GOOD_HTML = """\
 <html><head>
@@ -118,7 +120,3 @@ def _entries():
 
 def _hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]
-
-
-GOOD_HASH = _hash(GOOD_URL)
-BODYLESS_HASH = _hash(BODYLESS_URL)
