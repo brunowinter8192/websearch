@@ -11,7 +11,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 
 ## Modules
 
-### 25_startpage_probe.py (258 LOC)
+### 25_startpage_probe.py (276 LOC)
 
 **Purpose:** Go/no-go probe for startpage.com scrapeability via the real homepage search form; ten queries, counts and block markers.
 **Reads:** none (live run).
@@ -27,7 +27,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `25_startpage_probe.py`.
 **Calls out:** stdlib only.
 
-### 26_brave_probe.py (233 LOC)
+### 26_brave_probe.py (256 LOC)
 
 **Purpose:** Three-condition gate probe for Brave Search (real rows, no PoW/CAPTCHA, latency at most five seconds); result DROP.
 **Reads:** none (live run).
@@ -43,7 +43,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `26_brave_probe.py`.
 **Calls out:** stdlib only.
 
-### 27_brave_headed_lane_probe.py (215 LOC)
+### 27_brave_headed_lane_probe.py (238 LOC)
 
 **Purpose:** Headed-background Chrome lane probe (macOS `open -g`) against Brave PoW; result DROP, launch mechanism validated.
 **Reads:** none (live run).
@@ -59,7 +59,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `27_brave_headed_lane_probe.py`.
 **Calls out:** stdlib only.
 
-### 28_bing_probe.py (249 LOC)
+### 28_bing_probe.py (272 LOC)
 
 **Purpose:** Go/no-go probe for bing.com as a second Bing-index path, including unwrapping of `ck/a` tracking redirects; result CANDIDATE.
 **Reads:** none (live run).
@@ -75,7 +75,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `28_bing_probe.py`.
 **Calls out:** stdlib only.
 
-### 29_yandex_probe.py (229 LOC)
+### 29_yandex_probe.py (252 LOC)
 
 **Purpose:** Go/no-go probe for yandex.com as an independent-index candidate under a relaxed criterion; result CANDIDATE.
 **Reads:** none (live run).
@@ -91,7 +91,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `29_yandex_probe.py`.
 **Calls out:** stdlib only.
 
-### 31_date_availability_probe.py (136 LOC)
+### 31_date_availability_probe.py (144 LOC)
 
 **Purpose:** Measurement probe: whether eight DOM-scraped engines expose result dates as elements, snippet text, nowhere or unmeasurable.
 **Reads:** none (live run).
@@ -123,7 +123,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `31_date_availability_probe.py`.
 **Calls out:** stdlib only.
 
-### altcha_trigger_probe.py (396 LOC)
+### altcha_trigger_probe.py (400 LOC)
 
 **Purpose:** Go/no-go probe: can Mojeek's ALTCHA challenge be started and completed by automation via three isolated trigger attempts.
 **Reads:** none (live run).

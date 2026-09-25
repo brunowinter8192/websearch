@@ -30,6 +30,7 @@ from _03_capture import (
 )
 from _03_log import write_log_header, write_log_line
 from _03_report import write_run_report
+import argparse
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 OUTPUT_DIR = Path(__file__).parent / "03_output"
@@ -42,6 +43,22 @@ DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CoinDesk backfill traversal — stage A (capped) or stage B (uncapped)")
+    parser.add_argument("--full", action="store_true", help="Stage B: uncapped run (no click limit)")
+    parser.add_argument("--cap", type=int, default=None, metavar="N", help="Override click cap (default: STAGE_A_CAP=400)")
+    args = parser.parse_args()
+    if args.full:
+        cap = None
+    elif args.cap is not None:
+        cap = args.cap
+    else:
+        cap = STAGE_A_CAP
+    asyncio.run(backfill_workflow(stage_a_cap=cap))
+
+
+# FUNCTIONS
 
 async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -90,8 +107,6 @@ async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
                       state["stop_reason"], state["click_times"], stage_a_cap, state["disabled_retry_hits"])
     print(f"Report → {run['report_path']}")
 
-
-# FUNCTIONS
 
 def prepare_backfill_run(stage_a_cap: int | None) -> dict:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -323,15 +338,4 @@ def parse_url_date(url: str) -> datetime | None:
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="CoinDesk backfill traversal — stage A (capped) or stage B (uncapped)")
-    parser.add_argument("--full", action="store_true", help="Stage B: uncapped run (no click limit)")
-    parser.add_argument("--cap", type=int, default=None, metavar="N", help="Override click cap (default: STAGE_A_CAP=400)")
-    args = parser.parse_args()
-    if args.full:
-        cap = None
-    elif args.cap is not None:
-        cap = args.cap
-    else:
-        cap = STAGE_A_CAP
-    asyncio.run(backfill_workflow(stage_a_cap=cap))
+    main()

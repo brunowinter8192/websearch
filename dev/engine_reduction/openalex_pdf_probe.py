@@ -34,6 +34,17 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     records = []
     error = None
+    error = await _probe_works(error, records)
+
+    report_path = write_report(records, error)
+    _print_report(report_path)
+    if error:
+        _print_stopped_early(error)
+
+
+# FUNCTIONS
+
+async def _probe_works(error, records):
     async with httpx.AsyncClient(timeout=10.0) as client:
         for qi, query in enumerate(QUERIES, 1):
             print(f"[{qi}/{len(QUERIES)}] {query}", file=sys.stderr)
@@ -52,14 +63,38 @@ async def run_probe() -> None:
             )
             if qi < len(QUERIES):
                 await asyncio.sleep(INTER_QUERY_DELAY_S)
+    return error
 
-    report_path = write_report(records, error)
-    print(f"\nReport: {report_path}", file=sys.stderr)
+
+def write_report(records: list[dict], error: str | None) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
+
+    lines = [
+        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
+        "",
+        "Measurement only — no src/ touched, no wiring. Direct httpx against "
+        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
+        "",
+    ]
     if error:
-        print(f"Stopped early: {error}", file=sys.stderr)
+        lines += [f"**Stopped early due to: {error}**", ""]
+
+    lines += _build_per_query_table(records)
+    lines += _build_type_breakdown_section(records)
+    lines += _build_eyeball_section(records)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
-# FUNCTIONS
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+def _print_stopped_early(error):
+    print(f"Stopped early: {error}", file=sys.stderr)
+
 
 async def fetch_works(client: httpx.AsyncClient, query: str) -> list[dict]:
     params = {"search": query, "per_page": PER_PAGE}
@@ -91,54 +126,6 @@ def build_record(qi: int, query: str, works: list[dict]) -> dict:
         "eyeball": build_eyeball_rows(works[:TOP_N]) if qi in EYEBALL_QUERY_NUMS else None,
     }
     return record
-
-
-def write_report(records: list[dict], error: str | None) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
-
-    lines = [
-        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
-        "",
-        "Measurement only — no src/ touched, no wiring. Direct httpx against "
-        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
-        "",
-    ]
-    if error:
-        lines += [f"**Stopped early due to: {error}**", ""]
-
-    lines += _build_per_query_table(records)
-    lines += _build_type_breakdown_section(records)
-    lines += _build_eyeball_section(records)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
-
-
-class RateLimitError(Exception):
-    pass
-
-
-def classify(work: dict) -> str:
-    loc = work.get("best_oa_location")
-    if loc is None:
-        return "no_oa"
-    if loc.get("pdf_url"):
-        return "pdf_url"
-    return "landing_only"
-
-
-def build_eyeball_rows(works: list[dict]) -> list[dict]:
-    rows = []
-    for w in works:
-        loc = w.get("best_oa_location") or {}
-        rows.append({
-            "title": (w.get("title") or "")[:100],
-            "type": w.get("type") or "unknown",
-            "chosen_url": _pick_url(w),
-            "pdf_url": loc.get("pdf_url") or "",
-        })
-    return rows
 
 
 def _build_per_query_table(records: list[dict]) -> list[str]:
@@ -197,6 +184,32 @@ def _build_eyeball_section(records: list[dict]) -> list[str]:
             lines.append(f"| {i} | {title} | {row['type']} | {row['chosen_url']} | {row['pdf_url']} |")
         lines.append("")
     return lines
+
+
+class RateLimitError(Exception):
+    pass
+
+
+def classify(work: dict) -> str:
+    loc = work.get("best_oa_location")
+    if loc is None:
+        return "no_oa"
+    if loc.get("pdf_url"):
+        return "pdf_url"
+    return "landing_only"
+
+
+def build_eyeball_rows(works: list[dict]) -> list[dict]:
+    rows = []
+    for w in works:
+        loc = w.get("best_oa_location") or {}
+        rows.append({
+            "title": (w.get("title") or "")[:100],
+            "type": w.get("type") or "unknown",
+            "chosen_url": _pick_url(w),
+            "pdf_url": loc.get("pdf_url") or "",
+        })
+    return rows
 
 
 def _pick_url(work: dict) -> str:

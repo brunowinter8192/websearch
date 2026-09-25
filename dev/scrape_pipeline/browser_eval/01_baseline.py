@@ -16,14 +16,11 @@ from src.scraper.chromium_scrape import scrape_url_chromium_workflow
 
 async def run_baseline_suite():
     domains = load_domains()
-    print(f"Loaded {len(domains)} test domains")
-    print("=" * 80)
+    _print_loaded_test_domains(domains)
 
-    for url in domains:
-        await process_single_domain(url)
+    await _run_domain_baselines(domains)
 
-    print("=" * 80)
-    print(f"Baseline suite completed: {len(domains)} domains processed")
+    _print_line(domains)
 
 
 # FUNCTIONS
@@ -39,6 +36,21 @@ def load_domains() -> list[str]:
                 domains.append(line)
 
     return domains
+
+
+def _print_loaded_test_domains(domains):
+    print(f"Loaded {len(domains)} test domains")
+    print("=" * 80)
+
+
+async def _run_domain_baselines(domains):
+    for url in domains:
+        await process_single_domain(url)
+
+
+def _print_line(domains):
+    print("=" * 80)
+    print(f"Baseline suite completed: {len(domains)} domains processed")
 
 
 async def process_single_domain(url: str) -> None:

@@ -25,13 +25,41 @@ MIN_FLOOR = 40
 
 def run_simulation() -> None:
     records = parse_smoke_report(SMOKE_REPORT)
-    print(f"Parsed {len(records)} records", file=sys.stderr)
-    results = [_select_new(r) for r in records]
+    _print_parsed_records(records)
+    results = _compute_results(records)
     path = write_report(records, results)
-    print(f"Report: {path}", file=sys.stderr)
+    _print_report(path)
 
 
 # FUNCTIONS
+
+def _print_parsed_records(records):
+    print(f"Parsed {len(records)} records", file=sys.stderr)
+
+
+def _compute_results(records):
+    results = [_select_new(r) for r in records]
+    return results
+
+
+def write_report(records: list[dict], results: list) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"snippet_selection_{ts}.md"
+    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
+        _compute_aggregates(records, results)
+    L = (
+        _render_header(ts)
+        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
+        + _render_per_query_picks(records, results)
+        + _render_floor_cases(floor_records, floor_n)
+    )
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
+
+
+def _print_report(path):
+    print(f"Report: {path}", file=sys.stderr)
+
 
 def _select_new(record: dict):
     candidates = {}
@@ -56,21 +84,6 @@ def _select_new(record: dict):
     winner           = max(pool, key=lambda s: pool[s][0])
     score, clean_len = scored[winner]
     return winner, strip_bloat(candidates[winner]), score, clean_len, floor_triggered
-
-
-def write_report(records: list[dict], results: list) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"snippet_selection_{ts}.md"
-    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
-        _compute_aggregates(records, results)
-    L = (
-        _render_header(ts)
-        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
-        + _render_per_query_picks(records, results)
-        + _render_floor_cases(floor_records, floor_n)
-    )
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
-    return path
 
 
 def _compute_aggregates(records: list[dict], results: list) -> tuple:

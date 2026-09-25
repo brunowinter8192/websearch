@@ -77,6 +77,21 @@ _BACKFILL: dict[str, list[dict]] = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Oracle cleanup — filter google+SS, backfill loss pairs")
+    parser.add_argument("--v2-dir", default=None, help="v2 ts_dir path (default: value_eval_v2_20260523_000156)")
+    args   = parser.parse_args()
+    v2_dir = _compute_v2_dir(args)
+    oracle_cleanup_workflow(v2_dir)
+
+
+# FUNCTIONS
+
+def _compute_v2_dir(args):
+    v2_dir = Path(args.v2_dir) if args.v2_dir else V2_DEFAULT
+    return v2_dir
+
+
 def oracle_cleanup_workflow(v2_dir: Path) -> None:
     summary_rows: list[dict] = []
     for mode in MODES:
@@ -88,8 +103,6 @@ def oracle_cleanup_workflow(v2_dir: Path) -> None:
     _write_summary(v2_dir, summary_rows)
     print(v2_dir / "oracle_v3clean_summary.md")
 
-
-# FUNCTIONS
 
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
@@ -207,8 +220,4 @@ def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Oracle cleanup — filter google+SS, backfill loss pairs")
-    parser.add_argument("--v2-dir", default=None, help="v2 ts_dir path (default: value_eval_v2_20260523_000156)")
-    args   = parser.parse_args()
-    v2_dir = Path(args.v2_dir) if args.v2_dir else V2_DEFAULT
-    oracle_cleanup_workflow(v2_dir)
+    main()

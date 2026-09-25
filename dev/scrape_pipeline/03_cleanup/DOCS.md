@@ -11,7 +11,7 @@ Raw scraped markdown from `../02_raw_data/` -> pattern-based chrome removal -> c
 
 ## Modules
 
-### clean.py (277 LOC)
+### clean.py (287 LOC)
 
 **Purpose:** URL-spanning cleanup of raw scraped markdown with generic and site-specific patterns.
 **Reads:** `../02_raw_data/<ts>/`.

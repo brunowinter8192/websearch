@@ -33,16 +33,25 @@ async def scrape_urls(
     )
     sem = asyncio.Semaphore(concurrency)
 
+    raw = await _scrape_all(urls, browser_cfg, run_cfg, sem, output_dir)
+
+    return _replace_exceptions(raw, urls)
+
+
+# FUNCTIONS
+
+async def _scrape_all(urls, browser_cfg, run_cfg, sem, output_dir):
     async with AsyncWebCrawler(config=browser_cfg) as crawler:
         tasks = [_scrape_one(crawler, url, run_cfg, sem, output_dir) for url in urls]
         raw = await asyncio.gather(*tasks, return_exceptions=True)
+    return raw
 
+
+def _replace_exceptions(raw, urls):
     return [r if isinstance(r, dict) else {'url': urls[i], 'outcome': 'error',
                                             'wall_ms': 0, 'bytes': 0, 'status_code': None}
             for i, r in enumerate(raw)]
 
-
-# FUNCTIONS
 
 async def _scrape_one(
     crawler: AsyncWebCrawler,

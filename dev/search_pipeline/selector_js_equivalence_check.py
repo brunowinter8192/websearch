@@ -45,6 +45,13 @@ HTML = {
 
 # ORCHESTRATOR
 
+def run_main() -> None:
+    sys.path.insert(0, str(PROJECT_ROOT))
+    raise SystemExit(asyncio.run(main()))
+
+
+# FUNCTIONS
+
 async def main() -> int:
     old_js = {name: _load_js(_old_module(name)) for name in ENGINES}
     new_js = {name: _load_js(_new_module(name)) for name in ENGINES}
@@ -67,8 +74,6 @@ async def main() -> int:
     print("VERDICT", "PASS" if failures == 0 else "FAIL")
     return failures
 
-
-# FUNCTIONS
 
 def _old_module(name: str):
     source = subprocess.run(
@@ -109,5 +114,4 @@ async def _run(browser: Chrome, html: str, js: str) -> list:
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, str(PROJECT_ROOT))
-    raise SystemExit(asyncio.run(main()))
+    run_main()

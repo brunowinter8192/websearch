@@ -12,8 +12,7 @@ HEADING = re.compile(r"### (\S+\.(?:py|sh)) \(\d+ LOC\)")
 
 def fix_workflow() -> None:
     docs = list_docs()
-    changed = [fix_doc(doc) for doc in docs]
-    print(f"docs={len(docs)} rewritten={sum(changed)}")
+    _fix_all(docs)
 
 
 # FUNCTIONS
@@ -21,6 +20,11 @@ def fix_workflow() -> None:
 def list_docs() -> list[Path]:
     out = subprocess.check_output(["git", "ls-files", "dev", "*DOCS.md"], cwd=PROJECT_ROOT, text=True)
     return [PROJECT_ROOT / f for f in out.split("\n") if f.endswith("DOCS.md") and f.startswith("dev/")]
+
+
+def _fix_all(docs):
+    changed = [fix_doc(doc) for doc in docs]
+    print(f"docs={len(docs)} rewritten={sum(changed)}")
 
 
 def fix_doc(doc: Path) -> int:

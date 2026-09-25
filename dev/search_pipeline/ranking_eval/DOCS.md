@@ -11,7 +11,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 
 ## Modules
 
-### clean_pool.py (214 LOC)
+### clean_pool.py (223 LOC)
 
 **Purpose:** Pool filter helper and oracle cleanup: drops named engines from pools and rebuilds v3clean oracle files.
 **Reads:** `../runs/<v2 ts_dir>/*_oracle.json`.
@@ -19,7 +19,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 **Called by:** CLI only (`--v2-dir`).
 **Calls out:** stdlib only.
 
-### stage4_aggregate.py (335 LOC)
+### stage4_aggregate.py (343 LOC)
 
 **Purpose:** Aggregate v2: Jaccard of each method against the oracle, per-pair eval Markdown plus summary.
 **Reads:** `<ts_dir>/*_pool.json`, `*_methods.json`, `*_oracle.json`.
@@ -27,7 +27,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 **Called by:** CLI only (`--ts-dir`, `--no-oracle`).
 **Calls out:** stdlib only.
 
-### stage4_aggregate_v3.py (298 LOC)
+### stage4_aggregate_v3.py (306 LOC)
 
 **Purpose:** Aggregate v3: Jaccard, per-method latency statistics and Pareto table across twelve methods.
 **Reads:** `<pool_dir>/*_pool.json`, `*_methods_v3.json`; `<oracle_dir>/*_oracle_v3clean.json`.
@@ -35,7 +35,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 **Called by:** CLI only (`--pool-dir`, `--oracle-dir`, `--no-oracle`).
 **Calls out:** stdlib only.
 
-### value_eval_aggregate.py (341 LOC)
+### value_eval_aggregate.py (354 LOC)
 
 **Purpose:** Historical stage 4 (v1): Jaccard per pair with per-query and summary Markdown, superseded by the stage4 scripts.
 **Reads:** `<ts_dir>/*_pool.json`, `*_methods.json`, `*_oracle.json`.
@@ -43,7 +43,7 @@ Per-pair pool, methods and oracle JSON under `../runs/<ts>/` in; `stage4_aggrega
 **Called by:** CLI (`--ts-dir`, `--ts-out`, `--no-oracle`).
 **Calls out:** stdlib only.
 
-### pool_diff_v2_v3.py (241 LOC)
+### pool_diff_v2_v3.py (245 LOC)
 
 **Purpose:** Pool diff: URL overlap and per-engine reliability between a v2 reference dir and a v3 run across sixteen pairs.
 **Reads:** `../runs/value_eval_v2_<ts>/` (hardcoded), v3 dir via `--v3-dir` or newest.

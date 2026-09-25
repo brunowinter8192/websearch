@@ -28,6 +28,23 @@ METHOD_LABELS = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Stage 4 — Aggregate (value_eval_v2)")
+    parser.add_argument("--ts-dir",    required=True,       help="Directory with pool/methods/oracle JSONs")
+    parser.add_argument("--no-oracle", action="store_true", help="Skip oracle (smoke mode)")
+    args   = parser.parse_args()
+    ts_dir = Path(args.ts_dir)
+    if not ts_dir.exists():
+        _exit_without_ts_dir(ts_dir)
+    run_aggregate(ts_dir=ts_dir, no_oracle=args.no_oracle)
+
+
+# FUNCTIONS
+
+def _exit_without_ts_dir(ts_dir):
+    sys.exit(f"ERROR: ts_dir does not exist: {ts_dir}")
+
+
 def run_aggregate(ts_dir: Path, no_oracle: bool) -> None:
     results = []
     for mode in MODES:
@@ -47,8 +64,6 @@ def run_aggregate(ts_dir: Path, no_oracle: bool) -> None:
     summary_path = _write_summary_md(results, ts_dir)
     print(f"\nSummary: {summary_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def _load_and_score_pair(
     ts_dir: Path, mode: str, query: str, no_oracle: bool
@@ -325,11 +340,4 @@ def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stage 4 — Aggregate (value_eval_v2)")
-    parser.add_argument("--ts-dir",    required=True,       help="Directory with pool/methods/oracle JSONs")
-    parser.add_argument("--no-oracle", action="store_true", help="Skip oracle (smoke mode)")
-    args   = parser.parse_args()
-    ts_dir = Path(args.ts_dir)
-    if not ts_dir.exists():
-        sys.exit(f"ERROR: ts_dir does not exist: {ts_dir}")
-    run_aggregate(ts_dir=ts_dir, no_oracle=args.no_oracle)
+    main()

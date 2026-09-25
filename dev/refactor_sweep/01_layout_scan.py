@@ -34,13 +34,48 @@ PROJECT_ROOT = SCRIPT_DIR.parents[1]
 
 def scan_workflow() -> None:
     files = list_dev_files(PROJECT_ROOT)
-    results = [analyse_file(PROJECT_ROOT, rel) for rel in files]
+    results = _analyse_all(files)
     report = render_report(results)
     write_report(report)
     print_summary(results)
 
 
 # FUNCTIONS
+
+def _analyse_all(files):
+    results = [analyse_file(PROJECT_ROOT, rel) for rel in files]
+    return results
+
+
+def render_report(results: list[dict]) -> str:
+    total = Counter()
+    for r in results:
+        for f in r["findings"]:
+            total[f.split()[0]] += 1
+    dirty = [r for r in results if r["findings"]]
+    kinds = Counter(r["kind"] for r in results)
+    lines = ["# 01_layout_scan report", ""]
+    lines += [f"files scanned: {len(results)} ({', '.join(f'{k}={v}' for k, v in sorted(kinds.items()))})"]
+    lines += [f"files with findings: {len(dirty)}", f"findings total: {sum(total.values())}", ""]
+    lines += ["## Findings by code", ""] + [f"- {code}: {n}" for code, n in sorted(total.items())] + [""]
+    lines += ["## Exempt files", ""]
+    lines += [f"- `{r['file']}`: {r['reason']}" for r in results if r["kind"] == "EXEMPT"] + [""]
+    lines += ["## Files", ""]
+    for r in dirty:
+        lines.append(f"### {r['file']} ({r['kind']})")
+        lines += [f"- {f}" for f in r["findings"]] + [""]
+    return "\n".join(lines) + "\n"
+
+
+def write_report(report: str) -> None:
+    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_PATH.write_text(report, encoding="utf-8")
+
+
+def print_summary(results: list[dict]) -> None:
+    dirty = sum(1 for r in results if r["findings"])
+    print(f"scanned={len(results)} files_with_findings={dirty} report={REPORT_PATH}")
+
 
 def analyse_file(root: Path, rel: str) -> dict:
     if rel in EXEMPT_FILES:
@@ -112,30 +147,6 @@ def entry_findings(tree: ast.Module, markers: list[tuple[int, str]], kind: str) 
     return script_entry_findings(tree, defs, orchestrators)
 
 
-def script_entry_findings(tree: ast.Module, defs: dict, orchestrators: list) -> list[str]:
-    guard = [n for n in tree.body if is_main_guard(n)][0]
-    entry = guard_entry(guard)
-    if entry is None:
-        return ["GUARD_LOGIC"]
-    found = []
-    if entry not in defs:
-        return [f"GUARD_ENTRY_UNRESOLVED {entry}"]
-    if defs[entry] not in orchestrators:
-        found.append(f"ENTRY_NOT_ORCHESTRATOR {entry}")
-    return found + orchestrator_shape_findings(orchestrators)
-
-
-def orchestrator_shape_findings(orchestrators: list) -> list[str]:
-    found = []
-    if len(orchestrators) > 1:
-        found.append("ORCHESTRATOR_COUNT " + ",".join(n.name for n in orchestrators))
-    for node in orchestrators:
-        kinds = sorted(set(orchestrator_violations(node)))
-        if kinds:
-            found.append(f"ORCHESTRATOR_LOGIC {node.name} {','.join(kinds)}")
-    return found
-
-
 def stepdown_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list[str]:
     defs = {n.name: n for n in tree.body if isinstance(n, DEF_TYPES)}
     order = {name: i for i, name in enumerate(defs)}
@@ -154,39 +165,33 @@ def stepdown_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list[
     return found
 
 
+def script_entry_findings(tree: ast.Module, defs: dict, orchestrators: list) -> list[str]:
+    guard = [n for n in tree.body if is_main_guard(n)][0]
+    entry = guard_entry(guard)
+    if entry is None:
+        return ["GUARD_LOGIC"]
+    found = []
+    if entry not in defs:
+        return [f"GUARD_ENTRY_UNRESOLVED {entry}"]
+    if defs[entry] not in orchestrators:
+        found.append(f"ENTRY_NOT_ORCHESTRATOR {entry}")
+    return found + orchestrator_shape_findings(orchestrators)
+
+
 def is_pinned_by_definition_time(name: str, users: set, defs: dict, future: bool) -> bool:
     names = set(defs)
     return any(name in definition_time_deps(defs[u], names, future) for u in users)
 
 
-def render_report(results: list[dict]) -> str:
-    total = Counter()
-    for r in results:
-        for f in r["findings"]:
-            total[f.split()[0]] += 1
-    dirty = [r for r in results if r["findings"]]
-    kinds = Counter(r["kind"] for r in results)
-    lines = ["# 01_layout_scan report", ""]
-    lines += [f"files scanned: {len(results)} ({', '.join(f'{k}={v}' for k, v in sorted(kinds.items()))})"]
-    lines += [f"files with findings: {len(dirty)}", f"findings total: {sum(total.values())}", ""]
-    lines += ["## Findings by code", ""] + [f"- {code}: {n}" for code, n in sorted(total.items())] + [""]
-    lines += ["## Exempt files", ""]
-    lines += [f"- `{r['file']}`: {r['reason']}" for r in results if r["kind"] == "EXEMPT"] + [""]
-    lines += ["## Files", ""]
-    for r in dirty:
-        lines.append(f"### {r['file']} ({r['kind']})")
-        lines += [f"- {f}" for f in r["findings"]] + [""]
-    return "\n".join(lines) + "\n"
-
-
-def write_report(report: str) -> None:
-    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(report, encoding="utf-8")
-
-
-def print_summary(results: list[dict]) -> None:
-    dirty = sum(1 for r in results if r["findings"])
-    print(f"scanned={len(results)} files_with_findings={dirty} report={REPORT_PATH}")
+def orchestrator_shape_findings(orchestrators: list) -> list[str]:
+    found = []
+    if len(orchestrators) > 1:
+        found.append("ORCHESTRATOR_COUNT " + ",".join(n.name for n in orchestrators))
+    for node in orchestrators:
+        kinds = sorted(set(orchestrator_violations(node)))
+        if kinds:
+            found.append(f"ORCHESTRATOR_LOGIC {node.name} {','.join(kinds)}")
+    return found
 
 
 if __name__ == "__main__":

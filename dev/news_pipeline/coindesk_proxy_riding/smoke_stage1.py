@@ -19,15 +19,19 @@ VALID_STATUSES = {"ok", "failed"}
 # ORCHESTRATOR
 
 def main() -> None:
+    _run_stage1_checks()
+    print("ALL PASS")
+
+
+# FUNCTIONS
+
+def _run_stage1_checks():
     try:
         asyncio.run(_live_run())
     except AssertionError as exc:
         print(f"FAIL — {exc}")
         sys.exit(1)
-    print("ALL PASS")
 
-
-# FUNCTIONS
 
 async def _live_run() -> None:
     from src.news.engine.proxy_riding.scrape import scrape_entries_riding, RidingScrapeConfig

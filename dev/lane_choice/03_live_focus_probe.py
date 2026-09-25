@@ -33,17 +33,26 @@ def main():
             "then read the printed verdict."
         )
     )
+    _add_arguments(parser)
+    args = parser.parse_args()
+    urls = _compute_urls(args)
+    live_focus_probe_workflow(urls)
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
     parser.add_argument(
         "--url", action="append", dest="urls",
         help=f"URL to scrape — repeat for multiple URLs, each run back-to-back with a fresh browser "
         f"after one shared countdown (default if omitted: {DEFAULT_URL})",
     )
-    args = parser.parse_args()
+
+
+def _compute_urls(args):
     urls = args.urls or [DEFAULT_URL]
-    live_focus_probe_workflow(urls)
+    return urls
 
-
-# FUNCTIONS
 
 def live_focus_probe_workflow(urls: list[str]) -> None:
     print_countdown(LANE)

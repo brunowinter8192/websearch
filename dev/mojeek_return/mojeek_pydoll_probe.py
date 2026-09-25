@@ -76,6 +76,13 @@ PHASE_FRESH_QUERIES = [
 
 # ORCHESTRATOR
 
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(probe_workflow())
+
+
+# FUNCTIONS
+
 async def probe_workflow() -> None:
     carryover_profile = tempfile.mkdtemp(prefix=WARM_PROFILE_PREFIX)
     fresh_profile = tempfile.mkdtemp(prefix=FRESH_PROFILE_PREFIX)
@@ -97,8 +104,6 @@ async def probe_workflow() -> None:
     finally:
         discard_profiles([carryover_profile, fresh_profile])
 
-
-# FUNCTIONS
 
 @dataclass
 class Phase:
@@ -178,5 +183,4 @@ def _cookie_identity(fingerprint: dict) -> tuple:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(probe_workflow())
+    main()

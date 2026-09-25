@@ -40,14 +40,14 @@ async def run_probe() -> None:
 
     pool = _load_pool()
     _write_pool_file(pool, ts)
-    print(f"[pool] {len(pool)} HTML_HAS_PDF_LINK URLs loaded", file=sys.stderr)
+    _print_pool_html_has(pool)
 
     t_start = time.monotonic()
     results = await _probe_all(pool)
-    wall_secs = time.monotonic() - t_start
+    wall_secs = _compute_wall_secs(t_start)
 
     report_path = _write_report(results, wall_secs, ts, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
+    _print_report(report_path)
 
 
 # FUNCTIONS
@@ -92,6 +92,10 @@ def _write_pool_file(pool: list[str], ts: str) -> None:
     print(f"[pool] written: {path.name}", file=sys.stderr)
 
 
+def _print_pool_html_has(pool):
+    print(f"[pool] {len(pool)} HTML_HAS_PDF_LINK URLs loaded", file=sys.stderr)
+
+
 async def _probe_all(pool: list[str]) -> list[dict]:
     limits = httpx.Limits(max_connections=GLOBAL_MAX_CONNECTIONS, max_keepalive_connections=GLOBAL_MAX_KEEPALIVE)
     domain_sems: dict[str, asyncio.Semaphore] = {}
@@ -115,6 +119,15 @@ async def _probe_all(pool: list[str]) -> list[dict]:
                 print(f"[probe] {done}/{total}", file=sys.stderr)
 
     return [r for r in results if r is not None]
+
+
+def _compute_wall_secs(t_start):
+    wall_secs = time.monotonic() - t_start
+    return wall_secs
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
 
 
 async def _probe_with_cap(

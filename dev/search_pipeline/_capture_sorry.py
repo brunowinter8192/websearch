@@ -32,19 +32,11 @@ async def capture_sorry() -> None:
     HTML_DIR.mkdir(parents=True, exist_ok=True)
 
     browser = await start_browser(cfg)
-    try:
-        url, title, html, png_path = await navigate_and_capture(browser, cfg, ts)
-    finally:
-        await stop_browser(browser)
+    url, title, html, png_path = await _capture_page(browser, cfg, ts)
 
-    status = "SORRY" if "/sorry/" in url else "OK"
+    status = _compute_status(url)
     write_outputs(url, title, html, png_path, status, ts)
-    print(f"Status: {status}", file=sys.stderr)
-    print(f"URL: {url}", file=sys.stderr)
-    print(f"Title: {title}", file=sys.stderr)
-    print(f"PNG: {png_path}", file=sys.stderr)
-    print(f"HTML: {HTML_DIR / f'sorry_{ts}.html'}", file=sys.stderr)
-    print(f"MD:  {REPORTS_DIR / f'sorry_{ts}.md'}", file=sys.stderr)
+    _print_status(status, url, title, png_path, ts)
 
 
 # FUNCTIONS
@@ -68,31 +60,17 @@ async def start_browser(cfg: dict) -> Chrome:
     return browser
 
 
-async def navigate_and_capture(browser: Chrome, cfg: dict, ts: str):
-    tab = await browser.new_tab()
-    js = _build_js_patches(cfg)
-    if js:
-        await tab._execute_command(
-            PageCommands.add_script_to_evaluate_on_new_document(source=js, run_immediately=True)
-        )
-    await _inject_consent_cookie(tab, cfg)
-
-    await tab.go_to(CAPTURE_URL, timeout=cfg["run"]["page_load_timeout"])
-    url = await tab.current_url
-    title = _extract_scalar(await tab.execute_script("return document.title")) or ""
-    html = await tab.page_source
-
-    png_path = PNG_DIR / f"sorry_{ts}.png"
-    await tab.take_screenshot(path=str(png_path))
-    await tab.close()
+async def _capture_page(browser, cfg, ts):
+    try:
+        url, title, html, png_path = await navigate_and_capture(browser, cfg, ts)
+    finally:
+        await stop_browser(browser)
     return url, title, html, png_path
 
 
-async def stop_browser(browser: Chrome) -> None:
-    try:
-        await browser.stop()
-    except Exception:
-        pass
+def _compute_status(url):
+    status = "SORRY" if "/sorry/" in url else "OK"
+    return status
 
 
 def write_outputs(url: str, title: str, html: str, png_path: Path, status: str, ts: str) -> None:
@@ -116,6 +94,15 @@ def write_outputs(url: str, title: str, html: str, png_path: Path, status: str, 
         note,
     ]
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _print_status(status, url, title, png_path, ts):
+    print(f"Status: {status}", file=sys.stderr)
+    print(f"URL: {url}", file=sys.stderr)
+    print(f"Title: {title}", file=sys.stderr)
+    print(f"PNG: {png_path}", file=sys.stderr)
+    print(f"HTML: {HTML_DIR / f'sorry_{ts}.html'}", file=sys.stderr)
+    print(f"MD:  {REPORTS_DIR / f'sorry_{ts}.md'}", file=sys.stderr)
 
 
 def _build_options(cfg: dict) -> ChromiumOptions:
@@ -146,6 +133,33 @@ def _build_options(cfg: dict) -> ChromiumOptions:
         "credentials_enable_autosignin": prefs.get("credentials", True),
     }
     return options
+
+
+async def navigate_and_capture(browser: Chrome, cfg: dict, ts: str):
+    tab = await browser.new_tab()
+    js = _build_js_patches(cfg)
+    if js:
+        await tab._execute_command(
+            PageCommands.add_script_to_evaluate_on_new_document(source=js, run_immediately=True)
+        )
+    await _inject_consent_cookie(tab, cfg)
+
+    await tab.go_to(CAPTURE_URL, timeout=cfg["run"]["page_load_timeout"])
+    url = await tab.current_url
+    title = _extract_scalar(await tab.execute_script("return document.title")) or ""
+    html = await tab.page_source
+
+    png_path = PNG_DIR / f"sorry_{ts}.png"
+    await tab.take_screenshot(path=str(png_path))
+    await tab.close()
+    return url, title, html, png_path
+
+
+async def stop_browser(browser: Chrome) -> None:
+    try:
+        await browser.stop()
+    except Exception:
+        pass
 
 
 def _build_js_patches(cfg: dict) -> str:

@@ -11,7 +11,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 
 ## Modules
 
-### brave_pydoll_probe.py (224 LOC)
+### brave_pydoll_probe.py (228 LOC)
 
 **Purpose:** Live four-phase probe: does the button flow complete, what does it cost, does a solved challenge carry over.
 **Reads:** nothing; hardcoded queries, live navigations.

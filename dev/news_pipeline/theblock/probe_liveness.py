@@ -62,15 +62,14 @@ async def probe_liveness_workflow() -> None:
         read_s=args.read_timeout,
     )
 
-    elapsed       = time.monotonic() - t0_wall
+    elapsed = _compute_elapsed(t0_wall)
     print_console_summary(results, args.concurrency, elapsed)
     append_sweep_log(
         results, ts, mode, len(entries),
         args.concurrency, args.connect_timeout, args.read_timeout, elapsed,
         skipped=skipped_count,
     )
-    if any(r["bucket"] == "unknown" for r in results):
-        write_unknown_log(results, ts)
+    _warn_on_unknown_bucket(results, ts)
     if args.source not in EVAL_ONLY_SOURCES:
         record_run(results, mode)
 
@@ -150,6 +149,16 @@ async def run_checks(
         await asyncio.gather(*[_one(i, proto, hp) for i, (proto, hp) in enumerate(entries)])
 
     return results
+
+
+def _compute_elapsed(t0_wall):
+    elapsed       = time.monotonic() - t0_wall
+    return elapsed
+
+
+def _warn_on_unknown_bucket(results, ts):
+    if any(r["bucket"] == "unknown" for r in results):
+        write_unknown_log(results, ts)
 
 
 def load_filtered_entries(args: argparse.Namespace, loader) -> tuple[list[tuple[str, str]], str, int]:

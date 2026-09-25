@@ -18,7 +18,7 @@ _sleep             = time.sleep
 REFRESH_INTERVAL_S = 3600
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 def run_loop(
     pool_provider: Callable[[], list[tuple[str, str]]],
@@ -33,16 +33,10 @@ def run_loop(
 ) -> tuple[list[str], list[str], list[str]]:
     state = _init_state(pool_provider, target_urls, logger, cm, buffer_size)
 
-    while state.queue:
-        _run_iteration(
-            state, pool_provider, content_type, concurrency, logger, cm,
-            buffer_size, content_handler, refresh_interval_s,
-        )
+    _process_queue(state, pool_provider, content_type, concurrency, logger, cm, buffer_size, content_handler, refresh_interval_s)
 
     return state.done, state.dead, list(state.queue)
 
-
-# FUNCTIONS
 
 @dataclass
 class LoopState:
@@ -68,6 +62,14 @@ def _init_state(
         queue=deque(target_urls), done=[], dead=[], wset=set(), consec_fail={},
         pool=pool_22k, buf=buf, last_refresh=last_refresh,
     )
+
+
+def _process_queue(state, pool_provider, content_type, concurrency, logger, cm, buffer_size, content_handler, refresh_interval_s):
+    while state.queue:
+        _run_iteration(
+            state, pool_provider, content_type, concurrency, logger, cm,
+            buffer_size, content_handler, refresh_interval_s,
+        )
 
 
 def _run_iteration(

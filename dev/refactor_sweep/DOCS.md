@@ -1,27 +1,37 @@
 # dev/refactor_sweep/
 
 ## Role
-Layout tooling for the module standard (INFRASTRUCTURE, ORCHESTRATOR, FUNCTIONS) over every tracked `dev/` module: a scan, a mechanical re-layout, and equivalence proofs. Touch it to re-measure layout conformance or to lay out new dev files; do not use it on `src/`.
+Layout tooling for the module standard (INFRASTRUCTURE, ORCHESTRATOR, FUNCTIONS) over every tracked `dev/` module: a scan, a mechanical re-layout, an orchestrator extraction, and equivalence proofs. Touch it to re-measure layout conformance or to lay out new dev files; do not use it on `src/`.
 
 ## Public Interface
 No `__init__.py` — not a package. Each script is run directly via `./venv/bin/python`; `_layout_lib.py` is the shared analysis library imported by sibling scripts.
 
 ## Flow
-Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, stepdown order) -> report under `md/`; the re-layout script rewrites files with the same top-level nodes reordered and verifies node equality; the snapshot script imports every module in an isolated tree copy and records its module-level names.
+Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, stepdown order) -> report under `md/`; the re-layout script rewrites files with the same top-level nodes reordered and verifies node equality; the extraction script moves impure orchestrator statements into named helper functions; the snapshot, inline and run-compare scripts prove before/after equivalence against the merge base.
 
 ## Modules
 
-### _layout_lib.py (265 LOC)
+### _layout_lib.py (291 LOC)
 
 **Purpose:** Shared AST helpers: marker reading, definition-time dependency analysis, orchestrator purity check, reference graph, node fingerprints.
 **Reads:** source text passed in; `git ls-files` for the file list.
 **Writes:** nothing.
-**Called by:** 01_layout_scan.py, 02_relayout.py, 03_ast_equivalence.py, 04_import_snapshot.py.
+**Called by:** 01_layout_scan.py, 02_relayout.py, 03_ast_equivalence.py, 04_import_snapshot.py, 06_extract_orchestrator.py, 07_inline_equivalence.py, _extract_plan.py.
 **Calls out:** none.
 
 ---
 
-### 01_layout_scan.py (193 LOC)
+### _extract_plan.py (242 LOC)
+
+**Purpose:** Plans the extraction: finds impure statements in an orchestrator, groups them, and computes helper parameters and returned names.
+**Reads:** AST nodes passed in.
+**Writes:** nothing.
+**Called by:** 06_extract_orchestrator.py.
+**Calls out:** none.
+
+---
+
+### 01_layout_scan.py (198 LOC)
 
 **Purpose:** Scans every tracked dev module for layout findings and writes the report.
 **Reads:** tracked `dev/**/*.py`.
@@ -31,7 +41,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 02_relayout.py (357 LOC)
+### 02_relayout.py (336 LOC)
 
 **Purpose:** Rewrites dev modules into marker layout by reordering top-level nodes, aborting on unsafe cases and verifying node equality.
 **Reads:** tracked `dev/**/*.py`.
@@ -41,7 +51,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 03_ast_equivalence.py (98 LOC)
+### 03_ast_equivalence.py (103 LOC)
 
 **Purpose:** Compares the top-level node multiset of every modified dev file against the merge base with integration.
 **Reads:** git objects and working tree.
@@ -51,7 +61,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 04_import_snapshot.py (125 LOC)
+### 04_import_snapshot.py (130 LOC)
 
 **Purpose:** Imports every dev module in a separate interpreter and dumps its module-level names as JSON for before/after comparison.
 **Reads:** a tree copy given by `--tree`.
@@ -61,7 +71,37 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 05_fix_doc_loc.py (43 LOC)
+### 06_extract_orchestrator.py (303 LOC)
+
+**Purpose:** Moves statements with logic out of an orchestrator body into named helper functions and lifts logic in a main guard into a function.
+**Reads:** tracked `dev/**/*.py` (not `dev/tests/`), optional names JSON.
+**Writes:** the rewritten modules when `--apply` is given; stdout otherwise.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 07_inline_equivalence.py (246 LOC)
+
+**Purpose:** Inlines every extraction helper back into its caller and compares the result with the merge-base function.
+**Reads:** git objects and working tree.
+**Writes:** `md/07_inline_equivalence.md`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 08_run_compare.py (128 LOC)
+
+**Purpose:** Runs sandbox-safe dev scripts in a base tree and a current tree and compares exit code, output and written files.
+**Reads:** two tree copies, a script list.
+**Writes:** the report path given by `--out`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 05_fix_doc_loc.py (47 LOC)
 
 **Purpose:** Rewrites the LOC numbers in module headings of all dev DOCS.md files from the actual line counts.
 **Reads:** `dev/**/DOCS.md` and the documented modules.

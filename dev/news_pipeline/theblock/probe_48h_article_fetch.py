@@ -29,6 +29,20 @@ _NUM_RE       = re.compile(r"_(\d+)\.xml$")
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="48h article delta probe: theblock.co highest post-sitemap → parallel race fetch → raw HTML"
+    )
+    parser.add_argument(
+        "--hours", type=float, default=48.0,
+        help="Lookback window in hours; <2 hits → fallback to 2 newest (default: 48)",
+    )
+    args = parser.parse_args()
+    probe_48h_article_fetch_workflow(hours=args.hours)
+
+
+# FUNCTIONS
+
 def probe_48h_article_fetch_workflow(hours: float) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -79,8 +93,6 @@ def probe_48h_article_fetch_workflow(hours: float) -> None:
         else:
             print(f"  → FAILED (all {RACE_WIDTH} parallel proxies missed)")
 
-
-# FUNCTIONS
 
 def _fetch_index(pool: list) -> list[str]:
     content = _fetch_index_direct()
@@ -148,12 +160,4 @@ def _fetch_index_direct() -> bytes | None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="48h article delta probe: theblock.co highest post-sitemap → parallel race fetch → raw HTML"
-    )
-    parser.add_argument(
-        "--hours", type=float, default=48.0,
-        help="Lookback window in hours; <2 hits → fallback to 2 newest (default: 48)",
-    )
-    args = parser.parse_args()
-    probe_48h_article_fetch_workflow(hours=args.hours)
+    main()

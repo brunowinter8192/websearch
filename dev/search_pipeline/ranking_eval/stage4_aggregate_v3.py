@@ -37,6 +37,26 @@ METHOD_LABELS = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Stage 4 v3 — Aggregate (Phase 13)")
+    parser.add_argument("--pool-dir",   required=True,        help="Directory with *_pool.json + *_methods_v3.json")
+    parser.add_argument("--oracle-dir", default=str(V2_DEFAULT), help="Directory with *_oracle_v3clean.json")
+    parser.add_argument("--no-oracle",  action="store_true",  help="Skip oracle (smoke mode)")
+    args       = parser.parse_args()
+    pool_dir   = Path(args.pool_dir)
+    oracle_dir = Path(args.oracle_dir)
+    _check_input_dirs(pool_dir, oracle_dir)
+    run_aggregate_v3(pool_dir=pool_dir, oracle_dir=oracle_dir, no_oracle=args.no_oracle)
+
+
+# FUNCTIONS
+
+def _check_input_dirs(pool_dir, oracle_dir):
+    for p in (pool_dir, oracle_dir):
+        if not p.exists():
+            sys.exit(f"ERROR: directory does not exist: {p}")
+
+
 def run_aggregate_v3(pool_dir: Path, oracle_dir: Path, no_oracle: bool) -> None:
     results = []
     for mode in MODES:
@@ -56,8 +76,6 @@ def run_aggregate_v3(pool_dir: Path, oracle_dir: Path, no_oracle: bool) -> None:
     summary_path = _write_summary_md(results, pool_dir)
     print(f"\nSummary: {summary_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def _load_and_score_pair(
     pool_dir: Path, oracle_dir: Path, mode: str, query: str, no_oracle: bool
@@ -285,14 +303,4 @@ def _percentile(vals: list[float], p: int) -> float:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stage 4 v3 — Aggregate (Phase 13)")
-    parser.add_argument("--pool-dir",   required=True,        help="Directory with *_pool.json + *_methods_v3.json")
-    parser.add_argument("--oracle-dir", default=str(V2_DEFAULT), help="Directory with *_oracle_v3clean.json")
-    parser.add_argument("--no-oracle",  action="store_true",  help="Skip oracle (smoke mode)")
-    args       = parser.parse_args()
-    pool_dir   = Path(args.pool_dir)
-    oracle_dir = Path(args.oracle_dir)
-    for p in (pool_dir, oracle_dir):
-        if not p.exists():
-            sys.exit(f"ERROR: directory does not exist: {p}")
-    run_aggregate_v3(pool_dir=pool_dir, oracle_dir=oracle_dir, no_oracle=args.no_oracle)
+    main()

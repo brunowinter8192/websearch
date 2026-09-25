@@ -57,6 +57,22 @@ async def main():
     semaphore = asyncio.Semaphore(PARALLEL_URLS)
     results = {}
 
+    await _open_crawler(browser_config, semaphore, results, urls)
+
+    _run_browser_checks(urls, results)
+
+    _print_output_saved_to()
+
+
+# FUNCTIONS
+
+def get_urls():
+    if len(sys.argv) > 1:
+        return sys.argv[1:]
+    return JS_TEST_URLS
+
+
+async def _open_crawler(browser_config, semaphore, results, urls):
     async with AsyncWebCrawler(config=browser_config) as crawler:
         tasks = [
             scrape_url_configs(semaphore, crawler, url, results)
@@ -64,6 +80,8 @@ async def main():
         ]
         await asyncio.gather(*tasks)
 
+
+def _run_browser_checks(urls, results):
     for url in urls:
         domain = url.split("//")[-1].split("/")[0].replace(".", "_")
         slug = url_to_slug(url)
@@ -79,15 +97,9 @@ async def main():
             chars, words = results.get((url, config_name), (0, 0))
             print(f"{config_name:<16} {chars:>10,} {words:>10,}")
 
+
+def _print_output_saved_to():
     print(f"\nOutput saved to: {OUTPUT_DIR}")
-
-
-# FUNCTIONS
-
-def get_urls():
-    if len(sys.argv) > 1:
-        return sys.argv[1:]
-    return JS_TEST_URLS
 
 
 async def scrape_url_configs(sem, crawler, url, results):

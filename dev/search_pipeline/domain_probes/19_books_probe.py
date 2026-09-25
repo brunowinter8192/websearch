@@ -59,11 +59,30 @@ MAX_PATH_LEN = 80
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    engines = _compute_engines()
 
     all_runs: dict[str, list[dict]] = {}
-    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    run_stats = _compute_run_stats()
 
+    await _run_books_queries(engines, run_stats, all_runs)
+
+    report_path = write_report(all_runs, run_stats, REPORT_DIR)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _compute_engines():
+    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    return engines
+
+
+def _compute_run_stats():
+    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    return run_stats
+
+
+async def _run_books_queries(engines, run_stats, all_runs):
     try:
         for qi, base_query in enumerate(QUERIES, 1):
             query = base_query + SUFFIX
@@ -98,17 +117,16 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(all_runs, run_stats, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
-
-
-# FUNCTIONS
 
 def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"books_probe_{ts}.md"
     path.write_text("\n".join(_build_report(all_runs, run_stats, ts)), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
 
 
 def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:

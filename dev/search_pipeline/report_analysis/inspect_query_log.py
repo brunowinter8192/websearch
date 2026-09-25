@@ -16,21 +16,19 @@ def main() -> None:
 
     log_path = _resolve_log_path(args.log_path)
     if not log_path.exists():
-        print(f"No log file at {log_path}", file=sys.stderr)
+        _print_no_log_file(log_path)
         sys.exit(1)
 
-    all_records = [json.loads(l) for l in log_path.read_text().splitlines() if l.strip()]
+    all_records = _compute_all_records(log_path)
 
-    engine_run_records    = [r for r in all_records if r.get("record_type") == "engine_run"]
-    workflow_records      = [r for r in all_records if r.get("record_type", "workflow_summary") != "engine_run"]
+    engine_run_records = _compute_engine_run_records(all_records)
+    workflow_records = _compute_workflow_records(all_records)
 
-    print(f"Log          : {log_path}")
-    print(f"Total lines  : {len(all_records)}  "
-          f"(engine_run={len(engine_run_records)}, workflow_summary/old={len(workflow_records)})")
+    _print_log(log_path, all_records, engine_run_records, workflow_records)
 
-    records = all_records if args.all_types else workflow_records
+    records = _compute_records(all_records, args, workflow_records)
     if args.tail:
-        records = records[-args.tail:]
+        records = _compute_tail_records(records, args)
 
     if not records:
         print("No records to display (try --all-types for a probe log).")
@@ -58,6 +56,41 @@ def _resolve_log_path(arg: str | None) -> Path:
     if env:
         return Path(env)
     return DEFAULT_LOG_PATH
+
+
+def _print_no_log_file(log_path):
+    print(f"No log file at {log_path}", file=sys.stderr)
+
+
+def _compute_all_records(log_path):
+    all_records = [json.loads(l) for l in log_path.read_text().splitlines() if l.strip()]
+    return all_records
+
+
+def _compute_engine_run_records(all_records):
+    engine_run_records    = [r for r in all_records if r.get("record_type") == "engine_run"]
+    return engine_run_records
+
+
+def _compute_workflow_records(all_records):
+    workflow_records      = [r for r in all_records if r.get("record_type", "workflow_summary") != "engine_run"]
+    return workflow_records
+
+
+def _print_log(log_path, all_records, engine_run_records, workflow_records):
+    print(f"Log          : {log_path}")
+    print(f"Total lines  : {len(all_records)}  "
+          f"(engine_run={len(engine_run_records)}, workflow_summary/old={len(workflow_records)})")
+
+
+def _compute_records(all_records, args, workflow_records):
+    records = all_records if args.all_types else workflow_records
+    return records
+
+
+def _compute_tail_records(records, args):
+    records = records[-args.tail:]
+    return records
 
 
 def _print_timing_summary(records: list[dict]) -> None:

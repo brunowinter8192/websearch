@@ -24,6 +24,7 @@ from _05_capture import (
 from _05_fixed import fixed_cursor_loop
 from _05_parse import build_cursor_url, extract_cursor_std, parse_articles
 from _05_report import write_fixed_report, write_walk_report
+import argparse
 
 OUTPUT_DIR = Path(__file__).parent / "05_data"
 
@@ -32,6 +33,43 @@ CALL_DELAY = 0.3
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+
+    parser = argparse.ArgumentParser(description="CoinDesk cursor storyType probe")
+    parser.add_argument(
+        "--mode", choices=["walk", "fixed"], default="walk",
+        help="walk: log all storyTypes; fixed: use fixed cursor skipping invalid types",
+    )
+    parser.add_argument(
+        "--n", type=int, default=25,
+        help="number of paginated calls (default: 25 for walk, increase for fixed/deep)",
+    )
+    parser.add_argument(
+        "--invalid-types", type=str, default="",
+        metavar="T1,T2,...",
+        help="comma-separated storyTypes to skip as cursor anchor (fixed mode only)",
+    )
+    _add_arguments(parser)
+    args = parser.parse_args()
+
+    invalid = _compute_invalid(args)
+    asyncio.run(cursor_probe_workflow(mode=args.mode, n=args.n, invalid_types=invalid, delay=args.delay))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument(
+        "--delay", type=float, default=CALL_DELAY,
+        help=f"seconds between cursor calls (default: {CALL_DELAY})",
+    )
+
+
+def _compute_invalid(args):
+    invalid = frozenset(t.strip() for t in args.invalid_types.split(",") if t.strip())
+    return invalid
+
 
 async def cursor_probe_workflow(
     mode: str,
@@ -68,8 +106,6 @@ async def cursor_probe_workflow(
     finally:
         await teardown_chrome_session(tab, chrome, port, session_dir, mode)
 
-
-# FUNCTIONS
 
 def replay_first_call(timeline_entry: dict, mode: str) -> tuple:
     api_url = timeline_entry["request"]["url"]
@@ -216,27 +252,4 @@ def advance_walk_cursor(articles: list, headers: dict, delay: float, call_num: i
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="CoinDesk cursor storyType probe")
-    parser.add_argument(
-        "--mode", choices=["walk", "fixed"], default="walk",
-        help="walk: log all storyTypes; fixed: use fixed cursor skipping invalid types",
-    )
-    parser.add_argument(
-        "--n", type=int, default=25,
-        help="number of paginated calls (default: 25 for walk, increase for fixed/deep)",
-    )
-    parser.add_argument(
-        "--invalid-types", type=str, default="",
-        metavar="T1,T2,...",
-        help="comma-separated storyTypes to skip as cursor anchor (fixed mode only)",
-    )
-    parser.add_argument(
-        "--delay", type=float, default=CALL_DELAY,
-        help=f"seconds between cursor calls (default: {CALL_DELAY})",
-    )
-    args = parser.parse_args()
-
-    invalid = frozenset(t.strip() for t in args.invalid_types.split(",") if t.strip())
-    asyncio.run(cursor_probe_workflow(mode=args.mode, n=args.n, invalid_types=invalid, delay=args.delay))
+    main()

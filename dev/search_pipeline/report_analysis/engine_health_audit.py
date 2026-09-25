@@ -28,7 +28,7 @@ def main() -> None:
     print(table_str)
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     report_path = write_report(table_str, REPORT_DIR, ts)
-    print(f"\nReport written → {report_path}")
+    _print_report_written(report_path)
 
 
 # FUNCTIONS
@@ -142,6 +142,10 @@ def write_report(table_str: str, report_dir: Path, timestamp: str) -> Path:
     path = report_dir / f"engine_health_{timestamp}.md"
     path.write_text(f"```\n{table_str}\n```\n", encoding="utf-8")
     return path
+
+
+def _print_report_written(report_path):
+    print(f"\nReport written → {report_path}")
 
 
 def _parse_ts(ts: str) -> datetime:

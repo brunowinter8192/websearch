@@ -11,7 +11,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 
 ## Modules
 
-### p1_fetch.py (36 LOC)
+### p1_fetch.py (44 LOC)
 
 **Purpose:** Browser-impersonating fetch primitive with XML and HTML content validators and a three-way status.
 **Reads:** Remote URLs.
@@ -27,7 +27,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `p3_target.py`, `p4_loop.py`, `p6_buffer.py`, `acquire_pipe.py`.
 **Calls out:** none.
 
-### p3_target.py (52 LOC)
+### p3_target.py (55 LOC)
 
 **Purpose:** Sitemap target builder: fetches the theblock index and parses sub-sitemap URLs, direct first with proxy fallback.
 **Reads:** The theblock sitemap index.
@@ -35,7 +35,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `httpx`.
 
-### p4_loop.py (308 LOC)
+### p4_loop.py (310 LOC)
 
 **Purpose:** Sustained concurrent rotation loop with periodic pool refresh, exhaustion wait, tail race, and a two-strike burn lifecycle.
 **Reads:** A pool provider callback and the target URL list.
@@ -43,7 +43,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `acquire_pipe.py`.
 **Calls out:** none.
 
-### p4_race.py (118 LOC)
+### p4_race.py (130 LOC)
 
 **Purpose:** One-shot race loop variant with workers pulling URL and proxy pairs, no cooldown or refresh.
 **Reads:** Caller-supplied proxy pool and URL list.
@@ -83,7 +83,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `matplotlib` (lazy).
 
-### acquire_pipe.py (141 LOC)
+### acquire_pipe.py (149 LOC)
 
 **Purpose:** Job orchestrator wiring pool load, target build, lock, cooldown, sustained loop, content persistence, and janitor.
 **Reads:** The backfill pool and the theblock sitemap index.

@@ -42,10 +42,30 @@ def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     queries = _load_queries()
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    wml_run_dir = WML_DIR / f"google_wml_probe_{run_ts}"
+    wml_run_dir = _compute_wml_run_dir(run_ts)
     wml_run_dir.mkdir(parents=True, exist_ok=True)
 
     records = []
+    _run_query_variants(queries, wml_run_dir, records)
+
+    report_path = write_report(records, run_ts)
+    counts = _count_outcomes(records)
+    _print_report(report_path, counts)
+
+
+# FUNCTIONS
+
+def _load_queries() -> list[dict]:
+    with open(QUERIES_PATH, encoding="utf-8") as f:
+        return json.load(f)["queries"]
+
+
+def _compute_wml_run_dir(run_ts):
+    wml_run_dir = WML_DIR / f"google_wml_probe_{run_ts}"
+    return wml_run_dir
+
+
+def _run_query_variants(queries, wml_run_dir, records):
     for qi, q in enumerate(queries):
         print(f"[{qi + 1}/{len(queries)}] ({q['axis']}) {q['query']}", file=sys.stderr)
         record = run_query(q["query"], q["axis"], wml_run_dir)
@@ -59,17 +79,34 @@ def run_probe() -> None:
             print(f"  (pacing {NAV_DELAY_S}s before next request)", file=sys.stderr)
             time.sleep(NAV_DELAY_S)
 
-    report_path = write_report(records, run_ts)
+
+def write_report(records: list[dict], run_ts: str) -> Path:
+    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
     counts = _count_outcomes(records)
+    verdict = _compute_verdict(records, counts)
+
+    lines = []
+    lines += _build_header(run_ts, records, verdict)
+    lines += _build_outcome_counts_section(counts)
+    lines += _build_per_query_table(records)
+    lines += _build_ok_samples_section(records)
+    lines += _build_non_ok_section(records)
+    lines += _build_raw_bodies_section(run_ts)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _print_report(report_path, counts):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Outcomes: {counts}", file=sys.stderr)
 
 
-# FUNCTIONS
-
-def _load_queries() -> list[dict]:
-    with open(QUERIES_PATH, encoding="utf-8") as f:
-        return json.load(f)["queries"]
+def _count_outcomes(records: list[dict]) -> dict:
+    counts = {"OK": 0, "EMPTY_PARSED": 0, "NO_CONTAINERS": 0, "BLOCKED": 0, "ERROR": 0}
+    for r in records:
+        counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
+    return counts
 
 
 def run_query(query: str, axis: str, wml_run_dir: Path) -> dict:
@@ -107,62 +144,6 @@ def run_query(query: str, axis: str, wml_run_dir: Path) -> dict:
         record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
     record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
     return record
-
-
-def write_report(records: list[dict], run_ts: str) -> Path:
-    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
-    counts = _count_outcomes(records)
-    verdict = _compute_verdict(records, counts)
-
-    lines = []
-    lines += _build_header(run_ts, records, verdict)
-    lines += _build_outcome_counts_section(counts)
-    lines += _build_per_query_table(records)
-    lines += _build_ok_samples_section(records)
-    lines += _build_non_ok_section(records)
-    lines += _build_raw_bodies_section(run_ts)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
-
-
-def _count_outcomes(records: list[dict]) -> dict:
-    counts = {"OK": 0, "EMPTY_PARSED": 0, "NO_CONTAINERS": 0, "BLOCKED": 0, "ERROR": 0}
-    for r in records:
-        counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
-    return counts
-
-
-def _slugify(text: str) -> str:
-    import re
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return slug[:60]
-
-
-def _detect_block(status_code: int, body: str) -> bool:
-    if status_code != 200:
-        return True
-    lower = body.lower()
-    return any(marker in lower for marker in _BLOCK_MARKERS)
-
-
-def _parse_results(body: str) -> tuple[int, list, list]:
-    doc = lhtml.fromstring(body)
-    containers = doc.xpath(_CONTAINER_XPATH)
-    results = []
-    for c in containers:
-        title_els = c.xpath(_TITLE_XPATH)
-        url_els = c.xpath(_URL_XPATH)
-        snip_els = c.xpath(_SNIPPET_XPATH)
-        if not title_els or not url_els:
-            continue
-        url = _clean_url(url_els[0])
-        if not url:
-            continue
-        title = title_els[0].text_content().strip()
-        snippet = snip_els[0].text_content().strip() if snip_els else ""
-        results.append({"url": url, "title": title, "snippet": snippet})
-    return len(containers), results, containers
 
 
 def _compute_verdict(records: list[dict], counts: dict) -> str:
@@ -270,6 +251,38 @@ def _build_raw_bodies_section(run_ts: str) -> list[str]:
         "(gitignored — local evidence, not carried in the repo).",
         "",
     ]
+
+
+def _slugify(text: str) -> str:
+    import re
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return slug[:60]
+
+
+def _detect_block(status_code: int, body: str) -> bool:
+    if status_code != 200:
+        return True
+    lower = body.lower()
+    return any(marker in lower for marker in _BLOCK_MARKERS)
+
+
+def _parse_results(body: str) -> tuple[int, list, list]:
+    doc = lhtml.fromstring(body)
+    containers = doc.xpath(_CONTAINER_XPATH)
+    results = []
+    for c in containers:
+        title_els = c.xpath(_TITLE_XPATH)
+        url_els = c.xpath(_URL_XPATH)
+        snip_els = c.xpath(_SNIPPET_XPATH)
+        if not title_els or not url_els:
+            continue
+        url = _clean_url(url_els[0])
+        if not url:
+            continue
+        title = title_els[0].text_content().strip()
+        snippet = snip_els[0].text_content().strip() if snip_els else ""
+        results.append({"url": url, "title": title, "snippet": snippet})
+    return len(containers), results, containers
 
 
 def _clean_url(href: str) -> str:

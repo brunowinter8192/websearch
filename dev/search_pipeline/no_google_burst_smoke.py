@@ -54,7 +54,7 @@ QUERIES = [
 
 async def run_smoke() -> None:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = REPORT_DIR / f"no_google_burst_{ts}.jsonl"
+    report_path = _compute_report_path(ts)
 
     engines = {
         "google_scholar": ScholarEngine(),
@@ -62,11 +62,29 @@ async def run_smoke() -> None:
         "openalex": OpenAlexEngine(),
     }
 
-    print(f"Smoke: 9 engines (no Google), {len(QUERIES)} queries", file=sys.stderr)
-    print(f"Report: {report_path}", file=sys.stderr)
+    _print_smoke_9_engines(report_path)
     print(file=sys.stderr)
 
     records = []
+    await _run_burst_queries(engines, records, report_path)
+
+    _print_summary(records)
+    _print_report_written(report_path)
+
+
+# FUNCTIONS
+
+def _compute_report_path(ts):
+    report_path = REPORT_DIR / f"no_google_burst_{ts}.jsonl"
+    return report_path
+
+
+def _print_smoke_9_engines(report_path):
+    print(f"Smoke: 9 engines (no Google), {len(QUERIES)} queries", file=sys.stderr)
+    print(f"Report: {report_path}", file=sys.stderr)
+
+
+async def _run_burst_queries(engines, records, report_path):
     try:
         for qi, query in enumerate(QUERIES):
             burst = qi // 4 + 1
@@ -83,38 +101,6 @@ async def run_smoke() -> None:
                 f.write(json.dumps(record) + "\n")
     finally:
         await close_browser()
-
-    _print_summary(records)
-    print(f"\nReport written: {report_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-async def _run_burst(engines: dict, query: str, label: str) -> dict:
-    t_wall = time.perf_counter()
-    tasks = {
-        name: asyncio.create_task(
-            _run_engine(eng, query, WATCHDOG.get(name, DEFAULT_WATCHDOG))
-        )
-        for name, eng in engines.items()
-    }
-    results_map = dict(zip(tasks.keys(), await asyncio.gather(*tasks.values(), return_exceptions=True)))
-    wall_ms = round((time.perf_counter() - t_wall) * 1000)
-
-    engine_stats = {}
-    for name, result in results_map.items():
-        if isinstance(result, Exception):
-            engine_stats[name] = {"status": "ERROR", "search_ms": 0, "result_count": 0, "error": str(result), "blocked": False}
-        else:
-            status, search_ms, result_count, blocked = result
-            engine_stats[name] = {"status": status, "search_ms": search_ms, "result_count": result_count, "blocked": blocked}
-
-    return {
-        "label": label,
-        "query": query,
-        "wall_ms": wall_ms,
-        "engines": engine_stats,
-    }
 
 
 def _print_summary(records: list[dict]) -> None:
@@ -141,6 +127,37 @@ def _print_summary(records: list[dict]) -> None:
     print(f"Effective attempts (non-RATE_SKIP): {len(effective)}/{len(scholar_entries)}", file=sys.stderr)
     block_rate = f"{len(blocks) / len(effective) * 100:.0f}%" if effective else "N/A"
     print(f"Blocked (captcha_form or 30x http_status fact): {len(blocks)}/{len(effective)} effective → block rate {block_rate}", file=sys.stderr)
+
+
+def _print_report_written(report_path):
+    print(f"\nReport written: {report_path}", file=sys.stderr)
+
+
+async def _run_burst(engines: dict, query: str, label: str) -> dict:
+    t_wall = time.perf_counter()
+    tasks = {
+        name: asyncio.create_task(
+            _run_engine(eng, query, WATCHDOG.get(name, DEFAULT_WATCHDOG))
+        )
+        for name, eng in engines.items()
+    }
+    results_map = dict(zip(tasks.keys(), await asyncio.gather(*tasks.values(), return_exceptions=True)))
+    wall_ms = round((time.perf_counter() - t_wall) * 1000)
+
+    engine_stats = {}
+    for name, result in results_map.items():
+        if isinstance(result, Exception):
+            engine_stats[name] = {"status": "ERROR", "search_ms": 0, "result_count": 0, "error": str(result), "blocked": False}
+        else:
+            status, search_ms, result_count, blocked = result
+            engine_stats[name] = {"status": status, "search_ms": search_ms, "result_count": result_count, "blocked": blocked}
+
+    return {
+        "label": label,
+        "query": query,
+        "wall_ms": wall_ms,
+        "engines": engine_stats,
+    }
 
 
 async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int, bool]:

@@ -11,7 +11,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 
 ## Modules
 
-### p0_pool.py (214 LOC)
+### p0_pool.py (260 LOC)
 
 **Purpose:** Local copy of the proxy pool machinery: loaders, cooldown manager, and retry helper.
 **Reads:** Proxy source lists via its loaders.
@@ -19,7 +19,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** `run_coindesk_riding.py`, `p2_browser_rider.py`, `_p2_state.py`.
 **Calls out:** none.
 
-### p2_browser_rider.py (278 LOC)
+### p2_browser_rider.py (297 LOC)
 
 **Purpose:** Core riding pool orchestrator: browser instances, rider tasks distributed across them, per-URL proxy context with burn and fail rotation.
 **Reads:** Proxy pool via `p0_pool.py`, URL queue.
@@ -51,7 +51,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** `p2_browser_rider.py`.
 **Calls out:** none.
 
-### p3_url_sampler.py (114 LOC)
+### p3_url_sampler.py (139 LOC)
 
 **Purpose:** Proportional URL sampler over the CoinDesk inventory shards with a per-year floor.
 **Reads:** The CoinDesk inventory shards in the main repo's data folder.
@@ -83,7 +83,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** `p4_reporter.py`.
 **Calls out:** `matplotlib`.
 
-### run_coindesk_riding.py (121 LOC)
+### run_coindesk_riding.py (134 LOC)
 
 **Purpose:** CLI orchestrator wiring pool load, riding pool, and report write end to end.
 **Reads:** CLI arguments.
@@ -91,7 +91,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** CLI only.
 **Calls out:** none.
 
-### analyze_write_times.py (254 LOC)
+### analyze_write_times.py (263 LOC)
 
 **Purpose:** Reconstructs riding throughput from raw file modification times when the job report is missing.
 **Reads:** The raw HTML directory.
@@ -99,7 +99,7 @@ Runner loads the proxy pool and samples URLs from the CoinDesk inventory -> ridi
 **Called by:** CLI only.
 **Calls out:** `matplotlib`.
 
-### smoke_stage1.py (117 LOC)
+### smoke_stage1.py (121 LOC)
 
 **Purpose:** Stage 1 mini live-run smoke validating the production riding package.
 **Reads:** The production riding package; a few inventory URLs.

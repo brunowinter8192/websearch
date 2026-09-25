@@ -59,6 +59,13 @@ return JSON.stringify({fired: true});
 
 # ORCHESTRATOR
 
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(capture_workflow())
+
+
+# FUNCTIONS
+
 async def capture_workflow() -> None:
     profile_dir = tempfile.mkdtemp(prefix="mojeek-challenge-capture-")
     handle = await launch_browser(profile_dir)
@@ -70,8 +77,6 @@ async def capture_workflow() -> None:
         await teardown(handle)
         discard_profile(profile_dir)
 
-
-# FUNCTIONS
 
 async def capture_challenge_page(handle) -> list[dict]:
     tab = await new_tab(handle)
@@ -161,5 +166,4 @@ def _extract_value(result):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(capture_workflow())
+    main()

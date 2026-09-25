@@ -35,6 +35,40 @@ REGRESSION_DOMAINS = [
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Measure URL discovery recall on docs.github.com/de/rest — 3 strategies vs gold standard"
+    )
+    _add_arguments(parser)
+    parser.add_argument("--no-regression", action="store_true",
+                        help="Skip regression check on non-SPA domains")
+    parser.add_argument("--strategies", type=str, default=None,
+                        help="Comma-separated strategy names to run (default: all). e.g. C_bfs_networkidle")
+    parser.add_argument("--delay", type=int, default=0,
+                        help="Seconds to sleep between strategies (default: 0, use 600 to avoid rate limiting)")
+    args = parser.parse_args()
+
+    only = _compute_only(args)
+    asyncio.run(render_recall_workflow(args.gold, args.max_pages, args.depth,
+                                      args.no_regression, only, args.delay))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
+                        help=f"Gold standard file (default: goldstandard/docs_github_rest.txt)")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
+                        help=f"Max pages per strategy (default: {DEFAULT_MAX_PAGES})")
+    parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH,
+                        help=f"BFS depth (default: {DEFAULT_DEPTH})")
+
+
+def _compute_only(args):
+    only = [s.strip() for s in args.strategies.split(",")] if args.strategies else None
+    return only
+
+
 async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
                                no_regression: bool, only_strategies: list[str] | None = None,
                                delay_between: int = 0):
@@ -71,8 +105,6 @@ async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
     print(f"\n{report}")
     print(f"\nReport saved: {out_path}")
 
-
-# FUNCTIONS
 
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
@@ -270,23 +302,4 @@ def normalize_url(url: str) -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Measure URL discovery recall on docs.github.com/de/rest — 3 strategies vs gold standard"
-    )
-    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
-                        help=f"Gold standard file (default: goldstandard/docs_github_rest.txt)")
-    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
-                        help=f"Max pages per strategy (default: {DEFAULT_MAX_PAGES})")
-    parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH,
-                        help=f"BFS depth (default: {DEFAULT_DEPTH})")
-    parser.add_argument("--no-regression", action="store_true",
-                        help="Skip regression check on non-SPA domains")
-    parser.add_argument("--strategies", type=str, default=None,
-                        help="Comma-separated strategy names to run (default: all). e.g. C_bfs_networkidle")
-    parser.add_argument("--delay", type=int, default=0,
-                        help="Seconds to sleep between strategies (default: 0, use 600 to avoid rate limiting)")
-    args = parser.parse_args()
-
-    only = [s.strip() for s in args.strategies.split(",")] if args.strategies else None
-    asyncio.run(render_recall_workflow(args.gold, args.max_pages, args.depth,
-                                      args.no_regression, only, args.delay))
+    main()

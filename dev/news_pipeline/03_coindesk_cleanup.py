@@ -37,15 +37,19 @@ def main():
     parser = argparse.ArgumentParser(
         description="CoinDesk article cleanup — extract body, strip nav/footer noise, normalize."
     )
-    parser.add_argument("--input", default=str(INPUT_DIR),
-                        help=f"Input dir of scraped .md files (default: {INPUT_DIR})")
-    parser.add_argument("--output", default=str(OUTPUT_DIR),
-                        help=f"Output dir for cleaned .md files (default: {OUTPUT_DIR})")
+    _add_arguments(parser)
     args = parser.parse_args()
     cleanup_workflow(Path(args.input), Path(args.output))
 
 
 # FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--input", default=str(INPUT_DIR),
+                        help=f"Input dir of scraped .md files (default: {INPUT_DIR})")
+    parser.add_argument("--output", default=str(OUTPUT_DIR),
+                        help=f"Output dir for cleaned .md files (default: {OUTPUT_DIR})")
+
 
 def cleanup_workflow(input_dir: Path, output_dir: Path):
     md_files = sorted(input_dir.glob("*.md"))

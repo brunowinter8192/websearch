@@ -75,23 +75,26 @@ def main():
     parser.add_argument("--output", help="Output dir (default: 03_cleanup/cleaned_data/<ts>/)")
     args = parser.parse_args()
 
-    input_dir = Path(args.input) if args.input else find_latest_raw_dir()
+    input_dir = _compute_input_dir(args)
     if args.output:
         output_dir = Path(args.output)
     else:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = CLEANED_DIR_BASE / ts
+        output_dir = _compute_output_dir(ts)
 
     cleanup_workflow(input_dir, output_dir)
 
 
 # FUNCTIONS
 
-def find_latest_raw_dir() -> Path:
-    candidates = sorted(p for p in RAW_DIR_DEFAULT.iterdir() if p.is_dir())
-    if not candidates:
-        raise SystemExit(f"No subdirs in {RAW_DIR_DEFAULT}")
-    return candidates[-1]
+def _compute_input_dir(args):
+    input_dir = Path(args.input) if args.input else find_latest_raw_dir()
+    return input_dir
+
+
+def _compute_output_dir(ts):
+    output_dir = CLEANED_DIR_BASE / ts
+    return output_dir
 
 
 def cleanup_workflow(input_dir: Path, output_dir: Path) -> None:
@@ -122,6 +125,13 @@ def cleanup_workflow(input_dir: Path, output_dir: Path) -> None:
         print(f"  OK    {f.name:80s}  raw={raw_size:>7,}  out={len(cleaned):>7,}  -{pct:5.1f}%", file=sys.stderr)
 
     write_summary(output_dir, rows)
+
+
+def find_latest_raw_dir() -> Path:
+    candidates = sorted(p for p in RAW_DIR_DEFAULT.iterdir() if p.is_dir())
+    if not candidates:
+        raise SystemExit(f"No subdirs in {RAW_DIR_DEFAULT}")
+    return candidates[-1]
 
 
 def clean_markdown(text: str) -> str:

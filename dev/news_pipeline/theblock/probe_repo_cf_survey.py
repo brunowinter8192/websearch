@@ -31,46 +31,36 @@ _PROXY_RE = re.compile(r'^([a-zA-Z0-9.\-]+):(\d{1,5})(?=[:\s]|$)')
 def probe_repo_cf_survey_workflow() -> None:
     REPORT_DIR.mkdir(exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_path = REPORT_DIR / f"repo_cf_survey_{ts}.md"
+    report_path = _compute_report_path(ts)
 
     repo_groups = build_repo_groups()
-    print(f"Repos to survey: {len(repo_groups)}")
+    _print_repos_to_survey(repo_groups)
 
     write_report_header(report_path, ts, repo_groups)
 
     print("\n[1/3] Fetching proxy lists...")
     repo_proxies, failed_sources = asyncio.run(fetch_all_repos(repo_groups))
 
-    print(f"\nFailed sources: {len(failed_sources)}")
+    _print_failed_sources(failed_sources)
     print("\nRepo unique counts:")
-    for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
-        print(f"  {rk:<30} {len(proxies):>7,}")
+    _print_repo_counts(repo_proxies)
 
     write_fetch_summary(report_path, repo_proxies, failed_sources)
 
-    print(f"\n[2/3] CF-checking repos (sample={SAMPLE_SIZE}, concurrency={CONCURRENCY})...")
-    repo_results = {}
-    for repo_key in sorted(repo_proxies.keys()):
-        proxies = list(repo_proxies[repo_key])
-        if not proxies:
-            print(f"  {repo_key}: 0 proxies — skip")
-            continue
-        sample = random.sample(proxies, min(len(proxies), SAMPLE_SIZE))
-        print(f"  {repo_key}: {len(proxies):,} unique → sampling {len(sample)}", flush=True)
-        result = check_repo(repo_key, sample)
-        repo_results[repo_key] = result
-        write_repo_result(report_path, repo_key, result)
-        total = result["sample"]
-        passed = result["passed"]
-        rate = passed / total * 100 if total else 0
-        print(f"    → {passed}/{total} passed ({rate:.2f}%)", flush=True)
+    _print_check_header()
+    repo_results = _check_repos(repo_proxies, report_path)
 
     print("\n[3/3] Finalising report...")
     finalize_report(report_path, repo_results, repo_proxies)
-    print(f"\nReport: {report_path}")
+    _print_report(report_path)
 
 
 # FUNCTIONS
+
+def _compute_report_path(ts):
+    report_path = REPORT_DIR / f"repo_cf_survey_{ts}.md"
+    return report_path
+
 
 def build_repo_groups() -> dict:
     groups: dict[str, list] = defaultdict(list)
@@ -81,6 +71,10 @@ def build_repo_groups() -> dict:
     for url, is_mixed in SOCKS5_SOURCES:
         groups[repo_key_from_url(url)].append(("socks5", url, is_mixed))
     return dict(groups)
+
+
+def _print_repos_to_survey(repo_groups):
+    print(f"Repos to survey: {len(repo_groups)}")
 
 
 def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
@@ -119,6 +113,15 @@ async def fetch_all_repos(repo_groups: dict) -> tuple[dict, list]:
     return dict(repo_proxies), failed_sources
 
 
+def _print_failed_sources(failed_sources):
+    print(f"\nFailed sources: {len(failed_sources)}")
+
+
+def _print_repo_counts(repo_proxies):
+    for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
+        print(f"  {rk:<30} {len(proxies):>7,}")
+
+
 def write_fetch_summary(path: Path, repo_proxies: dict, failed_sources: list) -> None:
     lines = [
         "## Fetch summary (unique proxies per repo)",
@@ -140,6 +143,101 @@ def write_fetch_summary(path: Path, repo_proxies: dict, failed_sources: list) ->
     lines += ["", "---", ""]
     with open(path, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
+
+
+def _print_check_header():
+    print(f"\n[2/3] CF-checking repos (sample={SAMPLE_SIZE}, concurrency={CONCURRENCY})...")
+
+
+def _check_repos(repo_proxies, report_path):
+    repo_results = {}
+    for repo_key in sorted(repo_proxies.keys()):
+        proxies = list(repo_proxies[repo_key])
+        if not proxies:
+            print(f"  {repo_key}: 0 proxies — skip")
+            continue
+        sample = random.sample(proxies, min(len(proxies), SAMPLE_SIZE))
+        print(f"  {repo_key}: {len(proxies):,} unique → sampling {len(sample)}", flush=True)
+        result = check_repo(repo_key, sample)
+        repo_results[repo_key] = result
+        write_repo_result(report_path, repo_key, result)
+        total = result["sample"]
+        passed = result["passed"]
+        rate = passed / total * 100 if total else 0
+        print(f"    → {passed}/{total} passed ({rate:.2f}%)", flush=True)
+    return repo_results
+
+
+def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
+    ranked = sorted(repo_results.values(), key=lambda x: -x["rate"])
+
+    lines = [
+        "---",
+        "",
+        "## Ranked by CF-rate (descending)",
+        "",
+        "| Rank | Repo | Total-unique | Sample | Passed | CF-rate | http% | socks4% | socks5% |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for i, r in enumerate(ranked, 1):
+        rk = r["repo_key"]
+        total_unique = len(repo_proxies.get(rk, set()))
+        def prate(proto):
+            n = r["proto_total"].get(proto, 0)
+            p = r["proto_pass"].get(proto, 0)
+            return f"{p/n*100:.2f}%" if n else "—"
+        lines.append(
+            f"| {i} | {rk} | {total_unique:,} | {r['sample']} | {r['passed']} | "
+            f"{r['rate']:.3f}% | {prate('http')} | {prate('socks4')} | {prate('socks5')} |"
+        )
+
+    lines += [
+        "",
+        "## Cumulative unique (top-down by CF-rate)",
+        "",
+        "| Repos included | Cumulative unique |",
+        "|---|---|",
+    ]
+    seen: set = set()
+    for r in ranked:
+        rk = r["repo_key"]
+        seen.update(repo_proxies.get(rk, set()))
+        lines.append(f"| …+{rk} | {len(seen):,} |")
+
+    lines += ["", ""]
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}")
+
+
+def repo_key_from_url(url: str) -> str:
+    if "proxyscrape.com" in url:
+        return "proxyscrape"
+    if "raw.githubusercontent.com" in url:
+        parts = url.split("/")
+        idx = parts.index("raw.githubusercontent.com")
+        return f"{parts[idx+1]}/{parts[idx+2]}"
+    return url.split("/")[2]
+
+
+async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
+                    protocol: str, url: str, is_mixed: bool) -> tuple[set, str | None]:
+    async with sem:
+        try:
+            r = await client.get(url, timeout=FETCH_TIMEOUT, follow_redirects=True)
+            if r.status_code != 200:
+                return set(), f"HTTP {r.status_code}"
+            result = set()
+            for line in r.text.splitlines():
+                hp = parse_proxy_line(line)
+                if hp:
+                    result.add((protocol, hp))
+            return result, None
+        except Exception as e:
+            return set(), f"{type(e).__name__}: {str(e)[:100]}"
 
 
 def check_repo(repo_key: str, sample: list) -> dict:
@@ -197,85 +295,6 @@ def write_repo_result(path: Path, repo_key: str, result: dict) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
-    ranked = sorted(repo_results.values(), key=lambda x: -x["rate"])
-
-    lines = [
-        "---",
-        "",
-        "## Ranked by CF-rate (descending)",
-        "",
-        "| Rank | Repo | Total-unique | Sample | Passed | CF-rate | http% | socks4% | socks5% |",
-        "|---|---|---|---|---|---|---|---|---|",
-    ]
-    for i, r in enumerate(ranked, 1):
-        rk = r["repo_key"]
-        total_unique = len(repo_proxies.get(rk, set()))
-        def prate(proto):
-            n = r["proto_total"].get(proto, 0)
-            p = r["proto_pass"].get(proto, 0)
-            return f"{p/n*100:.2f}%" if n else "—"
-        lines.append(
-            f"| {i} | {rk} | {total_unique:,} | {r['sample']} | {r['passed']} | "
-            f"{r['rate']:.3f}% | {prate('http')} | {prate('socks4')} | {prate('socks5')} |"
-        )
-
-    lines += [
-        "",
-        "## Cumulative unique (top-down by CF-rate)",
-        "",
-        "| Repos included | Cumulative unique |",
-        "|---|---|",
-    ]
-    seen: set = set()
-    for r in ranked:
-        rk = r["repo_key"]
-        seen.update(repo_proxies.get(rk, set()))
-        lines.append(f"| …+{rk} | {len(seen):,} |")
-
-    lines += ["", ""]
-    with open(path, "a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-
-
-def repo_key_from_url(url: str) -> str:
-    if "proxyscrape.com" in url:
-        return "proxyscrape"
-    if "raw.githubusercontent.com" in url:
-        parts = url.split("/")
-        idx = parts.index("raw.githubusercontent.com")
-        return f"{parts[idx+1]}/{parts[idx+2]}"
-    return url.split("/")[2]
-
-
-async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
-                    protocol: str, url: str, is_mixed: bool) -> tuple[set, str | None]:
-    async with sem:
-        try:
-            r = await client.get(url, timeout=FETCH_TIMEOUT, follow_redirects=True)
-            if r.status_code != 200:
-                return set(), f"HTTP {r.status_code}"
-            result = set()
-            for line in r.text.splitlines():
-                hp = parse_proxy_line(line)
-                if hp:
-                    result.add((protocol, hp))
-            return result, None
-        except Exception as e:
-            return set(), f"{type(e).__name__}: {str(e)[:100]}"
-
-
-def check_proxy(protocol: str, host_port: str) -> bool:
-    purl = f"{protocol}://{host_port}"
-    try:
-        s = cffi.Session(impersonate="chrome")
-        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
-        head = r.content[:500]
-        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
-        return False
-
-
 def parse_proxy_line(line: str) -> str | None:
     line = line.strip()
     if not line or line.startswith("#"):
@@ -288,6 +307,17 @@ def parse_proxy_line(line: str) -> str | None:
     if m and 1 <= int(m.group(2)) <= 65535:
         return f"{m.group(1)}:{m.group(2)}"
     return None
+
+
+def check_proxy(protocol: str, host_port: str) -> bool:
+    purl = f"{protocol}://{host_port}"
+    try:
+        s = cffi.Session(impersonate="chrome")
+        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
+        head = r.content[:500]
+        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":

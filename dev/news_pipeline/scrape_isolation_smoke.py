@@ -50,17 +50,17 @@ REGWALL_MARKERS = [
 
 def main():
     urls = _load_urls(URL_FILE)
-    print(f"Loaded {len(urls)} URLs", flush=True)
+    _print_loaded_urls(urls)
 
     print("\n--- Candidate B1: shared browser, per-URL timezone (fresh context) ---", flush=True)
     t0 = time.time()
     asyncio.run(_run_b1(urls, B1_RAW))
-    b1_wall = int(time.time() - t0)
+    b1_wall = _compute_b1_wall(t0)
 
     print("\n--- Candidate B2: fresh crawler per URL (parallel, semaphore-gated) ---", flush=True)
     t0 = time.time()
     asyncio.run(_run_b2(urls, B2_RAW))
-    b2_wall = int(time.time() - t0)
+    b2_wall = _compute_b2_wall(t0)
 
     b1_rows = _build_rows(urls, B1_RAW)
     b2_rows = _build_rows(urls, B2_RAW)
@@ -76,6 +76,10 @@ def main():
 def _load_urls(path: Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [item["url"] for item in data]
+
+
+def _print_loaded_urls(urls):
+    print(f"Loaded {len(urls)} URLs", flush=True)
 
 
 async def _run_b1(urls: list[str], output_dir: Path) -> None:
@@ -102,6 +106,11 @@ async def _run_b1(urls: list[str], output_dir: Path) -> None:
         await asyncio.gather(*[fetch_one(crawler, url, zones[i]) for i, url in enumerate(urls)])
 
 
+def _compute_b1_wall(t0):
+    b1_wall = int(time.time() - t0)
+    return b1_wall
+
+
 async def _run_b2(urls: list[str], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     sem = asyncio.Semaphore(CONCURRENCY)
@@ -122,6 +131,11 @@ async def _run_b2(urls: list[str], output_dir: Path) -> None:
                     print(f"  B2 ERR {url.split('/')[-1][:60]}: {e}", flush=True)
 
     await asyncio.gather(*[fetch_one(url) for url in urls])
+
+
+def _compute_b2_wall(t0):
+    b2_wall = int(time.time() - t0)
+    return b2_wall
 
 
 def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:

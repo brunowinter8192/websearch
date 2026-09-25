@@ -34,11 +34,27 @@ BROWSER_SLEEP_S = 1.0
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    engines = _compute_engines()
 
     all_runs: dict[str, list[dict]] = {}
-    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    run_stats = _compute_run_stats()
 
+    await _run_docs_queries(engines, run_stats, all_runs)
+
+
+# FUNCTIONS
+
+def _compute_engines():
+    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    return engines
+
+
+def _compute_run_stats():
+    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    return run_stats
+
+
+async def _run_docs_queries(engines, run_stats, all_runs):
     try:
         for qi, base_query in enumerate(QUERIES, 1):
             query = base_query + SUFFIX

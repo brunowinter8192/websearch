@@ -45,6 +45,16 @@ BASE_PARAMS = {
 async def run_classify() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     records = []
+    await _classify_queries(records)
+
+    report_path = write_report(records)
+    counts = _summary_counts(records)
+    _print_report(report_path, counts)
+
+
+# FUNCTIONS
+
+async def _classify_queries(records):
     async with httpx.AsyncClient(timeout=20.0) as client:
         for idx, (smoke_row, query) in enumerate(SE_EMPTY_QUERIES):
             print(f"[{idx + 1}/15] smoke#{smoke_row}: {query}", file=sys.stderr)
@@ -58,27 +68,6 @@ async def run_classify() -> None:
             )
             if idx < len(SE_EMPTY_QUERIES) - 1:
                 await asyncio.sleep(1.0)
-
-    report_path = write_report(records)
-    counts = _summary_counts(records)
-    print(f"\nReport: {report_path}", file=sys.stderr)
-    print(f"Summary: {counts}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> dict:
-    record = _new_record(smoke_row, query)
-
-    if await _probe_stackoverflow(client, query, record):
-        return record
-
-    await asyncio.sleep(1.0)
-
-    await _probe_cross_site(client, query, record)
-
-    record["classification"] = _classify(record)
-    return record
 
 
 def write_report(records: list[dict]) -> Path:
@@ -126,11 +115,30 @@ def write_report(records: list[dict]) -> Path:
     return path
 
 
+def _print_report(report_path, counts):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+    print(f"Summary: {counts}", file=sys.stderr)
+
+
 def _summary_counts(records: list[dict]) -> dict:
     counts = {"ENGINE_EMPTY": 0, "ENGINE_NICHE": 0, "PIPELINE_BUG": 0, "RATE_LIMITED": 0, "BOT_BLOCK": 0, "UNKNOWN": 0}
     for r in records:
         counts[r["classification"]] = counts.get(r["classification"], 0) + 1
     return counts
+
+
+async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> dict:
+    record = _new_record(smoke_row, query)
+
+    if await _probe_stackoverflow(client, query, record):
+        return record
+
+    await asyncio.sleep(1.0)
+
+    await _probe_cross_site(client, query, record)
+
+    record["classification"] = _classify(record)
+    return record
 
 
 def _new_record(smoke_row: int, query: str) -> dict:

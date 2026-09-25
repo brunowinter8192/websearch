@@ -20,7 +20,7 @@ def equivalence_workflow() -> None:
     args = parse_args()
     base = resolve_base(args.base)
     files = changed_files(base)
-    results = [compare_file(base, rel) for rel in files]
+    results = _compare_all(base, files)
     write_report(render_report(base, results))
     print_summary(results)
 
@@ -39,34 +39,14 @@ def resolve_base(base: str) -> str:
     return git("merge-base", "HEAD", "integration").strip()
 
 
-def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=PROJECT_ROOT, text=True)
-
-
 def changed_files(base: str) -> list[str]:
     out = git("diff", "--name-only", "--diff-filter=M", base, "--", "dev")
     return sorted(f for f in out.split("\n") if f.endswith(".py"))
 
 
-def compare_file(base: str, rel: str) -> dict:
-    old = git("show", f"{base}:{rel}")
-    new = (PROJECT_ROOT / rel).read_text(encoding="utf-8")
-    old_fp = node_fingerprints(old)
-    new_fp = node_fingerprints(new)
-    if old_fp == new_fp:
-        return {"file": rel, "equal": True, "only_old": [], "only_new": []}
-    only_old = sorted(set(old_fp) - set(new_fp))
-    only_new = sorted(set(new_fp) - set(old_fp))
-    return {"file": rel, "equal": False, "only_old": describe(old, only_old), "only_new": describe(new, only_new)}
-
-
-def describe(source: str, fingerprints: list[str]) -> list[str]:
-    wanted = set(fingerprints)
-    names = []
-    for node in ast.parse(source).body:
-        if ast.dump(node) in wanted:
-            names.append(getattr(node, "name", f"{type(node).__name__}@{node.lineno}"))
-    return names
+def _compare_all(base, files):
+    results = [compare_file(base, rel) for rel in files]
+    return results
 
 
 def render_report(base: str, results: list[dict]) -> str:
@@ -92,6 +72,31 @@ def write_report(report: str) -> None:
 def print_summary(results: list[dict]) -> None:
     different = sum(1 for r in results if not r["equal"])
     print(f"compared={len(results)} differ={different} report={REPORT_PATH}")
+
+
+def compare_file(base: str, rel: str) -> dict:
+    old = git("show", f"{base}:{rel}")
+    new = (PROJECT_ROOT / rel).read_text(encoding="utf-8")
+    old_fp = node_fingerprints(old)
+    new_fp = node_fingerprints(new)
+    if old_fp == new_fp:
+        return {"file": rel, "equal": True, "only_old": [], "only_new": []}
+    only_old = sorted(set(old_fp) - set(new_fp))
+    only_new = sorted(set(new_fp) - set(old_fp))
+    return {"file": rel, "equal": False, "only_old": describe(old, only_old), "only_new": describe(new, only_new)}
+
+
+def git(*args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=PROJECT_ROOT, text=True)
+
+
+def describe(source: str, fingerprints: list[str]) -> list[str]:
+    wanted = set(fingerprints)
+    names = []
+    for node in ast.parse(source).body:
+        if ast.dump(node) in wanted:
+            names.append(getattr(node, "name", f"{type(node).__name__}@{node.lineno}"))
+    return names
 
 
 if __name__ == "__main__":

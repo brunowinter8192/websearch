@@ -35,6 +35,41 @@ _STATUS_HINTS: dict[str, str] = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Full pipeline smoke: search_web_workflow per query, engine-reliability focus."
+    )
+    parser.add_argument(
+        "--max-queries",
+        dest="max_queries",
+        type=int,
+        default=None,
+        help="Limit to first N queries from queries.txt (default: all)",
+    )
+    parser.add_argument(
+        "--language",
+        default="en",
+        help="ISO language code (default: en)",
+    )
+    parser.add_argument(
+        "--engine-timeout",
+        dest="engine_timeout",
+        type=float,
+        default=None,
+        help="Hard timeout per engine call in seconds, e.g. 8.0 (default: None = no timeout)",
+    )
+    parser.add_argument(
+        "--report-prefix",
+        dest="report_prefix",
+        default="pipeline_smoke",
+        help="Report filename prefix (default: pipeline_smoke → pipeline_smoke_<ts>.md)",
+    )
+    args = parser.parse_args()
+    asyncio.run(run_pipeline_smoke(args.max_queries, args.language, args.engine_timeout, args.report_prefix))
+
+
+# FUNCTIONS
+
 async def run_pipeline_smoke(max_queries: int | None, language: str, engine_timeout: float | None = None, report_prefix: str = "pipeline_smoke") -> None:
     queries = _load_queries(QUERIES_FILE, max_queries)
     print(f"Pipeline smoke | Queries: {len(queries)} | Language: {language}", file=sys.stderr)
@@ -75,8 +110,6 @@ async def run_pipeline_smoke(max_queries: int | None, language: str, engine_time
     print(f"\nReport: {path}", file=sys.stderr)
     print(f"Done: {ok}/{len(records)} queries with results", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -335,33 +368,4 @@ def _top3_bottleneck(records: list[dict]) -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Full pipeline smoke: search_web_workflow per query, engine-reliability focus."
-    )
-    parser.add_argument(
-        "--max-queries",
-        dest="max_queries",
-        type=int,
-        default=None,
-        help="Limit to first N queries from queries.txt (default: all)",
-    )
-    parser.add_argument(
-        "--language",
-        default="en",
-        help="ISO language code (default: en)",
-    )
-    parser.add_argument(
-        "--engine-timeout",
-        dest="engine_timeout",
-        type=float,
-        default=None,
-        help="Hard timeout per engine call in seconds, e.g. 8.0 (default: None = no timeout)",
-    )
-    parser.add_argument(
-        "--report-prefix",
-        dest="report_prefix",
-        default="pipeline_smoke",
-        help="Report filename prefix (default: pipeline_smoke → pipeline_smoke_<ts>.md)",
-    )
-    args = parser.parse_args()
-    asyncio.run(run_pipeline_smoke(args.max_queries, args.language, args.engine_timeout, args.report_prefix))
+    main()

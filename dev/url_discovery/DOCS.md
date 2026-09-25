@@ -12,7 +12,7 @@ Fixture: source lists of page paths -> generated routes on a local threaded HTTP
 
 ## Modules
 
-### 01_resume_state_probe.py (258 LOC)
+### 01_resume_state_probe.py (267 LOC)
 
 **Purpose:** Verifies by execution whether BFS resume state can pre-seed the frontier with an arbitrary URL set.
 **Reads:** nothing on disk; live pages via crawl4ai.
@@ -38,7 +38,7 @@ Fixture: source lists of page paths -> generated routes on a local threaded HTTP
 **Called by:** `_fixture_site.py`.
 **Calls out:** none.
 
-### 02_fixture_site_server.py (35 LOC)
+### 02_fixture_site_server.py (41 LOC)
 
 **Purpose:** Standalone entry point that starts the fixture site, prints its seed URL and ground truth, and blocks until interrupted.
 **Reads:** nothing.

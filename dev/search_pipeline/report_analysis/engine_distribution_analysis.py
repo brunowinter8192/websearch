@@ -57,16 +57,20 @@ SHORT = {
 
 def run_analysis() -> None:
     records    = parse_smoke_report(SMOKE_REPORT)
-    print(f"Parsed {len(records)} records", file=sys.stderr)
+    _print_parsed_records(records)
     slot_counts = compute_slot_counts(records)
     status_agg  = parse_status_aggregate(SMOKE_REPORT)
     baselines   = compute_baselines(slot_counts, status_agg)
     per_query   = compute_per_query_distribution(records)
     path = write_report(records, slot_counts, status_agg, baselines, per_query)
-    print(f"Report: {path}", file=sys.stderr)
+    _print_report(path)
 
 
 # FUNCTIONS
+
+def _print_parsed_records(records):
+    print(f"Parsed {len(records)} records", file=sys.stderr)
+
 
 def compute_slot_counts(records: list[dict]) -> dict:
     counts = {
@@ -167,6 +171,10 @@ def write_report(
     )
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
     return path
+
+
+def _print_report(path):
+    print(f"Report: {path}", file=sys.stderr)
 
 
 def _render_header(ts: str, records: list[dict], per_query: list[tuple]) -> list[str]:

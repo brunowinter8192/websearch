@@ -59,6 +59,15 @@ async def run_probe() -> None:
     ]
 
     records = []
+    await _run_engines(engines, records)
+
+    report_path = write_report(records, REPORT_DIR)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+async def _run_engines(engines, records):
     try:
         for engine_name, engine in engines:
             max_r = ENGINE_MAX[engine_name]
@@ -76,33 +85,6 @@ async def run_probe() -> None:
                     await asyncio.sleep(sleep_s)
     finally:
         await close_browser()
-
-    report_path = write_report(records, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-async def probe_single(engine, engine_name: str, query: str, max_results: int) -> dict:
-    record = {
-        "engine":     engine_name,
-        "query":      query,
-        "requested":  max_results,
-        "returned":   0,
-        "latency_ms": 0,
-        "status":     "ERROR",
-    }
-    t0 = time.monotonic()
-    try:
-        results = await engine.search(query, "en", max_results)
-        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
-        record["returned"] = len(results)
-        record["status"] = "OK" if results else "EMPTY"
-    except Exception as e:
-        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
-        record["status"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
-    return record
 
 
 def write_report(records: list[dict], report_dir: Path) -> Path:
@@ -148,6 +130,32 @@ def write_report(records: list[dict], report_dir: Path) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+async def probe_single(engine, engine_name: str, query: str, max_results: int) -> dict:
+    record = {
+        "engine":     engine_name,
+        "query":      query,
+        "requested":  max_results,
+        "returned":   0,
+        "latency_ms": 0,
+        "status":     "ERROR",
+    }
+    t0 = time.monotonic()
+    try:
+        results = await engine.search(query, "en", max_results)
+        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
+        record["returned"] = len(results)
+        record["status"] = "OK" if results else "EMPTY"
+    except Exception as e:
+        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
+        record["status"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
+    return record
 
 
 def build_summary(records: list[dict]) -> dict[str, dict]:

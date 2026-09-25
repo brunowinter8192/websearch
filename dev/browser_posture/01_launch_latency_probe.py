@@ -35,8 +35,23 @@ OCCLUDER_PROFILE = profile_dir("occluder")
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     server, thread, port = start_probe_server()
-    base_url = f"http://127.0.0.1:{port}/"
+    base_url = _compute_base_url(port)
     results = {}
+    await _measure_configs(results, base_url, server, thread)
+
+    orphans = check_orphans()
+    report_path = write_report(results, orphans)
+    _print_report(report_path, orphans)
+
+
+# FUNCTIONS
+
+def _compute_base_url(port):
+    base_url = f"http://127.0.0.1:{port}/"
+    return base_url
+
+
+async def _measure_configs(results, base_url, server, thread):
     try:
         for cfg in CONFIGS:
             print(f"=== {cfg['label']} ===", file=sys.stderr)
@@ -49,13 +64,40 @@ async def run_probe() -> None:
         stop_probe_server(server, thread)
         kill_by_profile(OCCLUDER_PROFILE)
 
-    orphans = check_orphans()
-    report_path = write_report(results, orphans)
+
+def check_orphans() -> list[str]:
+    import subprocess
+    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def write_report(results: dict, orphans: list[str]) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
+
+    lines = [
+        f"# Launch Latency + Flag Probe — {ts}",
+        "",
+        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
+        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
+        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
+        "",
+    ]
+    lines += _build_config_table()
+    lines += _build_latency_table(results)
+    lines += _build_drift_table(results)
+    lines += _build_watchdog_fit(results)
+    lines += _build_excluded_flag_note()
+    lines += _build_teardown_section(orphans)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _print_report(report_path, orphans):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Orphan Chrome processes after run: {len(orphans)}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def measure_latency(cfg: dict, base_url: str) -> dict:
     profile = profile_dir(cfg["slug"])
@@ -110,35 +152,6 @@ async def measure_drift(cfg: dict, base_url: str) -> dict:
         "occlusion_applicable": cfg["backgrounded"],
         "occlusion_confirmed": any(occluded_confirmed) if occluded_confirmed else None,
     }
-
-
-def check_orphans() -> list[str]:
-    import subprocess
-    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
-    return [line for line in result.stdout.splitlines() if line.strip()]
-
-
-def write_report(results: dict, orphans: list[str]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
-
-    lines = [
-        f"# Launch Latency + Flag Probe — {ts}",
-        "",
-        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
-        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
-        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
-        "",
-    ]
-    lines += _build_config_table()
-    lines += _build_latency_table(results)
-    lines += _build_drift_table(results)
-    lines += _build_watchdog_fit(results)
-    lines += _build_excluded_flag_note()
-    lines += _build_teardown_section(orphans)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _build_config_table() -> list[str]:

@@ -34,6 +34,22 @@ BACKOFF_IMMUNE = frozenset({"crossref", "openalex", "stack_exchange", "open_libr
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Sleep-branch discriminator probe — Phase 3 (backoff vs tokencap)."
+    )
+    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
+                        help="Limit to first N queries (default: all from queries.txt)")
+    parser.add_argument("--smoke", action="store_true",
+                        help="4-query dry-run: verify instrumentation, no report written")
+    args = parser.parse_args()
+    if args.smoke and args.max_queries is None:
+        args.max_queries = 4
+    asyncio.run(run_branch_probe(args.max_queries, args.smoke))
+
+
+# FUNCTIONS
+
 async def run_branch_probe(max_queries: int | None, smoke: bool) -> None:
     _start_probe_clock()
     queries = _load_queries(QUERIES_FILE, max_queries)
@@ -47,8 +63,6 @@ async def run_branch_probe(max_queries: int | None, smoke: bool) -> None:
         return
     _write_outputs(query_records, cascade_ok, zero_n)
 
-
-# FUNCTIONS
 
 async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
     print(f"branch probe | queries={len(queries)} smoke={smoke}", file=sys.stderr)
@@ -150,14 +164,4 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Sleep-branch discriminator probe — Phase 3 (backoff vs tokencap)."
-    )
-    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
-                        help="Limit to first N queries (default: all from queries.txt)")
-    parser.add_argument("--smoke", action="store_true",
-                        help="4-query dry-run: verify instrumentation, no report written")
-    args = parser.parse_args()
-    if args.smoke and args.max_queries is None:
-        args.max_queries = 4
-    asyncio.run(run_branch_probe(args.max_queries, args.smoke))
+    main()

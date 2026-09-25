@@ -11,7 +11,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 
 ## Modules
 
-### 14_download_classify_probe.py (52 LOC)
+### 14_download_classify_probe.py (71 LOC)
 
 **Purpose:** Download-classify probe entry point: builds the URL pool, classifies it by HTTP sniffing, and assembles the report.
 **Reads:** newest `pipeline_smoke_*.md` and `free_word_injection_probe_*.md` from `../md/`.
@@ -43,7 +43,7 @@ No `__init__.py`. Entry scripts `14_download_classify_probe.py` and `15_citation
 **Called by:** `14_download_classify_probe.py`.
 **Calls out:** none.
 
-### 15_citation_pdf_followup.py (248 LOC)
+### 15_citation_pdf_followup.py (261 LOC)
 
 **Purpose:** Two-hop validation: re-GETs HTML_HAS_PDF_LINK URLs from probe 14, follows `citation_pdf_url`, classifies actual PDF delivery.
 **Reads:** a hardcoded source report in `../md/` and its pool file in `../txt/`.

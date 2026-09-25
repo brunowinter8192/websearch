@@ -11,7 +11,7 @@ Test URLs (`domains.txt` or explore_pipeline discovery reports) -> scrape under 
 
 ## Modules
 
-### 04_filtering.py (151 LOC)
+### 04_filtering.py (159 LOC)
 
 **Purpose:** Compares several content-filter configurations per URL and saves raw and fit markdown for each.
 **Reads:** `domains.txt` in the parent directory, or a CLI URL.
@@ -19,7 +19,7 @@ Test URLs (`domains.txt` or explore_pipeline discovery reports) -> scrape under 
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 06_content_source.py (183 LOC)
+### 06_content_source.py (207 LOC)
 
 **Purpose:** Compares content-source and filter combinations across many URLs per domain.
 **Reads:** Discovery JSON reports from `dev/explore_pipeline/md/`.

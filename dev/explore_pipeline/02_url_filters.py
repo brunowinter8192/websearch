@@ -14,7 +14,28 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 OUTPUT_DIR = Path(__file__).parent / "md"
 
 
+# ORCHESTRATOR
+
+def run_main() -> None:
+    parser = argparse.ArgumentParser(description="Compare crawl results with and without URL filters")
+    parser.add_argument("url", help="Seed URL to crawl")
+    parser.add_argument("--exclude-patterns", required=True,
+                        help="Comma-separated URL patterns to exclude (e.g. '/genindex*,/search*')")
+    parser.add_argument("--label", help="Report filename prefix (default: derived from domain)")
+    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
+    parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
+    args = parser.parse_args()
+
+    label = _compute_label(args)
+    asyncio.run(main(args.url, args.depth, args.max_pages, args.exclude_patterns, label))
+
+
 # FUNCTIONS
+
+def _compute_label(args):
+    label = args.label or urlparse(args.url).netloc.replace('.', '_')
+    return label
+
 
 async def main(url: str, depth: int, max_pages: int, exclude_patterns: str, label: str):
     domain = urlparse(url).netloc
@@ -146,14 +167,4 @@ def save_report(report, label):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare crawl results with and without URL filters")
-    parser.add_argument("url", help="Seed URL to crawl")
-    parser.add_argument("--exclude-patterns", required=True,
-                        help="Comma-separated URL patterns to exclude (e.g. '/genindex*,/search*')")
-    parser.add_argument("--label", help="Report filename prefix (default: derived from domain)")
-    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
-    parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
-    args = parser.parse_args()
-
-    label = args.label or urlparse(args.url).netloc.replace('.', '_')
-    asyncio.run(main(args.url, args.depth, args.max_pages, args.exclude_patterns, label))
+    run_main()

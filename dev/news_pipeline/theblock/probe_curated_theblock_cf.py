@@ -21,6 +21,16 @@ REPORT_DIR = Path(__file__).parent / "probe_curated_theblock_cf_reports"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Curated list direct theblock CF-pass probe")
+    parser.add_argument("--concurrency", type=int, default=128,
+                        help="ThreadPoolExecutor max_workers (default: 128)")
+    args = parser.parse_args()
+    probe_curated_theblock_cf_workflow(args.concurrency)
+
+
+# FUNCTIONS
+
 def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
     proxies = load_curated_proxies()
     proto_counts = Counter(p for p, _ in proxies)
@@ -31,8 +41,6 @@ def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
     report_path = write_report(proxies, results, proto_counts, concurrency)
     print(f"Report: {report_path}")
 
-
-# FUNCTIONS
 
 def run_checks(proxies: list, concurrency: int) -> list:
     results = []
@@ -157,8 +165,4 @@ def build_comparison_lines(total: int, total_passed: int) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Curated list direct theblock CF-pass probe")
-    parser.add_argument("--concurrency", type=int, default=128,
-                        help="ThreadPoolExecutor max_workers (default: 128)")
-    args = parser.parse_args()
-    probe_curated_theblock_cf_workflow(args.concurrency)
+    main()

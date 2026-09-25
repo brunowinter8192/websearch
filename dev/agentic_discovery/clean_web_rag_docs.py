@@ -18,11 +18,10 @@ _TRAFILATURA_ANCHOR_RE = re.compile(r'\[#\]\([^)]*"Link to this heading"\)')
 def main():
     patterns = ["playwright__*.md", "crawl4ai__*.md", "trafilatura__*.md"]
     all_files = []
-    for pattern in patterns:
-        all_files.extend(sorted(INPUT_DIR.glob(pattern)))
+    _collect_pattern_files(patterns, all_files)
 
     if not all_files:
-        print(f"No matching files found in {INPUT_DIR}")
+        _print_no_matching_files()
         return
 
     domain_stats: dict[str, list] = {
@@ -31,6 +30,31 @@ def main():
         "trafilatura":[0, 0, 0, 0],
     }
 
+    _accumulate_domain_stats(all_files, domain_stats)
+
+    total_before = _compute_total_before(domain_stats)
+    total_after = _compute_total_after(domain_stats)
+    reduction = _compute_reduction(total_after, total_before)
+
+    _print_line(all_files)
+    print()
+    _print_domain_stats(domain_stats)
+    print()
+    _print_total_chars_before(total_before, total_after, reduction)
+
+
+# FUNCTIONS
+
+def _collect_pattern_files(patterns, all_files):
+    for pattern in patterns:
+        all_files.extend(sorted(INPUT_DIR.glob(pattern)))
+
+
+def _print_no_matching_files():
+    print(f"No matching files found in {INPUT_DIR}")
+
+
+def _accumulate_domain_stats(all_files, domain_stats):
     for path in all_files:
         name = path.name
         if name.startswith("playwright__"):
@@ -48,25 +72,40 @@ def main():
         if before != after:
             s[3] += 1
 
-    total_before = sum(s[1] for s in domain_stats.values())
-    total_after = sum(s[2] for s in domain_stats.values())
-    reduction = (1 - total_after / total_before) * 100 if total_before else 0
 
+def _compute_total_before(domain_stats):
+    total_before = sum(s[1] for s in domain_stats.values())
+    return total_before
+
+
+def _compute_total_after(domain_stats):
+    total_after = sum(s[2] for s in domain_stats.values())
+    return total_after
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    return reduction
+
+
+def _print_line(all_files):
     print("=" * 60)
     print(f"FILES PROCESSED: {len(all_files)} total")
-    print()
+
+
+def _print_domain_stats(domain_stats):
     for domain, (n, before, after, changed) in domain_stats.items():
         dom_reduction = (1 - after / before) * 100 if before else 0
         print(f"  {domain}: {n} files, {changed} modified, "
               f"{before:,} → {after:,} chars ({dom_reduction:.1f}% reduction)")
-    print()
+
+
+def _print_total_chars_before(total_before, total_after, reduction):
     print(f"TOTAL chars before: {total_before:,}")
     print(f"TOTAL chars after:  {total_after:,}")
     print(f"TOTAL reduction:    {reduction:.1f}%")
     print("=" * 60)
 
-
-# FUNCTIONS
 
 def clean_file(path: Path) -> tuple[int, int]:
     text = path.read_text(encoding="utf-8")

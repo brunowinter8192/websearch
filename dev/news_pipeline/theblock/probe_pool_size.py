@@ -102,12 +102,10 @@ async def probe_pool_size_workflow() -> None:
     ts_start = datetime.now(timezone.utc)
     t0 = time.monotonic()
 
-    print(f"=== proxy pool size probe | {ts_start.strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
-    print(f"Fetching {len(HTTP_SOURCES) + len(SOCKS4_SOURCES) + len(SOCKS5_SOURCES)} sources "
-          f"(semaphore={SEMAPHORE_SIZE}, timeout={TIMEOUT_S}s) ...")
+    _print_proxy_pool_size(ts_start)
 
     results = await fetch_all_sources()
-    elapsed = time.monotonic() - t0
+    elapsed = _compute_elapsed(t0)
 
     stats   = compute_stats(results)
     md_text = build_report_md(results, stats, ts_start, elapsed)
@@ -116,6 +114,12 @@ async def probe_pool_size_workflow() -> None:
 
 
 # FUNCTIONS
+
+def _print_proxy_pool_size(ts_start):
+    print(f"=== proxy pool size probe | {ts_start.strftime('%Y-%m-%dT%H:%M:%SZ')} ===")
+    print(f"Fetching {len(HTTP_SOURCES) + len(SOCKS4_SOURCES) + len(SOCKS5_SOURCES)} sources "
+          f"(semaphore={SEMAPHORE_SIZE}, timeout={TIMEOUT_S}s) ...")
+
 
 async def fetch_all_sources() -> list[dict]:
     tasks: list[tuple[str, str, bool]] = (
@@ -128,6 +132,11 @@ async def fetch_all_sources() -> list[dict]:
         return list(await asyncio.gather(
             *[fetch_source(client, sem, url, bucket, mixed) for url, bucket, mixed in tasks]
         ))
+
+
+def _compute_elapsed(t0):
+    elapsed = time.monotonic() - t0
+    return elapsed
 
 
 def compute_stats(results: list[dict]) -> dict:

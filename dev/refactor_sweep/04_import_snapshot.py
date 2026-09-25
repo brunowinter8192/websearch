@@ -28,7 +28,7 @@ def snapshot_workflow() -> None:
         run_child(Path(args.tree), args.child)
         return
     tree = Path(args.tree).resolve()
-    files = [f for f in list_dev_files(PROJECT_ROOT) if (tree / f).exists()]
+    files = _compute_files(tree)
     snapshots = collect_snapshots(tree, files)
     write_snapshots(Path(args.out), snapshots)
 
@@ -41,29 +41,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out", default="")
     parser.add_argument("--child", default="")
     return parser.parse_args()
-
-
-def collect_snapshots(tree: Path, files: list[str]) -> dict:
-    targets = [f for f in files if f not in EXEMPT_FILES]
-    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        results = list(pool.map(lambda rel: run_parent(tree, rel), targets))
-    return dict(zip(targets, results))
-
-
-def run_parent(tree: Path, rel: str) -> dict:
-    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-    try:
-        proc = subprocess.run(
-            [sys.executable, str(Path(__file__).resolve()), "--tree", str(tree), CHILD_FLAG, rel],
-            cwd=tree, capture_output=True, text=True, timeout=TIMEOUT_S, env=env,
-        )
-    except subprocess.TimeoutExpired:
-        return {"status": "TIMEOUT"}
-    last = proc.stdout.strip().split("\n")[-1] if proc.stdout.strip() else ""
-    try:
-        return json.loads(last)
-    except json.JSONDecodeError:
-        return {"status": "NO_SNAPSHOT", "exit": proc.returncode}
 
 
 def run_child(tree: Path, rel: str) -> None:
@@ -80,6 +57,27 @@ def run_child(tree: Path, rel: str) -> None:
     print(json.dumps({"status": "OK", "names": snapshot_names(vars(module), str(tree))}, sort_keys=True))
 
 
+def _compute_files(tree):
+    files = [f for f in list_dev_files(PROJECT_ROOT) if (tree / f).exists()]
+    return files
+
+
+def collect_snapshots(tree: Path, files: list[str]) -> dict:
+    targets = [f for f in files if f not in EXEMPT_FILES]
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        results = list(pool.map(lambda rel: run_parent(tree, rel), targets))
+    return dict(zip(targets, results))
+
+
+def write_snapshots(out: Path, snapshots: dict) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(snapshots, indent=1, sort_keys=True), encoding="utf-8")
+    statuses = {}
+    for snap in snapshots.values():
+        statuses[snap["status"]] = statuses.get(snap["status"], 0) + 1
+    print(statuses)
+
+
 def snapshot_names(namespace: dict, root: str) -> dict:
     out = {}
     for name, value in namespace.items():
@@ -87,6 +85,22 @@ def snapshot_names(namespace: dict, root: str) -> dict:
             continue
         out[name] = describe_value(value, root)
     return out
+
+
+def run_parent(tree: Path, rel: str) -> dict:
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "--tree", str(tree), CHILD_FLAG, rel],
+            cwd=tree, capture_output=True, text=True, timeout=TIMEOUT_S, env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "TIMEOUT"}
+    last = proc.stdout.strip().split("\n")[-1] if proc.stdout.strip() else ""
+    try:
+        return json.loads(last)
+    except json.JSONDecodeError:
+        return {"status": "NO_SNAPSHOT", "exit": proc.returncode}
 
 
 def describe_value(value, root: str):
@@ -110,15 +124,6 @@ def describe_value(value, root: str):
 
 def normalise(text: str, root: str) -> str:
     return text.replace(root, "<ROOT>")
-
-
-def write_snapshots(out: Path, snapshots: dict) -> None:
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(snapshots, indent=1, sort_keys=True), encoding="utf-8")
-    statuses = {}
-    for snap in snapshots.values():
-        statuses[snap["status"]] = statuses.get(snap["status"], 0) + 1
-    print(statuses)
 
 
 if __name__ == "__main__":

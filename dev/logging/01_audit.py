@@ -15,9 +15,9 @@ MSG_LIMIT = 120
 # ORCHESTRATOR
 
 def audit_workflow() -> None:
-    print(f"Scanning {SRC_DIR} ...", file=sys.stderr)
+    _print_scanning()
     records = _scan_src(SRC_DIR)
-    print(f"Found {len(records)} logger call-sites.", file=sys.stderr)
+    _print_found_logger_call(records)
     content = _render_report(records)
     out_path = _write_report(content)
     print(out_path)
@@ -25,12 +25,20 @@ def audit_workflow() -> None:
 
 # FUNCTIONS
 
+def _print_scanning():
+    print(f"Scanning {SRC_DIR} ...", file=sys.stderr)
+
+
 def _scan_src(src_dir: Path) -> list[dict]:
     all_records: list[dict] = []
     for py_file in sorted(src_dir.rglob("*.py")):
         records = _scan_file(py_file)
         all_records.extend(records)
     return all_records
+
+
+def _print_found_logger_call(records):
+    print(f"Found {len(records)} logger call-sites.", file=sys.stderr)
 
 
 def _render_report(records: list[dict]) -> str:

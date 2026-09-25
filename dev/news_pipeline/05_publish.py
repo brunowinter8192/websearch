@@ -25,14 +25,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="CoinDesk publish — copy cleaned MDs to RAG collection and index."
     )
-    parser.add_argument(
-        "--input", default=str(INPUT_DIR),
-        help=f"Directory of cleaned .md files + manifest.json (default: {INPUT_DIR})"
-    )
-    parser.add_argument(
-        "--collection-dir", default=str(COLLECTION_DIR),
-        help=f"RAG collection directory (default: {COLLECTION_DIR})"
-    )
+    _add_arguments(parser)
     parser.add_argument(
         "--skip-index", action="store_true", default=False,
         help="Copy files but skip rag-cli index (for testing)"
@@ -41,10 +34,21 @@ def main():
     n_copied, n_chunks = publish_workflow(
         Path(args.input), Path(args.collection_dir), args.skip_index
     )
-    print(f"Done: {n_copied} article(s) published, {n_chunks} chunk(s) indexed.")
+    _print_done_article_s(n_copied, n_chunks)
 
 
 # FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument(
+        "--input", default=str(INPUT_DIR),
+        help=f"Directory of cleaned .md files + manifest.json (default: {INPUT_DIR})"
+    )
+    parser.add_argument(
+        "--collection-dir", default=str(COLLECTION_DIR),
+        help=f"RAG collection directory (default: {COLLECTION_DIR})"
+    )
+
 
 def publish_workflow(input_dir: Path, collection_dir: Path, skip_index: bool = False):
     manifest = load_manifest(input_dir)
@@ -63,6 +67,10 @@ def publish_workflow(input_dir: Path, collection_dir: Path, skip_index: bool = F
     indexed_files, indexed_chunks = run_rag_index(COLLECTION_NAME)
     print(f"Indexed: {indexed_files} file(s), {indexed_chunks} chunk(s).", file=sys.stderr)
     return n_copied, indexed_chunks
+
+
+def _print_done_article_s(n_copied, n_chunks):
+    print(f"Done: {n_copied} article(s) published, {n_chunks} chunk(s) indexed.")
 
 
 def load_manifest(input_dir: Path) -> list[dict]:

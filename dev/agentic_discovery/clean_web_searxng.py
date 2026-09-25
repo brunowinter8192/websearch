@@ -64,7 +64,7 @@ SEARCH_BAR = re.compile(r'^Search\s*`[^`]+`\s*`[^`]+`\s*$', re.MULTILINE)
 
 def main():
     if not INPUT_DIR.exists():
-        print(f"ERROR: Input directory not found: {INPUT_DIR}")
+        _print_error_input_directory()
         sys.exit(1)
 
     files = sorted(INPUT_DIR.glob("*.md"))
@@ -78,12 +78,16 @@ def main():
 
     total_before, total_after, processed, skipped, prefix_counts = _process_files(files, test_file)
 
-    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    reduction = _compute_reduction(total_after, total_before)
 
     _print_report(processed, skipped, prefix_counts, total_before, total_after, reduction)
 
 
 # FUNCTIONS
+
+def _print_error_input_directory():
+    print(f"ERROR: Input directory not found: {INPUT_DIR}")
+
 
 def _process_files(files: list, test_file: str | None) -> tuple[int, int, int, int, dict]:
     total_before = 0
@@ -110,6 +114,11 @@ def _process_files(files: list, test_file: str | None) -> tuple[int, int, int, i
             skipped += 1
 
     return total_before, total_after, processed, skipped, prefix_counts
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    return reduction
 
 
 def _print_report(processed: int, skipped: int, prefix_counts: dict, total_before: int,

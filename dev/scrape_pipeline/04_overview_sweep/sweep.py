@@ -58,12 +58,17 @@ def main():
         output_dir = Path(args.output_dir)
     else:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = OUTPUT_BASE / ts
+        output_dir = _compute_output_dir(ts)
 
     asyncio.run(sweep_workflow(config_path, output_dir))
 
 
 # FUNCTIONS
+
+def _compute_output_dir(ts):
+    output_dir = OUTPUT_BASE / ts
+    return output_dir
+
 
 async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
     sweep_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))

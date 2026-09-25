@@ -32,17 +32,15 @@ async def probe_workflow() -> Path:
 
     baseline = await _run_variant("baseline", urls, enable_stealth=False)
     _save_json("baseline", baseline)
-    print(f"baseline done: {_summarize(baseline['results'])} wall={baseline['wall_s']:.0f}s")
-
-    print(f"sleeping {GAP_SECONDS}s before stealth run (WAF budget recovery gap)")
+    _print_baseline_done_wall(baseline)
     await asyncio.sleep(GAP_SECONDS)
 
     stealth = await _run_variant("stealth", urls, enable_stealth=True)
     _save_json("stealth", stealth)
-    print(f"stealth done: {_summarize(stealth['results'])} wall={stealth['wall_s']:.0f}s")
+    _print_stealth_done_wall(stealth)
 
     report_path = _write_report(baseline, stealth)
-    print(f"report: {report_path}")
+    _print_report(report_path)
     return report_path
 
 
@@ -70,6 +68,16 @@ def _save_json(label: str, run: dict) -> None:
     payload = {"label": run["label"], "enable_stealth": run["enable_stealth"],
                "wall_s": run["wall_s"], "crash_log": run["crash_log"], "results": run["results"]}
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _print_baseline_done_wall(baseline):
+    print(f"baseline done: {_summarize(baseline['results'])} wall={baseline['wall_s']:.0f}s")
+
+    print(f"sleeping {GAP_SECONDS}s before stealth run (WAF budget recovery gap)")
+
+
+def _print_stealth_done_wall(stealth):
+    print(f"stealth done: {_summarize(stealth['results'])} wall={stealth['wall_s']:.0f}s")
 
 
 def _write_report(baseline: dict, stealth: dict) -> Path:
@@ -120,8 +128,8 @@ def _write_report(baseline: dict, stealth: dict) -> Path:
     return path
 
 
-def _summarize(results: list[dict]) -> dict:
-    return {k: sum(1 for r in results if r["outcome"] == k) for k in OUTCOME_KEYS}
+def _print_report(report_path):
+    print(f"report: {report_path}")
 
 
 async def _scrape_all(
@@ -158,6 +166,10 @@ async def _scrape_all(
         if not isinstance(r, dict):
             crash_log.append(f"{urls[i]}: gather-level {type(r).__name__}: {r}")
     return results
+
+
+def _summarize(results: list[dict]) -> dict:
+    return {k: sum(1 for r in results if r["outcome"] == k) for k in OUTCOME_KEYS}
 
 
 def _byte_comparison(baseline_results: list[dict], stealth_results: list[dict]) -> dict:

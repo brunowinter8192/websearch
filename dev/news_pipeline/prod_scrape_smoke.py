@@ -34,7 +34,7 @@ REGWALL_MARKERS = [
 
 def main():
     urls = _load_urls(URL_FILE)
-    print(f"Loaded {len(urls)} URLs from {URL_FILE}", flush=True)
+    _print_loaded_urls_from(urls)
 
     asyncio.run(scrape_urls_workflow(urls, OUTPUT_DIR))
 
@@ -48,6 +48,10 @@ def main():
 def _load_urls(path: Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [item["url"] for item in data]
+
+
+def _print_loaded_urls_from(urls):
+    print(f"Loaded {len(urls)} URLs from {URL_FILE}", flush=True)
 
 
 def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:

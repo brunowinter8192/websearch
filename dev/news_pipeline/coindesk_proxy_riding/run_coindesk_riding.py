@@ -43,16 +43,11 @@ async def _run(args: argparse.Namespace) -> None:
         stall_timeout_s=args.stall_timeout,
     )
 
-    elapsed = time.monotonic() - t0
-    print(
-        f"[main] done in {elapsed:.0f}s — "
-        f"ok={state.n_ok} rw={state.n_regwall} fail={state.n_failed} "
-        f"cf={state.n_connect_fail} termination={state.termination}",
-        file=sys.stderr,
-    )
+    elapsed = _compute_elapsed(t0)
+    _print_main_done_in(elapsed, state)
 
     write_riding_report(state, output_dir, t_job_start)
-    print(f"[main] report → {output_dir / 'job.md'}")
+    _print_main_report(output_dir)
 
 
 # FUNCTIONS
@@ -103,6 +98,24 @@ async def _prepare_proxy_pool() -> list:
         file=sys.stderr,
     )
     return proxy_pool
+
+
+def _compute_elapsed(t0):
+    elapsed = time.monotonic() - t0
+    return elapsed
+
+
+def _print_main_done_in(elapsed, state):
+    print(
+        f"[main] done in {elapsed:.0f}s — "
+        f"ok={state.n_ok} rw={state.n_regwall} fail={state.n_failed} "
+        f"cf={state.n_connect_fail} termination={state.termination}",
+        file=sys.stderr,
+    )
+
+
+def _print_main_report(output_dir):
+    print(f"[main] report → {output_dir / 'job.md'}")
 
 
 def _parse_args() -> argparse.Namespace:

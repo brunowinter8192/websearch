@@ -18,6 +18,28 @@ UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="__NEXT_DATA__ nav-tree discovery probe")
+    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT)
+    parser.add_argument("--no-ghec", action="store_true", help="Skip GHEC sidebar fetch")
+    parser.add_argument("--no-ghes", action="store_true", help="Skip GHES sidebar fetch")
+    args = parser.parse_args()
+
+    result = _compute_result(args)
+    print("\n".join(result["log"]))
+
+
+# FUNCTIONS
+
+def _compute_result(args):
+    result = nextdata_discovery_workflow(
+        gold_path=args.gold,
+        include_ghec=not args.no_ghec,
+        include_ghes=not args.no_ghes,
+    )
+    return result
+
+
 def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghes: bool) -> dict:
     log = []
     t0 = time.time()
@@ -40,8 +62,6 @@ def nextdata_discovery_workflow(gold_path: Path, include_ghec: bool, include_ghe
 
     return {"log": log, "recall": recall, "report_path": report_path}
 
-
-# FUNCTIONS
 
 def fetch_root_nextdata(log: list) -> dict | None:
     log.append("## Step 1: __NEXT_DATA__ from seed page")
@@ -329,15 +349,4 @@ def save_report(report: str) -> Path:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="__NEXT_DATA__ nav-tree discovery probe")
-    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT)
-    parser.add_argument("--no-ghec", action="store_true", help="Skip GHEC sidebar fetch")
-    parser.add_argument("--no-ghes", action="store_true", help="Skip GHES sidebar fetch")
-    args = parser.parse_args()
-
-    result = nextdata_discovery_workflow(
-        gold_path=args.gold,
-        include_ghec=not args.no_ghec,
-        include_ghes=not args.no_ghes,
-    )
-    print("\n".join(result["log"]))
+    main()

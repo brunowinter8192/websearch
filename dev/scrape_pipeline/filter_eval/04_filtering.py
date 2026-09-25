@@ -66,11 +66,9 @@ async def main():
     browser_config = BrowserConfig(headless=True, verbose=False)
     semaphore = asyncio.Semaphore(PARALLEL_URLS)
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        tasks = [process_url_with_semaphore(semaphore, crawler, url) for url in urls]
-        await asyncio.gather(*tasks)
+    await _run_filter_checks(browser_config, semaphore, urls)
 
-    print(f"\nOutput saved to: {OUTPUT_DIR}")
+    _print_output_saved_to()
 
 
 # FUNCTIONS
@@ -85,6 +83,16 @@ def get_urls():
             if line and not line.startswith("#"):
                 urls.append(line)
     return urls
+
+
+async def _run_filter_checks(browser_config, semaphore, urls):
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        tasks = [process_url_with_semaphore(semaphore, crawler, url) for url in urls]
+        await asyncio.gather(*tasks)
+
+
+def _print_output_saved_to():
+    print(f"\nOutput saved to: {OUTPUT_DIR}")
 
 
 async def process_url_with_semaphore(sem, crawler, url):

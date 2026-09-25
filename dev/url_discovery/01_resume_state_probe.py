@@ -21,6 +21,15 @@ PHILOSOPHY_URL = "https://books.toscrape.com/catalogue/category/books/philosophy
 
 async def url_discovery_probe_workflow() -> None:
     browser_config = BrowserConfig(headless=True, verbose=False)
+    exp1, exp2, exp3, exp4 = await _run_experiments(browser_config)
+
+    report_path = write_report(exp1, exp2, exp3, exp4)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+async def _run_experiments(browser_config):
     async with AsyncWebCrawler(config=browser_config) as crawler:
         exp1 = await run_experiment_1_existence_and_start_url(crawler)
         print(f"[1/4] existence + start_url fate: {exp1['total_results']} results", file=sys.stderr)
@@ -30,12 +39,28 @@ async def url_discovery_probe_workflow() -> None:
         print("[3/4] depth bookkeeping: 2 variants done", file=sys.stderr)
         exp4 = await run_experiment_4_filter_chain_bypass(crawler)
         print("[4/4] FilterChain bypass: done", file=sys.stderr)
+    return exp1, exp2, exp3, exp4
 
-    report_path = write_report(exp1, exp2, exp3, exp4)
+
+def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    report_path = REPORT_DIR / f"01_resume_state_probe_report_{ts}.md"
+
+    lines = [f"# resume_state probe ({ts})", "",
+             "Target: books.toscrape.com (static, stable). crawl4ai 0.9.2.", ""]
+    lines += _format_experiment_1_section(exp1)
+    lines += _format_experiment_2_section(exp2)
+    lines += _format_experiment_3_section(exp3)
+    lines += _format_experiment_4_section(exp4)
+
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report_path
+
+
+def _print_report(report_path):
     print(f"\nReport: {report_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def run_experiment_1_existence_and_start_url(crawler: AsyncWebCrawler) -> dict:
     pending_urls = [TRAVEL_URL, MYSTERY_URL, PHILOSOPHY_URL]
@@ -149,51 +174,6 @@ async def run_experiment_4_filter_chain_bypass(crawler: AsyncWebCrawler) -> dict
     }
 
 
-def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_path = REPORT_DIR / f"01_resume_state_probe_report_{ts}.md"
-
-    lines = [f"# resume_state probe ({ts})", "",
-             "Target: books.toscrape.com (static, stable). crawl4ai 0.9.2.", ""]
-    lines += _format_experiment_1_section(exp1)
-    lines += _format_experiment_2_section(exp2)
-    lines += _format_experiment_3_section(exp3)
-    lines += _format_experiment_4_section(exp4)
-
-    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return report_path
-
-
-def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
-    return CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        deep_crawl_strategy=strategy,
-        stream=False,
-        verbose=False,
-    )
-
-
-def _result_rows(results) -> list:
-    rows = []
-    for r in results:
-        rows.append({
-            "url": r.url,
-            "success": bool(r.success),
-            "status_code": getattr(r, "status_code", None),
-            "depth": (r.metadata or {}).get("depth") if hasattr(r, "metadata") else None,
-        })
-    return rows
-
-
-def _capture_and_stop_callback(holder: dict):
-    async def callback(state: dict) -> None:
-        holder["state"] = state
-        holder["strategy"].cancel()
-    return callback
-
-
 def _format_experiment_1_section(exp1: dict) -> list:
     lines = ["## Experiment 1 — existence + start_url fate", "",
              f"- start_url: `{exp1['start_url']}`",
@@ -252,6 +232,35 @@ def _format_experiment_4_section(exp4: dict) -> list:
             "- expectation: seed fetched despite matching the blocking pattern (seeds bypass "
             "can_process_url entirely); the SAME URL, rediscovered as a child via the sidebar's "
             "self-link, gets rejected by the filter chain (rejected count >= 1).", ""]
+
+
+def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
+    return CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        deep_crawl_strategy=strategy,
+        stream=False,
+        verbose=False,
+    )
+
+
+def _result_rows(results) -> list:
+    rows = []
+    for r in results:
+        rows.append({
+            "url": r.url,
+            "success": bool(r.success),
+            "status_code": getattr(r, "status_code", None),
+            "depth": (r.metadata or {}).get("depth") if hasattr(r, "metadata") else None,
+        })
+    return rows
+
+
+def _capture_and_stop_callback(holder: dict):
+    async def callback(state: dict) -> None:
+        holder["state"] = state
+        holder["strategy"].cancel()
+    return callback
 
 
 if __name__ == "__main__":

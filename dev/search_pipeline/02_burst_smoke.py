@@ -23,6 +23,20 @@ SNIPPET_PREVIEW = 200
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Burst smoke test for searxng-cli search_batch.")
+    parser.add_argument("--queries-per-burst", type=int, default=4,
+                        help="Number of queries per search_batch call (default: 4)")
+    parser.add_argument("--cooldown", type=float, default=60.0,
+                        help="Seconds to wait between batches (default: 60)")
+    parser.add_argument("--max-queries", type=int, default=None,
+                        help="Cap total queries processed (default: all)")
+    args = parser.parse_args()
+    asyncio.run(run_burst_smoke(args.queries_per_burst, args.cooldown, args.max_queries))
+
+
+# FUNCTIONS
+
 async def run_burst_smoke(queries_per_burst: int, cooldown: float, max_queries: int | None) -> None:
     cfg = load_config(CONFIG_PATH)
     all_queries = load_queries(SCRIPT_DIR / cfg["run"]["queries_file"])
@@ -61,8 +75,6 @@ async def run_burst_smoke(queries_per_burst: int, cooldown: float, max_queries: 
     print(f"Result: {dist} (out of {len(records)})", file=sys.stderr)
     print(f"Timing: mean {int(statistics.mean(times))}ms / max {max(times)}ms", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def load_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -258,12 +270,4 @@ def _render_sample_results(records) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Burst smoke test for searxng-cli search_batch.")
-    parser.add_argument("--queries-per-burst", type=int, default=4,
-                        help="Number of queries per search_batch call (default: 4)")
-    parser.add_argument("--cooldown", type=float, default=60.0,
-                        help="Seconds to wait between batches (default: 60)")
-    parser.add_argument("--max-queries", type=int, default=None,
-                        help="Cap total queries processed (default: all)")
-    args = parser.parse_args()
-    asyncio.run(run_burst_smoke(args.queries_per_burst, args.cooldown, args.max_queries))
+    main()

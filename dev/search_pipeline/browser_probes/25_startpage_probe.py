@@ -94,6 +94,17 @@ _browser = None
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     records = []
+    await _run_queries(records)
+
+    report_path = write_report(records, REPORT_DIR)
+    ok_count = _compute_ok_count(records)
+    block_count = _compute_block_count(records)
+    _print_report(report_path, ok_count, records, block_count)
+
+
+# FUNCTIONS
+
+async def _run_queries(records):
     try:
         for qi, (query, axis) in enumerate(QUERIES):
             print(f"[{qi + 1}/{len(QUERIES)}] ({axis}) {query}", file=sys.stderr)
@@ -110,9 +121,18 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records, REPORT_DIR)
+
+def _compute_ok_count(records):
     ok_count = sum(1 for r in records if r["status"] == "OK")
+    return ok_count
+
+
+def _compute_block_count(records):
     block_count = sum(1 for r in records if r["status"] == "BLOCKED")
+    return block_count
+
+
+def _print_report(report_path, ok_count, records, block_count):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(
         f"Result: {ok_count}/{len(records)} OK, {block_count}/{len(records)} BLOCKED, "
@@ -120,8 +140,6 @@ async def run_probe() -> None:
         file=sys.stderr,
     )
 
-
-# FUNCTIONS
 
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {

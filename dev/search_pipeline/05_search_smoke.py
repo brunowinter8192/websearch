@@ -30,6 +30,28 @@ AVAILABLE_ENGINES = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Multi-engine comparison smoke test.")
+    parser.add_argument(
+        "--engines",
+        nargs="+",
+        default=["google", "duckduckgo"],
+        choices=list(AVAILABLE_ENGINES.keys()),
+        help="Engines to test (default: google duckduckgo). Available: google duckduckgo 'google scholar' openalex",
+    )
+    parser.add_argument(
+        "--max-queries",
+        dest="max_queries",
+        type=int,
+        default=None,
+        help="Limit to first N queries (default: all 30)",
+    )
+    args = parser.parse_args()
+    asyncio.run(run_smoke(args.engines, args.max_queries))
+
+
+# FUNCTIONS
+
 async def run_smoke(engine_names: list[str], max_queries: int | None) -> None:
     queries = _load_queries(QUERIES_FILE, max_queries)
     engines = {name: AVAILABLE_ENGINES[name]() for name in engine_names}
@@ -55,8 +77,6 @@ async def run_smoke(engine_names: list[str], max_queries: int | None) -> None:
     print(f"\nReport: {path}", file=sys.stderr)
     print(f"Result: {ok}/{len(records)} queries with results", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -203,20 +223,4 @@ def _render_url_entry(idx: int, url: str, data: dict, engine_names: list[str]) -
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Multi-engine comparison smoke test.")
-    parser.add_argument(
-        "--engines",
-        nargs="+",
-        default=["google", "duckduckgo"],
-        choices=list(AVAILABLE_ENGINES.keys()),
-        help="Engines to test (default: google duckduckgo). Available: google duckduckgo 'google scholar' openalex",
-    )
-    parser.add_argument(
-        "--max-queries",
-        dest="max_queries",
-        type=int,
-        default=None,
-        help="Limit to first N queries (default: all 30)",
-    )
-    args = parser.parse_args()
-    asyncio.run(run_smoke(args.engines, args.max_queries))
+    main()

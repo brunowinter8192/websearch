@@ -49,6 +49,13 @@ TRIGGER_ORDER = ["verify_call", "auto_onload", "real_click"]
 
 # ORCHESTRATOR
 
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(probe_workflow())
+
+
+# FUNCTIONS
+
 async def probe_workflow() -> None:
     inspection = await run_inspection()
     await asyncio.sleep(PAUSE_BETWEEN_RUNS_S)
@@ -63,8 +70,6 @@ async def probe_workflow() -> None:
     )
     write_report(report, REPORT_DIR)
 
-
-# FUNCTIONS
 
 @dataclass
 class InspectionResult:
@@ -392,5 +397,4 @@ async def _detect_page_outcome(page) -> dict:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(probe_workflow())
+    main()

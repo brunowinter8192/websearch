@@ -18,12 +18,12 @@ _POOL_REFRESH_MIN = 30
 
 def main() -> None:
     args   = _parse_args()
-    since  = _parse_since(args.since) if args.since else None
+    since = _compute_since(args)
     mtimes = _load_mtimes(args.raw_dir, since)
     stats  = _compute_stats(mtimes, args.bin_minutes, args.rolling, args.since)
     _print_summary(stats, args.bin_minutes)
     out    = _plot(stats, args.bin_minutes, args.rolling)
-    print(f"PNG: {out}")
+    _print_png(out)
 
 
 # FUNCTIONS
@@ -41,10 +41,9 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _parse_since(s: str) -> float:
-    local_tz = datetime.now().astimezone().tzinfo
-    dt = datetime.strptime(s, "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
-    return dt.timestamp()
+def _compute_since(args):
+    since  = _parse_since(args.since) if args.since else None
+    return since
 
 
 def _load_mtimes(raw_dir: Path, since: float | None) -> list[float]:
@@ -155,6 +154,10 @@ def _plot(stats: dict, bin_minutes: float, rolling: int) -> Path:
     return out
 
 
+def _print_png(out):
+    print(f"PNG: {out}")
+
+
 def _repo_root() -> Path:
     out = subprocess.check_output(
         ["git", "rev-parse", "--git-common-dir"],
@@ -163,6 +166,12 @@ def _repo_root() -> Path:
     ).strip()
     p = Path(out)
     return p.parent if p.name in (".git", "worktrees") or ".git" in str(p) else p.parent
+
+
+def _parse_since(s: str) -> float:
+    local_tz = datetime.now().astimezone().tzinfo
+    dt = datetime.strptime(s, "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
+    return dt.timestamp()
 
 
 def _compute_bins(mtimes: list[float], t0: float, span_s: float, bin_minutes: float) -> tuple:

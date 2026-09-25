@@ -27,6 +27,43 @@ MISSING_SAMPLE = 20
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Playwright-per-page BFS — measures URL discovery recall vs gold standard"
+    )
+    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
+                        help="Gold standard file (default: goldstandard/docs_github_rest.txt)")
+    _add_arguments(parser)
+    parser.add_argument("--stealth", action="store_true",
+                        help="Enable stealth mode (BrowserConfig enable_stealth + UndetectedAdapter)")
+    args = parser.parse_args()
+
+    asyncio.run(playwright_bfs_workflow(
+        args.seed, args.gold, args.include_pattern, args.max_pages, args.max_depth,
+        args.delay, args.page_timeout, args.concurrency, args.stealth,
+    ))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--seed", type=str, default=SEED_URL,
+                        help=f"Seed URL (default: {SEED_URL})")
+    parser.add_argument("--include-pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
+                        help=f"URL substring filter (default: {DEFAULT_INCLUDE_PATTERN})")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
+                        help=f"Max pages to fetch (default: {DEFAULT_MAX_PAGES})")
+    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH,
+                        help=f"Max BFS depth (default: {DEFAULT_MAX_DEPTH})")
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_S,
+                        help=f"delay_before_return_html in seconds (default: {DEFAULT_DELAY_S})")
+    parser.add_argument("--page-timeout", type=int, default=DEFAULT_PAGE_TIMEOUT_MS,
+                        help=f"page_timeout in ms (default: {DEFAULT_PAGE_TIMEOUT_MS})")
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+                        choices=[1, 2, 3],
+                        help=f"Concurrent arun() calls (default: {DEFAULT_CONCURRENCY}, max: 3)")
+
+
 async def playwright_bfs_workflow(seed: str, gold_path: Path, include_pattern: str,
                                    max_pages: int, max_depth: int, delay_s: float,
                                    page_timeout_ms: int, concurrency: int, stealth: bool):
@@ -52,8 +89,6 @@ async def playwright_bfs_workflow(seed: str, gold_path: Path, include_pattern: s
     print(f"\n{report}")
     print(f"\nReport saved: {out_path}")
 
-
-# FUNCTIONS
 
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
@@ -348,31 +383,4 @@ async def fetch_page(crawler: AsyncWebCrawler, url: str,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Playwright-per-page BFS — measures URL discovery recall vs gold standard"
-    )
-    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
-                        help="Gold standard file (default: goldstandard/docs_github_rest.txt)")
-    parser.add_argument("--seed", type=str, default=SEED_URL,
-                        help=f"Seed URL (default: {SEED_URL})")
-    parser.add_argument("--include-pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
-                        help=f"URL substring filter (default: {DEFAULT_INCLUDE_PATTERN})")
-    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
-                        help=f"Max pages to fetch (default: {DEFAULT_MAX_PAGES})")
-    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH,
-                        help=f"Max BFS depth (default: {DEFAULT_MAX_DEPTH})")
-    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_S,
-                        help=f"delay_before_return_html in seconds (default: {DEFAULT_DELAY_S})")
-    parser.add_argument("--page-timeout", type=int, default=DEFAULT_PAGE_TIMEOUT_MS,
-                        help=f"page_timeout in ms (default: {DEFAULT_PAGE_TIMEOUT_MS})")
-    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-                        choices=[1, 2, 3],
-                        help=f"Concurrent arun() calls (default: {DEFAULT_CONCURRENCY}, max: 3)")
-    parser.add_argument("--stealth", action="store_true",
-                        help="Enable stealth mode (BrowserConfig enable_stealth + UndetectedAdapter)")
-    args = parser.parse_args()
-
-    asyncio.run(playwright_bfs_workflow(
-        args.seed, args.gold, args.include_pattern, args.max_pages, args.max_depth,
-        args.delay, args.page_timeout, args.concurrency, args.stealth,
-    ))
+    main()

@@ -42,7 +42,7 @@ WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; ra
 
 ---
 
-### 01_google_dom_probe.py (148 LOC)
+### 01_google_dom_probe.py (166 LOC)
 
 **Purpose:** Path A entry point: two navigations per query through a real browser, classified into a four-state outcome model.
 **Reads:** `queries.json`.
@@ -52,7 +52,7 @@ WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; ra
 
 ---
 
-### 02_google_wml_probe.py (286 LOC)
+### 02_google_wml_probe.py (299 LOC)
 
 **Purpose:** Path B entry point: browserless WML-route fetch per query, classified with the same outcome model.
 **Reads:** `queries.json`.

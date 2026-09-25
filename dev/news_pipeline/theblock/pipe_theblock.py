@@ -33,7 +33,7 @@ SITEMAP_INDEX_URL     = "https://www.theblock.co/sitemap_tbco_index.xml"
 async def pipe_theblock_workflow() -> None:
     ts = datetime.now(timezone.utc)
     t0 = time.monotonic()
-    print(f"=== The Block proxy pipe  {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} ===\n")
+    _print_the_block_proxy(ts)
 
     sample, source_results, hp_to_sources, liveness_results, neutral_alive, elapsed_s1 = await run_stage1()
     cf_passing, elapsed_s2 = run_stage2(neutral_alive)
@@ -45,7 +45,7 @@ async def pipe_theblock_workflow() -> None:
 
     subs_fetched, total_subs, b_exhausted, b_active, elapsed_s3 = run_stage3(cf_passing)
 
-    print(f"Total elapsed: {time.monotonic()-t0:.0f}s")
+    _print_total_elapsed_s(t0)
     append_pipe_log(ts, len(sample), len(neutral_alive), len(cf_passing),
                     subs_fetched, total_subs, b_exhausted, b_active,
                     elapsed_s1, elapsed_s2, elapsed_s3)
@@ -54,6 +54,10 @@ async def pipe_theblock_workflow() -> None:
 
 
 # FUNCTIONS
+
+def _print_the_block_proxy(ts):
+    print(f"=== The Block proxy pipe  {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} ===\n")
+
 
 async def run_stage1() -> tuple[list[tuple[str, str]], list[dict], dict[str, set[str]], list[dict], list[str], float]:
     print("[Stage 1] Fetching fresh pool + neutral liveness check ...")
@@ -111,6 +115,10 @@ def run_stage3(cf_passing: list[str]) -> tuple[int, int, list[int], list[int], f
     print(f"  Subs fetched this run: {subs_fetched}")
     print(f"  Cache progress: {cached}/{total_subs}  elapsed: {elapsed_s3:.0f}s\n")
     return subs_fetched, total_subs, b_exhausted, b_active, elapsed_s3
+
+
+def _print_total_elapsed_s(t0):
+    print(f"Total elapsed: {time.monotonic()-t0:.0f}s")
 
 
 def append_pipe_log(

@@ -11,7 +11,7 @@ Two launches through the production chain (a 1 ms timeout and the production 300
 
 ## Modules
 
-### 01_launch_timeout_probe.py (99 LOC)
+### 01_launch_timeout_probe.py (103 LOC)
 
 **Purpose:** Launches camoufox with a 1 ms and a 30000 ms timeout and records whether the timeout is enforced.
 **Reads:** nothing; hardcoded launch kwargs.

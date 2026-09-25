@@ -34,8 +34,21 @@ def full_discovery() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     URLS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_path = OUTPUT_DIR / f"progress_{ts}.log"
+    log_path = _compute_log_path(ts)
 
+    completed = _discover_into_log(log_path, ts)
+    if completed:
+        _print_log(log_path)
+
+
+# FUNCTIONS
+
+def _compute_log_path(ts):
+    log_path = OUTPUT_DIR / f"progress_{ts}.log"
+    return log_path
+
+
+def _discover_into_log(log_path, ts) -> bool:
     with open(log_path, "w", encoding="utf-8", buffering=1) as log_fh:
         log(log_fh, f"=== CoinDesk Full Discovery start {ts} ===")
         log(log_fh, f"Stop date: {STOP_DATE} | Delay: {CALL_DELAY}s | Rewarm every: {REWARM_EVERY}s")
@@ -44,7 +57,7 @@ def full_discovery() -> None:
         headers, start_url, first_body = asyncio.run(browser_load_feed(CLICKS_WARMUP, log_fh))
         if first_body is None:
             log(log_fh, "FATAL: browser warmup failed — aborting.")
-            return
+            return False
         log(log_fh, f"Warmup done. First URL: {start_url}")
 
         results = cursor_loop(headers, start_url, first_body, log_fh)
@@ -56,11 +69,12 @@ def full_discovery() -> None:
             f" oldest={results['oldest_date']} rewarms={results['rewarm_count']}"
             f" fallbacks={results['fallback_count']} ==="
         ))
+    return True
 
+
+def _print_log(log_path):
     print(f"Log → {log_path}")
 
-
-# FUNCTIONS
 
 def cursor_loop(headers: dict, start_url: str, first_body: bytes, log_fh) -> dict:
     year_files: dict = {}

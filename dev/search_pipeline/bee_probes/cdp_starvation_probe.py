@@ -28,6 +28,18 @@ FINDINGS_DIR = SCRIPT_DIR / "md"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="CDP starvation probe: Pattern A + B + CDP event counter (20 queries)."
+    )
+    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
+                        help="Limit to first N queries (default: all from queries.txt)")
+    args = parser.parse_args()
+    asyncio.run(run_cdp_probe(args.max_queries))
+
+
+# FUNCTIONS
+
 async def run_cdp_probe(max_queries: int | None) -> None:
     _start_probe_clock()
     _enable_pattern_a()
@@ -35,8 +47,6 @@ async def run_cdp_probe(max_queries: int | None) -> None:
     query_records = await _execute_queries(queries)
     _write_outputs(query_records)
 
-
-# FUNCTIONS
 
 def _enable_pattern_a() -> None:
     loop = asyncio.get_running_loop()
@@ -122,10 +132,4 @@ async def _run_single_query(qi: int, query: str, total: int) -> dict:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="CDP starvation probe: Pattern A + B + CDP event counter (20 queries)."
-    )
-    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
-                        help="Limit to first N queries (default: all from queries.txt)")
-    args = parser.parse_args()
-    asyncio.run(run_cdp_probe(args.max_queries))
+    main()

@@ -12,7 +12,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 
 ## Modules
 
-### 03_live_focus_probe.py (312 LOC)
+### 03_live_focus_probe.py (321 LOC)
 
 **Purpose:** Live human focus-steal verification of the chromium lane over one or more URLs, with per-URL and pooled verdicts.
 **Reads:** nothing of its own; launches this worktree's CLI as a subprocess per URL.

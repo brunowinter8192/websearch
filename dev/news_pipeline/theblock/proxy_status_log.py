@@ -8,47 +8,17 @@ SCRIPT_DIR = Path(__file__).parent
 LOG_PATH   = SCRIPT_DIR / "logs" / "proxy_status_log.json"
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 def record_run(results: list[dict], source_label: str) -> None:
     ts   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     data = _load_log()
 
-    for r in results:
-        key = proxy_key(r["proto"], r["host_port"])
-        host, port = _parse_host_port(r["host_port"])
-
-        if key not in data:
-            data[key] = {
-                "protocol":   r["proto"],
-                "host":       host,
-                "port":       port,
-                "checks":     0,
-                "alive":      0,
-                "dead":       0,
-                "last_status": "",
-                "first_seen": ts,
-                "last_seen":  ts,
-            }
-
-        entry = data[key]
-        entry["checks"]     += 1
-        entry["last_seen"]   = ts
-        entry["last_status"] = "alive" if r["alive"] else "dead"
-        if r["alive"]:
-            entry["alive"] += 1
-        else:
-            entry["dead"] += 1
+    _fold_results(results, data, ts)
 
     _save_log(data)
-    alive = sum(1 for r in results if r["alive"])
-    print(f"proxy_status_log: {len(results)} results ({alive} alive) folded → {len(data)} unique proxies on record  [{LOG_PATH}]")
-
-
-# FUNCTIONS
-
-def _save_log(data: dict) -> None:
-    LOG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    alive = _compute_alive(results)
+    _print_proxy_status_log(results, alive, data)
 
 
 def partition_fresh(
@@ -79,6 +49,47 @@ def _load_log() -> dict:
     if not LOG_PATH.exists():
         return {}
     return json.loads(LOG_PATH.read_text(encoding="utf-8"))
+
+
+def _fold_results(results, data, ts):
+    for r in results:
+        key = proxy_key(r["proto"], r["host_port"])
+        host, port = _parse_host_port(r["host_port"])
+
+        if key not in data:
+            data[key] = {
+                "protocol":   r["proto"],
+                "host":       host,
+                "port":       port,
+                "checks":     0,
+                "alive":      0,
+                "dead":       0,
+                "last_status": "",
+                "first_seen": ts,
+                "last_seen":  ts,
+            }
+
+        entry = data[key]
+        entry["checks"]     += 1
+        entry["last_seen"]   = ts
+        entry["last_status"] = "alive" if r["alive"] else "dead"
+        if r["alive"]:
+            entry["alive"] += 1
+        else:
+            entry["dead"] += 1
+
+
+def _save_log(data: dict) -> None:
+    LOG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _compute_alive(results):
+    alive = sum(1 for r in results if r["alive"])
+    return alive
+
+
+def _print_proxy_status_log(results, alive, data):
+    print(f"proxy_status_log: {len(results)} results ({alive} alive) folded → {len(data)} unique proxies on record  [{LOG_PATH}]")
 
 
 def proxy_key(proto: str, host_port: str) -> str:

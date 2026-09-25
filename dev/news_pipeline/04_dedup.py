@@ -26,23 +26,24 @@ def main():
         "--input", default=None,
         help="Path to discover_*.json (default: newest in 01_json/)"
     )
-    parser.add_argument(
-        "--collection-dir", default=str(COLLECTION_DIR),
-        help=f"RAG collection directory (default: {COLLECTION_DIR})"
-    )
+    _add_arguments(parser)
     args = parser.parse_args()
-    input_path = Path(args.input) if args.input else pick_latest_input()
+    input_path = _compute_input_path(args)
     dedup_workflow(input_path, Path(args.collection_dir))
 
 
 # FUNCTIONS
 
-def pick_latest_input() -> Path:
-    input_dir = Path(__file__).parent / "01_json"
-    candidates = sorted(input_dir.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
-        raise FileNotFoundError(f"No discover_*.json found in {input_dir}")
-    return candidates[-1]
+def _add_arguments(parser):
+    parser.add_argument(
+        "--collection-dir", default=str(COLLECTION_DIR),
+        help=f"RAG collection directory (default: {COLLECTION_DIR})"
+    )
+
+
+def _compute_input_path(args):
+    input_path = Path(args.input) if args.input else pick_latest_input()
+    return input_path
 
 
 def dedup_workflow(input_path: Path, collection_dir: Path):
@@ -55,6 +56,14 @@ def dedup_workflow(input_path: Path, collection_dir: Path):
     output_path = write_output(new_entries)
     print_summary(len(entries), n_skipped, len(new_entries), output_path)
     return output_path
+
+
+def pick_latest_input() -> Path:
+    input_dir = Path(__file__).parent / "01_json"
+    candidates = sorted(input_dir.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
+    if not candidates:
+        raise FileNotFoundError(f"No discover_*.json found in {input_dir}")
+    return candidates[-1]
 
 
 def load_entries(input_path: Path) -> list[dict]:

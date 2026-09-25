@@ -85,6 +85,18 @@ _browser = None
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     records = []
+    await _run_queries(records)
+
+    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+    ok_count = _compute_ok_count(records)
+    pow_count = _compute_pow_count(records)
+    under_gate = _compute_under_gate(records)
+    _print_report(report_path, ok_count, records, pow_count, under_gate)
+
+
+# FUNCTIONS
+
+async def _run_queries(records):
     try:
         for qi, (query, axis) in enumerate(QUERIES):
             print(f"[{qi + 1}/{len(QUERIES)}] ({axis}) {query}", file=sys.stderr)
@@ -100,10 +112,23 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+
+def _compute_ok_count(records):
     ok_count = sum(1 for r in records if r["status"] == "OK")
+    return ok_count
+
+
+def _compute_pow_count(records):
     pow_count = sum(1 for r in records if r["pow_triggered"])
+    return pow_count
+
+
+def _compute_under_gate(records):
     under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
+    return under_gate
+
+
+def _print_report(report_path, ok_count, records, pow_count, under_gate):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(
         f"Result: {ok_count}/{len(records)} OK, {pow_count}/{len(records)} PoW-triggered, "
@@ -111,8 +136,6 @@ async def run_probe() -> None:
         file=sys.stderr,
     )
 
-
-# FUNCTIONS
 
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {

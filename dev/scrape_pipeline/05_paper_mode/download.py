@@ -31,11 +31,7 @@ def main():
     if args.input:
         url_list.extend(parse_pdf_urls(args.input))
 
-    for url in args.urls:
-        if not url.endswith(".pdf"):
-            print(f"skipped: {url} — not a .pdf URL", file=sys.stderr)
-        else:
-            url_list.append(("—", url))
+    _download_all(args, url_list)
 
     if not url_list:
         print("No PDF URLs to download.", file=sys.stderr)
@@ -65,6 +61,14 @@ def parse_pdf_urls(input_path: str) -> list[tuple[str, str]]:
                 skipped += 1
     print(f"(skipped {skipped} non-PDF URLs)", file=sys.stderr)
     return results
+
+
+def _download_all(args, url_list):
+    for url in args.urls:
+        if not url.endswith(".pdf"):
+            print(f"skipped: {url} — not a .pdf URL", file=sys.stderr)
+        else:
+            url_list.append(("—", url))
 
 
 def download_workflow(urls: list[tuple[str, str]], overwrite: bool) -> None:

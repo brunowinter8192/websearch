@@ -34,6 +34,15 @@ QUERIES = [
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     records = []
+    await _run_engines(records)
+
+    report_path = write_report(records, REPORT_DIR, QUERIES, RETRY_COOLDOWN_S)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+async def _run_engines(records):
     try:
         for engine in CONTAINER_SELECTOR:
             print(f"=== {engine} ===", file=sys.stderr)
@@ -56,11 +65,10 @@ async def run_probe() -> None:
     finally:
         await close_browser()
 
-    report_path = write_report(records, REPORT_DIR, QUERIES, RETRY_COOLDOWN_S)
+
+def _print_report(report_path):
     print(f"\nReport: {report_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
     record: dict = {

@@ -21,17 +21,21 @@ UI_WIDGET_LINES = {
 def main() -> None:
     files = sorted(INPUT_DIR.glob(FILE_PATTERN))
     if not files:
-        print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
+        _print_no_files_found()
         return
 
     total_before, total_after, pattern_counts = _process_files(files)
 
-    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+    reduction = _compute_reduction(total_after, total_before)
 
     _print_report(len(files), pattern_counts, total_before, total_after, reduction)
 
 
 # FUNCTIONS
+
+def _print_no_files_found():
+    print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
+
 
 def _process_files(files: list) -> tuple[int, int, dict]:
     total_before = 0
@@ -60,6 +64,11 @@ def _process_files(files: list) -> tuple[int, int, dict]:
             pattern_counts["expand_collapse_removed"] += 1
 
     return total_before, total_after, pattern_counts
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+    return reduction
 
 
 def _print_report(num_files: int, pattern_counts: dict, total_before: int, total_after: int,

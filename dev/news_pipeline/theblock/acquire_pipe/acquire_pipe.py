@@ -25,6 +25,31 @@ ARTICLE_URLS_FILE = OUTPUT_DIR / "theblock_article_urls.txt"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Acquire-pipe (sustained): sitemap dev-run → ~27k article URLs"
+    )
+    _add_arguments(parser)
+    args = parser.parse_args()
+    acquire_pipe_workflow(
+        concurrency=args.concurrency,
+        buffer_size=args.buffer_size,
+    )
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument(
+        "--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+        help=f"Concurrent (proxy, URL) pairs per batch (default: {DEFAULT_CONCURRENCY})",
+    )
+    parser.add_argument(
+        "--buffer_size", type=int, default=BUFFER_SIZE,
+        help=f"Active proxy buffer depth (default: {BUFFER_SIZE})",
+    )
+
+
 def acquire_pipe_workflow(
     concurrency: int,
     buffer_size: int,
@@ -47,8 +72,6 @@ def acquire_pipe_workflow(
         print(e)
         sys.exit(1)
 
-
-# FUNCTIONS
 
 def _run_job(
     job_id: str,
@@ -123,19 +146,4 @@ def _url_to_filename(url: str) -> str:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Acquire-pipe (sustained): sitemap dev-run → ~27k article URLs"
-    )
-    parser.add_argument(
-        "--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-        help=f"Concurrent (proxy, URL) pairs per batch (default: {DEFAULT_CONCURRENCY})",
-    )
-    parser.add_argument(
-        "--buffer_size", type=int, default=BUFFER_SIZE,
-        help=f"Active proxy buffer depth (default: {BUFFER_SIZE})",
-    )
-    args = parser.parse_args()
-    acquire_pipe_workflow(
-        concurrency=args.concurrency,
-        buffer_size=args.buffer_size,
-    )
+    main()

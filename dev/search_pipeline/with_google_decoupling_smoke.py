@@ -35,15 +35,35 @@ QUERIES = [
 
 async def run_smoke() -> None:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = REPORT_DIR / f"with_google_decoupling_{ts}.md"
+    report_path = _compute_report_path(ts)
 
-    print(f"Smoke: with-Google default set, {len(QUERIES)} queries", file=sys.stderr)
-    print(f"Report: {report_path}", file=sys.stderr)
+    _print_smoke_with_google(report_path)
     print(file=sys.stderr)
 
     log_line_before = _count_log_lines()
     records = []
 
+    await _run_queries(records)
+
+    log_lines_written = _compute_log_lines_written(log_line_before)
+    _write_report(records, report_path, log_lines_written)
+    pass_count = _compute_pass_count(records)
+    _print_result_checks_passed(pass_count, records, report_path)
+
+
+# FUNCTIONS
+
+def _compute_report_path(ts):
+    report_path = REPORT_DIR / f"with_google_decoupling_{ts}.md"
+    return report_path
+
+
+def _print_smoke_with_google(report_path):
+    print(f"Smoke: with-Google default set, {len(QUERIES)} queries", file=sys.stderr)
+    print(f"Report: {report_path}", file=sys.stderr)
+
+
+async def _run_queries(records):
     try:
         for qi, query in enumerate(QUERIES):
             print(f"[{qi + 1}/{len(QUERIES)}] {query}", file=sys.stderr)
@@ -59,54 +79,10 @@ async def run_smoke() -> None:
     finally:
         await close_browser()
 
+
+def _compute_log_lines_written(log_line_before):
     log_lines_written = _count_log_lines() - log_line_before
-    _write_report(records, report_path, log_lines_written)
-    pass_count = sum(1 for r in records if r["pass"])
-    print(f"\nResult: {pass_count}/{len(records)} checks passed", file=sys.stderr)
-    print(f"Report: {report_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-def _count_log_lines() -> int:
-    if not LOG_PATH.exists():
-        return 0
-    return sum(1 for _ in LOG_PATH.open(encoding="utf-8"))
-
-
-def _read_last_log_entry() -> dict:
-    if not LOG_PATH.exists():
-        return {}
-    lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
-    return json.loads(lines[-1]) if lines else {}
-
-
-def _verify_log_entry(entry: dict, query: str) -> dict:
-    engines_requested = entry.get("engines_requested", [])
-    engines_excluded = entry.get("engines_excluded", {})
-
-    scholar_in_requested = "google_scholar" in engines_requested
-    google_in_requested = "google" in engines_requested
-    excluded_correct = engines_excluded.get("google_scholar") == "decoupled_from_google"
-    has_excluded_field = "engines_excluded" in entry
-
-    passed = (
-        not scholar_in_requested
-        and google_in_requested
-        and excluded_correct
-        and has_excluded_field
-    )
-
-    return {
-        "query": query,
-        "pass": passed,
-        "scholar_in_requested": scholar_in_requested,
-        "google_in_requested": google_in_requested,
-        "excluded_correct": excluded_correct,
-        "has_excluded_field": has_excluded_field,
-        "engines_requested_count": len(engines_requested),
-        "engines_excluded_raw": engines_excluded,
-    }
+    return log_lines_written
 
 
 def _write_report(records: list[dict], path: Path, log_lines_written: int) -> None:
@@ -148,6 +124,57 @@ def _write_report(records: list[dict], path: Path, log_lines_written: int) -> No
         lines += _render_failures(records)
 
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _compute_pass_count(records):
+    pass_count = sum(1 for r in records if r["pass"])
+    return pass_count
+
+
+def _print_result_checks_passed(pass_count, records, report_path):
+    print(f"\nResult: {pass_count}/{len(records)} checks passed", file=sys.stderr)
+    print(f"Report: {report_path}", file=sys.stderr)
+
+
+def _count_log_lines() -> int:
+    if not LOG_PATH.exists():
+        return 0
+    return sum(1 for _ in LOG_PATH.open(encoding="utf-8"))
+
+
+def _read_last_log_entry() -> dict:
+    if not LOG_PATH.exists():
+        return {}
+    lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
+    return json.loads(lines[-1]) if lines else {}
+
+
+def _verify_log_entry(entry: dict, query: str) -> dict:
+    engines_requested = entry.get("engines_requested", [])
+    engines_excluded = entry.get("engines_excluded", {})
+
+    scholar_in_requested = "google_scholar" in engines_requested
+    google_in_requested = "google" in engines_requested
+    excluded_correct = engines_excluded.get("google_scholar") == "decoupled_from_google"
+    has_excluded_field = "engines_excluded" in entry
+
+    passed = (
+        not scholar_in_requested
+        and google_in_requested
+        and excluded_correct
+        and has_excluded_field
+    )
+
+    return {
+        "query": query,
+        "pass": passed,
+        "scholar_in_requested": scholar_in_requested,
+        "google_in_requested": google_in_requested,
+        "excluded_correct": excluded_correct,
+        "has_excluded_field": has_excluded_field,
+        "engines_requested_count": len(engines_requested),
+        "engines_excluded_raw": engines_excluded,
+    }
 
 
 def _render_failures(records: list[dict]) -> list[str]:

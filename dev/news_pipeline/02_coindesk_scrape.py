@@ -28,17 +28,15 @@ def main():
         help="Path to discover_*.json (default: newest in 01_json/)"
     )
     args = parser.parse_args()
-    input_path = Path(args.input) if args.input else pick_latest_input()
+    input_path = _compute_input_path(args)
     asyncio.run(scrape_workflow(input_path))
 
 
 # FUNCTIONS
 
-def pick_latest_input() -> Path:
-    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
-        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
-    return candidates[-1]
+def _compute_input_path(args):
+    input_path = Path(args.input) if args.input else pick_latest_input()
+    return input_path
 
 
 async def scrape_workflow(input_path: Path):
@@ -66,6 +64,13 @@ async def scrape_workflow(input_path: Path):
 
     write_manifest(manifest)
     print_summary(manifest, time.perf_counter() - t_start)
+
+
+def pick_latest_input() -> Path:
+    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
+    if not candidates:
+        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
+    return candidates[-1]
 
 
 def load_entries(input_path: Path) -> list[dict]:

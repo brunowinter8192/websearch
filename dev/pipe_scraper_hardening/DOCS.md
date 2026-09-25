@@ -11,7 +11,7 @@ URL list in -> baseline run, a fixed gap, stealth run, each with the same pacing
 
 ## Modules
 
-### 01_stealth_concurrency_probe.py (250 LOC)
+### 01_stealth_concurrency_probe.py (262 LOC)
 
 **Purpose:** Runs the same URL list without and with crawl4ai stealth and reports outcome counts, crash signatures and byte deltas.
 **Reads:** the discovered-URL list produced by the explore_pipeline area (the file is not tracked); live sites.

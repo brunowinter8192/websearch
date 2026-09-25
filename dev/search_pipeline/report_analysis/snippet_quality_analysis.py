@@ -36,29 +36,42 @@ MATRIX_ENGINES = [
 
 def run_analysis() -> None:
     records = parse_smoke_report(SMOKE_REPORT)
-    n_s  = sum(len(r["snippets"]) for r in records)
-    n_og = sum(1 for r in records if r["og"])
-    n_m  = sum(1 for r in records if r["meta"])
-    print(f"Parsed {len(records)} records  snippets:{n_s}  og:{n_og}  meta:{n_m}", file=sys.stderr)
+    n_s = _compute_sample_count(records)
+    n_og = _compute_og_count(records)
+    n_m = _compute_meta_count(records)
+    _print_parsed_records_snippets(records, n_s, n_og, n_m)
     source_stats       = compute_source_stats(records)
     overlap            = compute_overlap_matrix(records)
     wins, best_per_url = compute_best_by_usefulness(records)
     breakdown          = compute_per_class_breakdown(records, best_per_url)
     path = write_report(source_stats, overlap, records, wins, best_per_url, breakdown)
-    print(f"Report: {path}", file=sys.stderr)
-    for src, st in source_stats.items():
-        print(
-            f"  {src}: N={st['n_samples']} bloated={st['pct_bloated']:.0f}%"
-            f" clean={st['mean_clean_len']:.0f} useful={st['usefulness_score']:.0f}",
-            file=sys.stderr,
-        )
+    _print_report(path)
+    _print_source_stats(source_stats)
     total_wins = sum(wins.values())
-    print(f"\nBest-by-usefulness ({total_wins} URLs with content):", file=sys.stderr)
-    for src, w in sorted(wins.items(), key=lambda x: -x[1]):
-        print(f"  {src}: {w} ({100.0 * w / total_wins:.1f}%)", file=sys.stderr)
+    _print_best_by_usefulness(total_wins)
+    _print_win_shares(wins, total_wins)
 
 
 # FUNCTIONS
+
+def _compute_sample_count(records):
+    n_s  = sum(len(r["snippets"]) for r in records)
+    return n_s
+
+
+def _compute_og_count(records):
+    n_og = sum(1 for r in records if r["og"])
+    return n_og
+
+
+def _compute_meta_count(records):
+    n_m  = sum(1 for r in records if r["meta"])
+    return n_m
+
+
+def _print_parsed_records_snippets(records, n_s, n_og, n_m):
+    print(f"Parsed {len(records)} records  snippets:{n_s}  og:{n_og}  meta:{n_m}", file=sys.stderr)
+
 
 def compute_source_stats(records: list[dict]) -> dict:
     texts_by, total_by, empty_by = _collect_source_texts(records)
@@ -139,6 +152,28 @@ def write_report(
     )
     path.write_text("\n".join(L) + "\n", encoding="utf-8")
     return path
+
+
+def _print_report(path):
+    print(f"Report: {path}", file=sys.stderr)
+
+
+def _print_source_stats(source_stats):
+    for src, st in source_stats.items():
+        print(
+            f"  {src}: N={st['n_samples']} bloated={st['pct_bloated']:.0f}%"
+            f" clean={st['mean_clean_len']:.0f} useful={st['usefulness_score']:.0f}",
+            file=sys.stderr,
+        )
+
+
+def _print_best_by_usefulness(total_wins):
+    print(f"\nBest-by-usefulness ({total_wins} URLs with content):", file=sys.stderr)
+
+
+def _print_win_shares(wins, total_wins):
+    for src, w in sorted(wins.items(), key=lambda x: -x[1]):
+        print(f"  {src}: {w} ({100.0 * w / total_wins:.1f}%)", file=sys.stderr)
 
 
 def _collect_source_texts(records: list[dict]) -> tuple[dict, dict, dict]:

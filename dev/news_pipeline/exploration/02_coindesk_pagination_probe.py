@@ -10,7 +10,9 @@ from _02_depth import depth_workflow
 from _02_quick import probe_workflow
 
 
-if __name__ == "__main__":
+# ORCHESTRATOR
+
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="CoinDesk pagination probe — quick (5 clicks + HAR) or depth (ceiling finder)"
     )
@@ -23,3 +25,7 @@ if __name__ == "__main__":
         asyncio.run(depth_workflow())
     else:
         asyncio.run(probe_workflow())
+
+
+if __name__ == "__main__":
+    main()

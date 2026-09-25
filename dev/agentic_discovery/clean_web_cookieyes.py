@@ -18,7 +18,7 @@ def main():
 
     total_before, total_after, processed, errors = _process_files(files)
 
-    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+    reduction = _compute_reduction(total_after, total_before)
 
     _print_report(processed, total_files, total_before, total_after, reduction, errors)
 
@@ -45,6 +45,11 @@ def _process_files(files: list) -> tuple[int, int, int, list]:
             errors.append((filepath.name, str(e)))
 
     return total_before, total_after, processed, errors
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+    return reduction
 
 
 def _print_report(processed: int, total_files: int, total_before: int, total_after: int,

@@ -44,15 +44,7 @@ async def run_probe() -> None:
     await asyncio.to_thread(kill_survivors)
 
     user_data_dir = tempfile.mkdtemp(prefix="browser-posture-cdp-probe-")
-    try:
-        run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
-    finally:
-        stage["name"] = "teardown"
-        await asyncio.to_thread(kill_by_profile, user_data_dir)
-        await asyncio.to_thread(kill_survivors)
-        shutil.rmtree(user_data_dir, ignore_errors=True)
-        stop_event.set()
-        await poll_task
+    run_result = await _run_cdp_headed_check(bundle_path, user_data_dir, stage, stop_event, poll_task)
 
     orphans = check_orphans(user_data_dir)
     cmdline_diff = diff_cmdlines(run_result["self_cmdline"], reference["cmdline"])
@@ -61,8 +53,7 @@ async def run_probe() -> None:
         run_result["scrape_result"], run_result["self_cmdline"], cmdline_diff, focus_samples,
         orphans, REPORT_DIR,
     )
-    print(f"\nReport: {report_path}", file=sys.stderr)
-    print(f"Orphans after run: {len(orphans)}", file=sys.stderr)
+    _print_report(report_path, orphans)
 
 
 # FUNCTIONS
@@ -115,6 +106,39 @@ async def capture_reference_cmdline() -> dict:
     return {"pid": info["pid"], "exe": info["exe"], "cmdline": info["cmdline"], "error": error}
 
 
+async def _run_cdp_headed_check(bundle_path, user_data_dir, stage, stop_event, poll_task):
+    try:
+        run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
+    finally:
+        stage["name"] = "teardown"
+        await asyncio.to_thread(kill_by_profile, user_data_dir)
+        await asyncio.to_thread(kill_survivors)
+        shutil.rmtree(user_data_dir, ignore_errors=True)
+        stop_event.set()
+        await poll_task
+    return run_result
+
+
+def _print_report(report_path, orphans):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+    print(f"Orphans after run: {len(orphans)}", file=sys.stderr)
+
+
+def find_chrome_descendant() -> psutil.Process | None:
+    try:
+        children = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return None
+    for proc in children:
+        try:
+            exe = proc.exe()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if "ms-playwright" in exe:
+            return proc
+    return None
+
+
 async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, stage: dict) -> dict:
     self_launch_result = {"launched": False, "error": None}
     cdp_http_check = {"ready": False, "detail": None}
@@ -151,21 +175,6 @@ async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, sta
         "self_cmdline": self_cmdline,
         "self_pid": self_pid,
     }
-
-
-def find_chrome_descendant() -> psutil.Process | None:
-    try:
-        children = psutil.Process().children(recursive=True)
-    except psutil.Error:
-        return None
-    for proc in children:
-        try:
-            exe = proc.exe()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-        if "ms-playwright" in exe:
-            return proc
-    return None
 
 
 async def scrape_over_cdp(port: int, stage: dict) -> dict:

@@ -23,6 +23,22 @@ ENGINES = ["crossref", "duckduckgo", "google", "lobsters", "mojeek",
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Pool diff v2 vs v3")
+    parser.add_argument("--v3-dir", default=None, help="v3 ts_dir path (default: latest value_eval_v3_* in runs/)")
+    args = parser.parse_args()
+    if args.v3_dir:
+        v3_dir = Path(args.v3_dir)
+    else:
+        candidates = sorted(DATA_DIR.glob("value_eval_v3_*"), reverse=True)
+        if not candidates:
+            raise SystemExit("No value_eval_v3_* dir found in runs/")
+        v3_dir = candidates[0]
+    pool_diff_workflow(v3_dir)
+
+
+# FUNCTIONS
+
 def pool_diff_workflow(v3_dir: Path) -> None:
     rows     = _compute_rows(v3_dir)
     eng_rows = _compute_engine_rows(v2_dir=V2_REF, v3_dir=v3_dir)
@@ -30,8 +46,6 @@ def pool_diff_workflow(v3_dir: Path) -> None:
     out = REPORT_DIR / "pool_diff_v2_vs_v3.md"
     print(out)
 
-
-# FUNCTIONS
 
 def _compute_rows(v3_dir: Path) -> list[dict]:
     rows = []
@@ -228,14 +242,4 @@ def _render_highlights(ok_rows: list[dict]) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pool diff v2 vs v3")
-    parser.add_argument("--v3-dir", default=None, help="v3 ts_dir path (default: latest value_eval_v3_* in runs/)")
-    args = parser.parse_args()
-    if args.v3_dir:
-        v3_dir = Path(args.v3_dir)
-    else:
-        candidates = sorted(DATA_DIR.glob("value_eval_v3_*"), reverse=True)
-        if not candidates:
-            raise SystemExit("No value_eval_v3_* dir found in runs/")
-        v3_dir = candidates[0]
-    pool_diff_workflow(v3_dir)
+    main()

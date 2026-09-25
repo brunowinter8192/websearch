@@ -90,6 +90,13 @@ PHASE_FRESH_QUERIES = [
 
 # ORCHESTRATOR
 
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(probe_workflow())
+
+
+# FUNCTIONS
+
 async def probe_workflow() -> None:
     bundle_path = await resolve_chromium_bundle_path()
     logger.warning("Resolved Chromium bundle: %s", bundle_path)
@@ -134,8 +141,6 @@ async def probe_workflow() -> None:
     finally:
         discard_profiles(all_profiles)
 
-
-# FUNCTIONS
 
 @dataclass
 class Phase:
@@ -220,5 +225,4 @@ def _cookie_identity(fingerprint: dict) -> tuple:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(probe_workflow())
+    main()

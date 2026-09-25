@@ -30,7 +30,7 @@ async def run_probe() -> None:
     low_result = await attempt_launch(LOW_TIMEOUT_MS, "LOW (1ms)")
     control_result = await attempt_launch(PROD_TIMEOUT_MS, "CONTROL (30000ms, production default)")
     report_path = write_report(low_result, control_result)
-    print(f"\nReport: {report_path}", file=sys.stderr)
+    _print_report(report_path)
 
 
 # FUNCTIONS
@@ -93,6 +93,10 @@ def write_report(low: dict, control: dict) -> Path:
         lines += ["", "```", control["traceback"], "```"]
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

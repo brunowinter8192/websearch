@@ -36,13 +36,31 @@ async def run_probe() -> None:
     kill_survivors()
 
     bundle_path = resolve_and_verify_bundle(run_b["exe"])
-    plist_path = bundle_path / "Contents" / "Info.plist"
+    plist_path = _compute_plist_path(bundle_path)
     original_bytes = plist_path.read_bytes()
     original_lsuielement = read_lsuielement(plist_path)
     codesign_before = read_codesign_status(bundle_path)
 
     run_c = None
     codesign_after = None
+    codesign_after, run_c, plist_end_state, plist_format_restored = await _run_plist_variants(plist_path, original_bytes, codesign_after, bundle_path, run_c)
+
+    orphans = check_orphans()
+    report_path = write_report(
+        run_a, run_b, run_c, bundle_path, original_lsuielement, plist_end_state,
+        plist_format_restored, codesign_before, codesign_after, orphans, REPORT_DIR,
+    )
+    _print_report(report_path, orphans)
+
+
+# FUNCTIONS
+
+def _compute_plist_path(bundle_path):
+    plist_path = bundle_path / "Contents" / "Info.plist"
+    return plist_path
+
+
+async def _run_plist_variants(plist_path, original_bytes, codesign_after, bundle_path, run_c):
     try:
         set_lsuielement(plist_path, True, original_bytes)
         codesign_after = read_codesign_status(bundle_path)
@@ -53,17 +71,13 @@ async def run_probe() -> None:
         kill_survivors()
         plist_end_state = read_lsuielement(plist_path)
         plist_format_restored = plist_path.read_bytes() == original_bytes
+    return codesign_after, run_c, plist_end_state, plist_format_restored
 
-    orphans = check_orphans()
-    report_path = write_report(
-        run_a, run_b, run_c, bundle_path, original_lsuielement, plist_end_state,
-        plist_format_restored, codesign_before, codesign_after, orphans, REPORT_DIR,
-    )
+
+def _print_report(report_path, orphans):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Orphan chromium-family processes after run: {len(orphans)}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
     server, thread, port = start_probe_server()

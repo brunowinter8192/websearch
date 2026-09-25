@@ -56,16 +56,25 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Probe URLs for Cloudflare Markdown-for-Agents (Accept: text/markdown) adoption."
     )
-    parser.add_argument(
-        "--output-dir", dest="output_dir", default=None,
-        help=f"Report directory (default: {REPORTS_DIR})",
-    )
+    _add_arguments(parser)
     args = parser.parse_args()
-    out = Path(args.output_dir) if args.output_dir else REPORTS_DIR
+    out = _compute_out(args)
     asyncio.run(cf_md_adoption_workflow(out))
 
 
 # FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument(
+        "--output-dir", dest="output_dir", default=None,
+        help=f"Report directory (default: {REPORTS_DIR})",
+    )
+
+
+def _compute_out(args):
+    out = Path(args.output_dir) if args.output_dir else REPORTS_DIR
+    return out
+
 
 async def cf_md_adoption_workflow(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)

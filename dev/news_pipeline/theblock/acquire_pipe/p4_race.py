@@ -13,7 +13,7 @@ from p5_logger import AcquireLogger
 from p6_buffer import DEFAULT_CONCURRENCY
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 def run_race(
     pool:            list[tuple[str, str]],
@@ -23,7 +23,7 @@ def run_race(
     content_handler: Callable[[str, bytes], None] | None = None,
     concurrency:     int = DEFAULT_CONCURRENCY,
 ) -> tuple[list[str], list[str]]:
-    candidates  = pool[:]
+    candidates = _compute_candidates(pool)
     random.shuffle(candidates)
 
     _url_list = list(target_urls)
@@ -33,16 +33,28 @@ def run_race(
         lock=threading.Lock(), total=len(_url_list),
     )
 
+    _race_candidates(concurrency, state, logger, content_type, content_handler)
+
+    gap = _compute_gap(_url_list, state)
+    return state.done, gap
+
+
+def _compute_candidates(pool):
+    candidates  = pool[:]
+    return candidates
+
+
+def _race_candidates(concurrency, state, logger, content_type, content_handler):
     with ThreadPoolExecutor(max_workers=concurrency) as ex:
         futures = [ex.submit(_worker, state, logger, content_type, content_handler) for _ in range(concurrency)]
         for f in as_completed(futures):
             f.result()
 
+
+def _compute_gap(_url_list, state):
     gap = [u for u in _url_list if u not in state.done_set]
-    return state.done, gap
+    return gap
 
-
-# FUNCTIONS
 
 @dataclass
 class RaceState:

@@ -26,43 +26,51 @@ def probe_curl_cffi_discriminator_workflow():
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
-    print(f"Loading proxy pool from {PROXIES_JSON} ...")
+    _print_loading_proxy_pool()
     proxies = load_proxies()
+    _print_pool_proxies_http(proxies)
+    start = time.time()
+    primary_results = run_checks(proxies, TARGET_PRIMARY)
+    elapsed_primary = _compute_elapsed_primary(start)
+    _print_done_in_s(elapsed_primary)
+
+    passing_proxies = _compute_passing_proxies(proxies, primary_results)
+
+    secondary_results = []
+    if passing_proxies:
+        _print_secondary_passing_proxies(passing_proxies)
+        start2 = time.time()
+        secondary_results = run_checks(passing_proxies, TARGET_SECONDARY)
+        elapsed_secondary = _compute_elapsed_secondary(start2)
+        _print_secondary_elapsed(elapsed_secondary)
+    else:
+        print("\nNo passing proxies on primary — skipping secondary target.")
+        elapsed_secondary = 0.0
+
+    report_path = _compute_report_path(ts)
+    report = build_report(proxies, primary_results, passing_proxies, secondary_results,
+                          elapsed_primary, elapsed_secondary, ts)
+    report_path.write_text(report)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _print_loading_proxy_pool():
+    print(f"Loading proxy pool from {PROXIES_JSON} ...")
+
+
+def load_proxies():
+    return json.loads(PROXIES_JSON.read_text())
+
+
+def _print_pool_proxies_http(proxies):
     print(f"Pool: {len(proxies)} proxies (http {sum(1 for p in proxies if p['protocol']=='http')}, "
           f"socks4 {sum(1 for p in proxies if p['protocol']=='socks4')}, "
           f"socks5 {sum(1 for p in proxies if p['protocol']=='socks5')})")
 
     print(f"\n=== PRIMARY: {TARGET_PRIMARY} ===")
     print(f"Concurrency {CONCURRENCY}, timeout {TIMEOUT}s ...")
-    start = time.time()
-    primary_results = run_checks(proxies, TARGET_PRIMARY)
-    elapsed_primary = time.time() - start
-    print(f"Done in {elapsed_primary:.0f}s")
-
-    passing_proxies = [p for p, r in zip(proxies, primary_results) if r[0] == "pass"]
-
-    secondary_results = []
-    if passing_proxies:
-        print(f"\n=== SECONDARY: {TARGET_SECONDARY} ({len(passing_proxies)} passing proxies) ===")
-        start2 = time.time()
-        secondary_results = run_checks(passing_proxies, TARGET_SECONDARY)
-        elapsed_secondary = time.time() - start2
-        print(f"Done in {elapsed_secondary:.0f}s")
-    else:
-        print("\nNo passing proxies on primary — skipping secondary target.")
-        elapsed_secondary = 0.0
-
-    report_path = REPORT_DIR / f"discriminator_{ts}.md"
-    report = build_report(proxies, primary_results, passing_proxies, secondary_results,
-                          elapsed_primary, elapsed_secondary, ts)
-    report_path.write_text(report)
-    print(f"\nReport: {report_path}")
-
-
-# FUNCTIONS
-
-def load_proxies():
-    return json.loads(PROXIES_JSON.read_text())
 
 
 def run_checks(entries, target):
@@ -85,6 +93,38 @@ def run_checks(entries, target):
     return results
 
 
+def _compute_elapsed_primary(start):
+    elapsed_primary = time.time() - start
+    return elapsed_primary
+
+
+def _print_done_in_s(elapsed_primary):
+    print(f"Done in {elapsed_primary:.0f}s")
+
+
+def _compute_passing_proxies(proxies, primary_results):
+    passing_proxies = [p for p, r in zip(proxies, primary_results) if r[0] == "pass"]
+    return passing_proxies
+
+
+def _print_secondary_passing_proxies(passing_proxies):
+    print(f"\n=== SECONDARY: {TARGET_SECONDARY} ({len(passing_proxies)} passing proxies) ===")
+
+
+def _compute_elapsed_secondary(start2):
+    elapsed_secondary = time.time() - start2
+    return elapsed_secondary
+
+
+def _print_secondary_elapsed(elapsed_secondary):
+    print(f"Done in {elapsed_secondary:.0f}s")
+
+
+def _compute_report_path(ts):
+    report_path = REPORT_DIR / f"discriminator_{ts}.md"
+    return report_path
+
+
 def build_report(proxies, primary_results, passing_proxies, secondary_results,
                  elapsed_primary, elapsed_secondary, ts):
     total = len(proxies)
@@ -103,6 +143,10 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
     lines += build_verdict_lines(pass_count, cf_block, conn_err, timeout)
 
     return "\n".join(lines) + "\n"
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}")
 
 
 def check_one(entry, target):

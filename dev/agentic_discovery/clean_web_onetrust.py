@@ -16,7 +16,19 @@ RE_PAGINATION = re.compile(r'^\d+ of \d+\[\]\([^\)]*\)\s*$')
 RE_NAV_LINK_LINE = re.compile(r'^(\[([^\]]+)\]\([^\)]+\))+\s*$')
 
 
+# ORCHESTRATOR
+
+def run_main() -> None:
+    test_arg = _compute_test_arg()
+    main(test_arg)
+
+
 # FUNCTIONS
+
+def _compute_test_arg():
+    test_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    return test_arg
+
 
 def main(test_file: str = None):
     if test_file:
@@ -179,6 +191,5 @@ def _try_merge_split_heading(content_lines: list[str], i: int) -> tuple[str, int
     return "", i + 1
 
 
-if __name__ == '__main__':
-    test_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    main(test_arg)
+if __name__ == "__main__":
+    run_main()

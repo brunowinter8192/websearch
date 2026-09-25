@@ -53,18 +53,21 @@ def main():
     parser.add_argument("--drill", type=int, default=4, help="Number of URLs for diff drill-down (default 4)")
     args = parser.parse_args()
 
-    sweep_dir = Path(args.sweep) if args.sweep else find_latest_dir(SWEEP_BASE)
-    cleanraw_dir = Path(args.cleanraw) if args.cleanraw else find_latest_dir(CLEANRAW_BASE)
+    sweep_dir = _compute_sweep_dir(args)
+    cleanraw_dir = _compute_cleanraw_dir(args)
     analyze_workflow(sweep_dir, cleanraw_dir, args.drill)
 
 
 # FUNCTIONS
 
-def find_latest_dir(base: Path) -> Path:
-    candidates = sorted(p for p in base.iterdir() if p.is_dir())
-    if not candidates:
-        raise SystemExit(f"No subdirs in {base}")
-    return candidates[-1]
+def _compute_sweep_dir(args):
+    sweep_dir = Path(args.sweep) if args.sweep else find_latest_dir(SWEEP_BASE)
+    return sweep_dir
+
+
+def _compute_cleanraw_dir(args):
+    cleanraw_dir = Path(args.cleanraw) if args.cleanraw else find_latest_dir(CLEANRAW_BASE)
+    return cleanraw_dir
 
 
 def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> None:
@@ -90,6 +93,13 @@ def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> N
     report_path = sweep_dir / "_analysis.md"
     write_report(report_path, sweep_dir, cleanraw_dir, config_metrics, cleanraw_by_url, drill_count)
     print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+def find_latest_dir(base: Path) -> Path:
+    candidates = sorted(p for p in base.iterdir() if p.is_dir())
+    if not candidates:
+        raise SystemExit(f"No subdirs in {base}")
+    return candidates[-1]
 
 
 def load_cleanraws(cleanraw_dir: Path) -> dict:

@@ -70,9 +70,8 @@ def probe_discovery_workflow():
     total   = sub_stats["sub_count"]
     fetched = sub_stats["fetched"]
     remain  = sub_stats["remaining"]
-    status  = "COMPLETE" if remain == 0 else f"PARTIAL ({remain} subs pending — re-run to resume)"
-    print(f"\nReport written: {REPORT_PATH}")
-    print(f"Sitemap: {fetched}/{total} subs fetched — {status}")
+    status = _compute_status(remain)
+    _print_report_written(fetched, total, status)
 
 
 # FUNCTIONS
@@ -193,6 +192,16 @@ def fetch_ui_crawl():
 def write_report(content):
     with open(REPORT_PATH, "w") as f:
         f.write(content)
+
+
+def _compute_status(remain):
+    status  = "COMPLETE" if remain == 0 else f"PARTIAL ({remain} subs pending — re-run to resume)"
+    return status
+
+
+def _print_report_written(fetched, total, status):
+    print(f"\nReport written: {REPORT_PATH}")
+    print(f"Sitemap: {fetched}/{total} subs fetched — {status}")
 
 
 def _reconstruct_sub_urls_from_cache():

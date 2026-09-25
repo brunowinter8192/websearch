@@ -10,7 +10,7 @@ INPUT_DIR = Path("/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/MCP/RAG/da
 def main():
     md_files = sorted(INPUT_DIR.glob("*.md"))
     if not md_files:
-        print(f"No .md files found in {INPUT_DIR}")
+        _print_no_md_files()
         return
 
     total_before = 0
@@ -18,6 +18,19 @@ def main():
     processed = 0
     skipped = 0
 
+    total_before, total_after, skipped, processed = _clean_files(md_files, total_before, total_after, skipped, processed)
+
+    reduction = _compute_reduction(total_after, total_before)
+    _print_files_processed_cleaned(processed, skipped, total_before, total_after, reduction)
+
+
+# FUNCTIONS
+
+def _print_no_md_files():
+    print(f"No .md files found in {INPUT_DIR}")
+
+
+def _clean_files(md_files, total_before, total_after, skipped, processed):
     for path in md_files:
         before, after = clean_file(path)
         total_before += before
@@ -26,15 +39,20 @@ def main():
             skipped += 1
         else:
             processed += 1
+    return total_before, total_after, skipped, processed
 
+
+def _compute_reduction(total_after, total_before):
     reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    return reduction
+
+
+def _print_files_processed_cleaned(processed, skipped, total_before, total_after, reduction):
     print(f"FILES PROCESSED: {processed} cleaned, {skipped} unchanged")
     print(f"Total chars before: {total_before:,}")
     print(f"Total chars after:  {total_after:,}")
     print(f"Reduction: {reduction:.1f}%")
 
-
-# FUNCTIONS
 
 def clean_file(path: Path) -> tuple[int, int]:
     text = path.read_text(encoding="utf-8")
