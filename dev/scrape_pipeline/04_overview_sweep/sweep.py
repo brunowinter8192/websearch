@@ -45,6 +45,26 @@ ENTRY_RE = re.compile(r"^(\d+)\. \*\*\[([A-Z?]+)\]\*\*")
 URL_LINE_RE = re.compile(r"^\s+URL: (https?://\S+)$")
 
 
+# ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to sweep_config.yml")
+    parser.add_argument("--output-dir", default=None, help="Output dir (default: sweep_data/<timestamp>/)")
+    args = parser.parse_args()
+
+    config_path = Path(args.config)
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+    else:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = OUTPUT_BASE / ts
+
+    asyncio.run(sweep_workflow(config_path, output_dir))
+
+
+# FUNCTIONS
+
 async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
     sweep_cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     smoke_report = PROJECT_ROOT / sweep_cfg["input"]["smoke_report"]
@@ -68,6 +88,25 @@ async def sweep_workflow(config_path: Path, output_dir: Path) -> None:
     metadata["finished"] = datetime.now().isoformat(timespec="seconds")
     (output_dir / "_run_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     print(f"\nDone. Metadata: {output_dir}/_run_metadata.json", file=sys.stderr)
+
+
+def parse_q_urls(smoke_report: Path, query_id: int) -> tuple[str, list]:
+    lines = smoke_report.read_text(encoding="utf-8").splitlines()
+    q_text, start, end = find_query_section(lines, query_id)
+    urls = extract_urls(lines, start, end)
+    return q_text, urls
+
+
+def generate_combos(sweep_cfg: dict):
+    for f in sweep_cfg["filters"]:
+        for cs in sweep_cfg["content_sources"]:
+            for sel in sweep_cfg["excluded_selectors"]:
+                yield {
+                    "name": f"{f['name']}_{cs}_{sel['name']}",
+                    "filter": f,
+                    "content_source": cs,
+                    "selector": sel,
+                }
 
 
 def build_initial_metadata(query_id: int, query_text: str, urls: list, combos: list) -> dict:
@@ -114,16 +153,36 @@ async def run_one_combo(crawler, combo: dict, index: int, total: int, urls: list
     }
 
 
-def generate_combos(sweep_cfg: dict):
-    for f in sweep_cfg["filters"]:
-        for cs in sweep_cfg["content_sources"]:
-            for sel in sweep_cfg["excluded_selectors"]:
-                yield {
-                    "name": f"{f['name']}_{cs}_{sel['name']}",
-                    "filter": f,
-                    "content_source": cs,
-                    "selector": sel,
-                }
+def find_query_section(lines: list, query_id: int) -> tuple[str, int, int]:
+    start = -1
+    q_text = ""
+    for i, line in enumerate(lines):
+        m = QUERY_SECTION_RE.match(line)
+        if not m:
+            continue
+        if int(m.group(1)) == query_id:
+            start = i
+            q_text = m.group(2)
+        elif start != -1:
+            return q_text, start, i
+    if start == -1:
+        raise ValueError(f"Query Q{query_id} not found in smoke report")
+    return q_text, start, len(lines)
+
+
+def extract_urls(lines: list, start: int, end: int) -> list:
+    urls = []
+    in_entry = False
+    for line in lines[start:end]:
+        if ENTRY_RE.match(line):
+            in_entry = True
+            continue
+        if in_entry:
+            m = URL_LINE_RE.match(line)
+            if m:
+                urls.append(m.group(1))
+                in_entry = False
+    return urls
 
 
 def build_run_config(combo: dict) -> CrawlerRunConfig:
@@ -203,61 +262,6 @@ def sanitize_filename(url: str) -> str:
     slug = re.sub(r"[^\w]", "_", url)[:80]
     h = hashlib.md5(url.encode()).hexdigest()[:6]
     return f"{slug}_{h}"
-
-
-def parse_q_urls(smoke_report: Path, query_id: int) -> tuple[str, list]:
-    lines = smoke_report.read_text(encoding="utf-8").splitlines()
-    q_text, start, end = find_query_section(lines, query_id)
-    urls = extract_urls(lines, start, end)
-    return q_text, urls
-
-
-def find_query_section(lines: list, query_id: int) -> tuple[str, int, int]:
-    start = -1
-    q_text = ""
-    for i, line in enumerate(lines):
-        m = QUERY_SECTION_RE.match(line)
-        if not m:
-            continue
-        if int(m.group(1)) == query_id:
-            start = i
-            q_text = m.group(2)
-        elif start != -1:
-            return q_text, start, i
-    if start == -1:
-        raise ValueError(f"Query Q{query_id} not found in smoke report")
-    return q_text, start, len(lines)
-
-
-def extract_urls(lines: list, start: int, end: int) -> list:
-    urls = []
-    in_entry = False
-    for line in lines[start:end]:
-        if ENTRY_RE.match(line):
-            in_entry = True
-            continue
-        if in_entry:
-            m = URL_LINE_RE.match(line)
-            if m:
-                urls.append(m.group(1))
-                in_entry = False
-    return urls
-
-
-def main():
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to sweep_config.yml")
-    parser.add_argument("--output-dir", default=None, help="Output dir (default: sweep_data/<timestamp>/)")
-    args = parser.parse_args()
-
-    config_path = Path(args.config)
-    if args.output_dir:
-        output_dir = Path(args.output_dir)
-    else:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = OUTPUT_BASE / ts
-
-    asyncio.run(sweep_workflow(config_path, output_dir))
 
 
 if __name__ == "__main__":

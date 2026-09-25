@@ -12,6 +12,26 @@ from _cdp_starvation_probe_canary import (
 
 # FUNCTIONS
 
+def _write_report(records: list[dict], report_dir: Path) -> Path:
+    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = report_dir / f"cdp_probe_{ts_str}.md"
+    stats = _compute_stats(records)
+    verdict = _derive_verdict(stats)
+    run_dur_s = (records[-1]["t_end"] - PROBE_START) if records else 0.0
+
+    lines: list[str] = []
+    lines += _r_header(records, ts_str, run_dur_s, verdict)
+    lines += _r_query_table(records)
+    lines += _r_latency_stats(stats)
+    lines += _r_timeseries(records)
+    lines += _r_cdp_table(records)
+    lines += _r_slow_callbacks()
+    lines += _r_verdict_section(stats, verdict)
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _derive_verdict(stats: dict) -> str:
     s_cap = stats["empty"]
     s_zc = stats["zero_cascade"]
@@ -34,26 +54,6 @@ def _derive_verdict(stats: dict) -> str:
     if s_cap["n"] == 0 and s_zc["n"] == 0:
         return "INCONCLUSIVE"
     return "REFUTED"
-
-
-def _write_report(records: list[dict], report_dir: Path) -> Path:
-    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = report_dir / f"cdp_probe_{ts_str}.md"
-    stats = _compute_stats(records)
-    verdict = _derive_verdict(stats)
-    run_dur_s = (records[-1]["t_end"] - PROBE_START) if records else 0.0
-
-    lines: list[str] = []
-    lines += _r_header(records, ts_str, run_dur_s, verdict)
-    lines += _r_query_table(records)
-    lines += _r_latency_stats(stats)
-    lines += _r_timeseries(records)
-    lines += _r_cdp_table(records)
-    lines += _r_slow_callbacks()
-    lines += _r_verdict_section(stats, verdict)
-    lines.append("")
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _r_header(records: list[dict], ts_str: str, run_dur_s: float, verdict: str) -> list[str]:

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -118,13 +117,30 @@ async def _run_burst(engines: dict, query: str, label: str) -> dict:
     }
 
 
-def _is_blocked(diagnosis: dict | None) -> bool:
-    if not diagnosis:
-        return False
-    if diagnosis.get("captcha_form"):
-        return True
-    status = diagnosis.get("http_status")
-    return isinstance(status, int) and 300 <= status < 400
+def _print_summary(records: list[dict]) -> None:
+    print("\n=== SCHOLAR HTTP (PRODUCTION) SUMMARY ===", file=sys.stderr)
+    print(f"{'#':3} {'Label':7} {'Scholar status':22} {'ms':6} {'n':4} {'query':45}", file=sys.stderr)
+    print("-" * 95, file=sys.stderr)
+    scholar_entries = []
+    for i, rec in enumerate(records):
+        s = rec["engines"].get("google_scholar", {})
+        status = s.get("status", "?")
+        ms = s.get("search_ms", 0)
+        n = s.get("result_count", 0)
+        blocked = s.get("blocked", False)
+        scholar_entries.append((status, blocked))
+        print(f"{i + 1:3} {rec['label']:7} {status:22} {ms:6} {n:4} {rec['query'][:45]}", file=sys.stderr)
+
+    from collections import Counter
+    counts = Counter(status for status, _ in scholar_entries)
+    effective = [(status, blocked) for status, blocked in scholar_entries if status != S.RATE_SKIP]
+    blocks = [blocked for _, blocked in effective if blocked]
+
+    print(file=sys.stderr)
+    print("Scholar status distribution:", dict(counts), file=sys.stderr)
+    print(f"Effective attempts (non-RATE_SKIP): {len(effective)}/{len(scholar_entries)}", file=sys.stderr)
+    block_rate = f"{len(blocks) / len(effective) * 100:.0f}%" if effective else "N/A"
+    print(f"Blocked (captcha_form or 30x http_status fact): {len(blocks)}/{len(effective)} effective → block rate {block_rate}", file=sys.stderr)
 
 
 async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int, bool]:
@@ -156,30 +172,13 @@ async def _run_engine(engine, query: str, timeout: float) -> tuple[str, int, int
         return "ERROR", search_ms, 0, False
 
 
-def _print_summary(records: list[dict]) -> None:
-    print("\n=== SCHOLAR HTTP (PRODUCTION) SUMMARY ===", file=sys.stderr)
-    print(f"{'#':3} {'Label':7} {'Scholar status':22} {'ms':6} {'n':4} {'query':45}", file=sys.stderr)
-    print("-" * 95, file=sys.stderr)
-    scholar_entries = []
-    for i, rec in enumerate(records):
-        s = rec["engines"].get("google_scholar", {})
-        status = s.get("status", "?")
-        ms = s.get("search_ms", 0)
-        n = s.get("result_count", 0)
-        blocked = s.get("blocked", False)
-        scholar_entries.append((status, blocked))
-        print(f"{i + 1:3} {rec['label']:7} {status:22} {ms:6} {n:4} {rec['query'][:45]}", file=sys.stderr)
-
-    from collections import Counter
-    counts = Counter(status for status, _ in scholar_entries)
-    effective = [(status, blocked) for status, blocked in scholar_entries if status != S.RATE_SKIP]
-    blocks = [blocked for _, blocked in effective if blocked]
-
-    print(file=sys.stderr)
-    print("Scholar status distribution:", dict(counts), file=sys.stderr)
-    print(f"Effective attempts (non-RATE_SKIP): {len(effective)}/{len(scholar_entries)}", file=sys.stderr)
-    block_rate = f"{len(blocks) / len(effective) * 100:.0f}%" if effective else "N/A"
-    print(f"Blocked (captcha_form or 30x http_status fact): {len(blocks)}/{len(effective)} effective → block rate {block_rate}", file=sys.stderr)
+def _is_blocked(diagnosis: dict | None) -> bool:
+    if not diagnosis:
+        return False
+    if diagnosis.get("captcha_form"):
+        return True
+    status = diagnosis.get("http_status")
+    return isinstance(status, int) and 300 <= status < 400
 
 
 if __name__ == "__main__":

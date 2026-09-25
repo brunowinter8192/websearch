@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 import asyncio
 import random
@@ -73,16 +72,6 @@ def probe_repo_cf_survey_workflow() -> None:
 
 # FUNCTIONS
 
-def repo_key_from_url(url: str) -> str:
-    if "proxyscrape.com" in url:
-        return "proxyscrape"
-    if "raw.githubusercontent.com" in url:
-        parts = url.split("/")
-        idx = parts.index("raw.githubusercontent.com")
-        return f"{parts[idx+1]}/{parts[idx+2]}"
-    return url.split("/")[2]
-
-
 def build_repo_groups() -> dict:
     groups: dict[str, list] = defaultdict(list)
     for url, is_mixed in HTTP_SOURCES:
@@ -94,35 +83,19 @@ def build_repo_groups() -> dict:
     return dict(groups)
 
 
-def parse_proxy_line(line: str) -> str | None:
-    line = line.strip()
-    if not line or line.startswith("#"):
-        return None
-    if "://" in line:
-        line = line.split("://", 1)[1]
-    if "@" in line:
-        line = line.rsplit("@", 1)[1]
-    m = _PROXY_RE.match(line)
-    if m and 1 <= int(m.group(2)) <= 65535:
-        return f"{m.group(1)}:{m.group(2)}"
-    return None
-
-
-async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
-                    protocol: str, url: str, is_mixed: bool) -> tuple[set, str | None]:
-    async with sem:
-        try:
-            r = await client.get(url, timeout=FETCH_TIMEOUT, follow_redirects=True)
-            if r.status_code != 200:
-                return set(), f"HTTP {r.status_code}"
-            result = set()
-            for line in r.text.splitlines():
-                hp = parse_proxy_line(line)
-                if hp:
-                    result.add((protocol, hp))
-            return result, None
-        except Exception as e:
-            return set(), f"{type(e).__name__}: {str(e)[:100]}"
+def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
+    lines = [
+        f"# Per-repo theblock-CF survey — {ts}",
+        "",
+        f"- Check: curl_cffi chrome → {THEBLOCK_URL}",
+        f"- Pass: status 200 + XML marker in first 500B  |  timeout: {CHECK_TIMEOUT}s",
+        f"- Sample: {SAMPLE_SIZE} per repo (all if smaller)  |  concurrency: {CONCURRENCY}",
+        f"- Repos: {len(repo_groups)}",
+        "",
+        "---",
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 async def fetch_all_repos(repo_groups: dict) -> tuple[dict, list]:
@@ -146,15 +119,27 @@ async def fetch_all_repos(repo_groups: dict) -> tuple[dict, list]:
     return dict(repo_proxies), failed_sources
 
 
-def check_proxy(protocol: str, host_port: str) -> bool:
-    purl = f"{protocol}://{host_port}"
-    try:
-        s = cffi.Session(impersonate="chrome")
-        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
-        head = r.content[:500]
-        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
-        return False
+def write_fetch_summary(path: Path, repo_proxies: dict, failed_sources: list) -> None:
+    lines = [
+        "## Fetch summary (unique proxies per repo)",
+        "",
+        "| Repo | Unique | Protocols |",
+        "|---|---|---|",
+    ]
+    for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
+        protos = Counter(p for p, _ in proxies)
+        proto_str = " ".join(f"{k}:{v}" for k, v in sorted(protos.items()))
+        lines.append(f"| {rk} | {len(proxies):,} | {proto_str} |")
+    lines += ["", "### Failed sources", ""]
+    if failed_sources:
+        lines += ["| Repo | Protocol | URL | Error |", "|---|---|---|---|"]
+        for rk, protocol, url, error in failed_sources:
+            lines.append(f"| {rk} | {protocol} | {url} | {error} |")
+    else:
+        lines.append("None.")
+    lines += ["", "---", ""]
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def check_repo(repo_key: str, sample: list) -> dict:
@@ -185,44 +170,6 @@ def check_repo(repo_key: str, sample: list) -> dict:
         "passers":     passed_list,
         "elapsed":     elapsed,
     }
-
-
-def write_report_header(path: Path, ts: str, repo_groups: dict) -> None:
-    lines = [
-        f"# Per-repo theblock-CF survey — {ts}",
-        "",
-        f"- Check: curl_cffi chrome → {THEBLOCK_URL}",
-        f"- Pass: status 200 + XML marker in first 500B  |  timeout: {CHECK_TIMEOUT}s",
-        f"- Sample: {SAMPLE_SIZE} per repo (all if smaller)  |  concurrency: {CONCURRENCY}",
-        f"- Repos: {len(repo_groups)}",
-        "",
-        "---",
-        "",
-    ]
-    path.write_text("\n".join(lines), encoding="utf-8")
-
-
-def write_fetch_summary(path: Path, repo_proxies: dict, failed_sources: list) -> None:
-    lines = [
-        "## Fetch summary (unique proxies per repo)",
-        "",
-        "| Repo | Unique | Protocols |",
-        "|---|---|---|",
-    ]
-    for rk, proxies in sorted(repo_proxies.items(), key=lambda x: -len(x[1])):
-        protos = Counter(p for p, _ in proxies)
-        proto_str = " ".join(f"{k}:{v}" for k, v in sorted(protos.items()))
-        lines.append(f"| {rk} | {len(proxies):,} | {proto_str} |")
-    lines += ["", "### Failed sources", ""]
-    if failed_sources:
-        lines += ["| Repo | Protocol | URL | Error |", "|---|---|---|---|"]
-        for rk, protocol, url, error in failed_sources:
-            lines.append(f"| {rk} | {protocol} | {url} | {error} |")
-    else:
-        lines.append("None.")
-    lines += ["", "---", ""]
-    with open(path, "a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
 
 
 def write_repo_result(path: Path, repo_key: str, result: dict) -> None:
@@ -289,6 +236,58 @@ def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
     lines += ["", ""]
     with open(path, "a", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
+
+
+def repo_key_from_url(url: str) -> str:
+    if "proxyscrape.com" in url:
+        return "proxyscrape"
+    if "raw.githubusercontent.com" in url:
+        parts = url.split("/")
+        idx = parts.index("raw.githubusercontent.com")
+        return f"{parts[idx+1]}/{parts[idx+2]}"
+    return url.split("/")[2]
+
+
+async def fetch_one(client: httpx.AsyncClient, sem: asyncio.Semaphore,
+                    protocol: str, url: str, is_mixed: bool) -> tuple[set, str | None]:
+    async with sem:
+        try:
+            r = await client.get(url, timeout=FETCH_TIMEOUT, follow_redirects=True)
+            if r.status_code != 200:
+                return set(), f"HTTP {r.status_code}"
+            result = set()
+            for line in r.text.splitlines():
+                hp = parse_proxy_line(line)
+                if hp:
+                    result.add((protocol, hp))
+            return result, None
+        except Exception as e:
+            return set(), f"{type(e).__name__}: {str(e)[:100]}"
+
+
+def check_proxy(protocol: str, host_port: str) -> bool:
+    purl = f"{protocol}://{host_port}"
+    try:
+        s = cffi.Session(impersonate="chrome")
+        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
+        head = r.content[:500]
+        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
+    except Exception:
+        return False
+
+
+def parse_proxy_line(line: str) -> str | None:
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return None
+    if "://" in line:
+        line = line.split("://", 1)[1]
+    if "@" in line:
+        line = line.rsplit("@", 1)[1]
+    m = _PROXY_RE.match(line)
+    if m and 1 <= int(m.group(2)) <= 65535:
+        return f"{m.group(1)}:{m.group(2)}"
+    return None
 
 
 if __name__ == "__main__":

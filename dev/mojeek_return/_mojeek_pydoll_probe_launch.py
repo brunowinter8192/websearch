@@ -38,120 +38,14 @@ BROWSER_PREFERENCES = {
 }
 
 
+# FUNCTIONS
+
 @dataclass
 class LaunchedBrowser:
     browser: Chrome
     profile_dir: str
     owned_pids: list[int]
     watchdog_task: asyncio.Task | None
-
-
-# FUNCTIONS
-
-def build_options(profile_dir: str) -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.add_argument(f"--user-data-dir={profile_dir}")
-    options.add_argument("--no-startup-window")
-    options.block_popups = True
-    options.block_notifications = True
-
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.webrtc_leak_protection = True
-
-    for flag in BACKGROUNDING_FLAGS:
-        options.add_argument(flag)
-
-    options.browser_preferences = dict(BROWSER_PREFERENCES)
-
-    return options
-
-
-def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
-    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def pids_for_profile(profile_dir: str) -> list[int]:
-    result = subprocess.run(
-        ["pgrep", "-f", f"user-data-dir={profile_dir}"], capture_output=True, text=True
-    )
-    return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
-
-
-def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
-    procs = []
-    for pid in pids:
-        try:
-            proc = psutil.Process(pid)
-            proc.terminate()
-            procs.append(proc)
-        except psutil.NoSuchProcess:
-            pass
-    _, alive = psutil.wait_procs(procs, timeout=timeout_s)
-    for proc in alive:
-        try:
-            proc.kill()
-        except psutil.NoSuchProcess:
-            pass
-
-
-def reap_profile(profile_dir: str) -> None:
-    pids = pids_for_profile(profile_dir)
-    if not pids:
-        return
-    logger.info("Reaping Chrome on profile %s: pids=%s", profile_dir, pids)
-    _terminate_then_kill(pids)
-
-
-def _clear_stale_devtools_port(profile_dir: str) -> None:
-    Path(profile_dir, "DevToolsActivePort").unlink(missing_ok=True)
-
-
-def _wait_for_devtools_port(profile_dir: str, timeout_s: float) -> int:
-    port_file = Path(profile_dir) / "DevToolsActivePort"
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if port_file.exists():
-            lines = port_file.read_text().splitlines()
-            if lines and lines[0].strip().isdigit():
-                return int(lines[0].strip())
-        time.sleep(0.1)
-    raise TimeoutError(f"DevToolsActivePort did not appear under {profile_dir} within {timeout_s}s")
-
-
-def _get_frontmost_pid() -> int | None:
-    result = subprocess.run(
-        [
-            "osascript", "-e",
-            'tell application "System Events" to get unix id of first application process whose frontmost is true',
-        ],
-        capture_output=True, text=True,
-    )
-    pid = result.stdout.strip()
-    return int(pid) if pid.isdigit() else None
-
-
-def _activate_pid(pid: int) -> None:
-    subprocess.run(
-        [
-            "osascript", "-e",
-            f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true',
-        ],
-        capture_output=True, text=True,
-    )
-
-
-async def _focus_steal_watchdog_by_pid(owned_pids: set[int], anchor_pid: int | None) -> None:
-    last_other_pid = anchor_pid
-    while True:
-        current_pid = await asyncio.to_thread(_get_frontmost_pid)
-        if current_pid in owned_pids:
-            if last_other_pid is not None and last_other_pid not in owned_pids:
-                await asyncio.to_thread(_activate_pid, last_other_pid)
-        else:
-            last_other_pid = current_pid
-        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
 
 
 async def launch_browser(profile_dir: str) -> LaunchedBrowser:
@@ -211,3 +105,109 @@ async def teardown(handle: LaunchedBrowser) -> None:
     if handle.owned_pids:
         _terminate_then_kill(handle.owned_pids, timeout_s=10.0)
     reap_profile(handle.profile_dir)
+
+
+def reap_profile(profile_dir: str) -> None:
+    pids = pids_for_profile(profile_dir)
+    if not pids:
+        return
+    logger.info("Reaping Chrome on profile %s: pids=%s", profile_dir, pids)
+    _terminate_then_kill(pids)
+
+
+def _clear_stale_devtools_port(profile_dir: str) -> None:
+    Path(profile_dir, "DevToolsActivePort").unlink(missing_ok=True)
+
+
+def build_options(profile_dir: str) -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.add_argument(f"--user-data-dir={profile_dir}")
+    options.add_argument("--no-startup-window")
+    options.block_popups = True
+    options.block_notifications = True
+
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.webrtc_leak_protection = True
+
+    for flag in BACKGROUNDING_FLAGS:
+        options.add_argument(flag)
+
+    options.browser_preferences = dict(BROWSER_PREFERENCES)
+
+    return options
+
+
+def _open_background_process_creator(command: list[str]) -> subprocess.Popen:
+    args = command[1:]
+    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _wait_for_devtools_port(profile_dir: str, timeout_s: float) -> int:
+    port_file = Path(profile_dir) / "DevToolsActivePort"
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if port_file.exists():
+            lines = port_file.read_text().splitlines()
+            if lines and lines[0].strip().isdigit():
+                return int(lines[0].strip())
+        time.sleep(0.1)
+    raise TimeoutError(f"DevToolsActivePort did not appear under {profile_dir} within {timeout_s}s")
+
+
+async def _focus_steal_watchdog_by_pid(owned_pids: set[int], anchor_pid: int | None) -> None:
+    last_other_pid = anchor_pid
+    while True:
+        current_pid = await asyncio.to_thread(_get_frontmost_pid)
+        if current_pid in owned_pids:
+            if last_other_pid is not None and last_other_pid not in owned_pids:
+                await asyncio.to_thread(_activate_pid, last_other_pid)
+        else:
+            last_other_pid = current_pid
+        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
+
+
+def _get_frontmost_pid() -> int | None:
+    result = subprocess.run(
+        [
+            "osascript", "-e",
+            'tell application "System Events" to get unix id of first application process whose frontmost is true',
+        ],
+        capture_output=True, text=True,
+    )
+    pid = result.stdout.strip()
+    return int(pid) if pid.isdigit() else None
+
+
+def pids_for_profile(profile_dir: str) -> list[int]:
+    result = subprocess.run(
+        ["pgrep", "-f", f"user-data-dir={profile_dir}"], capture_output=True, text=True
+    )
+    return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
+
+
+def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
+    procs = []
+    for pid in pids:
+        try:
+            proc = psutil.Process(pid)
+            proc.terminate()
+            procs.append(proc)
+        except psutil.NoSuchProcess:
+            pass
+    _, alive = psutil.wait_procs(procs, timeout=timeout_s)
+    for proc in alive:
+        try:
+            proc.kill()
+        except psutil.NoSuchProcess:
+            pass
+
+
+def _activate_pid(pid: int) -> None:
+    subprocess.run(
+        [
+            "osascript", "-e",
+            f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true',
+        ],
+        capture_output=True, text=True,
+    )

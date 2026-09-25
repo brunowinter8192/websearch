@@ -85,30 +85,6 @@ def classify_carry_over(
     return CARRY_OVER_NONE
 
 
-def cookie_is_session_scoped(cookie: dict) -> bool:
-    expires = cookie.get("expires")
-    if expires is None:
-        return True
-    return expires <= SESSION_EXPIRY_SENTINEL
-
-
-def fingerprint_cookie(cookie: dict) -> dict:
-    value = cookie.get("value") or ""
-    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-    return {
-        "name": cookie.get("name"),
-        "domain": cookie.get("domain"),
-        "path": cookie.get("path"),
-        "expires": cookie.get("expires"),
-        "session_scoped": cookie_is_session_scoped(cookie),
-        "http_only": cookie.get("httpOnly"),
-        "secure": cookie.get("secure"),
-        "same_site": cookie.get("sameSite"),
-        "value_length": len(value),
-        "value_sha256_12": digest,
-    }
-
-
 def fingerprint_cookies(cookies: list[dict], domain_filter: str | None = None) -> list[dict]:
     selected = []
     for cookie in cookies:
@@ -117,10 +93,6 @@ def fingerprint_cookies(cookies: list[dict], domain_filter: str | None = None) -
             continue
         selected.append(fingerprint_cookie(cookie))
     return sorted(selected, key=lambda c: (c["name"] or "", c["domain"] or ""))
-
-
-def _cookie_key(fingerprint: dict) -> tuple:
-    return (fingerprint["name"], fingerprint["domain"], fingerprint["path"])
 
 
 def diff_cookie_fingerprints(before: list[dict], after: list[dict]) -> dict:
@@ -145,15 +117,6 @@ def diff_cookie_fingerprints(before: list[dict], after: list[dict]) -> dict:
         "changed": sorted(changed, key=lambda c: c["name"] or ""),
         "unchanged": sorted(unchanged, key=lambda c: c["name"] or ""),
     }
-
-
-def _decode_altcha_payload(payload: str) -> dict | None:
-    padded = payload + "=" * (-len(payload) % 4)
-    try:
-        raw = base64.b64decode(padded)
-        return json.loads(raw)
-    except Exception:
-        return None
 
 
 def extract_pow_time_ms(events: list[dict]) -> float | None:
@@ -200,3 +163,40 @@ def summarize_durations(values: list[float]) -> dict:
 
 def count_over_budget(values: list[float], budget_ms: float) -> int:
     return sum(1 for v in values if v is not None and v > budget_ms)
+
+
+def fingerprint_cookie(cookie: dict) -> dict:
+    value = cookie.get("value") or ""
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return {
+        "name": cookie.get("name"),
+        "domain": cookie.get("domain"),
+        "path": cookie.get("path"),
+        "expires": cookie.get("expires"),
+        "session_scoped": cookie_is_session_scoped(cookie),
+        "http_only": cookie.get("httpOnly"),
+        "secure": cookie.get("secure"),
+        "same_site": cookie.get("sameSite"),
+        "value_length": len(value),
+        "value_sha256_12": digest,
+    }
+
+
+def _cookie_key(fingerprint: dict) -> tuple:
+    return (fingerprint["name"], fingerprint["domain"], fingerprint["path"])
+
+
+def _decode_altcha_payload(payload: str) -> dict | None:
+    padded = payload + "=" * (-len(payload) % 4)
+    try:
+        raw = base64.b64decode(padded)
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def cookie_is_session_scoped(cookie: dict) -> bool:
+    expires = cookie.get("expires")
+    if expires is None:
+        return True
+    return expires <= SESSION_EXPIRY_SENTINEL

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import argparse
 import asyncio
 import resource
@@ -57,6 +56,22 @@ async def _run(args: argparse.Namespace) -> None:
 
 
 # FUNCTIONS
+
+def _raise_fd_limit(target: int = 16_384) -> None:
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        new_soft   = target if hard == resource.RLIM_INFINITY else min(target, hard)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
+        soft2, hard2 = resource.getrlimit(resource.RLIMIT_NOFILE)
+        print(f"[main] RLIMIT_NOFILE soft={soft2} hard={hard2}", file=sys.stderr)
+    except Exception as exc:
+        print(
+            f"[main] WARNING: could not raise RLIMIT_NOFILE: {exc}\n"
+            f"  Manually run: ulimit -n 16384",
+            file=sys.stderr,
+        )
+
+
 def _prepare_url_queue(args: argparse.Namespace) -> asyncio.Queue:
     urls = sample_urls(args.n_urls)
     if not urls:
@@ -88,21 +103,6 @@ async def _prepare_proxy_pool() -> list:
         file=sys.stderr,
     )
     return proxy_pool
-
-
-def _raise_fd_limit(target: int = 16_384) -> None:
-    try:
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        new_soft   = target if hard == resource.RLIM_INFINITY else min(target, hard)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
-        soft2, hard2 = resource.getrlimit(resource.RLIMIT_NOFILE)
-        print(f"[main] RLIMIT_NOFILE soft={soft2} hard={hard2}", file=sys.stderr)
-    except Exception as exc:
-        print(
-            f"[main] WARNING: could not raise RLIMIT_NOFILE: {exc}\n"
-            f"  Manually run: ulimit -n 16384",
-            file=sys.stderr,
-        )
 
 
 def _parse_args() -> argparse.Namespace:

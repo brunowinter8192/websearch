@@ -118,8 +118,27 @@ def check_orphans() -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def _fmt_stats(s: dict) -> str:
-    return f"{s['min']}/{s['median']}/{s['max']}" if s["n"] else "n/a"
+def write_report(results: dict, orphans: list[str]) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
+
+    lines = [
+        f"# Launch Latency + Flag Probe — {ts}",
+        "",
+        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
+        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
+        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
+        "",
+    ]
+    lines += _build_config_table()
+    lines += _build_latency_table(results)
+    lines += _build_drift_table(results)
+    lines += _build_watchdog_fit(results)
+    lines += _build_excluded_flag_note()
+    lines += _build_teardown_section(orphans)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _build_config_table() -> list[str]:
@@ -230,27 +249,8 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-def write_report(results: dict, orphans: list[str]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"01_launch_latency_probe_{ts}.md"
-
-    lines = [
-        f"# Launch Latency + Flag Probe — {ts}",
-        "",
-        "Dev-only probe (macOS): headless-direct vs headed-backgrounded Chrome launch latency, one "
-        "local-page navigation, and background-timer-throttling drift. N=5 per config for launch/nav, "
-        "N=3 per config for the (more expensive, fixed ~4.8s wait) timer-drift measurement.",
-        "",
-    ]
-    lines += _build_config_table()
-    lines += _build_latency_table(results)
-    lines += _build_drift_table(results)
-    lines += _build_watchdog_fit(results)
-    lines += _build_excluded_flag_note()
-    lines += _build_teardown_section(orphans)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def _fmt_stats(s: dict) -> str:
+    return f"{s['min']}/{s['median']}/{s['max']}" if s["n"] else "n/a"
 
 
 if __name__ == "__main__":

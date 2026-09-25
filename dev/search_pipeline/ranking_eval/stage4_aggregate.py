@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -50,16 +49,6 @@ def run_aggregate(ts_dir: Path, no_oracle: bool) -> None:
 
 
 # FUNCTIONS
-
-def _query_slug(query: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def _jaccard(a: list[str], b: list[str]) -> float:
-    sa, sb = set(a), set(b)
-    union  = sa | sb
-    return len(sa & sb) / len(union) if union else 0.0
-
 
 def _load_and_score_pair(
     ts_dir: Path, mode: str, query: str, no_oracle: bool
@@ -121,6 +110,42 @@ def _write_query_md(result: dict, ts_dir: Path) -> Path:
     return path
 
 
+def _write_summary_md(results: list[dict], ts_dir: Path) -> Path:
+    path       = ts_dir / "eval_summary.md"
+    has_oracle = any(r["oracle_urls"] for r in results)
+
+    lines = [
+        "# Value Eval Summary",
+        "",
+        f"**Pairs:** {len(results)} / 16  ",
+        f"**Oracle:** {'present' if has_oracle else 'pending (smoke mode)'}  ",
+        "",
+    ]
+
+    if has_oracle:
+        scored = [r for r in results if r["oracle_urls"]]
+        lines += _summary_per_mode_table(scored)
+        if scored:
+            lines += _summary_overall_winner(scored)
+            lines += _summary_mode_signals(scored)
+
+    else:
+        lines += _summary_smoke_coverage(results)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _query_slug(query: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
+
+
+def _jaccard(a: list[str], b: list[str]) -> float:
+    sa, sb = set(a), set(b)
+    union  = sa | sb
+    return len(sa & sb) / len(union) if union else 0.0
+
+
 def _render_query_header(result: dict, mode: str, query: str, mm: dict) -> list[str]:
     return [
         f"# Value Eval — {mode} × {query}",
@@ -180,76 +205,6 @@ def _render_comparison(result: dict, mm: dict) -> list[str]:
     else:
         lines += _comparison_pool_coverage(result, mm)
     return lines
-
-
-def _comparison_with_oracle(result: dict) -> list[str]:
-    oracle_set = set(result["oracle_urls"])
-    lines = [
-        "| Method | Jaccard | Oracle URLs captured |",
-        "|--------|---------|----------------------|",
-    ]
-    for key in METHOD_KEYS:
-        method_set = set(result["methods"].get(key, []))
-        shared     = oracle_set & method_set
-        j          = result["overlaps"][key]
-        lines.append(
-            f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
-        )
-    lines.append("")
-
-    all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
-    missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
-    lines += ["### Oracle URLs missed by all methods", ""]
-    if missed:
-        for u in missed:
-            lines.append(f"- {u}")
-    else:
-        lines.append("_All oracle URLs captured by at least one method._")
-    lines.append("")
-    return lines
-
-
-def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
-    mps = mm.get("method_pool_sizes", {})
-    lines = [
-        "| Method | Pool size | Top-10 count | ms |",
-        "|--------|-----------|--------------|----|",
-    ]
-    for key in METHOD_KEYS:
-        urls      = result["methods"].get(key, [])
-        ms        = mm.get(f"{key}_ms", "?")
-        pool_size = mps.get(key, result["pool_size"])
-        lines.append(
-            f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
-        )
-    lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
-    return lines
-
-
-def _write_summary_md(results: list[dict], ts_dir: Path) -> Path:
-    path       = ts_dir / "eval_summary.md"
-    has_oracle = any(r["oracle_urls"] for r in results)
-
-    lines = [
-        "# Value Eval Summary",
-        "",
-        f"**Pairs:** {len(results)} / 16  ",
-        f"**Oracle:** {'present' if has_oracle else 'pending (smoke mode)'}  ",
-        "",
-    ]
-
-    if has_oracle:
-        scored = [r for r in results if r["oracle_urls"]]
-        lines += _summary_per_mode_table(scored)
-        if scored:
-            lines += _summary_overall_winner(scored)
-            lines += _summary_mode_signals(scored)
-
-    else:
-        lines += _summary_smoke_coverage(results)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _summary_per_mode_table(scored: list[dict]) -> list[str]:
@@ -322,6 +277,50 @@ def _summary_smoke_coverage(results: list[dict]) -> list[str]:
             f"| {counts[0]} | {counts[1]} | {counts[2]} | {counts[3]} |"
         )
     lines.append("")
+    return lines
+
+
+def _comparison_with_oracle(result: dict) -> list[str]:
+    oracle_set = set(result["oracle_urls"])
+    lines = [
+        "| Method | Jaccard | Oracle URLs captured |",
+        "|--------|---------|----------------------|",
+    ]
+    for key in METHOD_KEYS:
+        method_set = set(result["methods"].get(key, []))
+        shared     = oracle_set & method_set
+        j          = result["overlaps"][key]
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
+        )
+    lines.append("")
+
+    all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
+    missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
+    lines += ["### Oracle URLs missed by all methods", ""]
+    if missed:
+        for u in missed:
+            lines.append(f"- {u}")
+    else:
+        lines.append("_All oracle URLs captured by at least one method._")
+    lines.append("")
+    return lines
+
+
+def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
+    mps = mm.get("method_pool_sizes", {})
+    lines = [
+        "| Method | Pool size | Top-10 count | ms |",
+        "|--------|-----------|--------------|----|",
+    ]
+    for key in METHOD_KEYS:
+        urls      = result["methods"].get(key, [])
+        ms        = mm.get(f"{key}_ms", "?")
+        pool_size = mps.get(key, result["pool_size"])
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
+        )
+    lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
     return lines
 
 

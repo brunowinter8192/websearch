@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import asyncio
 import re
 import time
@@ -16,6 +15,7 @@ from curl_cffi.const import CurlECode
 
 CHECK_URL   = "http://ipv4.icanhazip.com"
 _IP_RE      = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
+
 
 # FUNCTIONS
 

@@ -1,9 +1,12 @@
+# INFRASTRUCTURE
 import json
 
 import pytest
 
 from src.search.engines.bing import _build_results, _clean_url, _parse_results
 
+
+# FUNCTIONS
 
 def test_clean_url_unwraps_ck_a_redirect_to_real_destination():
     wrapped = (
@@ -62,16 +65,16 @@ def test_build_results_respects_max_results_cap():
     assert [r.position for r in results] == [1, 2, 3, 4, 5]
 
 
+@pytest.mark.asyncio
+async def test_parse_results_raises_on_invalid_json():
+    tab = _FakeTab("not valid json{")
+    with pytest.raises(json.JSONDecodeError):
+        await _parse_results(tab, max_results=10)
+
+
 class _FakeTab:
     def __init__(self, raw_value):
         self._raw_value = raw_value
 
     async def execute_script(self, script):
         return {"result": {"result": {"value": self._raw_value}}}
-
-
-@pytest.mark.asyncio
-async def test_parse_results_raises_on_invalid_json():
-    tab = _FakeTab("not valid json{")
-    with pytest.raises(json.JSONDecodeError):
-        await _parse_results(tab, max_results=10)

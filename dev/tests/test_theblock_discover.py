@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import httpx
 import pytest
 
@@ -5,14 +6,13 @@ from src.news.platforms.theblock import discover as theblock_discover
 from src.news.platforms.theblock.discover import _subs_in_range, _sub_by_index, _fetch_direct, _parse_url_blocks
 
 
+# FUNCTIONS
+
 def _make_urls(indices: list[int]) -> list[str]:
     return [
         f"https://www.theblock.co/sitemap_tbco_post_type_post_{i}.xml"
         for i in indices
     ]
-
-
-_ALL_URLS = _make_urls(list(range(27)))
 
 
 def test_range_selects_correct_subs():
@@ -132,12 +132,6 @@ def test_range_no_existing_sub_in_range_raises():
             asyncio.run(__import__("src.news.platforms.theblock.discover", fromlist=["discover"]).discover("sub:10-20"))
 
 
-class _FakeHttpResponse:
-    def __init__(self, status_code: int, content: bytes):
-        self.status_code = status_code
-        self.content = content
-
-
 def test_fetch_direct_403_without_xml_marker_returns_none_for_pool_fallback(monkeypatch):
     monkeypatch.setattr(theblock_discover.httpx, "get", lambda *a, **kw: _FakeHttpResponse(403, b"<html>blocked</html>"))
     assert _fetch_direct("https://www.theblock.co/sitemap_tbco_index.xml") is None
@@ -155,10 +149,6 @@ def test_fetch_direct_network_exception_propagates(monkeypatch):
     monkeypatch.setattr(theblock_discover.httpx, "get", _raise)
     with pytest.raises(httpx.ConnectError):
         _fetch_direct("https://www.theblock.co/sitemap_tbco_index.xml")
-
-
-def _url_block(lastmod: str) -> bytes:
-    return f"<url><loc>https://www.theblock.co/post/1/a</loc><lastmod>{lastmod}</lastmod></url>".encode()
 
 
 def test_parse_url_blocks_reads_iso_lastmod():
@@ -211,3 +201,16 @@ def test_failed_sub_sitemap_raises_like_the_index():
     with patch("src.news.platforms.theblock.discover._fetch_xml", side_effect=lambda url, pc, lg=None: replies.get(url)):
         with pytest.raises(RuntimeError, match="sub-sitemap fetch failed"):
             asyncio.run(theblock_discover.discover("full"))
+
+
+class _FakeHttpResponse:
+    def __init__(self, status_code: int, content: bytes):
+        self.status_code = status_code
+        self.content = content
+
+
+def _url_block(lastmod: str) -> bytes:
+    return f"<url><loc>https://www.theblock.co/post/1/a</loc><lastmod>{lastmod}</lastmod></url>".encode()
+
+
+_ALL_URLS = _make_urls(list(range(27)))

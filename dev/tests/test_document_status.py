@@ -1,28 +1,10 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.search.document_status import attach_document_status, start_document_status_capture
 
 
-class _FakeTab:
-    def __init__(self, target_id: str = "T1"):
-        self._target_id = target_id
-        self._callback = None
-
-    async def enable_network_events(self):
-        pass
-
-    async def on(self, event_name, callback):
-        self._callback = callback
-        return 1
-
-    def fire(self, event: dict) -> None:
-        self._callback(event)
-
-
-class _BrokenTab(_FakeTab):
-    async def enable_network_events(self):
-        raise RuntimeError("cdp boom")
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_collects_ordered_main_frame_document_statuses():
@@ -75,3 +57,24 @@ def test_does_not_mutate_the_input_diag_dict():
     diag = {"marker": "captcha"}
     attach_document_status(diag, [200])
     assert diag == {"marker": "captcha"}
+
+
+class _FakeTab:
+    def __init__(self, target_id: str = "T1"):
+        self._target_id = target_id
+        self._callback = None
+
+    async def enable_network_events(self):
+        pass
+
+    async def on(self, event_name, callback):
+        self._callback = callback
+        return 1
+
+    def fire(self, event: dict) -> None:
+        self._callback(event)
+
+
+class _BrokenTab(_FakeTab):
+    async def enable_network_events(self):
+        raise RuntimeError("cdp boom")

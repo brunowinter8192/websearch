@@ -106,35 +106,6 @@ def _findings_cdp_rate_table(records: list[dict]) -> list[str]:
     return lines
 
 
-def _verdict_narrative(stats: dict, verdict: str, norm_p99: float) -> list[str]:
-    s_cap = stats["empty"]
-    s_zc = stats["zero_cascade"]
-    s_norm = stats["normal"]
-
-    if verdict == "CONFIRMED":
-        worst_cat = "empty" if s_cap["p99"] >= s_zc["p99"] else "zero_cascade"
-        worst = stats[worst_cat]
-        return [
-            f"Scheduling latency p99 during `{worst_cat}` windows: {worst['p99']}ms vs",
-            f"normal {s_norm['p99']}ms ({worst['p99']/norm_p99:.0f}x ratio). Asyncio event loop",
-            "definitively starved during Chrome CAPTCHA processing. All 9 engines' 5s",
-            "`wait_for` deadlines expire before getting a scheduler turn — confirmed by Pattern B.",
-        ]
-    elif verdict == "PARTIALLY_CONFIRMED":
-        return [
-            f"Latency elevated: empty p99={s_cap['p99']}ms, zero_cascade p99={s_zc['p99']}ms",
-            f"vs normal {s_norm['p99']}ms. CDP event loop mechanism consistent but starvation",
-            "weaker than predicted — may require heavier CAPTCHA page to trigger full cascade.",
-        ]
-    elif verdict == "REFUTED":
-        return [
-            f"No significant elevation: empty p99={s_cap['p99']}ms,",
-            f"zero_cascade p99={s_zc['p99']}ms vs normal p99={s_norm['p99']}ms.",
-            "CDP starvation hypothesis not supported. Alternative root cause required.",
-        ]
-    return ["No CAPTCHA or zero-cascade queries occurred — hypothesis untestable."]
-
-
 def _findings_verdict_section(stats: dict, verdict: str, norm_p99: float) -> list[str]:
     lines = [
         "",
@@ -170,3 +141,32 @@ def _findings_next_steps(verdict: str) -> list[str]:
         ]
     lines.append("")
     return lines
+
+
+def _verdict_narrative(stats: dict, verdict: str, norm_p99: float) -> list[str]:
+    s_cap = stats["empty"]
+    s_zc = stats["zero_cascade"]
+    s_norm = stats["normal"]
+
+    if verdict == "CONFIRMED":
+        worst_cat = "empty" if s_cap["p99"] >= s_zc["p99"] else "zero_cascade"
+        worst = stats[worst_cat]
+        return [
+            f"Scheduling latency p99 during `{worst_cat}` windows: {worst['p99']}ms vs",
+            f"normal {s_norm['p99']}ms ({worst['p99']/norm_p99:.0f}x ratio). Asyncio event loop",
+            "definitively starved during Chrome CAPTCHA processing. All 9 engines' 5s",
+            "`wait_for` deadlines expire before getting a scheduler turn — confirmed by Pattern B.",
+        ]
+    elif verdict == "PARTIALLY_CONFIRMED":
+        return [
+            f"Latency elevated: empty p99={s_cap['p99']}ms, zero_cascade p99={s_zc['p99']}ms",
+            f"vs normal {s_norm['p99']}ms. CDP event loop mechanism consistent but starvation",
+            "weaker than predicted — may require heavier CAPTCHA page to trigger full cascade.",
+        ]
+    elif verdict == "REFUTED":
+        return [
+            f"No significant elevation: empty p99={s_cap['p99']}ms,",
+            f"zero_cascade p99={s_zc['p99']}ms vs normal p99={s_norm['p99']}ms.",
+            "CDP starvation hypothesis not supported. Alternative root cause required.",
+        ]
+    return ["No CAPTCHA or zero-cascade queries occurred — hypothesis untestable."]

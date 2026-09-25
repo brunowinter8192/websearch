@@ -1,22 +1,11 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.scraper import chromium_process, chromium_scrape
 from dev.tests._chromium_scrape_fakes import _patch_cdp_launch_mechanics, _FakeResult, _meta
 
 
-def _real_stamp_args():
-    browser_config = chromium_scrape.BrowserConfig(headless=True, verbose=False, enable_stealth=True)
-    adapter = chromium_scrape.UndetectedAdapter()
-    crawler_strategy = chromium_scrape.AsyncPlaywrightCrawlerStrategy(
-        browser_config=browser_config, browser_adapter=adapter
-    )
-    run_config = chromium_scrape.CrawlerRunConfig(
-        markdown_generator=chromium_scrape.DefaultMarkdownGenerator(
-            content_filter=chromium_scrape.PruningContentFilter(threshold=0.48, preserve_tags=["pre", "code"])
-        ),
-    )
-    return browser_config, adapter, crawler_strategy, run_config
-
+# FUNCTIONS
 
 def test_extract_config_stamp_carries_total_budget_s():
     args = _real_stamp_args()
@@ -121,3 +110,17 @@ async def test_launch_mode_truthful_on_cdp_path(monkeypatch):
     _, meta = await chromium_scrape.try_scrape("https://example.com")
     assert meta["config"]["launch_mode"] == chromium_scrape.LAUNCH_MODE
     assert meta["config"]["total_budget_s"] == chromium_scrape.TOTAL_SCRAPE_BUDGET_S
+
+
+def _real_stamp_args():
+    browser_config = chromium_scrape.BrowserConfig(headless=True, verbose=False, enable_stealth=True)
+    adapter = chromium_scrape.UndetectedAdapter()
+    crawler_strategy = chromium_scrape.AsyncPlaywrightCrawlerStrategy(
+        browser_config=browser_config, browser_adapter=adapter
+    )
+    run_config = chromium_scrape.CrawlerRunConfig(
+        markdown_generator=chromium_scrape.DefaultMarkdownGenerator(
+            content_filter=chromium_scrape.PruningContentFilter(threshold=0.48, preserve_tags=["pre", "code"])
+        ),
+    )
+    return browser_config, adapter, crawler_strategy, run_config

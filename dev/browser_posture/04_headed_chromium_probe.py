@@ -65,19 +65,33 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-def find_chrome_descendant() -> psutil.Process | None:
+async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
+    server, thread, port = start_probe_server()
+    url = f"http://127.0.0.1:{port}/"
+    browser_info = {"pid": None, "exe": None, "cmdline": None}
+    focus_samples: list[str] = []
+    stop_event = asyncio.Event()
+
+    poll_task = asyncio.create_task(_poll_browser_and_focus(browser_info, focus_samples, poll_focus, stop_event))
+    launch_success = False
+    error_message = None
     try:
-        children = psutil.Process().children(recursive=True)
-    except psutil.Error:
-        return None
-    for proc in children:
-        try:
-            exe = proc.exe()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-        if "ms-playwright" in exe:
-            return proc
-    return None
+        launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
+    finally:
+        stop_event.set()
+        await poll_task
+        stop_probe_server(server, thread)
+
+    return {
+        "headless": headless,
+        "launch_success": launch_success,
+        "error_message": error_message,
+        "pid": browser_info["pid"],
+        "exe": browser_info["exe"],
+        "cmdline": browser_info["cmdline"],
+        "focus_samples": focus_samples,
+        "chrome_frontmost_count": sum(1 for s in focus_samples if "chrome" in s.lower()),
+    }
 
 
 async def _poll_browser_and_focus(browser_info: dict, focus_samples: list[str], poll_focus: bool, stop_event: asyncio.Event) -> None:
@@ -113,33 +127,19 @@ async def _run_crawl4ai_once(headless: bool, dwell_s: float, url: str) -> tuple[
         return False, f"{type(e).__name__}: {e}"
 
 
-async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
-    server, thread, port = start_probe_server()
-    url = f"http://127.0.0.1:{port}/"
-    browser_info = {"pid": None, "exe": None, "cmdline": None}
-    focus_samples: list[str] = []
-    stop_event = asyncio.Event()
-
-    poll_task = asyncio.create_task(_poll_browser_and_focus(browser_info, focus_samples, poll_focus, stop_event))
-    launch_success = False
-    error_message = None
+def find_chrome_descendant() -> psutil.Process | None:
     try:
-        launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
-    finally:
-        stop_event.set()
-        await poll_task
-        stop_probe_server(server, thread)
-
-    return {
-        "headless": headless,
-        "launch_success": launch_success,
-        "error_message": error_message,
-        "pid": browser_info["pid"],
-        "exe": browser_info["exe"],
-        "cmdline": browser_info["cmdline"],
-        "focus_samples": focus_samples,
-        "chrome_frontmost_count": sum(1 for s in focus_samples if "chrome" in s.lower()),
-    }
+        children = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return None
+    for proc in children:
+        try:
+            exe = proc.exe()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if "ms-playwright" in exe:
+            return proc
+    return None
 
 
 if __name__ == "__main__":

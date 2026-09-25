@@ -44,6 +44,29 @@ SHAPE_MAP = {
 EXCLUDE_PREFIXES = ("_excluded_",)
 
 
+# ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("--sweep", default=None, help="Path to sweep_data/<ts>/ (default: latest)")
+    parser.add_argument("--cleanraw", default=None, help="Path to cleaned_data/<ts>/ (default: latest)")
+    parser.add_argument("--drill", type=int, default=4, help="Number of URLs for diff drill-down (default 4)")
+    args = parser.parse_args()
+
+    sweep_dir = Path(args.sweep) if args.sweep else find_latest_dir(SWEEP_BASE)
+    cleanraw_dir = Path(args.cleanraw) if args.cleanraw else find_latest_dir(CLEANRAW_BASE)
+    analyze_workflow(sweep_dir, cleanraw_dir, args.drill)
+
+
+# FUNCTIONS
+
+def find_latest_dir(base: Path) -> Path:
+    candidates = sorted(p for p in base.iterdir() if p.is_dir())
+    if not candidates:
+        raise SystemExit(f"No subdirs in {base}")
+    return candidates[-1]
+
+
 def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> None:
     print(f"sweep:    {sweep_dir}", file=sys.stderr)
     print(f"cleanraw: {cleanraw_dir}\n", file=sys.stderr)
@@ -67,6 +90,18 @@ def analyze_workflow(sweep_dir: Path, cleanraw_dir: Path, drill_count: int) -> N
     report_path = sweep_dir / "_analysis.md"
     write_report(report_path, sweep_dir, cleanraw_dir, config_metrics, cleanraw_by_url, drill_count)
     print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+def load_cleanraws(cleanraw_dir: Path) -> dict:
+    out = {}
+    for f in cleanraw_dir.glob("*.md"):
+        if f.name.startswith("_") or f.name == "02_raw_report.md":
+            continue
+        text = f.read_text(encoding="utf-8")
+        m = re.match(r"^<!-- source: (\S+) -->", text)
+        if m:
+            out[m.group(1)] = text
+    return out
 
 
 def analyze_config(config_dir: Path, cleanraw_by_url: dict, cfg_meta: dict) -> list:
@@ -100,31 +135,6 @@ def analyze_config(config_dir: Path, cleanraw_by_url: dict, cfg_meta: dict) -> l
             "bytes_diff": len(candidate) - len(cleanraw),
         })
     return per_url
-
-
-def line_set_metrics(candidate: str, cleanraw: str) -> tuple[float, float, float]:
-    cand_lines = normalize_lines(candidate)
-    ref_lines = normalize_lines(cleanraw)
-    if not ref_lines or not cand_lines:
-        return 0.0, 0.0, 0.0
-    inter = len(cand_lines & ref_lines)
-    recall = inter / len(ref_lines)
-    precision = inter / len(cand_lines)
-    if recall + precision == 0:
-        return 0.0, 0.0, 0.0
-    f1 = 2 * recall * precision / (recall + precision)
-    return recall, precision, f1
-
-
-def normalize_lines(text: str) -> set:
-    out = set()
-    for line in text.splitlines():
-        s = line.strip()
-        if not s or s.startswith("<!-- source:"):
-            continue
-        s = re.sub(r"\s+", " ", s).lower()
-        out.add(s)
-    return out
 
 
 def aggregate_metrics(config_name: str, cfg_meta: dict, per_url: list) -> dict:
@@ -161,37 +171,25 @@ def aggregate_metrics(config_name: str, cfg_meta: dict, per_url: list) -> dict:
     }
 
 
-def load_cleanraws(cleanraw_dir: Path) -> dict:
-    out = {}
-    for f in cleanraw_dir.glob("*.md"):
-        if f.name.startswith("_") or f.name == "02_raw_report.md":
-            continue
-        text = f.read_text(encoding="utf-8")
-        m = re.match(r"^<!-- source: (\S+) -->", text)
-        if m:
-            out[m.group(1)] = text
-    return out
-
-
-def url_shape(url: str) -> str:
-    for domain, shape in SHAPE_MAP.items():
-        if domain in url:
-            return shape
-    return "Unknown"
-
-
-def find_latest_dir(base: Path) -> Path:
-    candidates = sorted(p for p in base.iterdir() if p.is_dir())
-    if not candidates:
-        raise SystemExit(f"No subdirs in {base}")
-    return candidates[-1]
-
-
 def write_report(path: Path, sweep_dir: Path, cleanraw_dir: Path, configs: list, cleanraw_by_url: dict, drill_count: int) -> None:
     lines = _format_header_and_ranking(sweep_dir, cleanraw_dir, configs)
     lines += _format_per_shape_breakdown(configs)
     lines += _format_drill_down(configs, cleanraw_by_url, sweep_dir, drill_count)
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def line_set_metrics(candidate: str, cleanraw: str) -> tuple[float, float, float]:
+    cand_lines = normalize_lines(candidate)
+    ref_lines = normalize_lines(cleanraw)
+    if not ref_lines or not cand_lines:
+        return 0.0, 0.0, 0.0
+    inter = len(cand_lines & ref_lines)
+    recall = inter / len(ref_lines)
+    precision = inter / len(cand_lines)
+    if recall + precision == 0:
+        return 0.0, 0.0, 0.0
+    f1 = 2 * recall * precision / (recall + precision)
+    return recall, precision, f1
 
 
 def _format_header_and_ranking(sweep_dir: Path, cleanraw_dir: Path, configs: list) -> list:
@@ -273,6 +271,17 @@ def _format_drill_down(configs: list, cleanraw_by_url: dict, sweep_dir: Path, dr
     return lines
 
 
+def normalize_lines(text: str) -> set:
+    out = set()
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or s.startswith("<!-- source:"):
+            continue
+        s = re.sub(r"\s+", " ", s).lower()
+        out.add(s)
+    return out
+
+
 def pick_drill_urls(cleanraw_by_url: dict, n: int) -> list:
     by_shape: dict[str, list] = {}
     for url in cleanraw_by_url.keys():
@@ -319,21 +328,16 @@ def generate_diff(config_name: str, sweep_dir: Path, url: str, cleanraw_by_url: 
     return "\n".join(diff)
 
 
+def url_shape(url: str) -> str:
+    for domain, shape in SHAPE_MAP.items():
+        if domain in url:
+            return shape
+    return "Unknown"
+
+
 def hashlib_md5(url: str) -> str:
     import hashlib as h
     return h.md5(url.encode()).hexdigest()[:6]
-
-
-def main():
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument("--sweep", default=None, help="Path to sweep_data/<ts>/ (default: latest)")
-    parser.add_argument("--cleanraw", default=None, help="Path to cleaned_data/<ts>/ (default: latest)")
-    parser.add_argument("--drill", type=int, default=4, help="Number of URLs for diff drill-down (default 4)")
-    args = parser.parse_args()
-
-    sweep_dir = Path(args.sweep) if args.sweep else find_latest_dir(SWEEP_BASE)
-    cleanraw_dir = Path(args.cleanraw) if args.cleanraw else find_latest_dir(CLEANRAW_BASE)
-    analyze_workflow(sweep_dir, cleanraw_dir, args.drill)
 
 
 if __name__ == "__main__":

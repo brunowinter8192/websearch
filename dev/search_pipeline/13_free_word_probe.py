@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -269,11 +268,6 @@ def _stats(results: list[dict]) -> dict:
     }
 
 
-def _domain(url: str) -> str:
-    host = urlparse(url).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
-
-
 def _is_pdf(url: str) -> bool:
     if urlparse(url).path.lower().endswith(".pdf"):
         return True
@@ -293,6 +287,11 @@ def _is_book(url: str) -> bool:
     if d == "springer.com" and "/book/" in u:
         return True
     return d == "jstor.org"
+
+
+def _domain(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 if __name__ == "__main__":

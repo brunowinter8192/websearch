@@ -87,8 +87,17 @@ def kill_chrome_on_port(port: int) -> None:
         print(f"pkill (non-fatal): {e}", file=sys.stderr)
 
 
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
+async def run_capture_phase(tab) -> dict | None:
+    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+
+    raw = await tab.execute_script(_JS_DISMISS_COOKIE)
+    print(f"Cookie consent: {_extract_value(raw)}", file=sys.stderr)
+    await asyncio.sleep(0.5)
+
+    print(f"HAR-recording {CLICKS_TO_TRIGGER} clicks to trigger Timeline API …", file=sys.stderr)
+    return await capture_timeline_request(tab, CLICKS_TO_TRIGGER)
 
 
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
@@ -105,14 +114,5 @@ async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     return None
 
 
-async def run_capture_phase(tab) -> dict | None:
-    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
-    await tab.go_to(TARGET_URL, timeout=60)
-    await asyncio.sleep(3.0)
-
-    raw = await tab.execute_script(_JS_DISMISS_COOKIE)
-    print(f"Cookie consent: {_extract_value(raw)}", file=sys.stderr)
-    await asyncio.sleep(0.5)
-
-    print(f"HAR-recording {CLICKS_TO_TRIGGER} clicks to trigger Timeline API …", file=sys.stderr)
-    return await capture_timeline_request(tab, CLICKS_TO_TRIGGER)
+def _extract_value(raw):
+    return raw["result"]["result"]["value"]

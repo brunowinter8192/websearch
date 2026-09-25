@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import html
 import sys
@@ -61,15 +60,85 @@ def run_analysis() -> None:
 
 # FUNCTIONS
 
-def _usefulness(text: str) -> float:
-    if not text:
-        return 0.0
-    return len(strip_bloat(text)) * lexical_density(text)
-
-
 def compute_source_stats(records: list[dict]) -> dict:
     texts_by, total_by, empty_by = _collect_source_texts(records)
     return {src: _source_stat(src, texts_by, total_by, empty_by) for src in ALL_SOURCES}
+
+
+def compute_overlap_matrix(records: list[dict]) -> dict:
+    url_engines: dict[tuple, set] = defaultdict(set)
+    matrix_set = set(MATRIX_ENGINES)
+    for rec in records:
+        key = (rec["url"], rec["query"])
+        for eng in rec["engines"]:
+            e = eng.strip().lower()
+            if e in matrix_set:
+                url_engines[key].add(e)
+    matrix: dict[tuple, int] = defaultdict(int)
+    for engines in url_engines.values():
+        eng_list = sorted(engines)
+        for a in range(len(eng_list)):
+            for b in range(a + 1, len(eng_list)):
+                matrix[(eng_list[a], eng_list[b])] += 1
+                matrix[(eng_list[b], eng_list[a])] += 1
+    return matrix
+
+
+def compute_best_by_usefulness(records: list[dict]) -> tuple[dict, dict]:
+    wins: dict[str, int]           = defaultdict(int)
+    best_per_url: dict[tuple, str] = {}
+    for rec in records:
+        candidates: dict[str, float] = {}
+        for eng, text in rec["snippets"].items():
+            if text:
+                candidates[eng] = _usefulness(text)
+        if rec["og"]:
+            candidates["og"]   = _usefulness(rec["og"])
+        if rec["meta"]:
+            candidates["meta"] = _usefulness(rec["meta"])
+        key = (rec["query"], rec["url"])
+        if not candidates:
+            best_per_url[key] = "empty"
+            continue
+        winner = max(candidates, key=candidates.__getitem__)
+        wins[winner] += 1
+        best_per_url[key] = winner
+    return dict(wins), best_per_url
+
+
+def compute_per_class_breakdown(records: list[dict], best_per_url: dict) -> dict:
+    breakdown: dict[str, dict[str, int]] = {
+        "GENERAL":  defaultdict(int),
+        "ACADEMIC": defaultdict(int),
+        "QA":       defaultdict(int),
+    }
+    for rec in records:
+        key    = (rec["query"], rec["url"])
+        winner = best_per_url.get(key, "empty")
+        cls    = rec.get("class", "GENERAL")
+        if cls in breakdown:
+            breakdown[cls][winner] += 1
+    return {k: dict(v) for k, v in breakdown.items()}
+
+
+def write_report(
+    stats: dict, overlap: dict, records: list[dict],
+    wins: dict, best_per_url: dict, breakdown: dict,
+) -> Path:
+    ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path       = REPORT_DIR / f"snippet_quality_{ts}.md"
+    total_wins = sum(wins.values())
+    n_urls     = len(records)
+    L = (
+        _render_header(ts, n_urls, total_wins)
+        + _render_source_stats(stats)
+        + _render_overlap_matrix(overlap)
+        + _render_winners(wins, total_wins, n_urls)
+        + _render_per_class_breakdown(breakdown)
+        + _render_url_details(records, best_per_url)
+    )
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
 
 
 def _collect_source_texts(records: list[dict]) -> tuple[dict, dict, dict]:
@@ -131,60 +200,10 @@ def _source_stat(src: str, texts_by: dict, total_by: dict, empty_by: dict) -> di
     )
 
 
-def compute_overlap_matrix(records: list[dict]) -> dict:
-    url_engines: dict[tuple, set] = defaultdict(set)
-    matrix_set = set(MATRIX_ENGINES)
-    for rec in records:
-        key = (rec["url"], rec["query"])
-        for eng in rec["engines"]:
-            e = eng.strip().lower()
-            if e in matrix_set:
-                url_engines[key].add(e)
-    matrix: dict[tuple, int] = defaultdict(int)
-    for engines in url_engines.values():
-        eng_list = sorted(engines)
-        for a in range(len(eng_list)):
-            for b in range(a + 1, len(eng_list)):
-                matrix[(eng_list[a], eng_list[b])] += 1
-                matrix[(eng_list[b], eng_list[a])] += 1
-    return matrix
-
-
-def compute_best_by_usefulness(records: list[dict]) -> tuple[dict, dict]:
-    wins: dict[str, int]           = defaultdict(int)
-    best_per_url: dict[tuple, str] = {}
-    for rec in records:
-        candidates: dict[str, float] = {}
-        for eng, text in rec["snippets"].items():
-            if text:
-                candidates[eng] = _usefulness(text)
-        if rec["og"]:
-            candidates["og"]   = _usefulness(rec["og"])
-        if rec["meta"]:
-            candidates["meta"] = _usefulness(rec["meta"])
-        key = (rec["query"], rec["url"])
-        if not candidates:
-            best_per_url[key] = "empty"
-            continue
-        winner = max(candidates, key=candidates.__getitem__)
-        wins[winner] += 1
-        best_per_url[key] = winner
-    return dict(wins), best_per_url
-
-
-def compute_per_class_breakdown(records: list[dict], best_per_url: dict) -> dict:
-    breakdown: dict[str, dict[str, int]] = {
-        "GENERAL":  defaultdict(int),
-        "ACADEMIC": defaultdict(int),
-        "QA":       defaultdict(int),
-    }
-    for rec in records:
-        key    = (rec["query"], rec["url"])
-        winner = best_per_url.get(key, "empty")
-        cls    = rec.get("class", "GENERAL")
-        if cls in breakdown:
-            breakdown[cls][winner] += 1
-    return {k: dict(v) for k, v in breakdown.items()}
+def _usefulness(text: str) -> float:
+    if not text:
+        return 0.0
+    return len(strip_bloat(text)) * lexical_density(text)
 
 
 def _render_header(ts: str, n_urls: int, total_wins: int) -> list[str]:
@@ -345,26 +364,6 @@ def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
             L.append("*no content*")
         L.append("")
     return L
-
-
-def write_report(
-    stats: dict, overlap: dict, records: list[dict],
-    wins: dict, best_per_url: dict, breakdown: dict,
-) -> Path:
-    ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path       = REPORT_DIR / f"snippet_quality_{ts}.md"
-    total_wins = sum(wins.values())
-    n_urls     = len(records)
-    L = (
-        _render_header(ts, n_urls, total_wins)
-        + _render_source_stats(stats)
-        + _render_overlap_matrix(overlap)
-        + _render_winners(wins, total_wins, n_urls)
-        + _render_per_class_breakdown(breakdown)
-        + _render_url_details(records, best_per_url)
-    )
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

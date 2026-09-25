@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -63,6 +62,40 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
+async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
+    record: dict = {
+        "engine": engine, "query": query, "axis": axis, "retry": retry,
+        "status": "EMPTY", "diag": None, "container_count": 0, "samples": [],
+    }
+    tab = await _new_tab()
+    t0 = time.monotonic()
+    try:
+        ok, diag = await NAV_FUNCS[engine](tab, query)
+        if ok:
+            evidence = await _dump_date_evidence(tab, engine)
+            record["container_count"] = evidence["count"]
+            record["samples"] = evidence["samples"]
+            record["status"] = "OK" if evidence["count"] > 0 else "EMPTY"
+        else:
+            record["diag"] = diag
+            record["status"] = "BLOCKED" if (diag or {}).get("marker") else "EMPTY"
+    except Exception as e:
+        record["status"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+    finally:
+        record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
+        await _kill_tab(tab)
+    return record
+
+
+async def _dump_date_evidence(tab, engine: str) -> dict:
+    js = _build_date_dump_js(CONTAINER_SELECTOR[engine], CONTAINER_LIMIT)
+    val = _extract_value(await tab.execute_script(js))
+    if not val:
+        return {"count": 0, "samples": []}
+    return json.loads(val)
+
+
 def _build_date_dump_js(container_selector: str, limit: int) -> str:
     escaped = container_selector.replace("'", "\\'")
     return f"""
@@ -97,40 +130,6 @@ for (var _i = 0; _i < _n; _i++) {{
 }}
 return JSON.stringify({{count: _cs.length, samples: _out}});
 """
-
-
-async def _dump_date_evidence(tab, engine: str) -> dict:
-    js = _build_date_dump_js(CONTAINER_SELECTOR[engine], CONTAINER_LIMIT)
-    val = _extract_value(await tab.execute_script(js))
-    if not val:
-        return {"count": 0, "samples": []}
-    return json.loads(val)
-
-
-async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
-    record: dict = {
-        "engine": engine, "query": query, "axis": axis, "retry": retry,
-        "status": "EMPTY", "diag": None, "container_count": 0, "samples": [],
-    }
-    tab = await _new_tab()
-    t0 = time.monotonic()
-    try:
-        ok, diag = await NAV_FUNCS[engine](tab, query)
-        if ok:
-            evidence = await _dump_date_evidence(tab, engine)
-            record["container_count"] = evidence["count"]
-            record["samples"] = evidence["samples"]
-            record["status"] = "OK" if evidence["count"] > 0 else "EMPTY"
-        else:
-            record["diag"] = diag
-            record["status"] = "BLOCKED" if (diag or {}).get("marker") else "EMPTY"
-    except Exception as e:
-        record["status"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:160]}"
-    finally:
-        record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
-        await _kill_tab(tab)
-    return record
 
 
 if __name__ == "__main__":

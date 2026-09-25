@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import asyncio
 import sys
 import time
@@ -87,6 +86,16 @@ async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -
     print(f"[slot {slot_id}] exit", file=sys.stderr)
 
 
+async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
+    async with state.proxy_lock:
+        eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
+        if not eligible:
+            return None
+        idx              = state.proxy_cursor % len(eligible)
+        state.proxy_cursor += 1
+        return eligible[idx]
+
+
 async def _ride_one_proxy(slot_id: int, crawler: AsyncWebCrawler, state: RiderState, proto: str, hp: str) -> None:
     pstr   = f"{proto}://{hp}"
     t_bind = time.monotonic()
@@ -147,6 +156,28 @@ async def _ride_one_url(slot_id: int, state: RiderState, crawler: AsyncWebCrawle
     return should_break
 
 
+def _finalize_ride(slot_id: int, state: RiderState, pstr: str, proto: str, hp: str,
+                    t_bind: float, ride: dict) -> None:
+    r = RideRecord(
+        proxy_str=pstr, proto=proto, host_port=hp,
+        n_ok=ride["ride_ok"], n_regwall=ride["burn_count"],
+        n_connect_fail=1 if ride["cf_broke"] else 0,
+        n_failed=ride["fail_count"],
+        n_urls_attempted=len(ride["positions"]),
+        burned_threshold=ride["burn_count"] >= state.burn_threshold,
+        burned_connect=ride["cf_broke"],
+        ride_s=time.monotonic() - t_bind,
+        positions=ride["positions"],
+    )
+    state.ride_records.append(r)
+    state.cooldown_mgr.mark_burned(proto, hp)
+    print(
+        f"[slot {slot_id}] proxy done ok={ride['ride_ok']} rw={ride['burn_count']}"
+        f" cf={int(ride['cf_broke'])} n={len(ride['positions'])} {pstr}",
+        file=sys.stderr,
+    )
+
+
 def _apply_url_status(slot_id: int, state: RiderState, url: str, html: str,
                        ride: dict, job: JobRecord, ride_pos: int) -> bool:
     status = job.status
@@ -187,38 +218,6 @@ def _apply_url_status(slot_id: int, state: RiderState, url: str, html: str,
             should_break = True
 
     return should_break
-
-
-def _finalize_ride(slot_id: int, state: RiderState, pstr: str, proto: str, hp: str,
-                    t_bind: float, ride: dict) -> None:
-    r = RideRecord(
-        proxy_str=pstr, proto=proto, host_port=hp,
-        n_ok=ride["ride_ok"], n_regwall=ride["burn_count"],
-        n_connect_fail=1 if ride["cf_broke"] else 0,
-        n_failed=ride["fail_count"],
-        n_urls_attempted=len(ride["positions"]),
-        burned_threshold=ride["burn_count"] >= state.burn_threshold,
-        burned_connect=ride["cf_broke"],
-        ride_s=time.monotonic() - t_bind,
-        positions=ride["positions"],
-    )
-    state.ride_records.append(r)
-    state.cooldown_mgr.mark_burned(proto, hp)
-    print(
-        f"[slot {slot_id}] proxy done ok={ride['ride_ok']} rw={ride['burn_count']}"
-        f" cf={int(ride['cf_broke'])} n={len(ride['positions'])} {pstr}",
-        file=sys.stderr,
-    )
-
-
-async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
-    async with state.proxy_lock:
-        eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
-        if not eligible:
-            return None
-        idx              = state.proxy_cursor % len(eligible)
-        state.proxy_cursor += 1
-        return eligible[idx]
 
 
 if __name__ == "__main__":

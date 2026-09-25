@@ -11,7 +11,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 
 ## Modules
 
-### 01_discovery.py (162 LOC)
+### 01_discovery.py (165 LOC)
 
 **Purpose:** BFS crawl of one or all seed domains with domain filtering, reporting discovery metrics.
 **Reads:** `domains.txt` or a CLI URL.
@@ -19,7 +19,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 02_url_filters.py (156 LOC)
+### 02_url_filters.py (159 LOC)
 
 **Purpose:** Compares a baseline crawl against a filtered crawl and lists the URLs removed by the filters.
 **Reads:** CLI URL and exclude patterns.
@@ -27,7 +27,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 03_strategies.py (175 LOC)
+### 03_strategies.py (178 LOC)
 
 **Purpose:** Benchmarks crawl strategies (baseline versus prefetch variants) on time, pages discovered, and speedup.
 **Reads:** Optional CLI URL.

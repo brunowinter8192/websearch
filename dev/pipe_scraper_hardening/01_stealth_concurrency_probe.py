@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-
 URL_FILE = Path("dev/explore_pipeline/06_discovered_urls.txt")
 GAP_SECONDS = 300
 DOWNLOAD_DELAY = 1.0
@@ -22,6 +21,7 @@ EMPTY_THRESHOLD_BYTES = 100
 JSON_DIR = Path("dev/pipe_scraper_hardening/json")
 MD_DIR = Path("dev/pipe_scraper_hardening/md")
 OUTCOME_KEYS = ["ok", "waf_429", "http_error", "empty", "error"]
+
 
 # ORCHESTRATOR
 
@@ -51,106 +51,6 @@ async def probe_workflow() -> Path:
 def _load_urls() -> list[str]:
     return [ln.strip() for ln in URL_FILE.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
-def _url_to_filename(url: str) -> str:
-    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
-    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
-    return f"{slug}.md"
-
-def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
-    if domain not in domain_states:
-        domain_states[domain] = {
-            'lastseen': 0.0,
-            'lock': asyncio.Lock(),
-            'sem': asyncio.Semaphore(concurrency_per_domain),
-        }
-    return domain_states[domain]
-
-async def _gate_domain(state: dict, download_delay: float) -> None:
-    async with state['lock']:
-        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
-        now = time.time()
-        gap = now - state['lastseen']
-        if gap < jitter:
-            await asyncio.sleep(jitter - gap)
-        state['lastseen'] = time.time()
-
-async def _scrape_one(
-    crawler: AsyncWebCrawler,
-    url: str,
-    run_cfg: CrawlerRunConfig,
-    domain_states: dict,
-    download_delay: float,
-    concurrency_per_domain: int,
-    output_dir: Path,
-    crash_log: list,
-) -> dict:
-    domain = urlparse(url).netloc
-    state = _ensure_domain_state(domain_states, domain, concurrency_per_domain)
-    async with state['sem']:
-        await _gate_domain(state, download_delay)
-        t0 = time.time()
-        try:
-            result = await crawler.arun(url=url, config=run_cfg)
-        except Exception as exc:
-            crash_log.append(f"{url}: {type(exc).__name__}: {exc}")
-            return {'url': url, 'wall_ms': int((time.time() - t0) * 1000),
-                    'bytes': 0, 'status_code': None, 'outcome': 'error'}
-        wall_ms = int((time.time() - t0) * 1000)
-
-    raw_md = (result.markdown.raw_markdown if result.markdown else '') or ''
-    status = getattr(result, 'status_code', None)
-    byte_count = len(raw_md.encode('utf-8'))
-
-    if status == 429:
-        outcome = 'waf_429'
-    elif status and status >= 400:
-        outcome = 'http_error'
-    elif byte_count < EMPTY_THRESHOLD_BYTES:
-        outcome = 'empty'
-    else:
-        outcome = 'ok'
-
-    if raw_md:
-        fname = _url_to_filename(url)
-        (output_dir / fname).write_text(f"<!-- source: {url} -->\n\n{raw_md}", encoding='utf-8')
-
-    return {'url': url, 'wall_ms': wall_ms, 'bytes': byte_count,
-            'status_code': status, 'outcome': outcome}
-
-async def _scrape_all(
-    urls: list[str],
-    output_dir: Path,
-    download_delay: float,
-    concurrency_per_domain: int,
-    enable_stealth: bool,
-    crash_log: list,
-) -> list[dict]:
-    browser_cfg = BrowserConfig(headless=True, verbose=False, enable_stealth=enable_stealth)
-    run_cfg = CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
-        page_timeout=PAGE_TIMEOUT_MS,
-        markdown_generator=DefaultMarkdownGenerator(),
-        verbose=False,
-    )
-    domain_states: dict = {}
-    async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        raw = await asyncio.gather(
-            *[_scrape_one(crawler, url, run_cfg, domain_states,
-                          download_delay, concurrency_per_domain, output_dir, crash_log)
-              for url in urls],
-            return_exceptions=True,
-        )
-    results = [
-        r if isinstance(r, dict)
-        else {'url': urls[i], 'outcome': 'error', 'wall_ms': 0, 'bytes': 0, 'status_code': None}
-        for i, r in enumerate(raw)
-    ]
-    for i, r in enumerate(raw):
-        if not isinstance(r, dict):
-            crash_log.append(f"{urls[i]}: gather-level {type(r).__name__}: {r}")
-    return results
 
 async def _run_variant(label: str, urls: list[str], enable_stealth: bool) -> dict:
     output_dir = Path(f"/tmp/pipe_scraper_hardening_{label}")
@@ -164,8 +64,6 @@ async def _run_variant(label: str, urls: list[str], enable_stealth: bool) -> dic
     return {"label": label, "enable_stealth": enable_stealth, "results": results,
             "wall_s": wall_s, "crash_log": crash_log}
 
-def _summarize(results: list[dict]) -> dict:
-    return {k: sum(1 for r in results if r["outcome"] == k) for k in OUTCOME_KEYS}
 
 def _save_json(label: str, run: dict) -> None:
     path = JSON_DIR / f"01_{label}_results.json"
@@ -173,20 +71,6 @@ def _save_json(label: str, run: dict) -> None:
                "wall_s": run["wall_s"], "crash_log": run["crash_log"], "results": run["results"]}
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-def _byte_comparison(baseline_results: list[dict], stealth_results: list[dict]) -> dict:
-    b_by_url = {r["url"]: r["bytes"] for r in baseline_results}
-    s_by_url = {r["url"]: r["bytes"] for r in stealth_results}
-    common = set(b_by_url) & set(s_by_url)
-    diffs = {u: s_by_url[u] - b_by_url[u] for u in common}
-    changed = {u: d for u, d in diffs.items() if d != 0}
-    return {
-        "compared": len(common),
-        "identical": len(common) - len(changed),
-        "changed": len(changed),
-        "mean_delta": (sum(diffs.values()) / len(diffs)) if diffs else 0.0,
-        "max_abs_delta_url": max(diffs, key=lambda u: abs(diffs[u])) if diffs else None,
-        "max_abs_delta": max(diffs.values(), key=abs) if diffs else 0,
-    }
 
 def _write_report(baseline: dict, stealth: dict) -> Path:
     b_summary = _summarize(baseline["results"])
@@ -234,6 +118,132 @@ def _write_report(baseline: dict, stealth: dict) -> Path:
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _summarize(results: list[dict]) -> dict:
+    return {k: sum(1 for r in results if r["outcome"] == k) for k in OUTCOME_KEYS}
+
+
+async def _scrape_all(
+    urls: list[str],
+    output_dir: Path,
+    download_delay: float,
+    concurrency_per_domain: int,
+    enable_stealth: bool,
+    crash_log: list,
+) -> list[dict]:
+    browser_cfg = BrowserConfig(headless=True, verbose=False, enable_stealth=enable_stealth)
+    run_cfg = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
+        page_timeout=PAGE_TIMEOUT_MS,
+        markdown_generator=DefaultMarkdownGenerator(),
+        verbose=False,
+    )
+    domain_states: dict = {}
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        raw = await asyncio.gather(
+            *[_scrape_one(crawler, url, run_cfg, domain_states,
+                          download_delay, concurrency_per_domain, output_dir, crash_log)
+              for url in urls],
+            return_exceptions=True,
+        )
+    results = [
+        r if isinstance(r, dict)
+        else {'url': urls[i], 'outcome': 'error', 'wall_ms': 0, 'bytes': 0, 'status_code': None}
+        for i, r in enumerate(raw)
+    ]
+    for i, r in enumerate(raw):
+        if not isinstance(r, dict):
+            crash_log.append(f"{urls[i]}: gather-level {type(r).__name__}: {r}")
+    return results
+
+
+def _byte_comparison(baseline_results: list[dict], stealth_results: list[dict]) -> dict:
+    b_by_url = {r["url"]: r["bytes"] for r in baseline_results}
+    s_by_url = {r["url"]: r["bytes"] for r in stealth_results}
+    common = set(b_by_url) & set(s_by_url)
+    diffs = {u: s_by_url[u] - b_by_url[u] for u in common}
+    changed = {u: d for u, d in diffs.items() if d != 0}
+    return {
+        "compared": len(common),
+        "identical": len(common) - len(changed),
+        "changed": len(changed),
+        "mean_delta": (sum(diffs.values()) / len(diffs)) if diffs else 0.0,
+        "max_abs_delta_url": max(diffs, key=lambda u: abs(diffs[u])) if diffs else None,
+        "max_abs_delta": max(diffs.values(), key=abs) if diffs else 0,
+    }
+
+
+async def _scrape_one(
+    crawler: AsyncWebCrawler,
+    url: str,
+    run_cfg: CrawlerRunConfig,
+    domain_states: dict,
+    download_delay: float,
+    concurrency_per_domain: int,
+    output_dir: Path,
+    crash_log: list,
+) -> dict:
+    domain = urlparse(url).netloc
+    state = _ensure_domain_state(domain_states, domain, concurrency_per_domain)
+    async with state['sem']:
+        await _gate_domain(state, download_delay)
+        t0 = time.time()
+        try:
+            result = await crawler.arun(url=url, config=run_cfg)
+        except Exception as exc:
+            crash_log.append(f"{url}: {type(exc).__name__}: {exc}")
+            return {'url': url, 'wall_ms': int((time.time() - t0) * 1000),
+                    'bytes': 0, 'status_code': None, 'outcome': 'error'}
+        wall_ms = int((time.time() - t0) * 1000)
+
+    raw_md = (result.markdown.raw_markdown if result.markdown else '') or ''
+    status = getattr(result, 'status_code', None)
+    byte_count = len(raw_md.encode('utf-8'))
+
+    if status == 429:
+        outcome = 'waf_429'
+    elif status and status >= 400:
+        outcome = 'http_error'
+    elif byte_count < EMPTY_THRESHOLD_BYTES:
+        outcome = 'empty'
+    else:
+        outcome = 'ok'
+
+    if raw_md:
+        fname = _url_to_filename(url)
+        (output_dir / fname).write_text(f"<!-- source: {url} -->\n\n{raw_md}", encoding='utf-8')
+
+    return {'url': url, 'wall_ms': wall_ms, 'bytes': byte_count,
+            'status_code': status, 'outcome': outcome}
+
+
+def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
+    if domain not in domain_states:
+        domain_states[domain] = {
+            'lastseen': 0.0,
+            'lock': asyncio.Lock(),
+            'sem': asyncio.Semaphore(concurrency_per_domain),
+        }
+    return domain_states[domain]
+
+
+async def _gate_domain(state: dict, download_delay: float) -> None:
+    async with state['lock']:
+        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
+        now = time.time()
+        gap = now - state['lastseen']
+        if gap < jitter:
+            await asyncio.sleep(jitter - gap)
+        state['lastseen'] = time.time()
+
+
+def _url_to_filename(url: str) -> str:
+    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
+    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
+    return f"{slug}.md"
 
 
 if __name__ == "__main__":

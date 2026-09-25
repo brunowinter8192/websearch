@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import hashlib
 from pathlib import Path
 
@@ -5,21 +6,13 @@ import pytest
 
 from src.news.engine.dedup import filter_new_entries, pub_date_str, url_hash
 
-
-def _entry(url: str) -> dict:
-    return {"url": url, "publication_date": ""}
-
-
-def _write_raw(raw_dir: Path, url: str) -> None:
-    h = url_hash(url)
-    (raw_dir / f"{h}.md").write_text("stub", encoding="utf-8")
-
-
 URL_A = "https://www.theblock.co/post/1/article-a"
 URL_B = "https://www.theblock.co/post/2/article-b"
 URL_C = "https://www.theblock.co/post/3/article-c"
 URL_D = "https://www.theblock.co/post/4/article-d"
 
+
+# FUNCTIONS
 
 def test_excluded_url_no_raw_is_not_new(tmp_path):
     raw_dir = tmp_path
@@ -118,3 +111,12 @@ def test_filter_new_entries_pubdate_mode_matches_unknown_filename(tmp_path):
     new, n_skip_raw, n_excluded = filter_new_entries(entries, tmp_path, "theblock", mode="pubdate")
     assert new == []
     assert n_skip_raw == 1
+
+
+def _entry(url: str) -> dict:
+    return {"url": url, "publication_date": ""}
+
+
+def _write_raw(raw_dir: Path, url: str) -> None:
+    h = url_hash(url)
+    (raw_dir / f"{h}.md").write_text("stub", encoding="utf-8")

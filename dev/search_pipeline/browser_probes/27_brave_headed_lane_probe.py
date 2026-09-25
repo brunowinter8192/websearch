@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -110,17 +109,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-def _open_process_creator(command: list[str]) -> subprocess.Popen:
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
-    logging.info("Headed-background launch: %s", open_cmd)
-    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def _kill_stale_chrome() -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={PROFILE_DIR}"], capture_output=True)
-
-
 async def _start_headed_background_browser() -> None:
     global _browser
     _kill_stale_chrome()
@@ -132,52 +120,6 @@ async def _start_headed_background_browser() -> None:
     _browser = Chrome(options)
     _browser._browser_process_manager = BrowserProcessManager(process_creator=_open_process_creator)
     await _browser.start()
-
-
-async def _stop_headed_background_browser() -> None:
-    global _browser
-    if _browser is not None:
-        try:
-            await _browser.stop()
-        except Exception as e:
-            logging.warning("browser.stop() failed (expected to fall through to pkill): %s", e)
-        _browser = None
-    _kill_stale_chrome()
-
-
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-async def _wait_for_results(tab) -> bool:
-    for _ in range(MAX_WAIT_CYCLES):
-        raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
-        if count and int(count) > 0:
-            return True
-        await asyncio.sleep(WAIT_INTERVAL)
-    return False
-
-
-async def _parse_results(tab, max_results: int = 10) -> list[dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return [item for item in items[:max_results] if item.get("url")]
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
 
 
 async def run_query(query: str, axis: str) -> dict:
@@ -210,6 +152,63 @@ async def run_query(query: str, axis: str) -> dict:
     finally:
         await tab.close()
     return record
+
+
+async def _stop_headed_background_browser() -> None:
+    global _browser
+    if _browser is not None:
+        try:
+            await _browser.stop()
+        except Exception as e:
+            logging.warning("browser.stop() failed (expected to fall through to pkill): %s", e)
+        _browser = None
+    _kill_stale_chrome()
+
+
+def _kill_stale_chrome() -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={PROFILE_DIR}"], capture_output=True)
+
+
+def _open_process_creator(command: list[str]) -> subprocess.Popen:
+    args = command[1:]
+    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    logging.info("Headed-background launch: %s", open_cmd)
+    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = _extract_value(raw)
+    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
+async def _wait_for_results(tab) -> bool:
+    for _ in range(MAX_WAIT_CYCLES):
+        raw = await tab.execute_script(_JS_WAIT)
+        count = _extract_value(raw)
+        if count and int(count) > 0:
+            return True
+        await asyncio.sleep(WAIT_INTERVAL)
+    return False
+
+
+async def _parse_results(tab, max_results: int = 10) -> list[dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = _extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return [item for item in items[:max_results] if item.get("url")]
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
 
 
 if __name__ == "__main__":

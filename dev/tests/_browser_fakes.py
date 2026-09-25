@@ -1,3 +1,5 @@
+# FUNCTIONS
+
 class FakeChrome:
     def __init__(self, options):
         self.options = options

@@ -11,7 +11,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 
 ## Modules
 
-### p1_pipe_scraper.py (94 LOC)
+### p1_pipe_scraper.py (97 LOC)
 
 **Purpose:** Core probe scraper returning per-URL metrics under a locked raw-markdown configuration, optionally saving the markdown.
 **Reads:** nothing directly.
@@ -21,7 +21,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 
 ---
 
-### 07_pipe_scrape_eval.py (61 LOC)
+### 07_pipe_scrape_eval.py (62 LOC)
 
 **Purpose:** CLI entry point routing smoke and the three eval phases to their sibling modules; owns the smoke test.
 **Reads:** URL list via the common module.
@@ -71,7 +71,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 
 ---
 
-### 02_raw_smoke.py (199 LOC)
+### 02_raw_smoke.py (200 LOC)
 
 **Purpose:** Dev-only raw scrape of URLs parsed from a search smoke report, with no fallback chain or garbage detection, as a cleanup baseline.
 **Reads:** A search smoke markdown report given by `--input`.
@@ -81,7 +81,7 @@ URL list (from explore_pipeline's discovered set, a search smoke report, or a ha
 
 ---
 
-### 06_cloudflare_md_adoption.py (289 LOC)
+### 06_cloudflare_md_adoption.py (290 LOC)
 
 **Purpose:** Probes a curated URL set for server-side markdown adoption via the markdown Accept header and measures byte reduction.
 **Reads:** Hardcoded URL set.

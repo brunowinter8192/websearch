@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import json
@@ -12,6 +13,8 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 OUTPUT_DIR = Path(__file__).parent / "md"
 
+
+# FUNCTIONS
 
 async def main(url: str, depth: int, max_pages: int, exclude_patterns: str, label: str):
     domain = urlparse(url).netloc

@@ -11,7 +11,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ## Modules
 
-### clean_web_searxng.py (218 LOC)
+### clean_web_searxng.py (219 LOC)
 
 **Purpose:** Remove navigation chrome and formatting artifacts across all domain prefixes of the searxng RAG collection in one pass.
 **Reads:** Markdown files of the searxng collection.
@@ -21,7 +21,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_anthropic.py (100 LOC)
+### clean_web_anthropic.py (104 LOC)
 
 **Purpose:** Fix formatting artifacts in crawled Anthropic docs pages.
 **Reads:** Anthropic-prefixed files of the searxng collection.
@@ -31,7 +31,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_cookieyes.py (201 LOC)
+### clean_web_cookieyes.py (205 LOC)
 
 **Purpose:** Remove UI chrome from cookieyes documentation pages.
 **Reads:** Cookieyes-prefixed files of the searxng collection.
@@ -41,7 +41,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_onetrust.py (182 LOC)
+### clean_web_onetrust.py (184 LOC)
 
 **Purpose:** Remove UI chrome from OneTrust developer pages.
 **Reads:** Onetrust-prefixed files of the searxng collection.
@@ -51,7 +51,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_Playwright.py (98 LOC)
+### clean_web_Playwright.py (103 LOC)
 
 **Purpose:** Remove Docusaurus chrome from Playwright docs pages.
 **Reads:** Files of the separate Playwright collection.
@@ -61,7 +61,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_rag_docs.py (215 LOC)
+### clean_web_rag_docs.py (216 LOC)
 
 **Purpose:** Remove site-generator chrome from Playwright, Crawl4AI, and Trafilatura docs in the searxng collection.
 **Reads:** Files with those three prefixes.
@@ -71,7 +71,7 @@ Crawled markdown files in a sibling RAG project's document folders -> per-script
 
 ---
 
-### clean_web_tor.py (120 LOC)
+### clean_web_tor.py (125 LOC)
 
 **Purpose:** Remove navigation chrome and UI widgets from Tor support pages.
 **Reads:** Tor-prefixed files of the searxng collection.

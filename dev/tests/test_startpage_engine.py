@@ -1,5 +1,8 @@
+# INFRASTRUCTURE
 from src.search.engines.startpage import _build_results
 
+
+# FUNCTIONS
 
 def test_build_results_maps_fields_and_position():
     items = [

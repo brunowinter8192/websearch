@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import asyncio
 import re
 import time
@@ -97,6 +95,7 @@ SOCKS5_SOURCES: list[tuple[str, bool]] = [
 
 _PROXY_RE = re.compile(r'^([a-zA-Z0-9.\-]+):(\d{1,5})(?=[:\s]|$)')
 
+
 # ORCHESTRATOR
 
 async def probe_pool_size_workflow() -> None:
@@ -115,60 +114,8 @@ async def probe_pool_size_workflow() -> None:
     print_console_summary(results, stats, ts_start, elapsed)
     write_report(md_text, ts_start)
 
+
 # FUNCTIONS
-
-def parse_proxy_line(line: str) -> str | None:
-    line = line.strip()
-    if not line or line.startswith('#'):
-        return None
-    if '://' in line:
-        line = line.split('://', 1)[1]
-    if '@' in line:
-        line = line.rsplit('@', 1)[1]
-    m = _PROXY_RE.match(line)
-    if m and 1 <= int(m.group(2)) <= 65535:
-        return f"{m.group(1)}:{m.group(2)}"
-    return None
-
-
-async def fetch_source(
-    client: httpx.AsyncClient,
-    sem: asyncio.Semaphore,
-    url: str,
-    bucket: str,
-    is_mixed: bool,
-) -> dict:
-    async with sem:
-        try:
-            r = await client.get(url, timeout=TIMEOUT_S, follow_redirects=True)
-            status = r.status_code
-            if status != 200:
-                return _dead(url, bucket, is_mixed, status, f"HTTP {status}")
-            raw_count = 0
-            proxies: set[str] = set()
-            for line in r.text.splitlines():
-                p = parse_proxy_line(line)
-                if p:
-                    raw_count += 1
-                    proxies.add(p)
-            return {
-                "url": url, "bucket": bucket, "mixed": is_mixed,
-                "ok": True, "status": status, "error": None,
-                "raw_count": raw_count, "proxies": proxies,
-            }
-        except httpx.TimeoutException:
-            return _dead(url, bucket, is_mixed, None, "timeout")
-        except Exception as e:
-            return _dead(url, bucket, is_mixed, None, str(e)[:100])
-
-
-def _dead(url: str, bucket: str, is_mixed: bool, status, error: str) -> dict:
-    return {
-        "url": url, "bucket": bucket, "mixed": is_mixed,
-        "ok": False, "status": status, "error": error,
-        "raw_count": 0, "proxies": set(),
-    }
-
 
 async def fetch_all_sources() -> list[dict]:
     tasks: list[tuple[str, str, bool]] = (
@@ -213,12 +160,74 @@ def compute_stats(results: list[dict]) -> dict:
     }
 
 
-def _source_label(url: str) -> str:
-    if "proxyscrape.com" in url:
-        proto = url.split("protocol=")[-1]
-        return f"proxyscrape/{proto}"
-    parts = url.rstrip("/").split("/")
-    return "/".join(parts[-3:]) if len(parts) >= 3 else url
+def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> str:
+    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    lines: list[str] = []
+    lines += _render_header(results, stats, ts_str, elapsed)
+    lines += _render_headline(stats)
+    lines += _render_bucket_summary(results, stats)
+    lines += _render_source_detail(results)
+    lines += _render_failed_sources(stats)
+    lines += _render_baseline_comparison(stats)
+
+    return "\n".join(lines)
+
+
+def print_console_summary(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> None:
+    print(f"\nDone in {elapsed:.1f}s | OK: {stats['ok_count']}/{len(results)}")
+    print("\n--- Per-bucket ---")
+    for bucket in ("http", "socks4", "socks5"):
+        b = stats["buckets"][bucket]
+        print(f"  {bucket:<8}  raw={b['raw']:>8,}  unique={b['unique']:>8,}")
+    print("\n--- Headline ---")
+    print(f"  Total raw:              {stats['total_raw']:>10,}")
+    print(f"  Global unique:          {stats['global_unique']:>10,}")
+    print(f"  Sum per-bucket uniques: {stats['sum_bucket_uniques']:>10,}")
+    print(f"  Cross-bucket overlap:   {stats['bucket_overlap']:>10,}")
+    print(f"  vs baseline (~{BASELINE_RAW:,}):    {stats['total_raw'] / BASELINE_RAW:.1f}× raw")
+    if stats["failed"]:
+        print(f"\n  Failed sources ({len(stats['failed'])}):")
+        for r in stats["failed"]:
+            print(f"    {r['url']}  →  {r['error']}")
+
+
+def write_report(md_text: str, ts: datetime) -> None:
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    fname = REPORTS_DIR / f"pool_size_{ts.strftime('%Y%m%dT%H%M%SZ')}.md"
+    fname.write_text(md_text, encoding="utf-8")
+    print(f"\nReport: {fname}")
+
+
+async def fetch_source(
+    client: httpx.AsyncClient,
+    sem: asyncio.Semaphore,
+    url: str,
+    bucket: str,
+    is_mixed: bool,
+) -> dict:
+    async with sem:
+        try:
+            r = await client.get(url, timeout=TIMEOUT_S, follow_redirects=True)
+            status = r.status_code
+            if status != 200:
+                return _dead(url, bucket, is_mixed, status, f"HTTP {status}")
+            raw_count = 0
+            proxies: set[str] = set()
+            for line in r.text.splitlines():
+                p = parse_proxy_line(line)
+                if p:
+                    raw_count += 1
+                    proxies.add(p)
+            return {
+                "url": url, "bucket": bucket, "mixed": is_mixed,
+                "ok": True, "status": status, "error": None,
+                "raw_count": raw_count, "proxies": proxies,
+            }
+        except httpx.TimeoutException:
+            return _dead(url, bucket, is_mixed, None, "timeout")
+        except Exception as e:
+            return _dead(url, bucket, is_mixed, None, str(e)[:100])
 
 
 def _render_header(results: list[dict], stats: dict, ts_str: str, elapsed: float) -> list:
@@ -299,43 +308,34 @@ def _render_baseline_comparison(stats: dict) -> list:
     ]
 
 
-def build_report_md(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> str:
-    ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    lines: list[str] = []
-    lines += _render_header(results, stats, ts_str, elapsed)
-    lines += _render_headline(stats)
-    lines += _render_bucket_summary(results, stats)
-    lines += _render_source_detail(results)
-    lines += _render_failed_sources(stats)
-    lines += _render_baseline_comparison(stats)
-
-    return "\n".join(lines)
+def _dead(url: str, bucket: str, is_mixed: bool, status, error: str) -> dict:
+    return {
+        "url": url, "bucket": bucket, "mixed": is_mixed,
+        "ok": False, "status": status, "error": error,
+        "raw_count": 0, "proxies": set(),
+    }
 
 
-def print_console_summary(results: list[dict], stats: dict, ts: datetime, elapsed: float) -> None:
-    print(f"\nDone in {elapsed:.1f}s | OK: {stats['ok_count']}/{len(results)}")
-    print("\n--- Per-bucket ---")
-    for bucket in ("http", "socks4", "socks5"):
-        b = stats["buckets"][bucket]
-        print(f"  {bucket:<8}  raw={b['raw']:>8,}  unique={b['unique']:>8,}")
-    print("\n--- Headline ---")
-    print(f"  Total raw:              {stats['total_raw']:>10,}")
-    print(f"  Global unique:          {stats['global_unique']:>10,}")
-    print(f"  Sum per-bucket uniques: {stats['sum_bucket_uniques']:>10,}")
-    print(f"  Cross-bucket overlap:   {stats['bucket_overlap']:>10,}")
-    print(f"  vs baseline (~{BASELINE_RAW:,}):    {stats['total_raw'] / BASELINE_RAW:.1f}× raw")
-    if stats["failed"]:
-        print(f"\n  Failed sources ({len(stats['failed'])}):")
-        for r in stats["failed"]:
-            print(f"    {r['url']}  →  {r['error']}")
+def parse_proxy_line(line: str) -> str | None:
+    line = line.strip()
+    if not line or line.startswith('#'):
+        return None
+    if '://' in line:
+        line = line.split('://', 1)[1]
+    if '@' in line:
+        line = line.rsplit('@', 1)[1]
+    m = _PROXY_RE.match(line)
+    if m and 1 <= int(m.group(2)) <= 65535:
+        return f"{m.group(1)}:{m.group(2)}"
+    return None
 
 
-def write_report(md_text: str, ts: datetime) -> None:
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    fname = REPORTS_DIR / f"pool_size_{ts.strftime('%Y%m%dT%H%M%SZ')}.md"
-    fname.write_text(md_text, encoding="utf-8")
-    print(f"\nReport: {fname}")
+def _source_label(url: str) -> str:
+    if "proxyscrape.com" in url:
+        proto = url.split("protocol=")[-1]
+        return f"proxyscrape/{proto}"
+    parts = url.rstrip("/").split("/")
+    return "/".join(parts[-3:]) if len(parts) >= 3 else url
 
 
 if __name__ == "__main__":

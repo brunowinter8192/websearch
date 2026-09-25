@@ -11,7 +11,7 @@ Engine config from the module-level registry and a live page load in, seven DOM 
 
 ## Modules
 
-### inspect_engine_dom.py (344 LOC)
+### inspect_engine_dom.py (343 LOC)
 
 **Purpose:** Navigates to an engine search page via the production browser and writes a seven-heuristic DOM report with diagnosis.
 **Reads:** Module-level engine registry; live DOM via pydoll.

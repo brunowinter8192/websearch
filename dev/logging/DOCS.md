@@ -11,7 +11,7 @@ No `__init__.py` — not a package. The audit script is the entry point, run dir
 
 ## Modules
 
-### 01_audit.py (115 LOC)
+### 01_audit.py (114 LOC)
 
 **Purpose:** Walks `src/` and emits one report row per logger call with location, level, and message template.
 **Reads:** `src/**/*.py`.

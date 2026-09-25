@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import os
@@ -21,6 +20,7 @@ TEST_URLS = [
 
 
 # ORCHESTRATOR
+
 async def run_result_inspection():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

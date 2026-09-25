@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import ast
 import sys
@@ -13,7 +12,58 @@ LEVELS = {"debug", "info", "warning", "error", "critical"}
 MSG_LIMIT = 120
 
 
+# ORCHESTRATOR
+
+def audit_workflow() -> None:
+    print(f"Scanning {SRC_DIR} ...", file=sys.stderr)
+    records = _scan_src(SRC_DIR)
+    print(f"Found {len(records)} logger call-sites.", file=sys.stderr)
+    content = _render_report(records)
+    out_path = _write_report(content)
+    print(out_path)
+
+
 # FUNCTIONS
+
+def _scan_src(src_dir: Path) -> list[dict]:
+    all_records: list[dict] = []
+    for py_file in sorted(src_dir.rglob("*.py")):
+        records = _scan_file(py_file)
+        all_records.extend(records)
+    return all_records
+
+
+def _render_report(records: list[dict]) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lines = [
+        f"# Logger Call-Site Audit — {ts}",
+        f"\nSrc tree: `{SRC_DIR.relative_to(ROOT)}/`  ",
+        f"Total call-sites found: **{len(records)}**\n",
+        "| file:line | logger_obj | level | message_template |",
+        "|---|---|---|---|",
+    ]
+    for r in records:
+        cell_file = f"`{r['file']}:{r['lineno']}`"
+        cell_obj = f"`{r['obj']}`"
+        cell_level = r["level"].upper()
+        cell_msg = r["msg"].replace("|", "\\|").replace("\n", " ")
+        lines.append(f"| {cell_file} | {cell_obj} | {cell_level} | {cell_msg} |")
+    return "\n".join(lines) + "\n"
+
+
+def _write_report(content: str) -> Path:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    ts_file = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    out_path = REPORT_DIR / f"01_audit_{ts_file}.md"
+    out_path.write_text(content, encoding="utf-8")
+    return out_path
+
+
+def _scan_file(filepath: Path) -> list[dict]:
+    src_text = filepath.read_text(encoding="utf-8", errors="replace")
+    tree = ast.parse(src_text, filename=str(filepath))
+    return _extract_calls(tree, src_text, filepath)
+
 
 def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
     results = []
@@ -58,57 +108,6 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
 
     results.sort(key=lambda r: r["lineno"])
     return results
-
-
-def _scan_file(filepath: Path) -> list[dict]:
-    src_text = filepath.read_text(encoding="utf-8", errors="replace")
-    tree = ast.parse(src_text, filename=str(filepath))
-    return _extract_calls(tree, src_text, filepath)
-
-
-def _scan_src(src_dir: Path) -> list[dict]:
-    all_records: list[dict] = []
-    for py_file in sorted(src_dir.rglob("*.py")):
-        records = _scan_file(py_file)
-        all_records.extend(records)
-    return all_records
-
-
-def _render_report(records: list[dict]) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    lines = [
-        f"# Logger Call-Site Audit — {ts}",
-        f"\nSrc tree: `{SRC_DIR.relative_to(ROOT)}/`  ",
-        f"Total call-sites found: **{len(records)}**\n",
-        "| file:line | logger_obj | level | message_template |",
-        "|---|---|---|---|",
-    ]
-    for r in records:
-        cell_file = f"`{r['file']}:{r['lineno']}`"
-        cell_obj = f"`{r['obj']}`"
-        cell_level = r["level"].upper()
-        cell_msg = r["msg"].replace("|", "\\|").replace("\n", " ")
-        lines.append(f"| {cell_file} | {cell_obj} | {cell_level} | {cell_msg} |")
-    return "\n".join(lines) + "\n"
-
-
-def _write_report(content: str) -> Path:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    ts_file = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = REPORT_DIR / f"01_audit_{ts_file}.md"
-    out_path.write_text(content, encoding="utf-8")
-    return out_path
-
-
-# ORCHESTRATOR
-
-def audit_workflow() -> None:
-    print(f"Scanning {SRC_DIR} ...", file=sys.stderr)
-    records = _scan_src(SRC_DIR)
-    print(f"Found {len(records)} logger call-sites.", file=sys.stderr)
-    content = _render_report(records)
-    out_path = _write_report(content)
-    print(out_path)
 
 
 if __name__ == "__main__":

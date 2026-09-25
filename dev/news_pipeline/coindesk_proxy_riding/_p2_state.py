@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import asyncio
 import sys
 import time
@@ -13,6 +12,8 @@ from p0_pool import PersistentCooldownManager
 
 STALL_TIMEOUT_S   = 3_600.0
 
+
+# FUNCTIONS
 
 @dataclass
 class RideRecord:

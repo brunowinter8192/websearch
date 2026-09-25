@@ -140,6 +140,11 @@ async def run_headless_reference(artifact_url: str) -> dict:
     return data
 
 
+def check_orphans() -> list[str]:
+    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
 async def extract_sannysoft(tab) -> dict:
     raw = await tab.execute_script(
         "return JSON.stringify(Array.from(document.querySelectorAll('tr')).map(function(tr) {"
@@ -169,11 +174,6 @@ async def extract_creepjs(tab) -> dict:
         "literal_lie_or_trust_wording_found": literal_lie_or_trust,
         "raw_excerpt": full[:1500],
     }
-
-
-def check_orphans() -> list[str]:
-    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
-    return [line for line in result.stdout.splitlines() if line.strip()]
 
 
 if __name__ == "__main__":

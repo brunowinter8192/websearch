@@ -167,10 +167,6 @@ def kill_chrome_on_port(port: int) -> None:
         print(f"pkill (non-fatal): {e}", file=sys.stderr)
 
 
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
-
-
 async def extract_articles(tab) -> list[dict]:
     raw = await tab.execute_script(_JS_EXTRACT)
     val = _extract_value(raw)
@@ -194,14 +190,6 @@ async def wait_for_new_articles(tab, prev_count: int) -> int:
     return prev_count
 
 
-async def check_btn_state(tab) -> dict:
-    raw = await tab.execute_script(_JS_BTN_STATE_JSON)
-    val = _extract_value(raw)
-    if not val:
-        return {"found": False, "disabled": False}
-    return json.loads(val)
-
-
 async def retry_disabled_check(tab, click_n: int) -> bool:
     for attempt in range(1, DISABLED_RETRY_MAX + 1):
         print(f"  [disabled-retry {attempt}/{DISABLED_RETRY_MAX}] click={click_n} waiting {DISABLED_RETRY_WAIT}s …", file=sys.stderr)
@@ -214,3 +202,15 @@ async def retry_disabled_check(tab, click_n: int) -> bool:
             return True
         print(f"  [disabled-retry {attempt}/{DISABLED_RETRY_MAX}] still disabled", file=sys.stderr)
     return False
+
+
+async def check_btn_state(tab) -> dict:
+    raw = await tab.execute_script(_JS_BTN_STATE_JSON)
+    val = _extract_value(raw)
+    if not val:
+        return {"found": False, "disabled": False}
+    return json.loads(val)
+
+
+def _extract_value(raw):
+    return raw["result"]["result"]["value"]

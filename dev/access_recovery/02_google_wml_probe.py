@@ -72,48 +72,6 @@ def _load_queries() -> list[dict]:
         return json.load(f)["queries"]
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    if href.startswith("/url?"):
-        parsed = urlparse(href)
-        qs = parse_qs(parsed.query)
-        return qs.get("q", [href])[0]
-    return href
-
-
-def _parse_results(body: str) -> tuple[int, list, list]:
-    doc = lhtml.fromstring(body)
-    containers = doc.xpath(_CONTAINER_XPATH)
-    results = []
-    for c in containers:
-        title_els = c.xpath(_TITLE_XPATH)
-        url_els = c.xpath(_URL_XPATH)
-        snip_els = c.xpath(_SNIPPET_XPATH)
-        if not title_els or not url_els:
-            continue
-        url = _clean_url(url_els[0])
-        if not url:
-            continue
-        title = title_els[0].text_content().strip()
-        snippet = snip_els[0].text_content().strip() if snip_els else ""
-        results.append({"url": url, "title": title, "snippet": snippet})
-    return len(containers), results, containers
-
-
-def _detect_block(status_code: int, body: str) -> bool:
-    if status_code != 200:
-        return True
-    lower = body.lower()
-    return any(marker in lower for marker in _BLOCK_MARKERS)
-
-
-def _slugify(text: str) -> str:
-    import re
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return slug[:60]
-
-
 def run_query(query: str, axis: str, wml_run_dir: Path) -> dict:
     record: dict = {
         "query": query, "axis": axis, "outcome": "ERROR", "status_code": None,
@@ -151,11 +109,60 @@ def run_query(query: str, axis: str, wml_run_dir: Path) -> dict:
     return record
 
 
+def write_report(records: list[dict], run_ts: str) -> Path:
+    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
+    counts = _count_outcomes(records)
+    verdict = _compute_verdict(records, counts)
+
+    lines = []
+    lines += _build_header(run_ts, records, verdict)
+    lines += _build_outcome_counts_section(counts)
+    lines += _build_per_query_table(records)
+    lines += _build_ok_samples_section(records)
+    lines += _build_non_ok_section(records)
+    lines += _build_raw_bodies_section(run_ts)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _count_outcomes(records: list[dict]) -> dict:
     counts = {"OK": 0, "EMPTY_PARSED": 0, "NO_CONTAINERS": 0, "BLOCKED": 0, "ERROR": 0}
     for r in records:
         counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
     return counts
+
+
+def _slugify(text: str) -> str:
+    import re
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return slug[:60]
+
+
+def _detect_block(status_code: int, body: str) -> bool:
+    if status_code != 200:
+        return True
+    lower = body.lower()
+    return any(marker in lower for marker in _BLOCK_MARKERS)
+
+
+def _parse_results(body: str) -> tuple[int, list, list]:
+    doc = lhtml.fromstring(body)
+    containers = doc.xpath(_CONTAINER_XPATH)
+    results = []
+    for c in containers:
+        title_els = c.xpath(_TITLE_XPATH)
+        url_els = c.xpath(_URL_XPATH)
+        snip_els = c.xpath(_SNIPPET_XPATH)
+        if not title_els or not url_els:
+            continue
+        url = _clean_url(url_els[0])
+        if not url:
+            continue
+        title = title_els[0].text_content().strip()
+        snippet = snip_els[0].text_content().strip() if snip_els else ""
+        results.append({"url": url, "title": title, "snippet": snippet})
+    return len(containers), results, containers
 
 
 def _compute_verdict(records: list[dict], counts: dict) -> str:
@@ -265,21 +272,14 @@ def _build_raw_bodies_section(run_ts: str) -> list[str]:
     ]
 
 
-def write_report(records: list[dict], run_ts: str) -> Path:
-    path = REPORT_DIR / f"google_wml_probe_{run_ts}.md"
-    counts = _count_outcomes(records)
-    verdict = _compute_verdict(records, counts)
-
-    lines = []
-    lines += _build_header(run_ts, records, verdict)
-    lines += _build_outcome_counts_section(counts)
-    lines += _build_per_query_table(records)
-    lines += _build_ok_samples_section(records)
-    lines += _build_non_ok_section(records)
-    lines += _build_raw_bodies_section(run_ts)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    if href.startswith("/url?"):
+        parsed = urlparse(href)
+        qs = parse_qs(parsed.query)
+        return qs.get("q", [href])[0]
+    return href
 
 
 if __name__ == "__main__":

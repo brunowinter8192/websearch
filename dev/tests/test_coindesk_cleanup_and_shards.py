@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import logging
 
 import pytest
@@ -5,6 +6,8 @@ import pytest
 from src.news.platforms.coindesk.cleanup import cleanup
 from src.news.platforms.coindesk.shards import load_discover_filtered
 
+
+# FUNCTIONS
 
 def test_cleanup_without_h1_returns_empty_and_logs(caplog):
     with caplog.at_level(logging.WARNING, logger="src.news.platforms.coindesk.cleanup"):

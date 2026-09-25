@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import shutil
 from pathlib import Path
 
@@ -7,32 +8,7 @@ import src.search.browser as browser
 from dev.tests._browser_fakes import FakeChrome, _reset_state
 
 
-async def _fake_resolve_bundle():
-    return Path("/fake/chromium-1228/Google Chrome for Testing.app")
-
-
-class FakeProcessManager:
-    def __init__(self, process_creator=None):
-        self.process_creator = process_creator
-        self.start_calls = []
-
-    def start_browser_process(self, binary_location, port, arguments):
-        self.start_calls.append((binary_location, port, arguments))
-
-
-def _patch_launch_mechanics(monkeypatch, resolve_bundle=_fake_resolve_bundle, acquire=None):
-    monkeypatch.setattr(browser, "_resolve_chromium_bundle_path", resolve_bundle)
-    monkeypatch.setattr(browser.browser_lock, "acquire", acquire or (lambda *a, **kw: "fake-lock-handle"))
-    monkeypatch.setattr(browser, "_reap_session_profile", lambda: None)
-    monkeypatch.setattr(browser, "_get_frontmost_pid", lambda: 999)
-    monkeypatch.setattr(browser, "Chrome", lambda options: FakeChrome(options))
-    monkeypatch.setattr(browser, "BrowserProcessManager", FakeProcessManager)
-    monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 12345)
-    monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
-    monkeypatch.setattr(browser, "_record_own_pids", lambda session_dir: None)
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
-    monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: None)
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_get_tab_orders_lock_reap_launch_anchor_record(monkeypatch):
@@ -217,3 +193,30 @@ async def test_get_tab_removes_its_own_partial_directory_on_launch_failure(monke
     assert not Path(captured_dir[0]).exists()
     assert browser._session_dir is None
     assert released == [1]
+
+
+async def _fake_resolve_bundle():
+    return Path("/fake/chromium-1228/Google Chrome for Testing.app")
+
+
+def _patch_launch_mechanics(monkeypatch, resolve_bundle=_fake_resolve_bundle, acquire=None):
+    monkeypatch.setattr(browser, "_resolve_chromium_bundle_path", resolve_bundle)
+    monkeypatch.setattr(browser.browser_lock, "acquire", acquire or (lambda *a, **kw: "fake-lock-handle"))
+    monkeypatch.setattr(browser, "_reap_session_profile", lambda: None)
+    monkeypatch.setattr(browser, "_get_frontmost_pid", lambda: 999)
+    monkeypatch.setattr(browser, "Chrome", lambda options: FakeChrome(options))
+    monkeypatch.setattr(browser, "BrowserProcessManager", FakeProcessManager)
+    monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 12345)
+    monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
+    monkeypatch.setattr(browser, "_record_own_pids", lambda session_dir: None)
+    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
+    monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: None)
+
+
+class FakeProcessManager:
+    def __init__(self, process_creator=None):
+        self.process_creator = process_creator
+        self.start_calls = []
+
+    def start_browser_process(self, binary_location, port, arguments):
+        self.start_calls.append((binary_location, port, arguments))

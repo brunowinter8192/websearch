@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -78,7 +77,6 @@ async def run_probe() -> None:
             await close_browser()
         except Exception:
             pass
-
 
 
 if __name__ == "__main__":

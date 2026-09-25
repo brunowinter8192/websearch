@@ -44,24 +44,6 @@ def detect_bloat(text: str) -> set[str]:
     return {name for name, pat in _BLOAT if pat.search(text)}
 
 
-def _strip_doubled_prefix(text: str) -> str:
-    if len(text) < 60:
-        return text
-    head = text[:300]
-    best_cut = 0
-    for L in (100, 70, 50, 30):
-        if len(head) < 2 * L:
-            continue
-        for start in range(0, min(len(head) - 2 * L, 100)):
-            chunk = head[start:start + L]
-            second = head.find(chunk, start + L)
-            if 0 < second and second + L <= len(head):
-                cut = second + L
-                if cut > best_cut:
-                    best_cut = cut
-    return text[best_cut:] if best_cut else text
-
-
 def strip_bloat(text: str) -> str:
     text = _strip_doubled_prefix(text)
     text = re.sub(r'^Web results', '', text)
@@ -83,3 +65,21 @@ def lexical_density(text: str) -> float:
         return 0.0
     unique_content = {w for w in words if w not in STOPWORDS}
     return len(unique_content) / len(words)
+
+
+def _strip_doubled_prefix(text: str) -> str:
+    if len(text) < 60:
+        return text
+    head = text[:300]
+    best_cut = 0
+    for L in (100, 70, 50, 30):
+        if len(head) < 2 * L:
+            continue
+        for start in range(0, min(len(head) - 2 * L, 100)):
+            chunk = head[start:start + L]
+            second = head.find(chunk, start + L)
+            if 0 < second and second + L <= len(head):
+                cut = second + L
+                if cut > best_cut:
+                    best_cut = cut
+    return text[best_cut:] if best_cut else text

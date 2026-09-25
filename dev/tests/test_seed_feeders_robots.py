@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import httpx
 import pytest
 
@@ -6,6 +7,8 @@ from src.crawler.seed_feeders_robots import fetch_robots_txt, parse_robots_direc
 from src.crawler import seed_feeders
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient
 
+
+# FUNCTIONS
 
 def test_parse_robots_directives_extracts_paths_and_sitemap():
     text = (

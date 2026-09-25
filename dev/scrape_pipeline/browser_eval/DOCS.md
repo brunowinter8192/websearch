@@ -27,7 +27,7 @@ Test domains -> production scrape saved as numbered iterations -> regression dif
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 03_browser.py (121 LOC)
+### 03_browser.py (123 LOC)
 
 **Purpose:** Compares content yield across browser wait-strategy configurations for JS-heavy sites.
 **Reads:** Hardcoded domain set or a CLI URL.

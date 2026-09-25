@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+# INFRASTRUCTURE
 import re
 from pathlib import Path
 
@@ -7,6 +7,45 @@ INPUT_DIR = Path("/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/MCP/RAG/da
 PATTERN = "anthropic__*.md"
 
 CARD_LINK_RE = re.compile(r'^\[.+?\]\(https?://[^)]+\)(\[.+?\]\(https?://[^)]+\))+\s*$')
+
+
+# ORCHESTRATOR
+
+def main():
+    files = sorted(INPUT_DIR.glob(PATTERN))
+    if not files:
+        print(f"No files matched {PATTERN} in {INPUT_DIR}")
+        return
+
+    total_before = 0
+    total_after = 0
+    processed = 0
+
+    for path in files:
+        original = path.read_text(encoding="utf-8")
+        cleaned = clean_file(original)
+
+        total_before += len(original)
+        total_after += len(cleaned)
+        processed += 1
+
+        if cleaned != original:
+            path.write_text(cleaned, encoding="utf-8")
+
+    reduction = (total_before - total_after) / total_before * 100 if total_before else 0
+    print(f"FILES PROCESSED: {processed}")
+    print(f"Total chars before: {total_before:,}")
+    print(f"Total chars after:  {total_after:,}")
+    print(f"Reduction: {reduction:.1f}%")
+
+
+# FUNCTIONS
+
+def clean_file(content: str) -> str:
+    lines = content.split("\n")
+    result = _compress_header_and_merge_headings(lines)
+    result = _strip_trailing_card_nav(result)
+    return "\n".join(result) + "\n"
 
 
 def _compress_header_and_merge_headings(lines: list[str]) -> list[str]:
@@ -59,41 +98,6 @@ def _strip_trailing_card_nav(result: list[str]) -> list[str]:
         result.pop()
 
     return result
-
-
-def clean_file(content: str) -> str:
-    lines = content.split("\n")
-    result = _compress_header_and_merge_headings(lines)
-    result = _strip_trailing_card_nav(result)
-    return "\n".join(result) + "\n"
-
-
-def main():
-    files = sorted(INPUT_DIR.glob(PATTERN))
-    if not files:
-        print(f"No files matched {PATTERN} in {INPUT_DIR}")
-        return
-
-    total_before = 0
-    total_after = 0
-    processed = 0
-
-    for path in files:
-        original = path.read_text(encoding="utf-8")
-        cleaned = clean_file(original)
-
-        total_before += len(original)
-        total_after += len(cleaned)
-        processed += 1
-
-        if cleaned != original:
-            path.write_text(cleaned, encoding="utf-8")
-
-    reduction = (total_before - total_after) / total_before * 100 if total_before else 0
-    print(f"FILES PROCESSED: {processed}")
-    print(f"Total chars before: {total_before:,}")
-    print(f"Total chars after:  {total_after:,}")
-    print(f"Reduction: {reduction:.1f}%")
 
 
 if __name__ == "__main__":

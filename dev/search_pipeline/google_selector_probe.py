@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -142,6 +141,19 @@ async def read_structure(tab) -> list:
     return json.loads(val)
 
 
+def write_report(counts: dict, structure: list, url: str) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"google_selector_probe_{ts}.md"
+    hypothesis, detail = diagnose(counts)
+
+    lines = _render_dom_counts(counts, ts, url)
+    lines += _render_structure(structure)
+    lines += _render_hypothesis(hypothesis, detail)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def diagnose(counts: dict) -> tuple[str, str]:
     rso_h3   = counts.get("rso_h3", 0)
     div_g    = counts.get("div_g", 0)
@@ -171,19 +183,6 @@ def diagnose(counts: dict) -> tuple[str, str]:
             f"but `#rso h3` only sees {rso_h3}. Results live in a different DOM branch."
         )
     return label, detail
-
-
-def write_report(counts: dict, structure: list, url: str) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"google_selector_probe_{ts}.md"
-    hypothesis, detail = diagnose(counts)
-
-    lines = _render_dom_counts(counts, ts, url)
-    lines += _render_structure(structure)
-    lines += _render_hypothesis(hypothesis, detail)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _render_dom_counts(counts: dict, ts: str, url: str) -> list[str]:

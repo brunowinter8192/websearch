@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import logging
 
 import pytest
@@ -9,9 +10,7 @@ from src.news.platforms.coindesk import CoinDeskPlatform
 from src.news.platforms.theblock import TheBlockPlatform
 
 
-class _MinimalPlatform(Platform):
-    name = "minimal"
-
+# FUNCTIONS
 
 def test_protocol_defaults_are_declared():
     p = _MinimalPlatform()
@@ -56,3 +55,7 @@ def test_scrape_only_preamble_passes_for_supporting_platform(tmp_path, monkeypat
     monkeypatch.setattr(pipeline, "_check_internet", lambda platform, log: True)
     log, job_id, desc = pipeline._scrape_only_preamble(CoinDeskPlatform(), "2024", None, None)
     assert desc == "year=2024"
+
+
+class _MinimalPlatform(Platform):
+    name = "minimal"

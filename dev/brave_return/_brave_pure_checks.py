@@ -96,33 +96,6 @@ def run_verdict_checks() -> None:
     )
 
 
-def run_carry_over_checks() -> None:
-    check(
-        "challenge on the cold query only, gone warm and gone after relaunch, fresh challenged again",
-        classify_carry_over([True, False, False, False], [False, False], [True]) == CARRY_OVER_WITHIN_AND_ACROSS,
-    )
-    check(
-        "gone warm within the run but back after the process kill is within-run only",
-        classify_carry_over([True, False, False, False], [True, False], [True]) == CARRY_OVER_WITHIN_ONLY,
-    )
-    check(
-        "challenged on every query is no carry-over",
-        classify_carry_over([True, True, True], [True, True], [True]) == CARRY_OVER_NONE,
-    )
-    check(
-        "an unchallenged fresh profile makes any quiet warm phase confounded, not a carry-over",
-        classify_carry_over([True, False, False], [False, False], [False]) == CARRY_OVER_CONFOUNDED,
-    )
-    check(
-        "a cold profile that was never challenged makes carry-over unmeasurable",
-        classify_carry_over([False, False, False], [False], [False]) == CARRY_OVER_NO_COLD_CHALLENGE,
-    )
-    check(
-        "too few queries is inconclusive rather than a verdict",
-        classify_carry_over([True], [], []) == CARRY_OVER_INCONCLUSIVE,
-    )
-
-
 def run_cookie_diff_checks() -> None:
     before = fingerprint_cookies(
         [{"name": "a", "domain": ".brave.com", "path": "/", "value": "one", "expires": -1},
@@ -161,6 +134,33 @@ def run_stats_checks() -> None:
     check(
         "over-budget counting is per query, not an average",
         count_over_budget([5000.0, 6001.0, 12000.0, None], 6000.0) == 2,
+    )
+
+
+def run_carry_over_checks() -> None:
+    check(
+        "challenge on the cold query only, gone warm and gone after relaunch, fresh challenged again",
+        classify_carry_over([True, False, False, False], [False, False], [True]) == CARRY_OVER_WITHIN_AND_ACROSS,
+    )
+    check(
+        "gone warm within the run but back after the process kill is within-run only",
+        classify_carry_over([True, False, False, False], [True, False], [True]) == CARRY_OVER_WITHIN_ONLY,
+    )
+    check(
+        "challenged on every query is no carry-over",
+        classify_carry_over([True, True, True], [True, True], [True]) == CARRY_OVER_NONE,
+    )
+    check(
+        "an unchallenged fresh profile makes any quiet warm phase confounded, not a carry-over",
+        classify_carry_over([True, False, False], [False, False], [False]) == CARRY_OVER_CONFOUNDED,
+    )
+    check(
+        "a cold profile that was never challenged makes carry-over unmeasurable",
+        classify_carry_over([False, False, False], [False], [False]) == CARRY_OVER_NO_COLD_CHALLENGE,
+    )
+    check(
+        "too few queries is inconclusive rather than a verdict",
+        classify_carry_over([True], [], []) == CARRY_OVER_INCONCLUSIVE,
     )
 
 

@@ -101,13 +101,6 @@ return JSON.stringify({
 
 # FUNCTIONS
 
-def extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
 async def inject_socs_cookie(tab) -> None:
     await tab._execute_command(NetworkCommands.set_cookie(
         name=SOCS_NAME, value=SOCS_VALUE, domain=SOCS_DOMAIN, path="/",
@@ -134,16 +127,6 @@ async def wait_for_results(tab) -> tuple[bool, int]:
             return True, count
         await asyncio.sleep(WAIT_INTERVAL)
     return False, count
-
-
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    if "/url?" in href:
-        parsed = urlparse(href)
-        qs = parse_qs(parsed.query)
-        return qs.get("q", [href])[0]
-    return href
 
 
 async def parse_results(tab) -> list[dict]:
@@ -176,3 +159,20 @@ async def diagnose(tab) -> dict:
     if val:
         diag.update(json.loads(val))
     return diag
+
+
+def extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
+
+
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    if "/url?" in href:
+        parsed = urlparse(href)
+        qs = parse_qs(parsed.query)
+        return qs.get("q", [href])[0]
+    return href

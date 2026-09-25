@@ -1,67 +1,11 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.scraper import chromium_process, chromium_scrape
 from dev.tests._chromium_scrape_fakes import _patch_cdp_launch_mechanics, _FakeResult, _meta
 
 
-class _FakeRequest:
-    def __init__(self, resource_type, frame):
-        self.resource_type = resource_type
-        self._frame = frame
-
-    @property
-    def frame(self):
-        return self._frame
-
-
-class _FakeResponse:
-    def __init__(self, status, request):
-        self.status = status
-        self.request = request
-
-
-class _FakeMainFrame:
-    pass
-
-
-class _FakePage:
-    def __init__(self):
-        self.main_frame = _FakeMainFrame()
-        self._response_handlers = []
-
-    def on(self, event, handler):
-        if event == "response":
-            self._response_handlers.append(handler)
-
-    def fire_response(self, status, resource_type="document", frame=None):
-        request = _FakeRequest(resource_type, frame if frame is not None else self.main_frame)
-        response = _FakeResponse(status, request)
-        for h in self._response_handlers:
-            h(response)
-
-
-def _fake_crawler_with_document_responses(statuses, crawl4ai_status_code=403):
-    class _FakeCrawler:
-        def __init__(self, *a, **kw):
-            self.crawler_strategy = kw.get("crawler_strategy")
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def arun(self, url, config=None):
-            page = _FakePage()
-            await self.crawler_strategy.execute_hook(
-                "before_goto", page, context=None, url=url, config=config
-            )
-            for status in statuses:
-                page.fire_response(status)
-            return _FakeResult(raw_markdown="x" * 300, status_code=crawl4ai_status_code)
-
-    return _FakeCrawler
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_acquire_cdp_headed_last_document_response_overrides_crawl4ai_status(monkeypatch):
@@ -194,3 +138,62 @@ async def test_try_scrape_calls_reap_orphaned_scrapes_at_start(monkeypatch):
     await chromium_scrape.try_scrape("https://example.com")
 
     assert calls == [1]
+
+
+def _fake_crawler_with_document_responses(statuses, crawl4ai_status_code=403):
+    class _FakeCrawler:
+        def __init__(self, *a, **kw):
+            self.crawler_strategy = kw.get("crawler_strategy")
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def arun(self, url, config=None):
+            page = _FakePage()
+            await self.crawler_strategy.execute_hook(
+                "before_goto", page, context=None, url=url, config=config
+            )
+            for status in statuses:
+                page.fire_response(status)
+            return _FakeResult(raw_markdown="x" * 300, status_code=crawl4ai_status_code)
+
+    return _FakeCrawler
+
+
+class _FakePage:
+    def __init__(self):
+        self.main_frame = _FakeMainFrame()
+        self._response_handlers = []
+
+    def on(self, event, handler):
+        if event == "response":
+            self._response_handlers.append(handler)
+
+    def fire_response(self, status, resource_type="document", frame=None):
+        request = _FakeRequest(resource_type, frame if frame is not None else self.main_frame)
+        response = _FakeResponse(status, request)
+        for h in self._response_handlers:
+            h(response)
+
+
+class _FakeMainFrame:
+    pass
+
+
+class _FakeRequest:
+    def __init__(self, resource_type, frame):
+        self.resource_type = resource_type
+        self._frame = frame
+
+    @property
+    def frame(self):
+        return self._frame
+
+
+class _FakeResponse:
+    def __init__(self, status, request):
+        self.status = status
+        self.request = request

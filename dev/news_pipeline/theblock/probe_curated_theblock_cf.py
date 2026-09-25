@@ -18,6 +18,7 @@ XML_MARKERS = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 TIMEOUT = 15
 REPORT_DIR = Path(__file__).parent / "probe_curated_theblock_cf_reports"
 
+
 # ORCHESTRATOR
 
 def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
@@ -32,17 +33,6 @@ def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
 
 
 # FUNCTIONS
-
-def check_proxy(protocol: str, host_port: str) -> bool:
-    purl = f"{protocol}://{host_port}"
-    try:
-        s = cffi.Session(impersonate="chrome")
-        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=TIMEOUT)
-        head = r.content[:500]
-        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
-        return False
-
 
 def run_checks(proxies: list, concurrency: int) -> list:
     results = []
@@ -82,6 +72,17 @@ def write_report(proxies: list, results: list, proto_counts: Counter, concurrenc
 
     path.write_text("\n".join(lines) + "\n")
     return path
+
+
+def check_proxy(protocol: str, host_port: str) -> bool:
+    purl = f"{protocol}://{host_port}"
+    try:
+        s = cffi.Session(impersonate="chrome")
+        r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=TIMEOUT)
+        head = r.content[:500]
+        return r.status_code == 200 and any(m in head for m in XML_MARKERS)
+    except Exception:
+        return False
 
 
 def build_config_and_results_lines(ts: str, concurrency: int, total: int, total_passed: int) -> list[str]:

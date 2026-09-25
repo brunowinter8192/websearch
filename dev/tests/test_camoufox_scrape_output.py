@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import subprocess
 
 import pytest
@@ -7,6 +8,8 @@ from dev.tests._camoufox_scrape_fakes import _fake_launch_options, _make_fake_ca
 
 _real_resolve_system_locale = camoufox_scrape._resolve_system_locale
 
+
+# FUNCTIONS
 
 def test_build_camoufox_kwargs_reflects_block_images_param():
     off = camoufox_scrape._build_camoufox_kwargs(block_images=False)
@@ -57,17 +60,6 @@ async def test_config_hash_stable_for_identical_kwargs(monkeypatch):
     _, meta2 = await camoufox_scrape.try_scrape_camoufox("https://x.test/b")
 
     assert meta1["config_hash"] == meta2["config_hash"]
-
-
-def _meta(**overrides):
-    base = {
-        "acquisition_error": None, "status_code": 200, "landed_url": "https://x.test/a",
-        "raw_markdown_bytes": 100, "markdown_conversion_error": None,
-        "document_status_chain": [200],
-        "config": {"headless": False}, "config_hash": "deadbeef00",
-    }
-    base.update(overrides)
-    return base
 
 
 @pytest.mark.asyncio
@@ -198,3 +190,14 @@ def test_resolve_system_locale_empty_output_raises(monkeypatch):
     )
     with pytest.raises(RuntimeError, match="empty"):
         _real_resolve_system_locale()
+
+
+def _meta(**overrides):
+    base = {
+        "acquisition_error": None, "status_code": 200, "landed_url": "https://x.test/a",
+        "raw_markdown_bytes": 100, "markdown_conversion_error": None,
+        "document_status_chain": [200],
+        "config": {"headless": False}, "config_hash": "deadbeef00",
+    }
+    base.update(overrides)
+    return base

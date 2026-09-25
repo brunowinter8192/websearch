@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import json
 import difflib
@@ -8,6 +7,7 @@ from pathlib import Path
 
 
 # ORCHESTRATOR
+
 def compare_all_baselines():
     baselines_dir = Path(__file__).parent / "01_baselines"
 
@@ -91,6 +91,25 @@ def compare_domain_iterations(domain_dir: Path) -> dict | None:
     }
 
 
+def save_comparison_report(results: list[dict]) -> None:
+    reports_dir = Path(__file__).parent / "md"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file = reports_dir / f"02_diff_report_{timestamp}.txt"
+
+    with open(report_file, 'w', encoding='utf-8') as f:
+        f.write("=" * 80 + "\n")
+        f.write("SCRAPING SUITE COMPARISON REPORT\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write("=" * 80 + "\n\n")
+
+        for result in results:
+            write_domain_result(f, result)
+
+    print(f"\nReport saved: {report_file}")
+
+
 def load_metadata(metadata_file: Path) -> dict:
     with open(metadata_file, 'r') as f:
         return json.load(f)
@@ -128,25 +147,6 @@ def generate_content_diff(domain_dir: Path, prev_iter: int, latest_iter: int) ->
     )
 
     return '\n'.join(diff)
-
-
-def save_comparison_report(results: list[dict]) -> None:
-    reports_dir = Path(__file__).parent / "md"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_file = reports_dir / f"02_diff_report_{timestamp}.txt"
-
-    with open(report_file, 'w', encoding='utf-8') as f:
-        f.write("=" * 80 + "\n")
-        f.write("SCRAPING SUITE COMPARISON REPORT\n")
-        f.write(f"Generated: {datetime.now().isoformat()}\n")
-        f.write("=" * 80 + "\n\n")
-
-        for result in results:
-            write_domain_result(f, result)
-
-    print(f"\nReport saved: {report_file}")
 
 
 def write_domain_result(f, result: dict) -> None:

@@ -83,12 +83,12 @@ def _old_module(name: str):
     return module
 
 
-def _new_module(name: str):
-    return importlib.import_module(f"src.search.engines.{name}")
-
-
 def _load_js(module) -> str:
     return module._JS_PARSE
+
+
+def _new_module(name: str):
+    return importlib.import_module(f"src.search.engines.{name}")
 
 
 async def _start_browser() -> Chrome:

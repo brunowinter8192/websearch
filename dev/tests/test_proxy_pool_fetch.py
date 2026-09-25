@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 from types import SimpleNamespace
 
 import pytest
@@ -6,24 +7,7 @@ from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
 import src.news.engine.proxy_pool.fetch as fetch_mod
 
 
-class _Session:
-    def __init__(self, response=None, exc=None):
-        self._response = response
-        self._exc = exc
-
-    def get(self, url, **kw):
-        if self._exc is not None:
-            raise self._exc
-        return self._response
-
-
-def _patch(monkeypatch, **kw):
-    monkeypatch.setattr(fetch_mod.cffi, "Session", lambda **_: _Session(**kw))
-
-
-def _resp(status, content=b""):
-    return SimpleNamespace(status_code=status, content=content)
-
+# FUNCTIONS
 
 @pytest.mark.parametrize("exc,name", [(Timeout("t"), "Timeout"), (CurlConnectionError("c"), "ConnectionError")])
 def test_transport_errors_become_fail_with_class_name(monkeypatch, exc, name):
@@ -46,3 +30,22 @@ def test_ok_dead_and_fail_statuses_carry_reasons(monkeypatch):
     assert fetch_mod.fetch_url("http", "h:1", "u", "xml") == ("fail", b"", "http_503")
     _patch(monkeypatch, response=_resp(200, b"<html>captcha</html>"))
     assert fetch_mod.fetch_url("http", "h:1", "u", "xml") == ("fail", b"", "content_marker_missing")
+
+
+def _patch(monkeypatch, **kw):
+    monkeypatch.setattr(fetch_mod.cffi, "Session", lambda **_: _Session(**kw))
+
+
+def _resp(status, content=b""):
+    return SimpleNamespace(status_code=status, content=content)
+
+
+class _Session:
+    def __init__(self, response=None, exc=None):
+        self._response = response
+        self._exc = exc
+
+    def get(self, url, **kw):
+        if self._exc is not None:
+            raise self._exc
+        return self._response

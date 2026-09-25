@@ -11,20 +11,34 @@ REPORT_DIR = SCRIPT_DIR / "md"
 
 # FUNCTIONS
 
-def pad_min2(s: str, width: int) -> str:
-    return s + " " * max(2, width - len(s))
+def write_report(results: list[dict], aggregate: dict, cap: int, distribution: dict) -> Path:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    report_path = REPORT_DIR / f"04_lane_metrics_report_{ts}.md"
+
+    sections = [
+        "# Lane content/boilerplate metrics (Kohlschuetter Algorithm 2 + PROSE cap)",
+        format_cap_section(cap, distribution),
+        "\n\n".join(format_url_section(entry) for entry in results),
+        format_table(results),
+        format_aggregate_section(aggregate, len(results)),
+        format_rescue_section(aggregate),
+    ]
+    report_path.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
+    return report_path
 
 
-def format_lane_line(lane: str, m: dict) -> str:
-    content_str = f"content {m['words_content']}/{m['words_total']} words ({m['words_content_pct']:.0f}%)"
-    blocks_str = f"blocks {m['blocks_content']}/{m['blocks_total']}"
-    link_str = f"link-density {m['link_density_overall']:.2f}"
-    longest_str = f"longest {m['longest_content_block']}w"
-    prose_str = f"prose {m['prose_blocks']}/{m['blocks_content']}blk {m['prose_words']}w"
-    return (
-        f"{lane:<9s} {pad_min2(content_str, 32)}{pad_min2(blocks_str, 12)}"
-        f"{pad_min2(link_str, 18)}{pad_min2(longest_str, 14)}{prose_str}"
-    )
+def format_cap_section(cap: int, distribution: dict) -> str:
+    lines = [
+        "## PROSE length cap (derived from the chromium block-word-count distribution)",
+        "",
+        f"- Chromium blocks measured: {distribution['n']}",
+        f"- median: {distribution['median']:.0f}  p50: {distribution['p50']:.0f}  "
+        f"p75: {distribution['p75']:.0f}  p90: {distribution['p90']:.0f}  "
+        f"p95: {distribution['p95']:.0f}  p99: {distribution['p99']:.0f}  max: {distribution['max']}",
+        f"- Cap chosen: {cap} words — the {PROSE_PERCENTILE}th percentile of the distribution above.",
+    ]
+    return "\n".join(lines)
 
 
 def format_url_section(entry: dict) -> str:
@@ -51,19 +65,6 @@ def format_table(results: list[dict]) -> str:
                 f"{m['prose_blocks']}/{m['blocks_content']} | {m['prose_words']} |"
             )
     return f"## All {len(results)} URLs\n\n" + "\n".join(rows)
-
-
-def format_cap_section(cap: int, distribution: dict) -> str:
-    lines = [
-        "## PROSE length cap (derived from the chromium block-word-count distribution)",
-        "",
-        f"- Chromium blocks measured: {distribution['n']}",
-        f"- median: {distribution['median']:.0f}  p50: {distribution['p50']:.0f}  "
-        f"p75: {distribution['p75']:.0f}  p90: {distribution['p90']:.0f}  "
-        f"p95: {distribution['p95']:.0f}  p99: {distribution['p99']:.0f}  max: {distribution['max']}",
-        f"- Cap chosen: {cap} words — the {PROSE_PERCENTILE}th percentile of the distribution above.",
-    ]
-    return "\n".join(lines)
 
 
 def format_aggregate_section(aggregate: dict, pair_count: int) -> str:
@@ -111,18 +112,17 @@ def format_rescue_section(aggregate: dict) -> str:
     return "\n".join(lines)
 
 
-def write_report(results: list[dict], aggregate: dict, cap: int, distribution: dict) -> Path:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_path = REPORT_DIR / f"04_lane_metrics_report_{ts}.md"
+def format_lane_line(lane: str, m: dict) -> str:
+    content_str = f"content {m['words_content']}/{m['words_total']} words ({m['words_content_pct']:.0f}%)"
+    blocks_str = f"blocks {m['blocks_content']}/{m['blocks_total']}"
+    link_str = f"link-density {m['link_density_overall']:.2f}"
+    longest_str = f"longest {m['longest_content_block']}w"
+    prose_str = f"prose {m['prose_blocks']}/{m['blocks_content']}blk {m['prose_words']}w"
+    return (
+        f"{lane:<9s} {pad_min2(content_str, 32)}{pad_min2(blocks_str, 12)}"
+        f"{pad_min2(link_str, 18)}{pad_min2(longest_str, 14)}{prose_str}"
+    )
 
-    sections = [
-        "# Lane content/boilerplate metrics (Kohlschuetter Algorithm 2 + PROSE cap)",
-        format_cap_section(cap, distribution),
-        "\n\n".join(format_url_section(entry) for entry in results),
-        format_table(results),
-        format_aggregate_section(aggregate, len(results)),
-        format_rescue_section(aggregate),
-    ]
-    report_path.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
-    return report_path
+
+def pad_min2(s: str, width: int) -> str:
+    return s + " " * max(2, width - len(s))

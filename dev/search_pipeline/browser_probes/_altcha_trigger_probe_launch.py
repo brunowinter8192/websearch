@@ -13,13 +13,6 @@ FOCUS_STEAL_POLL_INTERVAL_S = 0.25
 
 # FUNCTIONS
 
-def _find_app_bundle(executable_path: str) -> Path | None:
-    for parent in Path(executable_path).parents:
-        if parent.suffix == ".app":
-            return parent
-    return None
-
-
 async def resolve_chromium_bundle_path() -> Path:
     pw = await async_playwright().start()
     try:
@@ -58,6 +51,29 @@ def wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
     raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
 
 
+async def focus_steal_watchdog(app_name: str) -> None:
+    last_other_app = await asyncio.to_thread(_get_frontmost_app)
+    while True:
+        current = await asyncio.to_thread(_get_frontmost_app)
+        if current == app_name:
+            if last_other_app and last_other_app != app_name:
+                await asyncio.to_thread(_activate_app, last_other_app)
+        else:
+            last_other_app = current
+        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
+
+
+def kill_by_profile(user_data_dir: str) -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={user_data_dir}"], capture_output=True)
+
+
+def _find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
 def _get_frontmost_app() -> str:
     result = subprocess.run(
         [
@@ -77,19 +93,3 @@ def _activate_app(app_name: str) -> None:
         ],
         capture_output=True, text=True,
     )
-
-
-async def focus_steal_watchdog(app_name: str) -> None:
-    last_other_app = await asyncio.to_thread(_get_frontmost_app)
-    while True:
-        current = await asyncio.to_thread(_get_frontmost_app)
-        if current == app_name:
-            if last_other_app and last_other_app != app_name:
-                await asyncio.to_thread(_activate_app, last_other_app)
-        else:
-            last_other_app = current
-        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
-
-
-def kill_by_profile(user_data_dir: str) -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={user_data_dir}"], capture_output=True)

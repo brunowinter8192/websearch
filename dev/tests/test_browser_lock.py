@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -6,6 +7,8 @@ import pytest
 
 import src.search.browser_lock as browser_lock
 
+
+# FUNCTIONS
 
 def test_acquire_returns_immediately_when_free(tmp_path):
     lock_path = tmp_path / "session.lock"

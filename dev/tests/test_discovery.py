@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 
 import pytest
@@ -6,6 +7,8 @@ from src.crawler.seed_feeders_scope import FeederResult
 from src.crawler.discovery import DiscoveredURL, DiscoveryResult, _assemble_seeds, discover_urls_workflow
 from dev.url_discovery._fixture_site import start_fixture_server, stop_fixture_server, ground_truth, seed_url
 
+
+# FUNCTIONS
 
 def test_assemble_seeds_includes_literal_seed_url_unconditionally():
     feeder_results = {
@@ -68,23 +71,6 @@ async def test_discover_urls_workflow_invalid_seed_url_is_failed_not_empty():
     assert result.error is not None
 
 
-@pytest.fixture(scope="module")
-def fixture_server():
-    server, thread, port = start_fixture_server()
-    yield port
-    stop_fixture_server(server, thread)
-
-
-@pytest.fixture(scope="module")
-def gt():
-    return ground_truth()
-
-
-@pytest.fixture(scope="module")
-def discovery_result(fixture_server):
-    return asyncio.run(discover_urls_workflow(seed_url(fixture_server)))
-
-
 def test_discover_urls_workflow_total_matches_fixture_ground_truth(discovery_result, gt):
     assert discovery_result.ok is True
     assert discovery_result.failed_feeders == {}
@@ -113,3 +99,20 @@ def test_total_dropped_sums_ok_feeders_only():
         "navtree": FeederResult(urls=[], ok=False, error="x"),
     }
     assert _total_dropped(results) == 5
+
+
+@pytest.fixture(scope="module")
+def discovery_result(fixture_server):
+    return asyncio.run(discover_urls_workflow(seed_url(fixture_server)))
+
+
+@pytest.fixture(scope="module")
+def gt():
+    return ground_truth()
+
+
+@pytest.fixture(scope="module")
+def fixture_server():
+    server, thread, port = start_fixture_server()
+    yield port
+    stop_fixture_server(server, thread)

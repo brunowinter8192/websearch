@@ -27,8 +27,15 @@ def compute_prose_cap(chromium_block_lists: list[list[dict]]) -> tuple[int, dict
     return cap, distribution
 
 
-def is_prose_block(classification: str, block: dict, cap: int) -> bool:
-    return classification == "CONTENT" and block["num_words"] <= cap and block["has_sentence_end"]
+def compute_file_metrics(path: Path, cap: int) -> dict:
+    blocks = read_blocks(path)
+    return compute_metrics_from_blocks(blocks, cap)
+
+
+def compute_metrics_from_blocks(blocks: list[dict], cap: int) -> dict:
+    tree_classifications = classify_blocks(blocks)
+    final_classifications = apply_heading_rule(blocks, tree_classifications)
+    return aggregate_file_metrics(blocks, final_classifications, cap)
 
 
 def aggregate_file_metrics(blocks: list[dict], classifications: list[str], cap: int) -> dict:
@@ -68,12 +75,5 @@ def aggregate_file_metrics(blocks: list[dict], classifications: list[str], cap: 
     }
 
 
-def compute_metrics_from_blocks(blocks: list[dict], cap: int) -> dict:
-    tree_classifications = classify_blocks(blocks)
-    final_classifications = apply_heading_rule(blocks, tree_classifications)
-    return aggregate_file_metrics(blocks, final_classifications, cap)
-
-
-def compute_file_metrics(path: Path, cap: int) -> dict:
-    blocks = read_blocks(path)
-    return compute_metrics_from_blocks(blocks, cap)
+def is_prose_block(classification: str, block: dict, cap: int) -> bool:
+    return classification == "CONTENT" and block["num_words"] <= cap and block["has_sentence_end"]

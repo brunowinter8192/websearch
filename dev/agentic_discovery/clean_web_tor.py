@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import re
 from pathlib import Path
 
@@ -15,45 +16,22 @@ UI_WIDGET_LINES = {
 }
 
 
-def clean_file(path: Path) -> tuple[int, int]:
-    text = path.read_text(encoding="utf-8")
-    chars_before = len(text)
+# ORCHESTRATOR
 
-    lines = text.splitlines(keepends=True)
-    output_lines = []
+def main() -> None:
+    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
+    if not files:
+        print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
+        return
 
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.rstrip("\n").rstrip("\r")
+    total_before, total_after, pattern_counts = _process_files(files)
 
-        if FOOTER_START_PATTERN.match(stripped):
-            while output_lines and output_lines[-1].strip() == "":
-                output_lines.pop()
-            break
+    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
 
-        if stripped in UI_WIDGET_LINES:
-            i += 1
-            if stripped in {"View for: ", "View for:"} and i < len(lines):
-                i += 1
-            continue
-
-        output_lines.append(line)
-        i += 1
-
-    result = "".join(output_lines)
-    result = result.rstrip("\n") + "\n"
-
-    path.write_text(result, encoding="utf-8")
-    return chars_before, len(result)
+    _print_report(len(files), pattern_counts, total_before, total_after, reduction)
 
 
-def _detect_patterns(lines_before: list) -> tuple[bool, bool, bool]:
-    has_footer = any(FOOTER_START_PATTERN.match(l) for l in lines_before)
-    has_view_for = any(l.strip() in {"View for: ", "View for:"} for l in lines_before)
-    has_expand = any("Expand all Collapse all" in l for l in lines_before)
-    return has_footer, has_view_for, has_expand
-
+# FUNCTIONS
 
 def _process_files(files: list) -> tuple[int, int, dict]:
     total_before = 0
@@ -103,17 +81,44 @@ def _print_report(num_files: int, pattern_counts: dict, total_before: int, total
     print(f"STATUS: CLEAN")
 
 
-def main() -> None:
-    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
-    if not files:
-        print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
-        return
+def _detect_patterns(lines_before: list) -> tuple[bool, bool, bool]:
+    has_footer = any(FOOTER_START_PATTERN.match(l) for l in lines_before)
+    has_view_for = any(l.strip() in {"View for: ", "View for:"} for l in lines_before)
+    has_expand = any("Expand all Collapse all" in l for l in lines_before)
+    return has_footer, has_view_for, has_expand
 
-    total_before, total_after, pattern_counts = _process_files(files)
 
-    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+def clean_file(path: Path) -> tuple[int, int]:
+    text = path.read_text(encoding="utf-8")
+    chars_before = len(text)
 
-    _print_report(len(files), pattern_counts, total_before, total_after, reduction)
+    lines = text.splitlines(keepends=True)
+    output_lines = []
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.rstrip("\n").rstrip("\r")
+
+        if FOOTER_START_PATTERN.match(stripped):
+            while output_lines and output_lines[-1].strip() == "":
+                output_lines.pop()
+            break
+
+        if stripped in UI_WIDGET_LINES:
+            i += 1
+            if stripped in {"View for: ", "View for:"} and i < len(lines):
+                i += 1
+            continue
+
+        output_lines.append(line)
+        i += 1
+
+    result = "".join(output_lines)
+    result = result.rstrip("\n") + "\n"
+
+    path.write_text(result, encoding="utf-8")
+    return chars_before, len(result)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,10 @@
+# INFRASTRUCTURE
 import pytest
 
 import src.scraper.scrape_logger as scrape_logger
 
+
+# FUNCTIONS
 
 def test_write_sidecar_header_includes_engine(tmp_path, monkeypatch):
     monkeypatch.setenv("WEBSEARCH_SCRAPE_LOG_PATH", str(tmp_path / "scrape_log.jsonl"))

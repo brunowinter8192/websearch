@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 LOG_PATH   = SCRIPT_DIR / "logs" / "proxy_status_log.json"
+
 
 # ORCHESTRATOR
 
@@ -45,14 +44,8 @@ def record_run(results: list[dict], source_label: str) -> None:
     alive = sum(1 for r in results if r["alive"])
     print(f"proxy_status_log: {len(results)} results ({alive} alive) folded → {len(data)} unique proxies on record  [{LOG_PATH}]")
 
+
 # FUNCTIONS
-
-def _load_log() -> dict:
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not LOG_PATH.exists():
-        return {}
-    return json.loads(LOG_PATH.read_text(encoding="utf-8"))
-
 
 def _save_log(data: dict) -> None:
     LOG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -79,6 +72,13 @@ def partition_fresh(
         else:
             skipped_fresh.append((proto, host_port))
     return to_check, skipped_fresh
+
+
+def _load_log() -> dict:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not LOG_PATH.exists():
+        return {}
+    return json.loads(LOG_PATH.read_text(encoding="utf-8"))
 
 
 def proxy_key(proto: str, host_port: str) -> str:

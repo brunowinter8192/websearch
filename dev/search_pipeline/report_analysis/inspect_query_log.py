@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import json
 import os
@@ -8,14 +9,7 @@ from pathlib import Path
 DEFAULT_LOG_PATH = Path("src/logs/query_log.jsonl")
 
 
-def _resolve_log_path(arg: str | None) -> Path:
-    if arg:
-        return Path(arg)
-    env = os.environ.get("SEARXNG_QUERY_LOG_PATH")
-    if env:
-        return Path(env)
-    return DEFAULT_LOG_PATH
-
+# ORCHESTRATOR
 
 def main() -> None:
     args = _parse_args()
@@ -47,12 +41,23 @@ def main() -> None:
     _print_last_record(records)
 
 
+# FUNCTIONS
+
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Inspect query_log.jsonl")
     ap.add_argument("--tail", type=int, default=None, help="Only consider last N records (after type filter)")
     ap.add_argument("--log-path", default=None, help="Path to JSONL log file (overrides env var and default)")
     ap.add_argument("--all-types", action="store_true", help="Include engine_run records in output (default: skip)")
     return ap.parse_args()
+
+
+def _resolve_log_path(arg: str | None) -> Path:
+    if arg:
+        return Path(arg)
+    env = os.environ.get("SEARXNG_QUERY_LOG_PATH")
+    if env:
+        return Path(env)
+    return DEFAULT_LOG_PATH
 
 
 def _print_timing_summary(records: list[dict]) -> None:

@@ -12,12 +12,37 @@ logger = logging.getLogger(__name__)
 
 EMPTY_THRESHOLD_BYTES = 100
 
-# FUNCTIONS
 
-def url_to_filename(url: str) -> str:
-    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
-    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
-    return f"{slug}.md"
+# ORCHESTRATOR
+
+async def scrape_urls(
+    urls: list[str],
+    delay_s: float = 1.0,
+    page_timeout_ms: int = 15000,
+    concurrency: int = 5,
+    output_dir: Path | None = None,
+) -> list[dict]:
+    browser_cfg = BrowserConfig(headless=True, verbose=False)
+    run_cfg = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        delay_before_return_html=delay_s,
+        page_timeout=page_timeout_ms,
+        markdown_generator=DefaultMarkdownGenerator(),
+        verbose=False,
+    )
+    sem = asyncio.Semaphore(concurrency)
+
+    async with AsyncWebCrawler(config=browser_cfg) as crawler:
+        tasks = [_scrape_one(crawler, url, run_cfg, sem, output_dir) for url in urls]
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+
+    return [r if isinstance(r, dict) else {'url': urls[i], 'outcome': 'error',
+                                            'wall_ms': 0, 'bytes': 0, 'status_code': None}
+            for i, r in enumerate(raw)]
+
+
+# FUNCTIONS
 
 async def _scrape_one(
     crawler: AsyncWebCrawler,
@@ -65,30 +90,8 @@ async def _scrape_one(
         'outcome': outcome,
     }
 
-# ORCHESTRATOR
 
-async def scrape_urls(
-    urls: list[str],
-    delay_s: float = 1.0,
-    page_timeout_ms: int = 15000,
-    concurrency: int = 5,
-    output_dir: Path | None = None,
-) -> list[dict]:
-    browser_cfg = BrowserConfig(headless=True, verbose=False)
-    run_cfg = CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        delay_before_return_html=delay_s,
-        page_timeout=page_timeout_ms,
-        markdown_generator=DefaultMarkdownGenerator(),
-        verbose=False,
-    )
-    sem = asyncio.Semaphore(concurrency)
-
-    async with AsyncWebCrawler(config=browser_cfg) as crawler:
-        tasks = [_scrape_one(crawler, url, run_cfg, sem, output_dir) for url in urls]
-        raw = await asyncio.gather(*tasks, return_exceptions=True)
-
-    return [r if isinstance(r, dict) else {'url': urls[i], 'outcome': 'error',
-                                            'wall_ms': 0, 'bytes': 0, 'status_code': None}
-            for i, r in enumerate(raw)]
+def url_to_filename(url: str) -> str:
+    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
+    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
+    return f"{slug}.md"

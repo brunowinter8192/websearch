@@ -10,16 +10,6 @@ from _acquire_probe_analysis import _agg_ratios
 
 # FUNCTIONS
 
-def _overall_disc(records: list[dict]) -> str:
-    zc = [r["disc"] for r in records if r["category"] == "zero_cascade"]
-    if not zc:
-        return "no_cascade"
-    counts: dict[str, int] = defaultdict(int)
-    for d in zc:
-        counts[d] += 1
-    return max(counts, key=lambda k: counts[k])
-
-
 def _write_report(records: list[dict], cascade_ok: bool, zero_n: int, report_dir: Path) -> Path:
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"acquire_probe_{ts_str}.md"
@@ -35,6 +25,16 @@ def _write_report(records: list[dict], cascade_ok: bool, zero_n: int, report_dir
     lines += _report_verdict(od)
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _overall_disc(records: list[dict]) -> str:
+    zc = [r["disc"] for r in records if r["category"] == "zero_cascade"]
+    if not zc:
+        return "no_cascade"
+    counts: dict[str, int] = defaultdict(int)
+    for d in zc:
+        counts[d] += 1
+    return max(counts, key=lambda k: counts[k])
 
 
 def _report_header(

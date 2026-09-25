@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -25,6 +24,7 @@ PROD_KWARGS = {
 
 
 # ORCHESTRATOR
+
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     low_result = await attempt_launch(LOW_TIMEOUT_MS, "LOW (1ms)")

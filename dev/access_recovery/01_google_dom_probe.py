@@ -73,10 +73,28 @@ def _load_queries() -> list[dict]:
         return json.load(f)["queries"]
 
 
-def _slugify(text: str) -> str:
-    import re
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return slug[:60]
+async def run_navigation(query: str, axis: str, num: int, html_run_dir: Path) -> dict:
+    record: dict = {
+        "query": query, "axis": axis, "num": num, "outcome": "ERROR",
+        "count": 0, "samples": [], "containers_count": None, "diagnostic": None,
+        "landed_url": None, "error": None,
+    }
+    t0 = time.monotonic()
+    tab = await new_tab()
+    try:
+        await inject_socs_cookie(tab)
+        search_url = SEARCH_URL.format(quote_plus(query), "en", num)
+        current = await _navigate_with_consent(tab, search_url)
+        record["landed_url"] = current
+        await _classify_navigation(tab, record, current)
+        await _save_navigation_artifacts(tab, record, query, num, html_run_dir)
+    except Exception as e:
+        record["outcome"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+    finally:
+        await kill_tab(tab)
+    record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
+    return record
 
 
 async def _navigate_with_consent(tab, search_url: str) -> str:
@@ -120,28 +138,10 @@ async def _save_navigation_artifacts(tab, record: dict, query: str, num: int, ht
         )
 
 
-async def run_navigation(query: str, axis: str, num: int, html_run_dir: Path) -> dict:
-    record: dict = {
-        "query": query, "axis": axis, "num": num, "outcome": "ERROR",
-        "count": 0, "samples": [], "containers_count": None, "diagnostic": None,
-        "landed_url": None, "error": None,
-    }
-    t0 = time.monotonic()
-    tab = await new_tab()
-    try:
-        await inject_socs_cookie(tab)
-        search_url = SEARCH_URL.format(quote_plus(query), "en", num)
-        current = await _navigate_with_consent(tab, search_url)
-        record["landed_url"] = current
-        await _classify_navigation(tab, record, current)
-        await _save_navigation_artifacts(tab, record, query, num, html_run_dir)
-    except Exception as e:
-        record["outcome"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
-    finally:
-        await kill_tab(tab)
-    record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
-    return record
+def _slugify(text: str) -> str:
+    import re
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return slug[:60]
 
 
 if __name__ == "__main__":

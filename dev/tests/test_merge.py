@@ -1,10 +1,9 @@
+# INFRASTRUCTURE
 from src.search.merge import build_engine_pools
 from src.search.result import SearchResult
 
 
-def _r(url, engine, position, **kw):
-    return SearchResult(url=url, title="T", snippet="S", engine=engine, position=position, **kw)
-
+# FUNCTIONS
 
 def test_url_shared_by_two_engines_is_kept_in_both_pools():
     results = [
@@ -75,3 +74,7 @@ def test_pool_still_sorted_by_own_native_position():
     ]
     pools = build_engine_pools(results)
     assert [r.position for r in pools["duckduckgo"]] == [1, 3, 5]
+
+
+def _r(url, engine, position, **kw):
+    return SearchResult(url=url, title="T", snippet="S", engine=engine, position=position, **kw)

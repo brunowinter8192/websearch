@@ -74,14 +74,6 @@ PHASE_FRESH_QUERIES = [
 ]
 
 
-@dataclass
-class Phase:
-    name: str
-    description: str
-    profile_dir: str
-    measurements: list = field(default_factory=list)
-
-
 # ORCHESTRATOR
 
 async def probe_workflow() -> None:
@@ -108,8 +100,12 @@ async def probe_workflow() -> None:
 
 # FUNCTIONS
 
-def build_search_url(query: str) -> str:
-    return SEARCH_URL.format(quote_plus(query))
+@dataclass
+class Phase:
+    name: str
+    description: str
+    profile_dir: str
+    measurements: list = field(default_factory=list)
 
 
 async def run_phase(name: str, description: str, profile_dir: str, queries: list[str]) -> Phase:
@@ -138,12 +134,6 @@ def snapshot_cookie_store(profile_dir: str) -> dict:
         return {"path": str(path), "exists": False}
     stat = path.stat()
     return {"path": str(path), "exists": True, "size_bytes": stat.st_size, "mtime": stat.st_mtime}
-
-
-def _cookie_identity(fingerprint: dict) -> tuple:
-    return (
-        fingerprint["name"], fingerprint["domain"], fingerprint["path"], fingerprint["value_sha256_12"]
-    )
 
 
 def build_persistence_record(cold: Phase, warm: Phase, store_after_cold: dict, store_before_warm: dict) -> dict:
@@ -175,6 +165,16 @@ def count_live_requests(phases: list[Phase]) -> int:
 def discard_profiles(profile_dirs: list[str]) -> None:
     for profile_dir in profile_dirs:
         shutil.rmtree(profile_dir, ignore_errors=True)
+
+
+def build_search_url(query: str) -> str:
+    return SEARCH_URL.format(quote_plus(query))
+
+
+def _cookie_identity(fingerprint: dict) -> tuple:
+    return (
+        fingerprint["name"], fingerprint["domain"], fingerprint["path"], fingerprint["value_sha256_12"]
+    )
 
 
 if __name__ == "__main__":

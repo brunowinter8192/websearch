@@ -1,19 +1,11 @@
+# INFRASTRUCTURE
 from datetime import datetime, timedelta, timezone
 
 _PROTO = "http"
 _HP    = "proxy:8080"
 
 
-def _burn_at_offset(mgr, proto, hp, offset_s: float, ride_ok: int = 0) -> None:
-    from src.news.engine.proxy_pool.proxy_key import proxy_key
-    mgr.mark_burned(proto, hp, ride_ok=ride_ok)
-    key = proxy_key(proto, hp)
-    now = datetime.now(timezone.utc)
-    if mgr._policy == "fixed":
-        mgr._burned_at[key] = now - timedelta(seconds=offset_s)
-    else:
-        mgr._next_eligible[key] = now - timedelta(seconds=offset_s)
-
+# FUNCTIONS
 
 def test_fixed_60min() -> None:
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
@@ -156,3 +148,13 @@ def test_fixed_cooldown_count() -> None:
     assert len(mgr.eligible_candidates(pool)) == 2, \
         f"expected 2 eligible after backdating two"
 
+
+def _burn_at_offset(mgr, proto, hp, offset_s: float, ride_ok: int = 0) -> None:
+    from src.news.engine.proxy_pool.proxy_key import proxy_key
+    mgr.mark_burned(proto, hp, ride_ok=ride_ok)
+    key = proxy_key(proto, hp)
+    now = datetime.now(timezone.utc)
+    if mgr._policy == "fixed":
+        mgr._burned_at[key] = now - timedelta(seconds=offset_s)
+    else:
+        mgr._next_eligible[key] = now - timedelta(seconds=offset_s)

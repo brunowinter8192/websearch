@@ -5,14 +5,24 @@ from datetime import datetime, timezone
 
 
 # FUNCTIONS
-def url_type(url):
-    m = re.search(r'theblock\.co/([^/?#]+)', url)
-    return m.group(1) if m else "other"
 
+def build_report(sitemap_urls, sub_stats, news_urls, news_from_cache,
+                 rss_urls, rss_rate_limited, ui_urls, ui_status):
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    ctx = _compute_report_context(sitemap_urls, sub_stats, news_urls, rss_urls, ui_urls)
 
-def post_id(url):
-    m = re.search(r'/post/(\d+)/', url)
-    return m.group(1) if m else None
+    lines = []
+    lines += _render_header(ts, sub_stats, ctx)
+    lines += _render_cf_note()
+    lines += _render_method1(sitemap_urls, sub_stats, ctx)
+    lines += _render_method2(news_urls, news_from_cache, ctx)
+    lines += _render_method3(rss_urls, rss_rate_limited, ctx)
+    lines += _render_method4(ui_urls, ui_status, ctx)
+    lines += _render_cross_method_comparison(ctx)
+    lines += _render_completeness_and_gaps(sub_stats, ctx)
+    lines += _render_news_vs_archive(ctx)
+
+    return "\n".join(lines)
 
 
 def _compute_report_context(sitemap_urls, sub_stats, news_urls, rss_urls, ui_urls):
@@ -202,20 +212,11 @@ def _render_news_vs_archive(ctx) -> list:
     return lines
 
 
-def build_report(sitemap_urls, sub_stats, news_urls, news_from_cache,
-                 rss_urls, rss_rate_limited, ui_urls, ui_status):
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    ctx = _compute_report_context(sitemap_urls, sub_stats, news_urls, rss_urls, ui_urls)
+def url_type(url):
+    m = re.search(r'theblock\.co/([^/?#]+)', url)
+    return m.group(1) if m else "other"
 
-    lines = []
-    lines += _render_header(ts, sub_stats, ctx)
-    lines += _render_cf_note()
-    lines += _render_method1(sitemap_urls, sub_stats, ctx)
-    lines += _render_method2(news_urls, news_from_cache, ctx)
-    lines += _render_method3(rss_urls, rss_rate_limited, ctx)
-    lines += _render_method4(ui_urls, ui_status, ctx)
-    lines += _render_cross_method_comparison(ctx)
-    lines += _render_completeness_and_gaps(sub_stats, ctx)
-    lines += _render_news_vs_archive(ctx)
 
-    return "\n".join(lines)
+def post_id(url):
+    m = re.search(r'/post/(\d+)/', url)
+    return m.group(1) if m else None

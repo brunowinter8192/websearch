@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import os
@@ -35,6 +34,7 @@ FIX2_URLS = [
 
 
 # ORCHESTRATOR
+
 async def run_fix_prototype():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -134,20 +134,6 @@ def build_fix2_section(results: dict) -> str:
     return "\n".join(lines)
 
 
-def strip_consent_prefix(content: str) -> str:
-    if not content:
-        return content
-    sample = content[:3000].lower()
-    density = sum(sample.count(w) for w in CONSENT_WORDS)
-    if density <= CONSENT_DENSITY_THRESHOLD:
-        return content
-    match = re.search(r'\n(#{1,2} )', content[CONSENT_SKIP_OFFSET:])
-    if match:
-        pos = CONSENT_SKIP_OFFSET + match.start() + 1
-        return content[pos:]
-    return content
-
-
 def build_recommendation(results: dict) -> str:
     medium_url = "https://medium.com/nonexistent-article-xyz-12345"
     wiki_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
@@ -196,6 +182,20 @@ def build_recommendation(results: dict) -> str:
         )
 
     return "\n".join(lines)
+
+
+def strip_consent_prefix(content: str) -> str:
+    if not content:
+        return content
+    sample = content[:3000].lower()
+    density = sum(sample.count(w) for w in CONSENT_WORDS)
+    if density <= CONSENT_DENSITY_THRESHOLD:
+        return content
+    match = re.search(r'\n(#{1,2} )', content[CONSENT_SKIP_OFFSET:])
+    if match:
+        pos = CONSENT_SKIP_OFFSET + match.start() + 1
+        return content[pos:]
+    return content
 
 
 if __name__ == "__main__":

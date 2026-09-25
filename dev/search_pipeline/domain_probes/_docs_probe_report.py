@@ -130,8 +130,6 @@ def _section_global_domain_freq(all_runs: dict) -> list[str]:
     return lines
 
 
-
-
 def _section_heuristic_coverage_matrix(all_runs: dict) -> list[str]:
     all_results = [r for results in all_runs.values() for r in results]
     total_urls = len(all_results)
@@ -167,26 +165,6 @@ def _section_heuristic_coverage_matrix(all_runs: dict) -> list[str]:
         "",
     ]
     return lines
-
-
-def _count_heuristic_matches(all_results: list[dict]) -> tuple[dict, dict, int, dict]:
-    h_totals: dict[str, int] = {key: 0 for key in HEURISTIC_KEYS}
-    h_eng: dict[str, dict[str, int]] = {
-        key: {name: 0 for name in ENGINE_NAMES} for key in HEURISTIC_KEYS
-    }
-    none_total = 0
-    none_eng: dict[str, int] = {name: 0 for name in ENGINE_NAMES}
-
-    for r in all_results:
-        matched = _match_heuristics(r["url"])
-        if not matched:
-            none_total += 1
-            none_eng[r["engine"]] += 1
-        else:
-            for key in matched:
-                h_totals[key] += 1
-                h_eng[key][r["engine"]] += 1
-    return h_totals, h_eng, none_total, none_eng
 
 
 def _section_top_n_inspection(all_runs: dict) -> list[str]:
@@ -325,6 +303,31 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     return lines
 
 
+def _domain(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _count_heuristic_matches(all_results: list[dict]) -> tuple[dict, dict, int, dict]:
+    h_totals: dict[str, int] = {key: 0 for key in HEURISTIC_KEYS}
+    h_eng: dict[str, dict[str, int]] = {
+        key: {name: 0 for name in ENGINE_NAMES} for key in HEURISTIC_KEYS
+    }
+    none_total = 0
+    none_eng: dict[str, int] = {name: 0 for name in ENGINE_NAMES}
+
+    for r in all_results:
+        matched = _match_heuristics(r["url"])
+        if not matched:
+            none_total += 1
+            none_eng[r["engine"]] += 1
+        else:
+            for key in matched:
+                h_totals[key] += 1
+                h_eng[key][r["engine"]] += 1
+    return h_totals, h_eng, none_total, none_eng
+
+
 def _match_heuristics(url: str) -> list[str]:
     parsed = urlparse(url)
     h = parsed.netloc.lower()
@@ -336,8 +339,3 @@ def _match_heuristics(url: str) -> list[str]:
         for i, (_, _, fn) in enumerate(HEURISTICS)
         if fn(h, p)
     ]
-
-
-def _domain(url: str) -> str:
-    host = urlparse(url).netloc.lower()
-    return host[4:] if host.startswith("www.") else host

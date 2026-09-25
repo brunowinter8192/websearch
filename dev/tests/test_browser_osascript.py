@@ -1,17 +1,10 @@
+# INFRASTRUCTURE
 import logging
 
 import src.search.browser as browser
 
 
-class _R:
-    def __init__(self, returncode, stdout="", stderr=""):
-        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
-
-
-def _patch(monkeypatch, result):
-    monkeypatch.setattr(browser, "_osascript_warned", set())
-    monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: result)
-
+# FUNCTIONS
 
 def test_frontmost_pid_warns_once_when_stdout_is_not_a_pid(monkeypatch, caplog):
     _patch(monkeypatch, _R(0, ""))
@@ -41,3 +34,13 @@ def test_activate_pid_warns_once_on_nonzero_exit(monkeypatch, caplog):
         browser._activate_pid(5)
         browser._activate_pid(5)
     assert len(caplog.messages) == 1
+
+
+class _R:
+    def __init__(self, returncode, stdout="", stderr=""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, stderr
+
+
+def _patch(monkeypatch, result):
+    monkeypatch.setattr(browser, "_osascript_warned", set())
+    monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: result)

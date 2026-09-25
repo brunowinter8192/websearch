@@ -1,22 +1,7 @@
 # INFRASTRUCTURE
-
 import random
 import subprocess
 from pathlib import Path
-
-
-def _repo_root() -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True, text=True,
-        cwd=Path(__file__).parent,
-        check=True,
-    )
-    git_common_dir = (Path(__file__).parent / result.stdout.strip()).resolve()
-    return git_common_dir.parent
-
-
-INVENTORY_DIR = _repo_root() / "data" / "news" / "coindesk" / "inventory"
 
 SAMPLE_YEARS = list(range(2017, 2027))
 
@@ -90,6 +75,20 @@ def _draw_sample(
             urls.append(url)
     rng.shuffle(urls)
     return urls
+
+
+def _repo_root() -> Path:
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"],
+        capture_output=True, text=True,
+        cwd=Path(__file__).parent,
+        check=True,
+    )
+    git_common_dir = (Path(__file__).parent / result.stdout.strip()).resolve()
+    return git_common_dir.parent
+
+
+INVENTORY_DIR = _repo_root() / "data" / "news" / "coindesk" / "inventory"
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -14,6 +13,7 @@ from src.scraper.chromium_scrape import scrape_url_chromium_workflow
 
 
 # ORCHESTRATOR
+
 async def run_baseline_suite():
     domains = load_domains()
     print(f"Loaded {len(domains)} test domains")

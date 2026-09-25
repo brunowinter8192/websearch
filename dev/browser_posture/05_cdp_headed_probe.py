@@ -74,21 +74,6 @@ async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_even
         await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
 
 
-def find_chrome_descendant() -> psutil.Process | None:
-    try:
-        children = psutil.Process().children(recursive=True)
-    except psutil.Error:
-        return None
-    for proc in children:
-        try:
-            exe = proc.exe()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-        if "ms-playwright" in exe:
-            return proc
-    return None
-
-
 async def capture_reference_cmdline() -> dict:
     server, thread, port = start_probe_server()
     url = f"http://127.0.0.1:{port}/"
@@ -130,35 +115,6 @@ async def capture_reference_cmdline() -> dict:
     return {"pid": info["pid"], "exe": info["exe"], "cmdline": info["cmdline"], "error": error}
 
 
-async def scrape_over_cdp(port: int, stage: dict) -> dict:
-    server, thread, http_port = start_probe_server()
-    url = f"http://127.0.0.1:{http_port}/"
-    browser_config = BrowserConfig(
-        cdp_url=f"http://127.0.0.1:{port}",
-        browser_mode="custom",
-        enable_stealth=True,
-        cdp_cleanup_on_close=True,
-        verbose=False,
-    )
-    adapter = UndetectedAdapter()
-    crawler_strategy = AsyncPlaywrightCrawlerStrategy(browser_config=browser_config, browser_adapter=adapter)
-    run_config = CrawlerRunConfig(
-        wait_until="load", page_timeout=15000, delay_before_return_html=1.0,
-        cache_mode=CacheMode.BYPASS, verbose=False,
-    )
-    try:
-        stage["name"] = "cdp_connect_page_navigate"
-        async with AsyncWebCrawler(config=browser_config, crawler_strategy=crawler_strategy) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
-            success = bool(getattr(result, "success", False)) or bool(getattr(result, "html", None))
-            content_len = len(getattr(result, "html", "") or "")
-            return {"success": success, "error": getattr(result, "error_message", None), "content_len": content_len}
-    except Exception as e:
-        return {"success": False, "error": f"{type(e).__name__}: {e}", "content_len": 0}
-    finally:
-        stop_probe_server(server, thread)
-
-
 async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, stage: dict) -> dict:
     self_launch_result = {"launched": False, "error": None}
     cdp_http_check = {"ready": False, "detail": None}
@@ -195,6 +151,50 @@ async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, sta
         "self_cmdline": self_cmdline,
         "self_pid": self_pid,
     }
+
+
+def find_chrome_descendant() -> psutil.Process | None:
+    try:
+        children = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return None
+    for proc in children:
+        try:
+            exe = proc.exe()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if "ms-playwright" in exe:
+            return proc
+    return None
+
+
+async def scrape_over_cdp(port: int, stage: dict) -> dict:
+    server, thread, http_port = start_probe_server()
+    url = f"http://127.0.0.1:{http_port}/"
+    browser_config = BrowserConfig(
+        cdp_url=f"http://127.0.0.1:{port}",
+        browser_mode="custom",
+        enable_stealth=True,
+        cdp_cleanup_on_close=True,
+        verbose=False,
+    )
+    adapter = UndetectedAdapter()
+    crawler_strategy = AsyncPlaywrightCrawlerStrategy(browser_config=browser_config, browser_adapter=adapter)
+    run_config = CrawlerRunConfig(
+        wait_until="load", page_timeout=15000, delay_before_return_html=1.0,
+        cache_mode=CacheMode.BYPASS, verbose=False,
+    )
+    try:
+        stage["name"] = "cdp_connect_page_navigate"
+        async with AsyncWebCrawler(config=browser_config, crawler_strategy=crawler_strategy) as crawler:
+            result = await crawler.arun(url=url, config=run_config)
+            success = bool(getattr(result, "success", False)) or bool(getattr(result, "html", None))
+            content_len = len(getattr(result, "html", "") or "")
+            return {"success": success, "error": getattr(result, "error_message", None), "content_len": content_len}
+    except Exception as e:
+        return {"success": False, "error": f"{type(e).__name__}: {e}", "content_len": 0}
+    finally:
+        stop_probe_server(server, thread)
 
 
 if __name__ == "__main__":

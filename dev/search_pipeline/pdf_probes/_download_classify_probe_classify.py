@@ -100,6 +100,34 @@ async def _classify_url(client: httpx.AsyncClient, original_url: str, tier: str)
     return rec
 
 
+def _apply_transform(url: str) -> str | None:
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    if domain.startswith("www."):
+        domain = domain[4:]
+
+    if domain == "arxiv.org":
+        path = parsed.path
+        if re.match(r"^/(abs|html)/", path):
+            new_path = re.sub(r"^/(abs|html)/", "/pdf/", path)
+            return urlunparse(parsed._replace(path=new_path))
+        return None
+
+    if domain == "aclanthology.org":
+        path = parsed.path
+        if path.lower().endswith(".pdf"):
+            return None
+        new_path = path.rstrip("/") + ".pdf"
+        return urlunparse(parsed._replace(path=new_path))
+
+    if domain == "openreview.net":
+        if parsed.path == "/forum":
+            return urlunparse(parsed._replace(path="/pdf"))
+        return None
+
+    return None
+
+
 def _init_classify_record(original_url: str, transformed_url: str | None, tier: str) -> dict:
     return {
         "original_url": original_url,
@@ -180,34 +208,6 @@ def _classify_html_body(rec: dict, body: bytes) -> None:
         rec["outcome"] = "HTML_PAYWALL"
     else:
         rec["outcome"] = "HTML_OK"
-
-
-def _apply_transform(url: str) -> str | None:
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower()
-    if domain.startswith("www."):
-        domain = domain[4:]
-
-    if domain == "arxiv.org":
-        path = parsed.path
-        if re.match(r"^/(abs|html)/", path):
-            new_path = re.sub(r"^/(abs|html)/", "/pdf/", path)
-            return urlunparse(parsed._replace(path=new_path))
-        return None
-
-    if domain == "aclanthology.org":
-        path = parsed.path
-        if path.lower().endswith(".pdf"):
-            return None
-        new_path = path.rstrip("/") + ".pdf"
-        return urlunparse(parsed._replace(path=new_path))
-
-    if domain == "openreview.net":
-        if parsed.path == "/forum":
-            return urlunparse(parsed._replace(path="/pdf"))
-        return None
-
-    return None
 
 
 def _extract_title(body: str) -> str | None:

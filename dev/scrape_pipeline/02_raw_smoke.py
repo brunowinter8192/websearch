@@ -19,6 +19,23 @@ WORKTREE_ROOT = Path(__file__).parent.parent.parent
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Mode 1 raw scrape: Crawl4AI direct, no prod deps, all URLs parallel via arun_many."
+    )
+    parser.add_argument("--input", required=True, help="Path to search smoke report MD file")
+    parser.add_argument("--query", type=int, default=24, help="Query number (default: 24)")
+    parser.add_argument(
+        "--output-dir", dest="output_dir", default=None,
+        help="Output directory (default: dev/scrape_pipeline/02_raw_data/<timestamp>/)"
+    )
+    args = parser.parse_args()
+    asyncio.run(raw_smoke_workflow(args.input, args.query, args.output_dir))
+
+
+# FUNCTIONS
+
 async def raw_smoke_workflow(input_path: str, query_id: int, output_dir: str | None):
     query_text, url_entries = parse_smoke_report(input_path, query_id)
     out_dir = prepare_output_dir(output_dir)
@@ -35,45 +52,10 @@ async def raw_smoke_workflow(input_path: str, query_id: int, output_dir: str | N
     print(f"Report: {report_path}", file=sys.stderr)
 
 
-# FUNCTIONS
-
 def parse_smoke_report(input_path: str, query_id: int) -> tuple[str, list[tuple[int, str, str]]]:
     lines = Path(input_path).read_text(encoding="utf-8").splitlines()
     query_text, start, end = find_query_section(lines, query_id)
     return query_text, extract_urls(lines, start, end)
-
-
-def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
-    start = -1
-    query_text = ""
-    for i, line in enumerate(lines):
-        m = QUERY_SECTION_RE.match(line)
-        if not m:
-            continue
-        if int(m.group(1)) == query_id:
-            start = i
-            query_text = m.group(2)
-        elif start != -1:
-            return query_text, start, i
-    if start == -1:
-        raise ValueError(f"Query Q{query_id} not found in smoke report")
-    return query_text, start, len(lines)
-
-
-def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str, str]]:
-    entries = []
-    current_pos, current_class = None, None
-    for line in lines[start:end]:
-        m = ENTRY_RE.match(line)
-        if m:
-            current_pos, current_class = int(m.group(1)), m.group(2)
-            continue
-        if current_pos is not None:
-            um = URL_LINE_RE.match(line)
-            if um:
-                entries.append((current_pos, current_class, um.group(1)))
-                current_pos, current_class = None, None
-    return entries
 
 
 def prepare_output_dir(output_dir: str | None) -> Path:
@@ -84,12 +66,6 @@ def prepare_output_dir(output_dir: str | None) -> Path:
         out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     return out
-
-
-def sanitize_filename(url: str) -> str:
-    slug = re.sub(r"[^\w]", "_", url)[:80]
-    h = hashlib.md5(url.encode()).hexdigest()[:6]
-    return f"{slug}_{h}"
 
 
 async def scrape_all(url_entries: list[tuple[int, str, str]], out_dir: Path) -> list[dict]:
@@ -138,18 +114,6 @@ async def scrape_all(url_entries: list[tuple[int, str, str]], out_dir: Path) -> 
     return results
 
 
-def _empty_hint(url: str) -> str:
-    ext = Path(url.split("?")[0]).suffix.lower()
-    if ext == ".pdf":
-        return " (PDF)"
-    domain = url.split("/")[2] if "//" in url else ""
-    plugin_domains = ("github.com", "arxiv.org", "reddit.com")
-    for d in plugin_domains:
-        if d in domain:
-            return f" (plugin-domain: {d.split('.')[0]})"
-    return ""
-
-
 def write_report(
     results: list, query_text: str, query_id: int,
     input_path: str, out_dir: Path, runtime: float,
@@ -181,18 +145,55 @@ def write_report(
     return report_path
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Mode 1 raw scrape: Crawl4AI direct, no prod deps, all URLs parallel via arun_many."
-    )
-    parser.add_argument("--input", required=True, help="Path to search smoke report MD file")
-    parser.add_argument("--query", type=int, default=24, help="Query number (default: 24)")
-    parser.add_argument(
-        "--output-dir", dest="output_dir", default=None,
-        help="Output directory (default: dev/scrape_pipeline/02_raw_data/<timestamp>/)"
-    )
-    args = parser.parse_args()
-    asyncio.run(raw_smoke_workflow(args.input, args.query, args.output_dir))
+def find_query_section(lines: list[str], query_id: int) -> tuple[str, int, int]:
+    start = -1
+    query_text = ""
+    for i, line in enumerate(lines):
+        m = QUERY_SECTION_RE.match(line)
+        if not m:
+            continue
+        if int(m.group(1)) == query_id:
+            start = i
+            query_text = m.group(2)
+        elif start != -1:
+            return query_text, start, i
+    if start == -1:
+        raise ValueError(f"Query Q{query_id} not found in smoke report")
+    return query_text, start, len(lines)
+
+
+def extract_urls(lines: list[str], start: int, end: int) -> list[tuple[int, str, str]]:
+    entries = []
+    current_pos, current_class = None, None
+    for line in lines[start:end]:
+        m = ENTRY_RE.match(line)
+        if m:
+            current_pos, current_class = int(m.group(1)), m.group(2)
+            continue
+        if current_pos is not None:
+            um = URL_LINE_RE.match(line)
+            if um:
+                entries.append((current_pos, current_class, um.group(1)))
+                current_pos, current_class = None, None
+    return entries
+
+
+def _empty_hint(url: str) -> str:
+    ext = Path(url.split("?")[0]).suffix.lower()
+    if ext == ".pdf":
+        return " (PDF)"
+    domain = url.split("/")[2] if "//" in url else ""
+    plugin_domains = ("github.com", "arxiv.org", "reddit.com")
+    for d in plugin_domains:
+        if d in domain:
+            return f" (plugin-domain: {d.split('.')[0]})"
+    return ""
+
+
+def sanitize_filename(url: str) -> str:
+    slug = re.sub(r"[^\w]", "_", url)[:80]
+    h = hashlib.md5(url.encode()).hexdigest()[:6]
+    return f"{slug}_{h}"
 
 
 if __name__ == "__main__":

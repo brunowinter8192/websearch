@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 from pathlib import Path
 
@@ -7,19 +8,7 @@ from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 from src.news.engine.proxy_riding.state import RiderState
 
 
-def _make_state(tmp_path: Path) -> RiderState:
-    return RiderState(
-        url_queue=asyncio.Queue(),
-        proxy_pool=[],
-        cooldown_mgr=RidingCooldownManager(),
-        output_dir=tmp_path,
-        job_dir=tmp_path / "scrape_jobs" / "job1",
-        burn_threshold=2,
-        page_timeout_ms=8_000,
-        total_urls=1,
-        target_urls=frozenset({"https://x.test/a"}),
-    )
-
+# FUNCTIONS
 
 def test_abort_stall_writes_no_job_md_on_reporter_failure(tmp_path, monkeypatch, capsys):
     def _raise(*a, **kw):
@@ -37,3 +26,17 @@ def test_abort_stall_writes_no_job_md_on_reporter_failure(tmp_path, monkeypatch,
     err = capsys.readouterr().err
     assert "write_riding_report WARN" in err
     assert "simulated reporter failure" in err
+
+
+def _make_state(tmp_path: Path) -> RiderState:
+    return RiderState(
+        url_queue=asyncio.Queue(),
+        proxy_pool=[],
+        cooldown_mgr=RidingCooldownManager(),
+        output_dir=tmp_path,
+        job_dir=tmp_path / "scrape_jobs" / "job1",
+        burn_threshold=2,
+        page_timeout_ms=8_000,
+        total_urls=1,
+        target_urls=frozenset({"https://x.test/a"}),
+    )

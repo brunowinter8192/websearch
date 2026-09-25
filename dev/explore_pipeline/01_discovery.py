@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import json
@@ -14,6 +15,31 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 OUTPUT_DIR = Path(__file__).parent / "md"
 DOMAINS_FILE = Path(__file__).parent / "domains.txt"
 TRAILING_SLASH = re.compile(r'/$')
+
+
+# FUNCTIONS
+
+async def run_all():
+    domains = load_domains()
+    print(f"Batch crawl: {len(domains)} domains from domains.txt\n")
+    tasks = [main(d["url"], d["depth"], d["max_pages"], d["label"]) for d in domains]
+    await asyncio.gather(*tasks)
+
+
+def load_domains():
+    entries = []
+    with open(DOMAINS_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                parts = line.split("|")
+                entries.append({
+                    "label": parts[0],
+                    "url": parts[1],
+                    "depth": int(parts[2]),
+                    "max_pages": int(parts[3]),
+                })
+    return entries
 
 
 async def main(url: str, depth: int, max_pages: int, label: str):
@@ -119,29 +145,6 @@ def print_report(report):
     for u in report["urls"]:
         status = f"{u['chars']:>8,} chars" if u["has_content"] else "   EMPTY"
         print(f"  {status}  {u['url']}")
-
-
-def load_domains():
-    entries = []
-    with open(DOMAINS_FILE) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                parts = line.split("|")
-                entries.append({
-                    "label": parts[0],
-                    "url": parts[1],
-                    "depth": int(parts[2]),
-                    "max_pages": int(parts[3]),
-                })
-    return entries
-
-
-async def run_all():
-    domains = load_domains()
-    print(f"Batch crawl: {len(domains)} domains from domains.txt\n")
-    tasks = [main(d["url"], d["depth"], d["max_pages"], d["label"]) for d in domains]
-    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -115,89 +114,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-def _kill_stale_chrome() -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
-
-
-def _build_options() -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.headless = not os.environ.get("SEARXNG_HEADED")
-    options.add_argument(f"--user-data-dir={SESSION_DIR}")
-    options.block_popups = True
-    options.block_notifications = True
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.webrtc_leak_protection = True
-    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
-    options.add_argument("--window-size=1920,1080")
-    return options
-
-
-async def _new_tab():
-    global _browser
-    if _browser is None:
-        _kill_stale_chrome()
-        _browser = Chrome(_build_options())
-        await _browser.start()
-    return await _browser.new_tab()
-
-
-async def _kill_tab(tab) -> None:
-    global _browser
-    target_id = getattr(tab, "_target_id", None)
-    if _browser is None or target_id is None:
-        return
-    try:
-        await asyncio.wait_for(
-            _browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0
-        )
-    except Exception as e:
-        logging.warning("kill_tab failed (target_id=%s): %s", target_id, e)
-    finally:
-        _browser._tabs_opened.pop(target_id, None)
-
-
-async def close_browser() -> None:
-    global _browser
-    if _browser is not None:
-        await _browser.stop()
-        _browser = None
-
-
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-async def _wait_for_results(tab) -> bool:
-    for _ in range(MAX_WAIT_CYCLES):
-        raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
-        if count and int(count) > 0:
-            return True
-        await asyncio.sleep(WAIT_INTERVAL)
-    return False
-
-
-async def _parse_results(tab, max_results: int = 10) -> list[dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return [item for item in items[:max_results] if item.get("url")]
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
-
-
 async def run_query(query: str, axis: str) -> dict:
     record: dict = {
         "query": query, "axis": axis, "count": 0, "status": "EMPTY",
@@ -228,6 +144,89 @@ async def run_query(query: str, axis: str) -> dict:
     finally:
         await _kill_tab(tab)
     return record
+
+
+async def close_browser() -> None:
+    global _browser
+    if _browser is not None:
+        await _browser.stop()
+        _browser = None
+
+
+async def _new_tab():
+    global _browser
+    if _browser is None:
+        _kill_stale_chrome()
+        _browser = Chrome(_build_options())
+        await _browser.start()
+    return await _browser.new_tab()
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = _extract_value(raw)
+    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
+async def _wait_for_results(tab) -> bool:
+    for _ in range(MAX_WAIT_CYCLES):
+        raw = await tab.execute_script(_JS_WAIT)
+        count = _extract_value(raw)
+        if count and int(count) > 0:
+            return True
+        await asyncio.sleep(WAIT_INTERVAL)
+    return False
+
+
+async def _parse_results(tab, max_results: int = 10) -> list[dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = _extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return [item for item in items[:max_results] if item.get("url")]
+
+
+async def _kill_tab(tab) -> None:
+    global _browser
+    target_id = getattr(tab, "_target_id", None)
+    if _browser is None or target_id is None:
+        return
+    try:
+        await asyncio.wait_for(
+            _browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0
+        )
+    except Exception as e:
+        logging.warning("kill_tab failed (target_id=%s): %s", target_id, e)
+    finally:
+        _browser._tabs_opened.pop(target_id, None)
+
+
+def _kill_stale_chrome() -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
+
+
+def _build_options() -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.headless = not os.environ.get("SEARXNG_HEADED")
+    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.block_popups = True
+    options.block_notifications = True
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.webrtc_leak_protection = True
+    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
+    options.add_argument("--window-size=1920,1080")
+    return options
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
 
 
 if __name__ == "__main__":

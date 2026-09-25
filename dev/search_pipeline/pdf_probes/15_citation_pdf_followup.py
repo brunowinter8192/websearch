@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import re
@@ -197,6 +196,11 @@ async def _hop1_extract(client: httpx.AsyncClient, url: str) -> dict:
     return rec
 
 
+def _base_domain(url: str) -> str:
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc
+
+
 async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
     rec = {"outcome": None, "status": None, "content_type": None, "title": None, "body_preview": None}
     try:
@@ -238,11 +242,6 @@ async def _hop2_classify(client: httpx.AsyncClient, pdf_url: str) -> dict:
     except Exception as e:
         rec["outcome"] = f"ERROR:{type(e).__name__}"
     return rec
-
-
-def _base_domain(url: str) -> str:
-    netloc = urlparse(url).netloc.lower()
-    return netloc[4:] if netloc.startswith("www.") else netloc
 
 
 if __name__ == "__main__":

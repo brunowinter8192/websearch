@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -106,19 +105,6 @@ async def probe_single(engine, engine_name: str, query: str, max_results: int) -
     return record
 
 
-def build_summary(records: list[dict]) -> dict[str, dict]:
-    seen_order = list(dict.fromkeys(r["engine"] for r in records))
-    summary = {}
-    for eng in seen_order:
-        eng_recs = [r for r in records if r["engine"] == eng]
-        summary[eng] = {
-            "requested":        eng_recs[0]["requested"],
-            "ceiling":          max(r["returned"] for r in eng_recs),
-            "median_latency_ms": round(median(r["latency_ms"] for r in eng_recs)),
-        }
-    return summary
-
-
 def write_report(records: list[dict], report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"max_results_probe_{ts}.md"
@@ -162,6 +148,19 @@ def write_report(records: list[dict], report_dir: Path) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def build_summary(records: list[dict]) -> dict[str, dict]:
+    seen_order = list(dict.fromkeys(r["engine"] for r in records))
+    summary = {}
+    for eng in seen_order:
+        eng_recs = [r for r in records if r["engine"] == eng]
+        summary[eng] = {
+            "requested":        eng_recs[0]["requested"],
+            "ceiling":          max(r["returned"] for r in eng_recs),
+            "median_latency_ms": round(median(r["latency_ms"] for r in eng_recs)),
+        }
+    return summary
 
 
 if __name__ == "__main__":

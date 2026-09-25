@@ -11,7 +11,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 
 ## Modules
 
-### curated_sources.py (232 LOC)
+### curated_sources.py (230 LOC)
 
 **Purpose:** Unified proxy source hub: curated loaders, the large backfill pool merge, standalone per-repo loaders, and shared fetch and dedup helpers.
 **Reads:** Public proxy-list source URLs.
@@ -35,7 +35,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `probe_liveness.py`, `curated_sources.py`, `acquire_pipe/p2_cooldown.py`, `acquire_pipe/p5_logger.py`.
 **Calls out:** none.
 
-### probe_discovery.py (283 LOC)
+### probe_discovery.py (296 LOC)
 
 **Purpose:** Measures discovery coverage and URL taxonomy over sitemap union, news sitemap, RSS, and a bounded UI crawl, resume-safe via per-sub checkpoints.
 **Reads:** theblock.co sitemap index, news sitemap, RSS feed.
@@ -43,7 +43,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only; `pipe_theblock.py`.
 **Calls out:** none.
 
-### _probe_discovery_report.py (221 LOC)
+### _probe_discovery_report.py (222 LOC)
 
 **Purpose:** Coverage report assembly with cross-method comparison, gap detection, and URL taxonomy helpers.
 **Reads:** nothing; takes result data.
@@ -59,7 +59,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only; `probe_repo_cf_survey.py`, `probe_liveness.py`.
 **Calls out:** `httpx`.
 
-### probe_repo_cf_survey.py (295 LOC)
+### probe_repo_cf_survey.py (294 LOC)
 
 **Purpose:** Ranks source repos by CF-pass rate against theblock.co on a sample per repo; its ranking decided the backfill repo set.
 **Reads:** Proxy lists from `probe_pool_size.py`.
@@ -67,7 +67,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** `curl_cffi`.
 
-### probe_liveness.py (192 LOC)
+### probe_liveness.py (191 LOC)
 
 **Purpose:** Instrumented async liveness checker with freeze, sample, full, and live-source modes, dead-reason classification, and cumulative status folding.
 **Reads:** Source lists, live sources, and the frozen pool.
@@ -107,7 +107,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _pipe_theblock_cf.py (55 LOC)
+### _pipe_theblock_cf.py (54 LOC)
 
 **Purpose:** CF-pass primitives: chrome-impersonating GET through a proxy, XML marker check, threaded check.
 **Reads:** The CF check target through each proxy.
@@ -115,7 +115,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `pipe_theblock.py`.
 **Calls out:** `curl_cffi`.
 
-### probe_curated_theblock_cf.py (163 LOC)
+### probe_curated_theblock_cf.py (164 LOC)
 
 **Purpose:** Standalone direct CF-pass probe on the curated list without an alive pre-filter.
 **Reads:** The curated proxy list.
@@ -123,7 +123,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** `curl_cffi`.
 
-### probe_curl_cffi_discriminator.py (268 LOC)
+### probe_curl_cffi_discriminator.py (283 LOC)
 
 **Purpose:** Discriminates an ambiguous zero-pass result by retesting the neutral pool with browser-impersonating curl_cffi.
 **Reads:** The neutral proxy pool and a real sub-sitemap.
@@ -131,7 +131,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** `curl_cffi`.
 
-### probe_48h_article_fetch.py (160 LOC)
+### probe_48h_article_fetch.py (159 LOC)
 
 **Purpose:** 48-hour article delta probe using parallel wave fetching over the full pool.
 **Reads:** The backfill pool and the theblock sitemap.

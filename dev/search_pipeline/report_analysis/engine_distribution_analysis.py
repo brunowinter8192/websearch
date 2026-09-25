@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import re
 import sys
@@ -150,6 +149,26 @@ def compute_per_query_distribution(records: list[dict]) -> list[tuple]:
     return [(qi, qi_query[qi], dict(qi_counts[qi])) for qi in sorted(qi_query)]
 
 
+def write_report(
+    records:     list[dict],
+    slot_counts: dict,
+    status_agg:  dict,
+    baselines:   dict,
+    per_query:   list[tuple],
+) -> Path:
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"engine_distribution_{ts}.md"
+    L = (
+        _render_header(ts, records, per_query)
+        + _render_slot_counts(slot_counts, records, per_query)
+        + _render_status_aggregate(status_agg)
+        + _render_slot_share(baselines)
+        + _render_per_query_distribution(per_query)
+    )
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
+
+
 def _render_header(ts: str, records: list[dict], per_query: list[tuple]) -> list[str]:
     return [
         f"# Engine Distribution Analysis — {ts}",
@@ -261,26 +280,6 @@ def _render_per_query_distribution(per_query: list[tuple]) -> list[str]:
         L.append(f"| {qi} | {q_short} | {cells} | {row_sum} |")
     L.append("")
     return L
-
-
-def write_report(
-    records:     list[dict],
-    slot_counts: dict,
-    status_agg:  dict,
-    baselines:   dict,
-    per_query:   list[tuple],
-) -> Path:
-    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"engine_distribution_{ts}.md"
-    L = (
-        _render_header(ts, records, per_query)
-        + _render_slot_counts(slot_counts, records, per_query)
-        + _render_status_aggregate(status_agg)
-        + _render_slot_share(baselines)
-        + _render_per_query_distribution(per_query)
-    )
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

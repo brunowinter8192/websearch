@@ -68,17 +68,6 @@ async def pydoll_teardown_verify_workflow() -> None:
 
 # FUNCTIONS
 
-def _count_renderers() -> int:
-    result = subprocess.run(
-        ["pgrep", "-c", "-f", "--type=renderer"],
-        capture_output=True, text=True
-    )
-    try:
-        return int(result.stdout.strip())
-    except ValueError:
-        return 0
-
-
 async def _test_kill_tab_hung(lines: list) -> dict:
     lines.append("## Test 1 — hung tab (chrome://hang) with kill_tab in finally")
     lines.append("")
@@ -107,34 +96,6 @@ async def _test_kill_tab_hung(lines: list) -> dict:
     lines.append("")
 
     return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
-
-
-async def _run_hung_op(lines: list) -> tuple:
-    target_id_seen = None
-    timed_out = False
-
-    async def _hung_op():
-        nonlocal target_id_seen
-        tab = await new_tab()
-        target_id_seen = getattr(tab, '_target_id', None)
-        try:
-            await tab.go_to("about:blank", timeout=5)
-            await tab.execute_script(
-                "return new Promise(function() {})", await_promise=True
-            )
-        finally:
-            await kill_tab(tab)
-
-    t0 = time.perf_counter()
-    try:
-        await asyncio.wait_for(_hung_op(), timeout=WATCHDOG)
-    except asyncio.TimeoutError:
-        timed_out = True
-    except Exception as e:
-        lines.append(f"Unexpected exception: {type(e).__name__}: {e}")
-
-    wall_ms = round((time.perf_counter() - t0) * 1000)
-    return target_id_seen, timed_out, wall_ms
 
 
 async def _test_normal_tab_cleanup(lines: list) -> dict:
@@ -186,13 +147,6 @@ async def _test_normal_tab_cleanup(lines: list) -> dict:
     return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
 
 
-async def _count_cdp_targets() -> int:
-    if not _browser_mod._browser:
-        return 0
-    targets = await _browser_mod._browser.get_targets()
-    return sum(1 for t in targets if t.get('type') == 'page')
-
-
 async def _test_batch_parallel_hung(lines: list) -> dict:
     lines.append(f"## Test 3 — parallel batch ({BATCH_N}x hung Promise) via asyncio.gather")
     lines.append("")
@@ -228,6 +182,52 @@ async def _test_batch_parallel_hung(lines: list) -> dict:
         'registry_clean': registry_clean,
         'cdp_targets_delta': cdp_targets_delta,
     }
+
+
+def _count_renderers() -> int:
+    result = subprocess.run(
+        ["pgrep", "-c", "-f", "--type=renderer"],
+        capture_output=True, text=True
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return 0
+
+
+async def _run_hung_op(lines: list) -> tuple:
+    target_id_seen = None
+    timed_out = False
+
+    async def _hung_op():
+        nonlocal target_id_seen
+        tab = await new_tab()
+        target_id_seen = getattr(tab, '_target_id', None)
+        try:
+            await tab.go_to("about:blank", timeout=5)
+            await tab.execute_script(
+                "return new Promise(function() {})", await_promise=True
+            )
+        finally:
+            await kill_tab(tab)
+
+    t0 = time.perf_counter()
+    try:
+        await asyncio.wait_for(_hung_op(), timeout=WATCHDOG)
+    except asyncio.TimeoutError:
+        timed_out = True
+    except Exception as e:
+        lines.append(f"Unexpected exception: {type(e).__name__}: {e}")
+
+    wall_ms = round((time.perf_counter() - t0) * 1000)
+    return target_id_seen, timed_out, wall_ms
+
+
+async def _count_cdp_targets() -> int:
+    if not _browser_mod._browser:
+        return 0
+    targets = await _browser_mod._browser.get_targets()
+    return sum(1 for t in targets if t.get('type') == 'page')
 
 
 async def _run_batch_hung(lines: list) -> tuple[list, bool, int]:

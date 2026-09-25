@@ -17,6 +17,34 @@ DATE_RE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CoinDesk dedup gate — filters discover JSON to URLs not yet in the RAG collection."
+    )
+    parser.add_argument(
+        "--input", default=None,
+        help="Path to discover_*.json (default: newest in 01_json/)"
+    )
+    parser.add_argument(
+        "--collection-dir", default=str(COLLECTION_DIR),
+        help=f"RAG collection directory (default: {COLLECTION_DIR})"
+    )
+    args = parser.parse_args()
+    input_path = Path(args.input) if args.input else pick_latest_input()
+    dedup_workflow(input_path, Path(args.collection_dir))
+
+
+# FUNCTIONS
+
+def pick_latest_input() -> Path:
+    input_dir = Path(__file__).parent / "01_json"
+    candidates = sorted(input_dir.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
+    if not candidates:
+        raise FileNotFoundError(f"No discover_*.json found in {input_dir}")
+    return candidates[-1]
+
+
 def dedup_workflow(input_path: Path, collection_dir: Path):
     entries = load_entries(input_path)
     print(f"Input : {input_path} ({len(entries)} entries)", file=sys.stderr)
@@ -29,24 +57,8 @@ def dedup_workflow(input_path: Path, collection_dir: Path):
     return output_path
 
 
-# FUNCTIONS
-
 def load_entries(input_path: Path) -> list[dict]:
     return json.loads(input_path.read_text(encoding="utf-8"))
-
-
-def url_hash(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:12]
-
-
-def pub_date_str(entry: dict) -> str:
-    pub = entry.get("publication_date", "")
-    if pub and len(pub) >= 10:
-        return pub[:10]
-    m = DATE_RE.search(entry.get("url", ""))
-    if m:
-        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    return ""
 
 
 def filter_new(entries: list[dict], collection_dir: Path) -> tuple[list[dict], int]:
@@ -78,29 +90,18 @@ def print_summary(total: int, skipped: int, new: int, output_path: Path):
     print(f"Output      : {output_path}")
 
 
-def pick_latest_input() -> Path:
-    input_dir = Path(__file__).parent / "01_json"
-    candidates = sorted(input_dir.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
-        raise FileNotFoundError(f"No discover_*.json found in {input_dir}")
-    return candidates[-1]
+def url_hash(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="CoinDesk dedup gate — filters discover JSON to URLs not yet in the RAG collection."
-    )
-    parser.add_argument(
-        "--input", default=None,
-        help="Path to discover_*.json (default: newest in 01_json/)"
-    )
-    parser.add_argument(
-        "--collection-dir", default=str(COLLECTION_DIR),
-        help=f"RAG collection directory (default: {COLLECTION_DIR})"
-    )
-    args = parser.parse_args()
-    input_path = Path(args.input) if args.input else pick_latest_input()
-    dedup_workflow(input_path, Path(args.collection_dir))
+def pub_date_str(entry: dict) -> str:
+    pub = entry.get("publication_date", "")
+    if pub and len(pub) >= 10:
+        return pub[:10]
+    m = DATE_RE.search(entry.get("url", ""))
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return ""
 
 
 if __name__ == "__main__":

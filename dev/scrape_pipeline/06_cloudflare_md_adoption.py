@@ -51,6 +51,22 @@ REPORTS_DIR = Path(__file__).parent / "md"
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Probe URLs for Cloudflare Markdown-for-Agents (Accept: text/markdown) adoption."
+    )
+    parser.add_argument(
+        "--output-dir", dest="output_dir", default=None,
+        help=f"Report directory (default: {REPORTS_DIR})",
+    )
+    args = parser.parse_args()
+    out = Path(args.output_dir) if args.output_dir else REPORTS_DIR
+    asyncio.run(cf_md_adoption_workflow(out))
+
+
+# FUNCTIONS
+
 async def cf_md_adoption_workflow(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     start_time = time.time()
@@ -80,8 +96,6 @@ async def cf_md_adoption_workflow(output_dir: Path) -> None:
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Runtime: {end_time - start_time:.1f}s", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def probe_url(
     client: httpx.AsyncClient, sem: asyncio.Semaphore, cat: str, url: str
@@ -270,19 +284,6 @@ def _format_summary_server_distribution(cf_fronted: list[dict]) -> list:
         for s, n in sorted(server_counts.items(), key=lambda x: -x[1]):
             lines.append(f"- `{s}`: {n}  ")
     return lines
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Probe URLs for Cloudflare Markdown-for-Agents (Accept: text/markdown) adoption."
-    )
-    parser.add_argument(
-        "--output-dir", dest="output_dir", default=None,
-        help=f"Report directory (default: {REPORTS_DIR})",
-    )
-    args = parser.parse_args()
-    out = Path(args.output_dir) if args.output_dir else REPORTS_DIR
-    asyncio.run(cf_md_adoption_workflow(out))
 
 
 if __name__ == "__main__":

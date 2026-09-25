@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -115,6 +114,19 @@ async def run_batch(batch_queries: list[str], batch_idx: int) -> list[dict]:
                 for q in batch_queries]
 
 
+def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
+                 queries_per_burst, cooldown) -> Path:
+    path = report_dir / f"burst_{ts}.md"
+    counts = Counter(r["status"] for r in records)
+    lines = _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts)
+    lines += _render_status_distribution(counts)
+    lines += _render_per_query_results(records)
+    lines += _render_timing_summary(records, batch_times)
+    lines += _render_sample_results(records)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _record(query, batch_idx, status, count, domains, search_ms, sample_results, note=""):
     return {"query": query, "batch": batch_idx, "status": status,
             "count": count, "domains": domains, "search_ms": search_ms,
@@ -143,6 +155,10 @@ def parse_stdout(block: str) -> tuple[int, list[dict]]:
     return count, results
 
 
+def _domain(url: str) -> str:
+    return urlparse(url.strip()).netloc
+
+
 def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str:
     if returncode != 0:
         return "ERROR"
@@ -157,23 +173,6 @@ def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str
     if "Google search failed" in stderr:
         return "ERROR"
     return "EMPTY"
-
-
-def _domain(url: str) -> str:
-    return urlparse(url.strip()).netloc
-
-
-def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
-                 queries_per_burst, cooldown) -> Path:
-    path = report_dir / f"burst_{ts}.md"
-    counts = Counter(r["status"] for r in records)
-    lines = _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts)
-    lines += _render_status_distribution(counts)
-    lines += _render_per_query_results(records)
-    lines += _render_timing_summary(records, batch_times)
-    lines += _render_sample_results(records)
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts) -> list[str]:

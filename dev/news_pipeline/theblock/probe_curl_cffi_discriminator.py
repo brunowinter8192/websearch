@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import json
 import sys
@@ -19,6 +18,7 @@ TIMEOUT        = 15
 REPORT_DIR     = Path("dev/news_pipeline/theblock/probe_curl_cffi_discriminator_reports")
 
 XML_MARKERS    = [b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>"]
+
 
 # ORCHESTRATOR
 
@@ -58,58 +58,12 @@ def probe_curl_cffi_discriminator_workflow():
     report_path.write_text(report)
     print(f"\nReport: {report_path}")
 
+
 # FUNCTIONS
 
 def load_proxies():
     return json.loads(PROXIES_JSON.read_text())
 
-def proxy_url(entry):
-    return f"{entry['protocol']}://{entry['host']}:{entry['port']}"
-
-def classify_response(r):
-    if r.status_code == 200:
-        content = r.content[:500]
-        if any(m in content for m in XML_MARKERS):
-            return ("pass", 200)
-        return ("fail_200_not_xml", 200)
-    elif r.status_code == 403:
-        return ("fail_403", 403)
-    elif r.status_code == 429:
-        return ("fail_429", 429)
-    else:
-        return (f"fail_http_{r.status_code}", r.status_code)
-
-def classify_exception(e):
-    code = getattr(e, "code", None)
-    if code is not None:
-        code_int = int(code)
-        if code_int == 28:
-            return ("fail_timeout", code_int)
-        elif code_int in (7, 5, 97):
-            return ("fail_connection", code_int)
-        elif code_int == 6:
-            return ("fail_connection", code_int)
-        elif code_int in (35, 51, 58, 60):
-            return ("fail_ssl", code_int)
-        elif code_int in (55, 56):
-            return ("fail_connection", code_int)
-        else:
-            return (f"fail_curl_{code_int}", code_int)
-    msg = str(e).lower()
-    if "timeout" in msg or "timed out" in msg:
-        return ("fail_timeout", -1)
-    return ("fail_connection", -1)
-
-def check_one(entry, target):
-    purl = proxy_url(entry)
-    proxies_dict = {"http": purl, "https": purl}
-    try:
-        s = cffi_requests.Session(impersonate="chrome")
-        r = s.get(target, proxies=proxies_dict, timeout=TIMEOUT)
-        s.close()
-        return classify_response(r)
-    except Exception as e:
-        return classify_exception(e)
 
 def run_checks(entries, target):
     results = [None] * len(entries)
@@ -130,6 +84,7 @@ def run_checks(entries, target):
     print()
     return results
 
+
 def build_report(proxies, primary_results, passing_proxies, secondary_results,
                  elapsed_primary, elapsed_secondary, ts):
     total = len(proxies)
@@ -149,6 +104,19 @@ def build_report(proxies, primary_results, passing_proxies, secondary_results,
 
     return "\n".join(lines) + "\n"
 
+
+def check_one(entry, target):
+    purl = proxy_url(entry)
+    proxies_dict = {"http": purl, "https": purl}
+    try:
+        s = cffi_requests.Session(impersonate="chrome")
+        r = s.get(target, proxies=proxies_dict, timeout=TIMEOUT)
+        s.close()
+        return classify_response(r)
+    except Exception as e:
+        return classify_exception(e)
+
+
 def failure_mode_counts(primary_counts):
     cf_block   = primary_counts.get("fail_403", 0) + primary_counts.get("fail_429", 0)
     conn_err   = sum(v for k, v in primary_counts.items()
@@ -157,6 +125,7 @@ def failure_mode_counts(primary_counts):
     other_http = sum(v for k, v in primary_counts.items()
                      if k.startswith("fail_http_") or k == "fail_200_not_xml")
     return cf_block, conn_err, timeout, other_http
+
 
 def build_header_lines(total):
     lines = []
@@ -167,6 +136,7 @@ def build_header_lines(total):
     lines.append(f"Secondary target: `{TARGET_SECONDARY}` (tested on passing proxies only)")
     lines.append(f"Concurrency: {CONCURRENCY}, timeout: {TIMEOUT}s/request")
     return lines
+
 
 def build_primary_lines(total, primary_counts, pass_count, elapsed_primary,
                         cf_block, conn_err, timeout, other_http):
@@ -190,6 +160,7 @@ def build_primary_lines(total, primary_counts, pass_count, elapsed_primary,
     lines.append(f"| other HTTP | {other_http} |")
     return lines
 
+
 def build_passing_lines(passing_proxies):
     lines = []
     if passing_proxies:
@@ -200,6 +171,7 @@ def build_passing_lines(passing_proxies):
             country = p.get("geolocation", {}).get("country", {}).get("iso_code", "??")
             lines.append(f"- `{proxy_url(p)}` — {asn_org} ({country})")
     return lines
+
 
 def build_secondary_lines(passing_proxies, secondary_results, elapsed_secondary):
     lines = []
@@ -217,6 +189,7 @@ def build_secondary_lines(passing_proxies, secondary_results, elapsed_secondary)
     else:
         lines.append("\nNot run (no proxies passed primary target).")
     return lines
+
 
 def build_asn_lines(proxies, passing_proxies):
     passing_asns = Counter(
@@ -248,6 +221,7 @@ def build_asn_lines(proxies, passing_proxies):
             lines.append(f"| {org} | {count} |")
     return lines
 
+
 def build_verdict_lines(pass_count, cf_block, conn_err, timeout):
     if pass_count > 0:
         verdict = "(a) — SIGNATURE was the blocker. curl_cffi-chrome passes; free proxy loop is viable."
@@ -263,6 +237,47 @@ def build_verdict_lines(pass_count, cf_block, conn_err, timeout):
     lines.append("\n## Verdict")
     lines.append(f"\n**{verdict}**")
     return lines
+
+
+def proxy_url(entry):
+    return f"{entry['protocol']}://{entry['host']}:{entry['port']}"
+
+
+def classify_response(r):
+    if r.status_code == 200:
+        content = r.content[:500]
+        if any(m in content for m in XML_MARKERS):
+            return ("pass", 200)
+        return ("fail_200_not_xml", 200)
+    elif r.status_code == 403:
+        return ("fail_403", 403)
+    elif r.status_code == 429:
+        return ("fail_429", 429)
+    else:
+        return (f"fail_http_{r.status_code}", r.status_code)
+
+
+def classify_exception(e):
+    code = getattr(e, "code", None)
+    if code is not None:
+        code_int = int(code)
+        if code_int == 28:
+            return ("fail_timeout", code_int)
+        elif code_int in (7, 5, 97):
+            return ("fail_connection", code_int)
+        elif code_int == 6:
+            return ("fail_connection", code_int)
+        elif code_int in (35, 51, 58, 60):
+            return ("fail_ssl", code_int)
+        elif code_int in (55, 56):
+            return ("fail_connection", code_int)
+        else:
+            return (f"fail_curl_{code_int}", code_int)
+    msg = str(e).lower()
+    if "timeout" in msg or "timed out" in msg:
+        return ("fail_timeout", -1)
+    return ("fail_connection", -1)
+
 
 if __name__ == "__main__":
     probe_curl_cffi_discriminator_workflow()

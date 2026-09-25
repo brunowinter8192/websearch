@@ -11,7 +11,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 
 ## Modules
 
-### run_pipeline.py (272 LOC)
+### run_pipeline.py (273 LOC)
 
 **Purpose:** Single-command orchestrator chaining preconditions, discover, dedup, scrape, cleanup, and publish, clearing stage data at start.
 **Reads:** Preconditions: internet reachability and rag-cli collection listing.
@@ -19,7 +19,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** CLI only.
 **Calls out:** `rag-cli`.
 
-### 01_coindesk_discover.py (354 LOC)
+### 01_coindesk_discover.py (357 LOC)
 
 **Purpose:** Discovers CoinDesk articles via UI pagination in a background Chrome, stopping once enough articles older than the window are seen.
 **Reads:** Live CoinDesk site via pydoll.
@@ -27,7 +27,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** `run_pipeline.py`, CLI.
 **Calls out:** `pydoll`.
 
-### 02_coindesk_scrape.py (154 LOC)
+### 02_coindesk_scrape.py (157 LOC)
 
 **Purpose:** Reference scrape over a shared crawler session that hits the regwall; superseded by the fresh-context scrape.
 **Reads:** Discover JSON via `--input` or the newest one.
@@ -35,7 +35,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 02b_coindesk_scrape_fresh_context.py (245 LOC)
+### 02b_coindesk_scrape_fresh_context.py (244 LOC)
 
 **Purpose:** Production-quality scrape with a fresh crawler per URL and the production per-domain pacing, with a loud regwall guard.
 **Reads:** Discover JSON via `--input` or the newest one.
@@ -43,7 +43,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** `run_pipeline.py`, CLI.
 **Calls out:** `crawl4ai`.
 
-### 03_coindesk_cleanup.py (232 LOC)
+### 03_coindesk_cleanup.py (233 LOC)
 
 **Purpose:** Extracts the clean article body from scraped markdown, strips navigation and footer noise, and normalizes structure for RAG ingestion.
 **Reads:** `02b_data/` markdown and frontmatter.
@@ -51,7 +51,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** `run_pipeline.py`, CLI.
 **Calls out:** none.
 
-### 04_dedup.py (107 LOC)
+### 04_dedup.py (108 LOC)
 
 **Purpose:** Drops URLs whose target file already exists in the coindesk RAG collection directory; filesystem presence is the seen-state.
 **Reads:** Discover JSON via `--input` or the newest one; the collection directory.
@@ -59,7 +59,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** `run_pipeline.py`, CLI.
 **Calls out:** none.
 
-### 05_publish.py (129 LOC)
+### 05_publish.py (130 LOC)
 
 **Purpose:** Copies cleaned markdown into the coindesk RAG collection directory and triggers indexing; idempotent.
 **Reads:** `03_data/` manifest and markdown; the collection directory.

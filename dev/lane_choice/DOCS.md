@@ -20,7 +20,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Called by:** CLI only.
 **Calls out:** macOS `osascript`.
 
-### 04_lane_metrics.py (50 LOC)
+### 04_lane_metrics.py (52 LOC)
 
 **Purpose:** Orchestrates pair collection, prose cap, classification, aggregation, and report; purely descriptive, never names a better lane.
 **Reads:** nothing directly.
@@ -44,7 +44,7 @@ Metrics: production scrape log -> URL pairs -> block reading -> classification -
 **Called by:** `04_lane_metrics.py`, `_lane_metrics_prose.py`.
 **Calls out:** none.
 
-### _lane_metrics_classify.py (59 LOC)
+### _lane_metrics_classify.py (58 LOC)
 
 **Purpose:** Content versus boilerplate decision tree (Kohlschuetter et al.) adapted to markdown, plus a short-heading rescue.
 **Reads:** nothing.

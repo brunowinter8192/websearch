@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import logging
 
@@ -6,6 +7,8 @@ import pytest
 from src.scraper import chromium_process, chromium_scrape
 from dev.tests._chromium_scrape_fakes import _patch_cdp_launch_mechanics, _FakeMarkdown, _FakeResult, _meta
 
+
+# FUNCTIONS
 
 @pytest.mark.parametrize("msg", [
     "BrowserType.launch: Executable doesn't exist at /root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome",

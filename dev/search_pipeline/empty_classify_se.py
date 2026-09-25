@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -82,6 +81,58 @@ async def probe_query(client: httpx.AsyncClient, smoke_row: int, query: str) -> 
     return record
 
 
+def write_report(records: list[dict]) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"empty_classify_se_{ts}.md"
+    counts = _summary_counts(records)
+
+    lines = [
+        f"# StackEx EMPTY Classification — {ts}",
+        "",
+        "Source: `dev/search_pipeline/md/search_smoke_20260504_023641.md`",
+        "Method: direct httpx probe against api.stackexchange.com/2.3/search/advanced, anonymous quota.",
+        "",
+        "## Summary",
+        "",
+        f"- ENGINE_EMPTY: {counts['ENGINE_EMPTY']}/15",
+        f"- ENGINE_NICHE: {counts['ENGINE_NICHE']}/15",
+        f"- PIPELINE_BUG: {counts['PIPELINE_BUG']}/15",
+        f"- RATE_LIMITED: {counts['RATE_LIMITED']}/15",
+        f"- BOT_BLOCK: {counts['BOT_BLOCK']}/15",
+        f"- UNKNOWN: {counts['UNKNOWN']}/15",
+        "",
+        "## Per-Query",
+        "",
+        "| # | Smoke # | Query | HTTP | SO total | SO items | XS total | XS items | quota_left | Classification |",
+        "|---|---------|-------|------|----------|----------|----------|----------|------------|----------------|",
+    ]
+
+    for idx, r in enumerate(records, 1):
+        query = r["query"].replace("|", "\\|")
+        lines.append(
+            f"| {idx} | {r['smoke_row']} | {query} | {r['so_http']} "
+            f"| {r['so_total']} | {r['so_items']} "
+            f"| {r['xs_total']} | {r['xs_items']} "
+            f"| {r['quota_remaining']} | {r['classification']} |"
+        )
+
+    noted = [r for r in records if r.get("notes")]
+    if noted:
+        lines += ["", "## Notes", ""]
+        for r in noted:
+            lines.append(f"- Smoke#{r['smoke_row']} `{r['query']}`: {r['notes']}")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _summary_counts(records: list[dict]) -> dict:
+    counts = {"ENGINE_EMPTY": 0, "ENGINE_NICHE": 0, "PIPELINE_BUG": 0, "RATE_LIMITED": 0, "BOT_BLOCK": 0, "UNKNOWN": 0}
+    for r in records:
+        counts[r["classification"]] = counts.get(r["classification"], 0) + 1
+    return counts
+
+
 def _new_record(smoke_row: int, query: str) -> dict:
     return {
         "smoke_row": smoke_row,
@@ -149,58 +200,6 @@ def _classify(r: dict) -> str:
     if so_items == 0 and xs_items == 0:
         return "ENGINE_EMPTY"
     return "UNKNOWN"
-
-
-def _summary_counts(records: list[dict]) -> dict:
-    counts = {"ENGINE_EMPTY": 0, "ENGINE_NICHE": 0, "PIPELINE_BUG": 0, "RATE_LIMITED": 0, "BOT_BLOCK": 0, "UNKNOWN": 0}
-    for r in records:
-        counts[r["classification"]] = counts.get(r["classification"], 0) + 1
-    return counts
-
-
-def write_report(records: list[dict]) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"empty_classify_se_{ts}.md"
-    counts = _summary_counts(records)
-
-    lines = [
-        f"# StackEx EMPTY Classification — {ts}",
-        "",
-        "Source: `dev/search_pipeline/md/search_smoke_20260504_023641.md`",
-        "Method: direct httpx probe against api.stackexchange.com/2.3/search/advanced, anonymous quota.",
-        "",
-        "## Summary",
-        "",
-        f"- ENGINE_EMPTY: {counts['ENGINE_EMPTY']}/15",
-        f"- ENGINE_NICHE: {counts['ENGINE_NICHE']}/15",
-        f"- PIPELINE_BUG: {counts['PIPELINE_BUG']}/15",
-        f"- RATE_LIMITED: {counts['RATE_LIMITED']}/15",
-        f"- BOT_BLOCK: {counts['BOT_BLOCK']}/15",
-        f"- UNKNOWN: {counts['UNKNOWN']}/15",
-        "",
-        "## Per-Query",
-        "",
-        "| # | Smoke # | Query | HTTP | SO total | SO items | XS total | XS items | quota_left | Classification |",
-        "|---|---------|-------|------|----------|----------|----------|----------|------------|----------------|",
-    ]
-
-    for idx, r in enumerate(records, 1):
-        query = r["query"].replace("|", "\\|")
-        lines.append(
-            f"| {idx} | {r['smoke_row']} | {query} | {r['so_http']} "
-            f"| {r['so_total']} | {r['so_items']} "
-            f"| {r['xs_total']} | {r['xs_items']} "
-            f"| {r['quota_remaining']} | {r['classification']} |"
-        )
-
-    noted = [r for r in records if r.get("notes")]
-    if noted:
-        lines += ["", "## Notes", ""]
-        for r in noted:
-            lines.append(f"- Smoke#{r['smoke_row']} `{r['query']}`: {r['notes']}")
-
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -14,21 +13,6 @@ XML_MARKERS           = [b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>"]
 
 
 # FUNCTIONS
-
-def cf_get(proxy_url: str, url: str) -> tuple[bytes, int]:
-    try:
-        s = cffi_requests.Session(impersonate="chrome")
-        r = s.get(url, proxies={"http": proxy_url, "https": proxy_url}, timeout=CF_TIMEOUT_S)
-        s.close()
-        return r.content, r.status_code
-    except Exception:
-        return b"", 0
-
-
-def is_xml(body: bytes) -> bool:
-    head = body[:500]
-    return any(m in head for m in XML_MARKERS)
-
 
 def stage2_cf_check(proxy_urls: list[str]) -> list[str]:
     passing: list[str] = []
@@ -53,3 +37,18 @@ def stage2_cf_check(proxy_urls: list[str]) -> list[str]:
                 passing.append(result)
     print()
     return passing
+
+
+def cf_get(proxy_url: str, url: str) -> tuple[bytes, int]:
+    try:
+        s = cffi_requests.Session(impersonate="chrome")
+        r = s.get(url, proxies={"http": proxy_url, "https": proxy_url}, timeout=CF_TIMEOUT_S)
+        s.close()
+        return r.content, r.status_code
+    except Exception:
+        return b"", 0
+
+
+def is_xml(body: bytes) -> bool:
+    head = body[:500]
+    return any(m in head for m in XML_MARKERS)

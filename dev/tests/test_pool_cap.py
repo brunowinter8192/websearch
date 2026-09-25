@@ -1,14 +1,9 @@
+# INFRASTRUCTURE
 from src.search.result import SearchResult
 from src.search.search_web import POOL_CAP, _cap_pools
 
 
-def _pool(engine: str, n: int) -> list[SearchResult]:
-    return [
-        SearchResult(url=f"https://{engine}.example/{i}", title="T", snippet="S",
-                     engine=engine, position=i)
-        for i in range(1, n + 1)
-    ]
-
+# FUNCTIONS
 
 def test_pool_cap_is_fixed_ten():
     assert POOL_CAP == 10
@@ -72,3 +67,11 @@ def test_espressomaschine_case_from_query_log():
         "duckduckgo": 10, "mojeek": 10, "openalex": 10, "startpage": 10,
         "brave": 6, "bing": 1, "yandex": 0,
     }
+
+
+def _pool(engine: str, n: int) -> list[SearchResult]:
+    return [
+        SearchResult(url=f"https://{engine}.example/{i}", title="T", snippet="S",
+                     engine=engine, position=i)
+        for i in range(1, n + 1)
+    ]

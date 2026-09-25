@@ -73,21 +73,6 @@ async def capture_workflow() -> None:
 
 # FUNCTIONS
 
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-async def _eval_json(tab, script: str):
-    raw = await tab.execute_script(script)
-    value = _extract_value(raw)
-    if not value:
-        return None
-    return json.loads(value)
-
-
 async def capture_challenge_page(handle) -> list[dict]:
     tab = await new_tab(handle)
     snapshots = []
@@ -102,24 +87,6 @@ async def capture_challenge_page(handle) -> list[dict]:
         return snapshots
     finally:
         await kill_tab(handle, tab)
-
-
-async def _poll_until_results(tab) -> list[dict]:
-    snapshots = []
-    seen_states = set()
-    deadline = asyncio.get_event_loop().time() + CAPTURE_BUDGET_S
-    while asyncio.get_event_loop().time() < deadline:
-        facts = await _eval_json(tab, CAPTURE_JS)
-        if facts is None:
-            break
-        marker = (facts.get("widget_state"), facts.get("captcha_note_text"), facts.get("result_link_count") > 0)
-        if marker not in seen_states:
-            seen_states.add(marker)
-            snapshots.append({"label": f"state={facts.get('widget_state')} note={facts.get('captcha_note_text')!r}", "facts": facts})
-        if facts.get("result_link_count", 0) > 0:
-            break
-        await asyncio.sleep(POLL_INTERVAL_S)
-    return snapshots
 
 
 def build_report(snapshots: list[dict]) -> str:
@@ -158,6 +125,39 @@ def write_report(report: str, report_dir: Path) -> Path:
 
 def discard_profile(profile_dir: str) -> None:
     shutil.rmtree(profile_dir, ignore_errors=True)
+
+
+async def _poll_until_results(tab) -> list[dict]:
+    snapshots = []
+    seen_states = set()
+    deadline = asyncio.get_event_loop().time() + CAPTURE_BUDGET_S
+    while asyncio.get_event_loop().time() < deadline:
+        facts = await _eval_json(tab, CAPTURE_JS)
+        if facts is None:
+            break
+        marker = (facts.get("widget_state"), facts.get("captcha_note_text"), facts.get("result_link_count") > 0)
+        if marker not in seen_states:
+            seen_states.add(marker)
+            snapshots.append({"label": f"state={facts.get('widget_state')} note={facts.get('captcha_note_text')!r}", "facts": facts})
+        if facts.get("result_link_count", 0) > 0:
+            break
+        await asyncio.sleep(POLL_INTERVAL_S)
+    return snapshots
+
+
+async def _eval_json(tab, script: str):
+    raw = await tab.execute_script(script)
+    value = _extract_value(raw)
+    if not value:
+        return None
+    return json.loads(value)
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
 
 
 if __name__ == "__main__":

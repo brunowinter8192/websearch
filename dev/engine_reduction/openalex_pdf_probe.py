@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -62,10 +61,6 @@ async def run_probe() -> None:
 
 # FUNCTIONS
 
-class RateLimitError(Exception):
-    pass
-
-
 async def fetch_works(client: httpx.AsyncClient, query: str) -> list[dict]:
     params = {"search": query, "per_page": PER_PAGE}
     response = await client.get(API_URL, params=params)
@@ -73,26 +68,6 @@ async def fetch_works(client: httpx.AsyncClient, query: str) -> list[dict]:
         raise RateLimitError(f"429 for query: {query}")
     response.raise_for_status()
     return response.json().get("results", [])
-
-
-def _pick_url(work: dict) -> str:
-    ids = work.get("ids") or {}
-    arxiv = ids.get("arxiv")
-    if arxiv:
-        return arxiv
-    doi = work.get("doi")
-    if doi:
-        return doi
-    return work.get("id", "")
-
-
-def classify(work: dict) -> str:
-    loc = work.get("best_oa_location")
-    if loc is None:
-        return "no_oa"
-    if loc.get("pdf_url"):
-        return "pdf_url"
-    return "landing_only"
 
 
 def build_record(qi: int, query: str, works: list[dict]) -> dict:
@@ -116,6 +91,41 @@ def build_record(qi: int, query: str, works: list[dict]) -> dict:
         "eyeball": build_eyeball_rows(works[:TOP_N]) if qi in EYEBALL_QUERY_NUMS else None,
     }
     return record
+
+
+def write_report(records: list[dict], error: str | None) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
+
+    lines = [
+        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
+        "",
+        "Measurement only — no src/ touched, no wiring. Direct httpx against "
+        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
+        "",
+    ]
+    if error:
+        lines += [f"**Stopped early due to: {error}**", ""]
+
+    lines += _build_per_query_table(records)
+    lines += _build_type_breakdown_section(records)
+    lines += _build_eyeball_section(records)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+class RateLimitError(Exception):
+    pass
+
+
+def classify(work: dict) -> str:
+    loc = work.get("best_oa_location")
+    if loc is None:
+        return "no_oa"
+    if loc.get("pdf_url"):
+        return "pdf_url"
+    return "landing_only"
 
 
 def build_eyeball_rows(works: list[dict]) -> list[dict]:
@@ -189,26 +199,15 @@ def _build_eyeball_section(records: list[dict]) -> list[str]:
     return lines
 
 
-def write_report(records: list[dict], error: str | None) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"openalex_pdf_probe_{ts}.md"
-
-    lines = [
-        f"# OpenAlex PDF-URL Availability Probe (Milestone 1) — {ts}",
-        "",
-        "Measurement only — no src/ touched, no wiring. Direct httpx against "
-        "`https://api.openalex.org/works?search=<q>&per_page=100`, no `mailto`, no API key.",
-        "",
-    ]
-    if error:
-        lines += [f"**Stopped early due to: {error}**", ""]
-
-    lines += _build_per_query_table(records)
-    lines += _build_type_breakdown_section(records)
-    lines += _build_eyeball_section(records)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def _pick_url(work: dict) -> str:
+    ids = work.get("ids") or {}
+    arxiv = ids.get("arxiv")
+    if arxiv:
+        return arxiv
+    doi = work.get("doi")
+    if doi:
+        return doi
+    return work.get("id", "")
 
 
 if __name__ == "__main__":

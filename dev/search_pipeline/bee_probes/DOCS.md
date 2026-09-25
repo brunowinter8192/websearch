@@ -11,7 +11,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 
 ## Modules
 
-### cdp_starvation_probe.py (132 LOC)
+### cdp_starvation_probe.py (131 LOC)
 
 **Purpose:** Phase 1 probe: tests whether event-loop starvation delays CDP events during engine cascades; always writes both outputs.
 **Reads:** `../queries.txt`.
@@ -51,7 +51,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `cdp_starvation_probe.py`, findings sibling.
 **Calls out:** none.
 
-### acquire_probe.py (144 LOC)
+### acquire_probe.py (143 LOC)
 
 **Purpose:** Phase 2 probe: instruments the limiter acquire to discriminate stale lock, backoff sleep, and innocent acquire.
 **Reads:** nothing; live instrumented run.
@@ -83,7 +83,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`.
 **Calls out:** none.
 
-### _acquire_probe_instrument.py (70 LOC)
+### _acquire_probe_instrument.py (68 LOC)
 
 **Purpose:** Lock-watching limiter monkeypatch emitting enter and exit events, applied at import.
 **Reads:** nothing; patches the production rate limiter.
@@ -99,7 +99,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`, findings sibling.
 **Calls out:** none.
 
-### branch_probe.py (164 LOC)
+### branch_probe.py (163 LOC)
 
 **Purpose:** Phase 3 probe: discriminates which sleep branch in the limiter acquire fires; stops on failed cascade reproduction.
 **Reads:** nothing; live instrumented run.

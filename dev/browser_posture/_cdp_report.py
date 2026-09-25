@@ -9,12 +9,6 @@ REFERENCE_STAGE = "reference_launch"
 
 # FUNCTIONS
 
-def pct(count: int, total: int) -> str:
-    if total == 0:
-        return "n/a"
-    return f"{round(100 * count / total)}%"
-
-
 def diff_cmdlines(self_cmdline: list[str] | None, reference_cmdline: list[str] | None) -> dict:
     if not self_cmdline or not reference_cmdline:
         return {"comparable": False}
@@ -32,18 +26,31 @@ def diff_cmdlines(self_cmdline: list[str] | None, reference_cmdline: list[str] |
     }
 
 
-def stage_focus_breakdown(focus_samples: list[tuple[str, str]]) -> list[tuple[str, int, int]]:
-    totals: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
-    chrome_counts: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
-    for stage_name, app in focus_samples:
-        totals.setdefault(stage_name, 0)
-        chrome_counts.setdefault(stage_name, 0)
-        totals[stage_name] += 1
-        if "chrome" in app.lower():
-            chrome_counts[stage_name] += 1
-    order = [*ROUTE_STAGES, REFERENCE_STAGE]
-    order += [s for s in totals if s not in order]
-    return [(s, totals[s], chrome_counts[s]) for s in order]
+def write_report(
+    bundle_path: Path, reference: dict, self_launch_result: dict, cdp_http_check: dict,
+    scrape_result: dict, self_cmdline: list[str] | None, cmdline_diff: dict,
+    focus_samples: list[tuple[str, str]], orphans: list[str], report_dir: Path,
+) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = report_dir / f"05_cdp_headed_probe_{ts}.md"
+    crawl4ai_version = importlib.metadata.version("crawl4ai")
+    patchright_version = importlib.metadata.version("patchright")
+
+    lines = [
+        f"# CDP Headed Probe (Milestone 1b) — {ts}",
+        "",
+        f"Dev-only probe (macOS). `crawl4ai=={crawl4ai_version}`, `patchright=={patchright_version}`. "
+        f"Bundle: `{bundle_path}`.",
+        "",
+    ]
+    lines += _build_self_launch_section(self_launch_result, cdp_http_check)
+    lines += _build_scrape_section(scrape_result)
+    lines += _build_focus_poll_section(focus_samples)
+    lines += _build_cmdline_delta_section(reference, self_cmdline, cmdline_diff)
+    lines += _build_teardown_section(orphans)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _build_self_launch_section(self_launch_result: dict, cdp_http_check: dict) -> list[str]:
@@ -145,28 +152,21 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-def write_report(
-    bundle_path: Path, reference: dict, self_launch_result: dict, cdp_http_check: dict,
-    scrape_result: dict, self_cmdline: list[str] | None, cmdline_diff: dict,
-    focus_samples: list[tuple[str, str]], orphans: list[str], report_dir: Path,
-) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = report_dir / f"05_cdp_headed_probe_{ts}.md"
-    crawl4ai_version = importlib.metadata.version("crawl4ai")
-    patchright_version = importlib.metadata.version("patchright")
+def stage_focus_breakdown(focus_samples: list[tuple[str, str]]) -> list[tuple[str, int, int]]:
+    totals: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
+    chrome_counts: dict[str, int] = {s: 0 for s in [*ROUTE_STAGES, REFERENCE_STAGE]}
+    for stage_name, app in focus_samples:
+        totals.setdefault(stage_name, 0)
+        chrome_counts.setdefault(stage_name, 0)
+        totals[stage_name] += 1
+        if "chrome" in app.lower():
+            chrome_counts[stage_name] += 1
+    order = [*ROUTE_STAGES, REFERENCE_STAGE]
+    order += [s for s in totals if s not in order]
+    return [(s, totals[s], chrome_counts[s]) for s in order]
 
-    lines = [
-        f"# CDP Headed Probe (Milestone 1b) — {ts}",
-        "",
-        f"Dev-only probe (macOS). `crawl4ai=={crawl4ai_version}`, `patchright=={patchright_version}`. "
-        f"Bundle: `{bundle_path}`.",
-        "",
-    ]
-    lines += _build_self_launch_section(self_launch_result, cdp_http_check)
-    lines += _build_scrape_section(scrape_result)
-    lines += _build_focus_poll_section(focus_samples)
-    lines += _build_cmdline_delta_section(reference, self_cmdline, cmdline_diff)
-    lines += _build_teardown_section(orphans)
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def pct(count: int, total: int) -> str:
+    if total == 0:
+        return "n/a"
+    return f"{round(100 * count / total)}%"

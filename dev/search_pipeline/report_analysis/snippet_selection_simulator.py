@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import sys
 from collections import defaultdict
@@ -57,6 +56,21 @@ def _select_new(record: dict):
     winner           = max(pool, key=lambda s: pool[s][0])
     score, clean_len = scored[winner]
     return winner, strip_bloat(candidates[winner]), score, clean_len, floor_triggered
+
+
+def write_report(records: list[dict], results: list) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"snippet_selection_{ts}.md"
+    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
+        _compute_aggregates(records, results)
+    L = (
+        _render_header(ts)
+        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
+        + _render_per_query_picks(records, results)
+        + _render_floor_cases(floor_records, floor_n)
+    )
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
 
 
 def _compute_aggregates(records: list[dict], results: list) -> tuple:
@@ -168,21 +182,6 @@ def _render_floor_cases(floor_records: list, floor_n: int) -> list[str]:
             "",
         ]
     return L
-
-
-def write_report(records: list[dict], results: list) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"snippet_selection_{ts}.md"
-    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
-        _compute_aggregates(records, results)
-    L = (
-        _render_header(ts)
-        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
-        + _render_per_query_picks(records, results)
-        + _render_floor_cases(floor_records, floor_n)
-    )
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

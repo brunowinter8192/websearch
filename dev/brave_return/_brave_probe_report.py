@@ -15,20 +15,31 @@ QUERY_BUDGET_NOTE = "30s"
 
 # FUNCTIONS
 
-def _fmt_ms(value) -> str:
-    return "-" if value is None else f"{value:.0f}"
+def build_report_md(
+    phases: list, persistence: dict, live_requests: int, gap_s: float, budget_s: float,
+    budget_note: str, extension_used: bool,
+) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    queries_per_phase = {p.name: [m.label for m in p.measurements] for p in phases}
+    lines = _build_header(ts, live_requests, gap_s, budget_note)
+    lines += _build_phase_descriptions(phases)
+    lines += _build_summary_table(phases)
+    lines += _build_q1_section(phases)
+    lines += _build_q2_section(phases)
+    lines += _build_q3_section(phases, _build_profile_persistence_section(persistence) + _cookie_lines(phases))
+    lines += _build_q4_section(phases)
+    lines += _build_limits_section(extension_used)
+    lines += _build_methodology_section(queries_per_phase, gap_s, budget_s)
+    return "\n".join(lines)
 
 
-def _phase_query_rows(phase) -> list[str]:
-    rows = []
-    for m in phase.measurements:
-        rows.append(
-            f"| {phase.name} | {m.label} | {m.challenge_served} | {m.final_state} | {m.verdict} | "
-            f"{m.result_link_count} | {m.trigger_mechanism or '-'} | {_fmt_ms(m.nav_ms)} | "
-            f"{_fmt_ms(m.button_seen_ms)} | {_fmt_ms(m.trigger_fired_ms)} | {_fmt_ms(m.results_ms)} | "
-            f"{_fmt_ms(m.total_ms)} |"
-        )
-    return rows
+def write_report(report: str, report_dir: Path) -> Path:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"brave_pydoll_probe_{ts}.md"
+    report_path.write_text(report)
+    print(f"Report written to {report_path}")
+    return report_path
 
 
 def _build_header(ts: str, live_requests: int, gap_s: float, budget_note: str) -> list[str]:
@@ -52,6 +63,19 @@ def _build_header(ts: str, live_requests: int, gap_s: float, budget_note: str) -
     ]
 
 
+def _build_phase_descriptions(phases: list) -> list[str]:
+    lines = ["## Phases", ""]
+    for phase in phases:
+        lines += [
+            f"**{phase.name}** — {phase.description}",
+            f"Profile: `{phase.profile_dir}`",
+            f"Queries challenged: {sum(1 for m in phase.measurements if m.challenge_served)} "
+            f"of {len(phase.measurements)}",
+            "",
+        ]
+    return lines
+
+
 def _build_summary_table(phases: list) -> list[str]:
     lines = [
         "## Per-query result",
@@ -65,19 +89,6 @@ def _build_summary_table(phases: list) -> list[str]:
     for phase in phases:
         lines += _phase_query_rows(phase)
     lines.append("")
-    return lines
-
-
-def _build_phase_descriptions(phases: list) -> list[str]:
-    lines = ["## Phases", ""]
-    for phase in phases:
-        lines += [
-            f"**{phase.name}** — {phase.description}",
-            f"Profile: `{phase.profile_dir}`",
-            f"Queries challenged: {sum(1 for m in phase.measurements if m.challenge_served)} "
-            f"of {len(phase.measurements)}",
-            "",
-        ]
     return lines
 
 
@@ -181,36 +192,6 @@ def _build_q3_section(phases: list, cookie_notes: list[str]) -> list[str]:
     return lines
 
 
-def _build_q4_section(phases: list) -> list[str]:
-    all_measurements = [m for p in phases for m in p.measurements]
-    states = [m.final_state for m in all_measurements]
-    pre_cookie = []
-    post_cookie = []
-    saw_cookie = False
-    for m in all_measurements:
-        target = post_cookie if saw_cookie else pre_cookie
-        target.append(m.final_state)
-        if m.final_state == STATE_RESULTS and m.challenge_served:
-            saw_cookie = True
-    return [
-        "## Q4 — does passing the button challenge have any effect on the 429/pow-link shape?",
-        "",
-        f"Observational only, n={len(all_measurements)} across the whole run. NOT provoked — "
-        "deliberately triggering a 429 would require bursting past the 20s pacing this milestone's "
-        "budget requires, so this section reports what was seen at ordinary pacing, not what a "
-        "burst would show.",
-        "",
-        f"429/pow-link rate before any button-challenge in this run was solved: "
-        f"{pow_link_rate(pre_cookie)}",
-        f"429/pow-link rate after a button-challenge was solved: {pow_link_rate(post_cookie)}",
-        f"All final states this run, in order: {states}",
-        "",
-        "A direction, not a cause, at this sample size. Do not read a single run's before/after "
-        "split as proof either way.",
-        "",
-    ]
-
-
 def _cookie_lines(phases: list) -> list[str]:
     lines = ["### Cookies Brave set, and what survived", ""]
     for phase in phases:
@@ -241,6 +222,36 @@ def _build_profile_persistence_section(persistence: dict) -> list[str]:
         "```json",
         json.dumps(persistence, indent=2),
         "```",
+        "",
+    ]
+
+
+def _build_q4_section(phases: list) -> list[str]:
+    all_measurements = [m for p in phases for m in p.measurements]
+    states = [m.final_state for m in all_measurements]
+    pre_cookie = []
+    post_cookie = []
+    saw_cookie = False
+    for m in all_measurements:
+        target = post_cookie if saw_cookie else pre_cookie
+        target.append(m.final_state)
+        if m.final_state == STATE_RESULTS and m.challenge_served:
+            saw_cookie = True
+    return [
+        "## Q4 — does passing the button challenge have any effect on the 429/pow-link shape?",
+        "",
+        f"Observational only, n={len(all_measurements)} across the whole run. NOT provoked — "
+        "deliberately triggering a 429 would require bursting past the 20s pacing this milestone's "
+        "budget requires, so this section reports what was seen at ordinary pacing, not what a "
+        "burst would show.",
+        "",
+        f"429/pow-link rate before any button-challenge in this run was solved: "
+        f"{pow_link_rate(pre_cookie)}",
+        f"429/pow-link rate after a button-challenge was solved: {pow_link_rate(post_cookie)}",
+        f"All final states this run, in order: {states}",
+        "",
+        "A direction, not a cause, at this sample size. Do not read a single run's before/after "
+        "split as proof either way.",
         "",
     ]
 
@@ -312,28 +323,17 @@ def _build_methodology_section(queries_per_phase: dict, gap_s: float, budget_s: 
     ]
 
 
-def build_report_md(
-    phases: list, persistence: dict, live_requests: int, gap_s: float, budget_s: float,
-    budget_note: str, extension_used: bool,
-) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    queries_per_phase = {p.name: [m.label for m in p.measurements] for p in phases}
-    lines = _build_header(ts, live_requests, gap_s, budget_note)
-    lines += _build_phase_descriptions(phases)
-    lines += _build_summary_table(phases)
-    lines += _build_q1_section(phases)
-    lines += _build_q2_section(phases)
-    lines += _build_q3_section(phases, _build_profile_persistence_section(persistence) + _cookie_lines(phases))
-    lines += _build_q4_section(phases)
-    lines += _build_limits_section(extension_used)
-    lines += _build_methodology_section(queries_per_phase, gap_s, budget_s)
-    return "\n".join(lines)
+def _phase_query_rows(phase) -> list[str]:
+    rows = []
+    for m in phase.measurements:
+        rows.append(
+            f"| {phase.name} | {m.label} | {m.challenge_served} | {m.final_state} | {m.verdict} | "
+            f"{m.result_link_count} | {m.trigger_mechanism or '-'} | {_fmt_ms(m.nav_ms)} | "
+            f"{_fmt_ms(m.button_seen_ms)} | {_fmt_ms(m.trigger_fired_ms)} | {_fmt_ms(m.results_ms)} | "
+            f"{_fmt_ms(m.total_ms)} |"
+        )
+    return rows
 
 
-def write_report(report: str, report_dir: Path) -> Path:
-    report_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"brave_pydoll_probe_{ts}.md"
-    report_path.write_text(report)
-    print(f"Report written to {report_path}")
-    return report_path
+def _fmt_ms(value) -> str:
+    return "-" if value is None else f"{value:.0f}"

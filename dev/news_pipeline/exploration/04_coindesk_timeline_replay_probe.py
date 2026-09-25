@@ -76,6 +76,7 @@ async def timeline_replay_workflow(loop: int = CURSOR_LOOP_CALLS, delay: float =
 
 
 # FUNCTIONS
+
 def extract_and_replay(timeline_entry: dict) -> dict:
     api_url = timeline_entry["request"]["url"]
     raw_headers = {h["name"]: h["value"] for h in timeline_entry["request"]["headers"]}

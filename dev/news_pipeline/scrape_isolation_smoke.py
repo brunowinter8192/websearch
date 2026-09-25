@@ -78,34 +78,6 @@ def _load_urls(path: Path) -> list[str]:
     return [item["url"] for item in data]
 
 
-def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
-    kwargs = dict(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
-        page_timeout=PAGE_TIMEOUT_MS,
-        markdown_generator=DefaultMarkdownGenerator(),
-        verbose=False,
-    )
-    if timezone_id:
-        kwargs["timezone_id"] = timezone_id
-    return CrawlerRunConfig(**kwargs)
-
-
-def _url_to_filename(url: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
-    slug = re.sub(r"_+", "_", slug).strip("_")[:100]
-    return f"{slug}.md"
-
-
-def _save(url: str, raw_md: str, output_dir: Path) -> int:
-    if not raw_md:
-        return 0
-    content = f"<!-- source: {url} -->\n\n{raw_md}"
-    (output_dir / _url_to_filename(url)).write_text(content, encoding="utf-8")
-    return len(content.encode("utf-8"))
-
-
 async def _run_b1(urls: list[str], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     zones = sorted(available_timezones())
@@ -243,6 +215,34 @@ def _print_comparison(b1_rows: list[dict], b1_wall: int,
 
     print(f"\nB1 review: {B1_REVIEW}")
     print(f"B2 review: {B2_REVIEW}")
+
+
+def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
+    kwargs = dict(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
+        page_timeout=PAGE_TIMEOUT_MS,
+        markdown_generator=DefaultMarkdownGenerator(),
+        verbose=False,
+    )
+    if timezone_id:
+        kwargs["timezone_id"] = timezone_id
+    return CrawlerRunConfig(**kwargs)
+
+
+def _save(url: str, raw_md: str, output_dir: Path) -> int:
+    if not raw_md:
+        return 0
+    content = f"<!-- source: {url} -->\n\n{raw_md}"
+    (output_dir / _url_to_filename(url)).write_text(content, encoding="utf-8")
+    return len(content.encode("utf-8"))
+
+
+def _url_to_filename(url: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
+    slug = re.sub(r"_+", "_", slug).strip("_")[:100]
+    return f"{slug}.md"
 
 
 if __name__ == "__main__":

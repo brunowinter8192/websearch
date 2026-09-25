@@ -27,6 +27,72 @@ CLEANED_DIR_BASE = PROJECT_ROOT / "dev" / "scrape_pipeline" / "03_cleanup" / "cl
 
 MIN_CONTENT_BYTES = 500
 
+GITHUB_SOURCE_RE = re.compile(
+    r"^<!-- source: https?://github\.com/[^/]+/[^/]+/(?:issues|pull)/(\d+)",
+    re.MULTILINE,
+)
+
+SOURCE_RE = re.compile(r"^<!-- source: .* -->\s*$", re.MULTILINE)
+H1_RE = re.compile(r"^# +\S", re.MULTILINE)
+MIN_TITLE_PROSE_CHARS = 200
+
+NAV_LINE_RE = re.compile(r"^\s*[\*\-]?\s*\[[^\]]*\]\([^)]*\)\s*$")
+GENERIC_NAV_PHRASES = re.compile(r"^\s*(Toggle navigation|Menu|Search this site)\b", re.IGNORECASE)
+HEADING_RE = re.compile(r"^#{1,6} +\S")
+
+SKIP_LINK_RE = re.compile(
+    r"^\s*\[\s*Skip to [^\]]+\]\([^)]+\)\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+SPHINX_ANCHOR_RE = re.compile(
+    r'\[(#|¶|\xb6)\]\([^)]+\s+"(?:Link to this heading|Permalink[^"]*)"\)',
+)
+
+TAIL_MARKERS = [
+    re.compile(r"^## Continue reading\s*$", re.MULTILINE),
+    re.compile(r"^## Related posts?\s*$", re.MULTILINE),
+    re.compile(r"^## Related articles?\s*$", re.MULTILINE),
+    re.compile(r"^## Comments\s*$", re.MULTILINE),
+    re.compile(r"^## Webmentions?\s*$", re.MULTILINE),
+    re.compile(r"^## Replies\s*$", re.MULTILINE),
+    re.compile(r"^You are here:\s*$", re.MULTILINE),
+    re.compile(r"^\s*Copyright\s+\d{4}", re.MULTILINE),
+]
+
+HN_SOURCE_RE = re.compile(r"^<!-- source: https?://news\.ycombinator\.com/", re.MULTILINE)
+HN_NAV_SIG = re.compile(r"\[Hacker News\]\(https://news\.ycombinator\.com/news\)")
+HN_STORY_ROW = re.compile(r"\(https://news\.ycombinator\.com/vote\?id=\d+", re.MULTILINE)
+
+BLANK_LINES_RE = re.compile(r"\n{4,}")
+
+
+# ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("--input", help="Path to raw outputs dir (default: latest in 02_raw_data/)")
+    parser.add_argument("--output", help="Output dir (default: 03_cleanup/cleaned_data/<ts>/)")
+    args = parser.parse_args()
+
+    input_dir = Path(args.input) if args.input else find_latest_raw_dir()
+    if args.output:
+        output_dir = Path(args.output)
+    else:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = CLEANED_DIR_BASE / ts
+
+    cleanup_workflow(input_dir, output_dir)
+
+
+# FUNCTIONS
+
+def find_latest_raw_dir() -> Path:
+    candidates = sorted(p for p in RAW_DIR_DEFAULT.iterdir() if p.is_dir())
+    if not candidates:
+        raise SystemExit(f"No subdirs in {RAW_DIR_DEFAULT}")
+    return candidates[-1]
+
 
 def cleanup_workflow(input_dir: Path, output_dir: Path) -> None:
     raw_files = sorted(p for p in input_dir.glob("*.md") if p.name != "02_raw_report.md")
@@ -70,10 +136,34 @@ def clean_markdown(text: str) -> str:
     return text
 
 
-GITHUB_SOURCE_RE = re.compile(
-    r"^<!-- source: https?://github\.com/[^/]+/[^/]+/(?:issues|pull)/(\d+)",
-    re.MULTILINE,
-)
+def write_summary(output_dir: Path, rows: list) -> None:
+    lines = [
+        "# Cleanup Run Summary",
+        "",
+        f"**Output:** `{output_dir}`",
+        f"**Files:** {len(rows)}",
+        "",
+        "| File | Raw bytes | Cleaned bytes | Delta |",
+        "|------|-----------|---------------|-------|",
+    ]
+    for name, raw, cleaned, note in rows:
+        short = name[:60] + ("…" if len(name) > 60 else "")
+        lines.append(f"| {short} | {raw:,} | {cleaned:,} | {note} |")
+
+    (output_dir / "_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def strip_hn_top_nav(text: str) -> str:
+    if not HN_SOURCE_RE.search(text):
+        return text
+    src = SOURCE_RE.search(text)
+    nav_match = HN_NAV_SIG.search(text)
+    story_match = HN_STORY_ROW.search(text)
+    if not (src and nav_match and story_match):
+        return text
+    line_start = text.rfind("\n", 0, story_match.start()) + 1
+    return text[:src.end()] + "\n\n" + text[line_start:]
+
 
 def strip_github_chrome(text: str) -> str:
     src = SOURCE_RE.search(text)
@@ -88,34 +178,6 @@ def strip_github_chrome(text: str) -> str:
     return text[:src.end()] + "\n\n" + text[m.start():]
 
 
-SOURCE_RE = re.compile(r"^<!-- source: .* -->\s*$", re.MULTILINE)
-H1_RE = re.compile(r"^# +\S", re.MULTILINE)
-MIN_TITLE_PROSE_CHARS = 200
-
-def gap_substantive_chars(gap: str) -> int:
-    total = 0
-    for line in gap.split("\n"):
-        s = line.strip()
-        if not s or s.startswith("#") or s.startswith("|"):
-            continue
-        if re.match(r"^\s*[\*\-]?\s*\[[^\]]*\]\([^)]*\)\s*$", s):
-            continue
-        prose = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
-        prose = re.sub(r"[\*\_\`\!]", "", prose)
-        if len(prose.strip()) > 60:
-            total += len(prose.strip())
-    return total
-
-def find_title_h1(text: str) -> int:
-    h1_positions = [m.start() for m in H1_RE.finditer(text)]
-    if not h1_positions:
-        return -1
-    for i, pos in enumerate(h1_positions):
-        next_pos = h1_positions[i + 1] if i + 1 < len(h1_positions) else len(text)
-        if gap_substantive_chars(text[pos:next_pos]) >= MIN_TITLE_PROSE_CHARS:
-            return pos
-    return h1_positions[0]
-
 def strip_pre_h1_chrome(text: str) -> str:
     src = SOURCE_RE.search(text)
     title_pos = find_title_h1(text)
@@ -123,30 +185,6 @@ def strip_pre_h1_chrome(text: str) -> str:
         return text
     return text[:src.end()] + "\n\n" + text[title_pos:]
 
-
-NAV_LINE_RE = re.compile(r"^\s*[\*\-]?\s*\[[^\]]*\]\([^)]*\)\s*$")
-GENERIC_NAV_PHRASES = re.compile(r"^\s*(Toggle navigation|Menu|Search this site)\b", re.IGNORECASE)
-HEADING_RE = re.compile(r"^#{1,6} +\S")
-
-def visible_text_len(s: str) -> int:
-    s = re.sub(r"\[!\[[^\]]*\]\([^)]*\)([^\]]*)\]\([^)]*\)", r"\1", s)
-    s = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", s)
-    s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
-    s = re.sub(r"https?://\S+", "", s)
-    s = re.sub(r"[\*\_\`]", "", s)
-    return len(s.strip())
-
-def is_substantive_line(line: str) -> bool:
-    s = line.strip()
-    if not s or s.startswith("<!--"):
-        return False
-    if HEADING_RE.match(s):
-        return True
-    if NAV_LINE_RE.match(s):
-        return False
-    if GENERIC_NAV_PHRASES.match(s):
-        return False
-    return visible_text_len(s) > 60
 
 def strip_pre_content_chrome(text: str) -> str:
     if H1_RE.search(text):
@@ -166,33 +204,13 @@ def strip_pre_content_chrome(text: str) -> str:
     return text[:src.end()] + "\n\n" + "\n".join(lines[skip_count:])
 
 
-SKIP_LINK_RE = re.compile(
-    r"^\s*\[\s*Skip to [^\]]+\]\([^)]+\)\s*$",
-    re.MULTILINE | re.IGNORECASE,
-)
-
 def strip_skip_links(text: str) -> str:
     return SKIP_LINK_RE.sub("", text)
 
 
-SPHINX_ANCHOR_RE = re.compile(
-    r'\[(#|¶|\xb6)\]\([^)]+\s+"(?:Link to this heading|Permalink[^"]*)"\)',
-)
-
 def strip_sphinx_anchors(text: str) -> str:
     return SPHINX_ANCHOR_RE.sub("", text)
 
-
-TAIL_MARKERS = [
-    re.compile(r"^## Continue reading\s*$", re.MULTILINE),
-    re.compile(r"^## Related posts?\s*$", re.MULTILINE),
-    re.compile(r"^## Related articles?\s*$", re.MULTILINE),
-    re.compile(r"^## Comments\s*$", re.MULTILINE),
-    re.compile(r"^## Webmentions?\s*$", re.MULTILINE),
-    re.compile(r"^## Replies\s*$", re.MULTILINE),
-    re.compile(r"^You are here:\s*$", re.MULTILINE),
-    re.compile(r"^\s*Copyright\s+\d{4}", re.MULTILINE),
-]
 
 def strip_tail_chrome(text: str) -> str:
     earliest = len(text)
@@ -203,66 +221,56 @@ def strip_tail_chrome(text: str) -> str:
     return text[:earliest].rstrip() + "\n"
 
 
-HN_SOURCE_RE = re.compile(r"^<!-- source: https?://news\.ycombinator\.com/", re.MULTILINE)
-HN_NAV_SIG = re.compile(r"\[Hacker News\]\(https://news\.ycombinator\.com/news\)")
-HN_STORY_ROW = re.compile(r"\(https://news\.ycombinator\.com/vote\?id=\d+", re.MULTILINE)
-
-def strip_hn_top_nav(text: str) -> str:
-    if not HN_SOURCE_RE.search(text):
-        return text
-    src = SOURCE_RE.search(text)
-    nav_match = HN_NAV_SIG.search(text)
-    story_match = HN_STORY_ROW.search(text)
-    if not (src and nav_match and story_match):
-        return text
-    line_start = text.rfind("\n", 0, story_match.start()) + 1
-    return text[:src.end()] + "\n\n" + text[line_start:]
-
-
-BLANK_LINES_RE = re.compile(r"\n{4,}")
-
 def collapse_blank_lines(text: str) -> str:
     return BLANK_LINES_RE.sub("\n\n\n", text)
 
 
-def write_summary(output_dir: Path, rows: list) -> None:
-    lines = [
-        "# Cleanup Run Summary",
-        "",
-        f"**Output:** `{output_dir}`",
-        f"**Files:** {len(rows)}",
-        "",
-        "| File | Raw bytes | Cleaned bytes | Delta |",
-        "|------|-----------|---------------|-------|",
-    ]
-    for name, raw, cleaned, note in rows:
-        short = name[:60] + ("…" if len(name) > 60 else "")
-        lines.append(f"| {short} | {raw:,} | {cleaned:,} | {note} |")
-
-    (output_dir / "_summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+def find_title_h1(text: str) -> int:
+    h1_positions = [m.start() for m in H1_RE.finditer(text)]
+    if not h1_positions:
+        return -1
+    for i, pos in enumerate(h1_positions):
+        next_pos = h1_positions[i + 1] if i + 1 < len(h1_positions) else len(text)
+        if gap_substantive_chars(text[pos:next_pos]) >= MIN_TITLE_PROSE_CHARS:
+            return pos
+    return h1_positions[0]
 
 
-def find_latest_raw_dir() -> Path:
-    candidates = sorted(p for p in RAW_DIR_DEFAULT.iterdir() if p.is_dir())
-    if not candidates:
-        raise SystemExit(f"No subdirs in {RAW_DIR_DEFAULT}")
-    return candidates[-1]
+def is_substantive_line(line: str) -> bool:
+    s = line.strip()
+    if not s or s.startswith("<!--"):
+        return False
+    if HEADING_RE.match(s):
+        return True
+    if NAV_LINE_RE.match(s):
+        return False
+    if GENERIC_NAV_PHRASES.match(s):
+        return False
+    return visible_text_len(s) > 60
 
 
-def main():
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument("--input", help="Path to raw outputs dir (default: latest in 02_raw_data/)")
-    parser.add_argument("--output", help="Output dir (default: 03_cleanup/cleaned_data/<ts>/)")
-    args = parser.parse_args()
+def gap_substantive_chars(gap: str) -> int:
+    total = 0
+    for line in gap.split("\n"):
+        s = line.strip()
+        if not s or s.startswith("#") or s.startswith("|"):
+            continue
+        if re.match(r"^\s*[\*\-]?\s*\[[^\]]*\]\([^)]*\)\s*$", s):
+            continue
+        prose = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
+        prose = re.sub(r"[\*\_\`\!]", "", prose)
+        if len(prose.strip()) > 60:
+            total += len(prose.strip())
+    return total
 
-    input_dir = Path(args.input) if args.input else find_latest_raw_dir()
-    if args.output:
-        output_dir = Path(args.output)
-    else:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = CLEANED_DIR_BASE / ts
 
-    cleanup_workflow(input_dir, output_dir)
+def visible_text_len(s: str) -> int:
+    s = re.sub(r"\[!\[[^\]]*\]\([^)]*\)([^\]]*)\]\([^)]*\)", r"\1", s)
+    s = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", s)
+    s = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", s)
+    s = re.sub(r"https?://\S+", "", s)
+    s = re.sub(r"[\*\_\`]", "", s)
+    return len(s.strip())
 
 
 if __name__ == "__main__":

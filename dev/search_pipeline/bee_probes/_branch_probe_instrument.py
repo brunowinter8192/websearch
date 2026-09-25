@@ -17,13 +17,6 @@ _pre_snapshots: list[dict] = []
 
 # FUNCTIONS
 
-def _get_name(limiter) -> str:
-    for name, lim in _rl_mod._limiters.items():
-        if lim is limiter:
-            return name
-    return "unknown"
-
-
 async def _replacement_acquire(self) -> None:
     name = _get_name(self)
     _acq_events.append((name, "enter", time.monotonic(), None))
@@ -53,6 +46,13 @@ async def _replacement_acquire(self) -> None:
     except BaseException as e:
         _acq_events.append((name, f"exit_err:{type(e).__name__}", time.monotonic(), None))
         raise
+
+
+def _get_name(limiter) -> str:
+    for name, lim in _rl_mod._limiters.items():
+        if lim is limiter:
+            return name
+    return "unknown"
 
 
 RateLimiter.acquire = _replacement_acquire

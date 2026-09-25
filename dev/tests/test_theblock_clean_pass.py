@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import hashlib
 import logging
 from pathlib import Path
@@ -7,17 +8,8 @@ import pytest
 from src.news.clean_pass import _run_clean_pass
 from src.news.platforms.theblock import TheBlockPlatform
 
-
 GOOD_URL = "https://www.theblock.co/post/12345/good-article"
 BODYLESS_URL = "https://www.theblock.co/post/99999/bodyless-article"
-
-
-def _hash(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:12]
-
-
-GOOD_HASH = _hash(GOOD_URL)
-BODYLESS_HASH = _hash(BODYLESS_URL)
 
 GOOD_HTML = """\
 <html><head>
@@ -35,27 +27,11 @@ BODYLESS_HTML = """\
 </head><body></body></html>
 """
 
-
-@pytest.fixture()
-def dirs(tmp_path):
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
-    collection_dir = tmp_path / "collection"
-    (raw_dir / f"{GOOD_HASH}.md").write_text(GOOD_HTML, encoding="utf-8")
-    (raw_dir / f"{BODYLESS_HASH}.md").write_text(BODYLESS_HTML, encoding="utf-8")
-    return raw_dir, collection_dir
-
-
-def _entries():
-    return [
-        {"url": GOOD_URL, "hash": GOOD_HASH, "publication_date": ""},
-        {"url": BODYLESS_URL, "hash": BODYLESS_HASH, "publication_date": ""},
-    ]
-
-
 _PLATFORM = TheBlockPlatform()
 _LOG = logging.getLogger("test_clean_pass")
 
+
+# FUNCTIONS
 
 def test_good_article_clean_file_written(dirs):
     raw_dir, collection_dir = dirs
@@ -121,3 +97,28 @@ def test_missing_raw_file_raises(tmp_path):
     raw_dir.mkdir()
     with pytest.raises(FileNotFoundError):
         _run_clean_pass(_PLATFORM, _entries(), raw_dir, tmp_path / "collection", _LOG)
+
+
+@pytest.fixture()
+def dirs(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    collection_dir = tmp_path / "collection"
+    (raw_dir / f"{GOOD_HASH}.md").write_text(GOOD_HTML, encoding="utf-8")
+    (raw_dir / f"{BODYLESS_HASH}.md").write_text(BODYLESS_HTML, encoding="utf-8")
+    return raw_dir, collection_dir
+
+
+def _entries():
+    return [
+        {"url": GOOD_URL, "hash": GOOD_HASH, "publication_date": ""},
+        {"url": BODYLESS_URL, "hash": BODYLESS_HASH, "publication_date": ""},
+    ]
+
+
+def _hash(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]
+
+
+GOOD_HASH = _hash(GOOD_URL)
+BODYLESS_HASH = _hash(BODYLESS_URL)

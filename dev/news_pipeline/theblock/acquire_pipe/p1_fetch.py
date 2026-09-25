@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 from curl_cffi import requests as cffi
 
 THEBLOCK_INDEX = "https://www.theblock.co/sitemap_tbco_index.xml"

@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import json
@@ -71,6 +72,7 @@ MARKDOWN_FIELD = {
 
 
 # ORCHESTRATOR
+
 async def run_content_source_comparison(urls: list[str], label: str):
     browser_config = BrowserConfig(headless=True, verbose=False)
     domain_dir = OUTPUT_DIR / label
@@ -97,6 +99,26 @@ async def scrape_with_semaphore(sem, crawler, url, domain_dir, index, total):
     async with sem:
         print(f"  [{index}/{total}] {url}")
         await scrape_and_save(crawler, url, domain_dir, index)
+
+
+def load_urls_from_crawl_report(report_path: Path) -> list[str]:
+    with open(report_path) as f:
+        data = json.load(f)
+    urls = [u["url"] for u in data["urls"] if u["has_content"]]
+    return urls[:MAX_URLS_PER_DOMAIN]
+
+
+def find_crawl_report(label: str) -> Path | None:
+    matches = sorted(CRAWL_REPORTS_DIR.glob(f"{label}_*.json"))
+    return matches[-1] if matches else None
+
+
+def find_all_crawl_reports() -> list[tuple[str, Path]]:
+    reports = []
+    for path in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
+        label = path.stem.rsplit("_", 2)[0]
+        reports.append((label, path))
+    return reports
 
 
 async def scrape_and_save(crawler, url: str, domain_dir: Path, index: int):
@@ -126,26 +148,6 @@ def url_to_slug(url: str) -> str:
         query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
         parts = f"{parts}_{query_slug}" if parts else query_slug
     return parts[:80]
-
-
-def load_urls_from_crawl_report(report_path: Path) -> list[str]:
-    with open(report_path) as f:
-        data = json.load(f)
-    urls = [u["url"] for u in data["urls"] if u["has_content"]]
-    return urls[:MAX_URLS_PER_DOMAIN]
-
-
-def find_crawl_report(label: str) -> Path | None:
-    matches = sorted(CRAWL_REPORTS_DIR.glob(f"{label}_*.json"))
-    return matches[-1] if matches else None
-
-
-def find_all_crawl_reports() -> list[tuple[str, Path]]:
-    reports = []
-    for path in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
-        label = path.stem.rsplit("_", 2)[0]
-        reports.append((label, path))
-    return reports
 
 
 if __name__ == "__main__":

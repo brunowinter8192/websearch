@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -67,6 +66,15 @@ async def _execute_queries(queries: list[str]) -> list[dict]:
     return query_records
 
 
+def _write_outputs(query_records: list[dict]) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    report_path = _write_report(query_records, REPORT_DIR)
+    findings_path = _write_findings(query_records, report_path, FINDINGS_DIR)
+    print(f"\nReport:   {report_path}", file=sys.stderr)
+    print(f"Findings: {findings_path}", file=sys.stderr)
+
+
 async def _run_single_query(qi: int, query: str, total: int) -> dict:
     t_start = time.monotonic()
     _, timings = await search_web_workflow(query, "en", None, None, _with_timings=True)
@@ -111,15 +119,6 @@ async def _run_single_query(qi: int, query: str, total: int) -> dict:
         file=sys.stderr,
     )
     return record
-
-
-def _write_outputs(query_records: list[dict]) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = _write_report(query_records, REPORT_DIR)
-    findings_path = _write_findings(query_records, report_path, FINDINGS_DIR)
-    print(f"\nReport:   {report_path}", file=sys.stderr)
-    print(f"Findings: {findings_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

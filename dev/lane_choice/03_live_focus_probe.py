@@ -23,6 +23,28 @@ DEFAULT_URL = "https://example.com"
 
 # ORCHESTRATOR
 
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Live HUMAN focus-steal probe: launches one or more real scrapes via THIS worktree's "
+            "own cli.py (never the `websearch` PATH wrapper), after a single countdown, one fresh "
+            "browser per URL back-to-back, while polling a macOS frontmost-app instrument "
+            "continuously across the whole sequence. Watch your own focus/typing during the run, "
+            "then read the printed verdict."
+        )
+    )
+    parser.add_argument(
+        "--url", action="append", dest="urls",
+        help=f"URL to scrape — repeat for multiple URLs, each run back-to-back with a fresh browser "
+        f"after one shared countdown (default if omitted: {DEFAULT_URL})",
+    )
+    args = parser.parse_args()
+    urls = args.urls or [DEFAULT_URL]
+    live_focus_probe_workflow(urls)
+
+
+# FUNCTIONS
+
 def live_focus_probe_workflow(urls: list[str]) -> None:
     print_countdown(LANE)
     baseline_app = get_frontmost_app()
@@ -55,19 +77,6 @@ def live_focus_probe_workflow(urls: list[str]) -> None:
     print(f"\nFull sample series report: {report_path}")
 
 
-# FUNCTIONS
-
-def get_frontmost_app() -> str:
-    result = subprocess.run(
-        [
-            "osascript", "-e",
-            'tell application "System Events" to get name of first application process whose frontmost is true',
-        ],
-        capture_output=True, text=True,
-    )
-    return result.stdout.strip()
-
-
 def print_countdown(lane: str) -> None:
     print("=" * 64)
     print(f"LIVE FOCUS-STEAL PROBE — {lane} lane")
@@ -78,6 +87,13 @@ def print_countdown(lane: str) -> None:
         print(f"  launching in {remaining}s...", flush=True)
         time.sleep(1)
     print("  LAUNCHING NOW.\n", flush=True)
+
+
+def poll_frontmost_loop(t0: float, samples: list[tuple[float, str]], stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        app = get_frontmost_app()
+        samples.append((round(time.perf_counter() - t0, 2), app))
+        time.sleep(POLL_INTERVAL_S)
 
 
 def run_urls_in_sequence(urls: list[str], subcommand: str, t0: float) -> list[dict]:
@@ -105,65 +121,24 @@ def print_url_runs(url_runs: list[dict]) -> None:
         print(f"  [{i}] {run['url']}: t={run['start_s']}s-{run['end_s']}s, exit={run['returncode']}")
 
 
-def poll_frontmost_loop(t0: float, samples: list[tuple[float, str]], stop_event: threading.Event) -> None:
-    while not stop_event.is_set():
-        app = get_frontmost_app()
-        samples.append((round(time.perf_counter() - t0, 2), app))
-        time.sleep(POLL_INTERVAL_S)
-
-
-def sample_gaps(samples: list[tuple[float, object]]) -> list[float]:
-    return [samples[i + 1][0] - samples[i][0] for i in range(len(samples) - 1)]
-
-
-def instrument_resolution_stats(samples: list[tuple[float, object]]) -> dict:
-    n = len(samples)
-    if n < 2:
-        return {"sample_count": n, "mean_interval_s": None, "max_gap_s": None, "effective_rate_hz": None}
-    gaps = sample_gaps(samples)
-    span = samples[-1][0] - samples[0][0]
-    return {
-        "sample_count": n,
-        "mean_interval_s": round(span / (n - 1), 3),
-        "max_gap_s": round(max(gaps), 3),
-        "effective_rate_hz": round((n - 1) / span, 2) if span > 0 else None,
-    }
-
-
-def longest_continuous_run(samples: list[tuple[float, object]], is_deviation) -> float:
-    longest = 0.0
-    run_start = None
-    for t, v in samples:
-        if is_deviation(v):
-            if run_start is None:
-                run_start = t
-        else:
-            if run_start is not None:
-                longest = max(longest, t - run_start)
-                run_start = None
-    if run_start is not None:
-        gaps = sample_gaps(samples)
-        mean_gap = sum(gaps) / len(gaps) if gaps else 0.0
-        longest = max(longest, samples[-1][0] - run_start + mean_gap)
-    return round(longest, 2)
-
-
-def compute_verdict(baseline_app: str, frontmost_samples: list[tuple[float, str]]) -> dict:
-    fm_deviations = [(t, app) for t, app in frontmost_samples if app != baseline_app]
-    fm_stats = instrument_resolution_stats(frontmost_samples)
-    return {
-        "fm_total": len(frontmost_samples),
-        "fm_dev_count": len(fm_deviations),
-        "fm_longest_s": longest_continuous_run(frontmost_samples, lambda app: app != baseline_app),
-        "fm_dev_offsets": [t for t, _ in fm_deviations],
-        "fm_mean_interval_s": fm_stats["mean_interval_s"],
-        "fm_max_gap_s": fm_stats["max_gap_s"],
-        "fm_effective_rate_hz": fm_stats["effective_rate_hz"],
-    }
-
-
-def _samples_in_window(samples: list[tuple[float, object]], start_s: float, end_s: float) -> list[tuple[float, object]]:
-    return [(t, v) for t, v in samples if start_s <= t <= end_s]
+def print_verdict(verdict: dict) -> None:
+    print("\n" + "=" * 64)
+    print("VERDICT")
+    print("=" * 64)
+    print(
+        f"Frontmost app: {verdict['fm_total']} samples "
+        f"(mean interval {verdict['fm_mean_interval_s']}s, max gap {verdict['fm_max_gap_s']}s, "
+        f"~{verdict['fm_effective_rate_hz']} samples/s), {verdict['fm_dev_count']} deviations, "
+        f"longest continuous deviation {verdict['fm_longest_s']}s"
+    )
+    if verdict["fm_dev_offsets"]:
+        print(f"  offsets (s since launch): {verdict['fm_dev_offsets']}")
+    print(
+        f"\nNote: actual sampling cadence is set by each osascript round-trip, not by the nominal "
+        f"POLL_INTERVAL_S={POLL_INTERVAL_S}s sleep alone (see mean interval/max gap above) — a "
+        "0-deviation line only covers the span actually sampled, not necessarily every moment of "
+        "the run."
+    )
 
 
 def compute_per_url_verdicts(
@@ -187,26 +162,6 @@ def print_per_url_verdicts(per_url_verdicts: list[tuple[dict, dict]]) -> None:
         )
 
 
-def print_verdict(verdict: dict) -> None:
-    print("\n" + "=" * 64)
-    print("VERDICT")
-    print("=" * 64)
-    print(
-        f"Frontmost app: {verdict['fm_total']} samples "
-        f"(mean interval {verdict['fm_mean_interval_s']}s, max gap {verdict['fm_max_gap_s']}s, "
-        f"~{verdict['fm_effective_rate_hz']} samples/s), {verdict['fm_dev_count']} deviations, "
-        f"longest continuous deviation {verdict['fm_longest_s']}s"
-    )
-    if verdict["fm_dev_offsets"]:
-        print(f"  offsets (s since launch): {verdict['fm_dev_offsets']}")
-    print(
-        f"\nNote: actual sampling cadence is set by each osascript round-trip, not by the nominal "
-        f"POLL_INTERVAL_S={POLL_INTERVAL_S}s sleep alone (see mean interval/max gap above) — a "
-        "0-deviation line only covers the span actually sampled, not necessarily every moment of "
-        "the run."
-    )
-
-
 def write_report(
     lane: str, url_runs: list[dict], baseline_app: str,
     frontmost_samples: list[tuple[float, str]], verdict: dict, per_url_verdicts: list[tuple[dict, dict]],
@@ -223,6 +178,35 @@ def write_report(
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report_path
+
+
+def get_frontmost_app() -> str:
+    result = subprocess.run(
+        [
+            "osascript", "-e",
+            'tell application "System Events" to get name of first application process whose frontmost is true',
+        ],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+def compute_verdict(baseline_app: str, frontmost_samples: list[tuple[float, str]]) -> dict:
+    fm_deviations = [(t, app) for t, app in frontmost_samples if app != baseline_app]
+    fm_stats = instrument_resolution_stats(frontmost_samples)
+    return {
+        "fm_total": len(frontmost_samples),
+        "fm_dev_count": len(fm_deviations),
+        "fm_longest_s": longest_continuous_run(frontmost_samples, lambda app: app != baseline_app),
+        "fm_dev_offsets": [t for t, _ in fm_deviations],
+        "fm_mean_interval_s": fm_stats["mean_interval_s"],
+        "fm_max_gap_s": fm_stats["max_gap_s"],
+        "fm_effective_rate_hz": fm_stats["effective_rate_hz"],
+    }
+
+
+def _samples_in_window(samples: list[tuple[float, object]], start_s: float, end_s: float) -> list[tuple[float, object]]:
+    return [(t, v) for t, v in samples if start_s <= t <= end_s]
 
 
 def _format_report_header(ts: str, lane: str, url_runs: list[dict], baseline_app: str) -> list:
@@ -288,24 +272,40 @@ def _format_sample_series(frontmost_samples: list[tuple[float, str]]) -> list:
     return lines
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Live HUMAN focus-steal probe: launches one or more real scrapes via THIS worktree's "
-            "own cli.py (never the `websearch` PATH wrapper), after a single countdown, one fresh "
-            "browser per URL back-to-back, while polling a macOS frontmost-app instrument "
-            "continuously across the whole sequence. Watch your own focus/typing during the run, "
-            "then read the printed verdict."
-        )
-    )
-    parser.add_argument(
-        "--url", action="append", dest="urls",
-        help=f"URL to scrape — repeat for multiple URLs, each run back-to-back with a fresh browser "
-        f"after one shared countdown (default if omitted: {DEFAULT_URL})",
-    )
-    args = parser.parse_args()
-    urls = args.urls or [DEFAULT_URL]
-    live_focus_probe_workflow(urls)
+def instrument_resolution_stats(samples: list[tuple[float, object]]) -> dict:
+    n = len(samples)
+    if n < 2:
+        return {"sample_count": n, "mean_interval_s": None, "max_gap_s": None, "effective_rate_hz": None}
+    gaps = sample_gaps(samples)
+    span = samples[-1][0] - samples[0][0]
+    return {
+        "sample_count": n,
+        "mean_interval_s": round(span / (n - 1), 3),
+        "max_gap_s": round(max(gaps), 3),
+        "effective_rate_hz": round((n - 1) / span, 2) if span > 0 else None,
+    }
+
+
+def longest_continuous_run(samples: list[tuple[float, object]], is_deviation) -> float:
+    longest = 0.0
+    run_start = None
+    for t, v in samples:
+        if is_deviation(v):
+            if run_start is None:
+                run_start = t
+        else:
+            if run_start is not None:
+                longest = max(longest, t - run_start)
+                run_start = None
+    if run_start is not None:
+        gaps = sample_gaps(samples)
+        mean_gap = sum(gaps) / len(gaps) if gaps else 0.0
+        longest = max(longest, samples[-1][0] - run_start + mean_gap)
+    return round(longest, 2)
+
+
+def sample_gaps(samples: list[tuple[float, object]]) -> list[float]:
+    return [samples[i + 1][0] - samples[i][0] for i in range(len(samples) - 1)]
 
 
 if __name__ == "__main__":

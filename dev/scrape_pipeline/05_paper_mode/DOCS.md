@@ -11,7 +11,7 @@ PDF URLs (arguments or parsed from a search smoke report) -> streamed download w
 
 ## Modules
 
-### download.py (151 LOC)
+### download.py (152 LOC)
 
 **Purpose:** Downloads PDF URLs with a content-type check and resolves filenames from headers or the URL.
 **Reads:** URL arguments or a search smoke report via `--input`.

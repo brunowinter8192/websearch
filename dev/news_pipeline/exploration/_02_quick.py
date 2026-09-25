@@ -23,17 +23,7 @@ from _02_report import write_report
 MAX_CLICKS = 5
 
 
-# ORCHESTRATOR
-
-def _read_post_data_sync(request) -> str | None:
-    raw_b64 = request._impl_obj._initializer.get("postData")
-    if not raw_b64:
-        return None
-    raw_bytes = _base64.b64decode(raw_b64)
-    if raw_bytes[:2] == b'\x1f\x8b':
-        return _gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
-    return raw_bytes.decode("utf-8", errors="replace")
-
+# FUNCTIONS
 
 async def probe_workflow():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -80,7 +70,30 @@ async def probe_workflow():
     print(f"HAR:    {har_path}")
 
 
-# FUNCTIONS
+def record_network_entry(response, network_log: list) -> None:
+    url = response.url
+    method = response.request.method
+    status = response.status
+    if any(url.endswith(ext) for ext in (".js", ".css", ".png", ".woff", ".woff2", ".svg", ".ico", ".gif", ".webp")):
+        return
+    headers = response.request.headers
+    next_action = headers.get("next-action", "")
+    has_rsc = "_rsc" in url
+    is_candidate = method == "POST" or has_rsc or next_action or "coindesk.com" in url
+    if not is_candidate:
+        return
+    post_data = _read_post_data_sync(response.request) if method == "POST" else None
+    network_log.append({
+        "url": url,
+        "method": method,
+        "status": status,
+        "next_action": next_action,
+        "has_rsc": has_rsc,
+        "post_data": post_data,
+        "click_n": None,
+    })
+
+
 async def setup_and_capture_initial(page) -> set:
     print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
     await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
@@ -105,28 +118,33 @@ async def run_click_loop(page, all_urls: set, oldest_date: str, network_log: lis
     return oldest_date
 
 
-def record_network_entry(response, network_log: list) -> None:
-    url = response.url
-    method = response.request.method
-    status = response.status
-    if any(url.endswith(ext) for ext in (".js", ".css", ".png", ".woff", ".woff2", ".svg", ".ico", ".gif", ".webp")):
-        return
-    headers = response.request.headers
-    next_action = headers.get("next-action", "")
-    has_rsc = "_rsc" in url
-    is_candidate = method == "POST" or has_rsc or next_action or "coindesk.com" in url
-    if not is_candidate:
-        return
-    post_data = _read_post_data_sync(response.request) if method == "POST" else None
-    network_log.append({
-        "url": url,
-        "method": method,
-        "status": status,
-        "next_action": next_action,
-        "has_rsc": has_rsc,
-        "post_data": post_data,
-        "click_n": None,
-    })
+async def get_final_button_state(page) -> str:
+    final_btn_info = await page.evaluate(_JS_BTN_STATE)
+    if not final_btn_info.get("found"):
+        final_btn_state = "GONE"
+    elif final_btn_info.get("disabled"):
+        final_btn_state = "DISABLED"
+    else:
+        final_btn_state = "active"
+    return final_btn_state
+
+
+def partition_network_log(network_log: list) -> dict:
+    click_nets: dict[int, list[dict]] = {}
+    for entry in network_log:
+        cn = entry["click_n"] if entry["click_n"] is not None else 0
+        click_nets.setdefault(cn, []).append(entry)
+    return click_nets
+
+
+def _read_post_data_sync(request) -> str | None:
+    raw_b64 = request._impl_obj._initializer.get("postData")
+    if not raw_b64:
+        return None
+    raw_bytes = _base64.b64decode(raw_b64)
+    if raw_bytes[:2] == b'\x1f\x8b':
+        return _gzip.decompress(raw_bytes).decode("utf-8", errors="replace")
+    return raw_bytes.decode("utf-8", errors="replace")
 
 
 async def run_click_batch(page, click_n: int, all_urls: set, oldest_date: str,
@@ -184,22 +202,3 @@ def build_batch_row(click_n: int, cumulative: int, new_this: int, oldest: str, b
         "oldest_date": oldest,
         "btn_state": btn_state,
     }
-
-
-async def get_final_button_state(page) -> str:
-    final_btn_info = await page.evaluate(_JS_BTN_STATE)
-    if not final_btn_info.get("found"):
-        final_btn_state = "GONE"
-    elif final_btn_info.get("disabled"):
-        final_btn_state = "DISABLED"
-    else:
-        final_btn_state = "active"
-    return final_btn_state
-
-
-def partition_network_log(network_log: list) -> dict:
-    click_nets: dict[int, list[dict]] = {}
-    for entry in network_log:
-        cn = entry["click_n"] if entry["click_n"] is not None else 0
-        click_nets.setdefault(cn, []).append(entry)
-    return click_nets

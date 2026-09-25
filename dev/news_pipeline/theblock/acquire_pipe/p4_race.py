@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import random
 import sys
 import threading
@@ -12,19 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from p1_fetch import fetch_url
 from p5_logger import AcquireLogger
 from p6_buffer import DEFAULT_CONCURRENCY
-
-
-@dataclass
-class RaceState:
-    candidates:  list[tuple[str, str]]
-    proxy_idx:   int
-    proxy_lock:  threading.Lock
-    url_list:    list[str]
-    url_idx:     int
-    done_set:    set[str]
-    done:        list[str]
-    lock:        threading.Lock
-    total:       int
 
 
 # ORCHESTRATOR
@@ -57,6 +43,19 @@ def run_race(
 
 
 # FUNCTIONS
+
+@dataclass
+class RaceState:
+    candidates:  list[tuple[str, str]]
+    proxy_idx:   int
+    proxy_lock:  threading.Lock
+    url_list:    list[str]
+    url_idx:     int
+    done_set:    set[str]
+    done:        list[str]
+    lock:        threading.Lock
+    total:       int
+
 
 def _worker(
     state:           RaceState,

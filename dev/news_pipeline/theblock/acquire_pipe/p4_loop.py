@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 import time
 from collections import deque
@@ -17,18 +16,6 @@ from p6_buffer import build_active_buffer, refill_buffer, BUFFER_SIZE, DEFAULT_C
 
 _sleep             = time.sleep
 REFRESH_INTERVAL_S = 3600
-
-
-@dataclass
-class LoopState:
-    queue:        deque
-    done:         list[str]
-    dead:         list[str]
-    wset:         set[tuple[str, str]]
-    consec_fail:  dict[tuple[str, str], int]
-    pool:         list[tuple[str, str]]
-    buf:          list[tuple[str, str]]
-    last_refresh: float
 
 
 # ORCHESTRATOR
@@ -56,6 +43,18 @@ def run_loop(
 
 
 # FUNCTIONS
+
+@dataclass
+class LoopState:
+    queue:        deque
+    done:         list[str]
+    dead:         list[str]
+    wset:         set[tuple[str, str]]
+    consec_fail:  dict[tuple[str, str], int]
+    pool:         list[tuple[str, str]]
+    buf:          list[tuple[str, str]]
+    last_refresh: float
+
 
 def _init_state(
     pool_provider: Callable[[], list[tuple[str, str]]],
@@ -118,6 +117,19 @@ def _reload_pool(
     return pool_22k, buf, time.monotonic()
 
 
+def _build_batch(
+    queue:       deque,
+    wset:        set[tuple[str, str]],
+    buf:         list[tuple[str, str]],
+    concurrency: int,
+) -> list[tuple[str, str, str]]:
+    batch, assigned_proxies = _assign_normal(queue, wset, buf, concurrency)
+
+    _add_tail_racers(batch, assigned_proxies, wset, buf, concurrency)
+
+    return batch
+
+
 def _sleep_until_eligible(
     cm: PersistentCooldownManager,
     last_refresh_mono: float,
@@ -172,6 +184,76 @@ def _run_batch(
     return buf
 
 
+def _assign_normal(
+    queue:       deque,
+    wset:        set[tuple[str, str]],
+    buf:         list[tuple[str, str]],
+    concurrency: int,
+) -> tuple[list[tuple[str, str, str]], set[tuple[str, str]]]:
+    batch:            list[tuple[str, str, str]] = []
+    assigned_proxies: set[tuple[str, str]]       = set()
+    url_iter = iter(queue)
+
+    for proto, hp in wset:
+        if len(batch) >= concurrency:
+            break
+        url = next(url_iter, None)
+        if url is None:
+            break
+        batch.append((proto, hp, url))
+        assigned_proxies.add((proto, hp))
+
+    for proto, hp in buf:
+        if len(batch) >= concurrency:
+            break
+        if (proto, hp) in assigned_proxies or (proto, hp) in wset:
+            continue
+        url = next(url_iter, None)
+        if url is None:
+            break
+        batch.append((proto, hp, url))
+        assigned_proxies.add((proto, hp))
+
+    return batch, assigned_proxies
+
+
+def _add_tail_racers(
+    batch:            list[tuple[str, str, str]],
+    assigned_proxies: set[tuple[str, str]],
+    wset:             set[tuple[str, str]],
+    buf:              list[tuple[str, str]],
+    concurrency:      int,
+) -> None:
+    if len(batch) < concurrency and batch:
+        pending_urls = [url for _, _, url in batch]
+        url_idx      = 0
+        for proto, hp in list(wset) + buf:
+            if len(batch) >= concurrency:
+                break
+            if (proto, hp) in assigned_proxies:
+                continue
+            batch.append((proto, hp, pending_urls[url_idx % len(pending_urls)]))
+            assigned_proxies.add((proto, hp))
+            url_idx += 1
+
+
+def _compute_sleep(
+    cm: PersistentCooldownManager,
+    last_refresh_mono: float,
+    refresh_interval_s: float,
+) -> float:
+    now_mono        = time.monotonic()
+    secs_to_refresh = max(0.0, (last_refresh_mono + refresh_interval_s) - now_mono)
+
+    earliest = cm.earliest_eligible_at()
+    if earliest is None:
+        return secs_to_refresh
+
+    now_utc          = datetime.now(timezone.utc)
+    secs_to_eligible = max(0.0, (earliest - now_utc).total_seconds())
+    return min(secs_to_refresh, secs_to_eligible)
+
+
 def _record_ok(
     url:             str,
     key:             tuple[str, str],
@@ -224,86 +306,3 @@ def _record_fail(
     else:
         _consec_fail[key] = fails
     return buf
-
-
-def _compute_sleep(
-    cm: PersistentCooldownManager,
-    last_refresh_mono: float,
-    refresh_interval_s: float,
-) -> float:
-    now_mono        = time.monotonic()
-    secs_to_refresh = max(0.0, (last_refresh_mono + refresh_interval_s) - now_mono)
-
-    earliest = cm.earliest_eligible_at()
-    if earliest is None:
-        return secs_to_refresh
-
-    now_utc          = datetime.now(timezone.utc)
-    secs_to_eligible = max(0.0, (earliest - now_utc).total_seconds())
-    return min(secs_to_refresh, secs_to_eligible)
-
-
-def _build_batch(
-    queue:       deque,
-    wset:        set[tuple[str, str]],
-    buf:         list[tuple[str, str]],
-    concurrency: int,
-) -> list[tuple[str, str, str]]:
-    batch, assigned_proxies = _assign_normal(queue, wset, buf, concurrency)
-
-    _add_tail_racers(batch, assigned_proxies, wset, buf, concurrency)
-
-    return batch
-
-
-def _assign_normal(
-    queue:       deque,
-    wset:        set[tuple[str, str]],
-    buf:         list[tuple[str, str]],
-    concurrency: int,
-) -> tuple[list[tuple[str, str, str]], set[tuple[str, str]]]:
-    batch:            list[tuple[str, str, str]] = []
-    assigned_proxies: set[tuple[str, str]]       = set()
-    url_iter = iter(queue)
-
-    for proto, hp in wset:
-        if len(batch) >= concurrency:
-            break
-        url = next(url_iter, None)
-        if url is None:
-            break
-        batch.append((proto, hp, url))
-        assigned_proxies.add((proto, hp))
-
-    for proto, hp in buf:
-        if len(batch) >= concurrency:
-            break
-        if (proto, hp) in assigned_proxies or (proto, hp) in wset:
-            continue
-        url = next(url_iter, None)
-        if url is None:
-            break
-        batch.append((proto, hp, url))
-        assigned_proxies.add((proto, hp))
-
-    return batch, assigned_proxies
-
-
-def _add_tail_racers(
-    batch:            list[tuple[str, str, str]],
-    assigned_proxies: set[tuple[str, str]],
-    wset:             set[tuple[str, str]],
-    buf:              list[tuple[str, str]],
-    concurrency:      int,
-) -> None:
-    if len(batch) < concurrency and batch:
-        pending_urls = [url for _, _, url in batch]
-        url_idx      = 0
-        for proto, hp in list(wset) + buf:
-            if len(batch) >= concurrency:
-                break
-            if (proto, hp) in assigned_proxies:
-                continue
-            batch.append((proto, hp, pending_urls[url_idx % len(pending_urls)]))
-            assigned_proxies.add((proto, hp))
-            url_idx += 1

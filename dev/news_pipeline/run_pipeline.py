@@ -21,6 +21,13 @@ PRECONDITION_TIMEOUT = 10
 
 
 # ORCHESTRATOR
+
+def main():
+    pipeline_workflow()
+
+
+# FUNCTIONS
+
 def pipeline_workflow():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log = setup_logging()
@@ -65,8 +72,6 @@ def pipeline_workflow():
     log.info("=== Pipeline complete ===")
     write_last_run_marker(log)
 
-
-# FUNCTIONS
 
 def setup_logging() -> logging.Logger:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -176,6 +181,12 @@ def run_stage_dedup(log: logging.Logger, discover_json: Path) -> tuple:
     return Path(m.group(1)), total, skipped, new
 
 
+def write_last_run_marker(log: logging.Logger):
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    LAST_RUN_FILE.write_text(ts + "\n", encoding="utf-8")
+    log.info(f"Last run marker: {ts}")
+
+
 def run_stage_scrape(log: logging.Logger, filtered_json: Path) -> tuple[int, int]:
     log.info(f"STAGE 02b: scrape ({filtered_json.name}) …")
     result = _run(
@@ -256,16 +267,6 @@ def _run(script_args: list[str], log: logging.Logger, stage_label: str) -> tuple
 def _parse_int(text: str, pattern: str) -> int:
     m = re.search(pattern, text)
     return int(m.group(1)) if m else 0
-
-
-def write_last_run_marker(log: logging.Logger):
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    LAST_RUN_FILE.write_text(ts + "\n", encoding="utf-8")
-    log.info(f"Last run marker: {ts}")
-
-
-def main():
-    pipeline_workflow()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -65,48 +64,6 @@ async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
     return query_records
 
 
-async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
-    n_before = len(_acq_events)
-    snap = _snapshot_limiters(qi)
-    _pre_snapshots.append(snap)
-
-    t_start = time.monotonic()
-    _, timings = await search_web_workflow(query, "en", None, None, _with_timings=True)
-    t_end = time.monotonic()
-
-    det = timings.get("engine_details", {})
-    google_status = det.get("google", {}).get("status", "—")
-    all_statuses = {k: v.get("status", "—") for k, v in det.items()}
-    all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
-    category = (
-        "empty" if google_status == "EMPTY"
-        else "zero_cascade" if all_rate_skip
-        else "normal"
-    )
-
-    new_events = _acq_events[n_before:]
-    eng_detail = _build_engine_detail(new_events, all_statuses, snap)
-    disc = _query_discriminator(eng_detail)
-
-    record = {
-        "qi": qi, "query": query, "t_start": t_start, "t_end": t_end,
-        "duration_s": t_end - t_start, "google_status": google_status,
-        "all_statuses": all_statuses, "category": category,
-        "total_ms": timings.get("total_ms", 0),
-        "eng_detail": eng_detail, "disc": disc, "snap": snap,
-    }
-
-    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
-    print(
-        f"[{qi:2}/{total}] {query[:48]!r:50} "
-        f"cat={category:<12} disc={disc:<24} ev={len(new_events)} {flag}",
-        file=sys.stderr,
-    )
-    if smoke:
-        _dump_smoke(new_events, eng_detail, snap, BACKOFF_IMMUNE)
-    return record
-
-
 def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, int, bool]:
     zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
     min_expected = max(3, len(query_records) // 4) if not smoke else 0
@@ -148,6 +105,48 @@ def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> 
     fp = _write_findings(query_records, rp, cascade_ok, zero_n, FINDINGS_DIR, BACKOFF_IMMUNE)
     print(f"\nReport:   {rp}", file=sys.stderr)
     print(f"Findings: {fp}", file=sys.stderr)
+
+
+async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
+    n_before = len(_acq_events)
+    snap = _snapshot_limiters(qi)
+    _pre_snapshots.append(snap)
+
+    t_start = time.monotonic()
+    _, timings = await search_web_workflow(query, "en", None, None, _with_timings=True)
+    t_end = time.monotonic()
+
+    det = timings.get("engine_details", {})
+    google_status = det.get("google", {}).get("status", "—")
+    all_statuses = {k: v.get("status", "—") for k, v in det.items()}
+    all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
+    category = (
+        "empty" if google_status == "EMPTY"
+        else "zero_cascade" if all_rate_skip
+        else "normal"
+    )
+
+    new_events = _acq_events[n_before:]
+    eng_detail = _build_engine_detail(new_events, all_statuses, snap)
+    disc = _query_discriminator(eng_detail)
+
+    record = {
+        "qi": qi, "query": query, "t_start": t_start, "t_end": t_end,
+        "duration_s": t_end - t_start, "google_status": google_status,
+        "all_statuses": all_statuses, "category": category,
+        "total_ms": timings.get("total_ms", 0),
+        "eng_detail": eng_detail, "disc": disc, "snap": snap,
+    }
+
+    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
+    print(
+        f"[{qi:2}/{total}] {query[:48]!r:50} "
+        f"cat={category:<12} disc={disc:<24} ev={len(new_events)} {flag}",
+        file=sys.stderr,
+    )
+    if smoke:
+        _dump_smoke(new_events, eng_detail, snap, BACKOFF_IMMUNE)
+    return record
 
 
 if __name__ == "__main__":

@@ -14,7 +14,6 @@ from urllib.parse import urlparse
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-
 REGWALL_FAIL_THRESHOLD = 0.20
 
 DOWNLOAD_DELAY = 1.0
@@ -43,6 +42,31 @@ _RUN_CFG = CrawlerRunConfig(
 
 # ORCHESTRATOR
 
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "CoinDesk raw scrape — fresh AsyncWebCrawler per URL, concurrent via asyncio.gather, "
+            "prod Scrapy gate (~1 req/s per domain, deterministic), loud regwall guard."
+        )
+    )
+    parser.add_argument(
+        "--input", default=None,
+        help="Path to discover_*.json (default: newest in 01_json/)"
+    )
+    args = parser.parse_args()
+    input_path = Path(args.input) if args.input else pick_latest_input()
+    asyncio.run(scrape_workflow(input_path))
+
+
+# FUNCTIONS
+
+def pick_latest_input() -> Path:
+    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
+    if not candidates:
+        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
+    return candidates[-1]
+
+
 async def scrape_workflow(input_path: Path) -> None:
     entries = load_entries(input_path)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -63,34 +87,8 @@ async def scrape_workflow(input_path: Path) -> None:
     print_summary(manifest, time.perf_counter() - t_start)
 
 
-# FUNCTIONS
-
 def load_entries(input_path: Path) -> list[dict]:
     return json.loads(input_path.read_text(encoding="utf-8"))
-
-
-def _is_regwall(markdown: str) -> bool:
-    return any(sig in markdown for sig in REGWALL_SIGNALS)
-
-
-def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
-    if domain not in domain_states:
-        domain_states[domain] = {
-            "lastseen": 0.0,
-            "lock": asyncio.Lock(),
-            "sem": asyncio.Semaphore(concurrency_per_domain),
-        }
-    return domain_states[domain]
-
-
-async def _gate_domain(state: dict, download_delay: float) -> None:
-    async with state["lock"]:
-        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
-        now = time.time()
-        gap = now - state["lastseen"]
-        if gap < jitter:
-            await asyncio.sleep(jitter - gap)
-        state["lastseen"] = time.time()
 
 
 async def _fetch_one(
@@ -158,23 +156,6 @@ def _collect_manifest(entries: list[dict], raw_results: tuple) -> list[dict]:
     return manifest
 
 
-def write_article(entry: dict, url_hash: str, content: str) -> Path:
-    scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    frontmatter = (
-        "---\n"
-        f"url: {entry['url']}\n"
-        f"lastmod: {entry['lastmod']}\n"
-        f"publication_date: {entry['publication_date']}\n"
-        f"title: {entry['title']}\n"
-        f"section: {entry['section']}\n"
-        f"scraped_at: {scraped_at}\n"
-        "---\n\n"
-    )
-    file_path = OUTPUT_DIR / f"{url_hash}.md"
-    file_path.write_text(frontmatter + content, encoding="utf-8")
-    return file_path
-
-
 def _check_regwall_guard(manifest: list[dict]) -> None:
     regwalled = [e for e in manifest if e["status"] == "regwall"]
     if not regwalled:
@@ -218,27 +199,45 @@ def print_summary(manifest: list[dict], total_s: float) -> None:
         print(f"  slowest : {slowest['url']} ({slowest.get('elapsed_s', '?')}s)")
 
 
-def pick_latest_input() -> Path:
-    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
-        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
-    return candidates[-1]
+def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
+    if domain not in domain_states:
+        domain_states[domain] = {
+            "lastseen": 0.0,
+            "lock": asyncio.Lock(),
+            "sem": asyncio.Semaphore(concurrency_per_domain),
+        }
+    return domain_states[domain]
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "CoinDesk raw scrape — fresh AsyncWebCrawler per URL, concurrent via asyncio.gather, "
-            "prod Scrapy gate (~1 req/s per domain, deterministic), loud regwall guard."
-        )
+async def _gate_domain(state: dict, download_delay: float) -> None:
+    async with state["lock"]:
+        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
+        now = time.time()
+        gap = now - state["lastseen"]
+        if gap < jitter:
+            await asyncio.sleep(jitter - gap)
+        state["lastseen"] = time.time()
+
+
+def _is_regwall(markdown: str) -> bool:
+    return any(sig in markdown for sig in REGWALL_SIGNALS)
+
+
+def write_article(entry: dict, url_hash: str, content: str) -> Path:
+    scraped_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    frontmatter = (
+        "---\n"
+        f"url: {entry['url']}\n"
+        f"lastmod: {entry['lastmod']}\n"
+        f"publication_date: {entry['publication_date']}\n"
+        f"title: {entry['title']}\n"
+        f"section: {entry['section']}\n"
+        f"scraped_at: {scraped_at}\n"
+        "---\n\n"
     )
-    parser.add_argument(
-        "--input", default=None,
-        help="Path to discover_*.json (default: newest in 01_json/)"
-    )
-    args = parser.parse_args()
-    input_path = Path(args.input) if args.input else pick_latest_input()
-    asyncio.run(scrape_workflow(input_path))
+    file_path = OUTPUT_DIR / f"{url_hash}.md"
+    file_path.write_text(frontmatter + content, encoding="utf-8")
+    return file_path
 
 
 if __name__ == "__main__":

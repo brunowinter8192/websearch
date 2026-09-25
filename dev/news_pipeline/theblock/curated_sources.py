@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import re
 import httpx
 
@@ -80,12 +78,39 @@ HOOKZOF_SOURCES: list[tuple[str, str]] = [
 
 _IP_PORT_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}:\d+")
 
-# ORCHESTRATOR
+
+# FUNCTIONS
 
 def load_curated_proxies() -> list[tuple[str, str]]:
     monosans = load_monosans_proxies()
     proxifly = _fetch_proxifly()
     return _merge_dedup(monosans + proxifly)
+
+
+def load_jetkai_proxies() -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    for proto, url in JETKAI_SOURCES:
+        entries.extend(_fetch_bare_txt(proto, url))
+    return _merge_dedup(entries)
+
+
+def load_backfill_pool() -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    entries.extend(load_monosans_proxies())
+    for loader in [
+        load_roosterkid_proxies,  load_databay_proxies,   load_thespeedx_proxies,
+        load_themiralay_proxies,  load_r00tee_proxies,    load_iplocate_proxies,
+        load_sunny9577_proxies,   load_aliilapro_proxies, load_dpangestuw_proxies,
+        load_zaeem20_proxies,     load_zloi_proxies,      load_hookzof_proxies,
+    ]:
+        entries.extend(loader())
+    return _merge_dedup(entries)
+
+
+def _fetch_proxifly() -> list[tuple[str, str]]:
+    resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
+    resp.raise_for_status()
+    return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
 
 
 def load_thespeedx_proxies() -> list[tuple[str, str]]:
@@ -98,13 +123,6 @@ def load_thespeedx_proxies() -> list[tuple[str, str]]:
 def load_databay_proxies() -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = []
     for proto, url in DATABAY_SOURCES:
-        entries.extend(_fetch_bare_txt(proto, url))
-    return _merge_dedup(entries)
-
-
-def load_jetkai_proxies() -> list[tuple[str, str]]:
-    entries: list[tuple[str, str]] = []
-    for proto, url in JETKAI_SOURCES:
         entries.extend(_fetch_bare_txt(proto, url))
     return _merge_dedup(entries)
 
@@ -179,24 +197,15 @@ def load_hookzof_proxies() -> list[tuple[str, str]]:
     return _merge_dedup(entries)
 
 
-def load_backfill_pool() -> list[tuple[str, str]]:
-    entries: list[tuple[str, str]] = []
-    entries.extend(load_monosans_proxies())
-    for loader in [
-        load_roosterkid_proxies,  load_databay_proxies,   load_thespeedx_proxies,
-        load_themiralay_proxies,  load_r00tee_proxies,    load_iplocate_proxies,
-        load_sunny9577_proxies,   load_aliilapro_proxies, load_dpangestuw_proxies,
-        load_zaeem20_proxies,     load_zloi_proxies,      load_hookzof_proxies,
-    ]:
-        entries.extend(loader())
-    return _merge_dedup(entries)
-
-# FUNCTIONS
-
-def _fetch_proxifly() -> list[tuple[str, str]]:
-    resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
-    resp.raise_for_status()
-    return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
+def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    seen:   set[str]              = set()
+    result: list[tuple[str, str]] = []
+    for proto, host_port in entries:
+        key = proxy_key(proto, host_port)
+        if key not in seen:
+            seen.add(key)
+            result.append((proto, host_port))
+    return result
 
 
 def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
@@ -219,14 +228,3 @@ def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
         if m:
             entries.append((proto, m.group()))
     return entries
-
-
-def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    seen:   set[str]              = set()
-    result: list[tuple[str, str]] = []
-    for proto, host_port in entries:
-        key = proxy_key(proto, host_port)
-        if key not in seen:
-            seen.add(key)
-            result.append((proto, host_port))
-    return result

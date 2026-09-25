@@ -70,6 +70,7 @@ async def cursor_probe_workflow(
 
 
 # FUNCTIONS
+
 def replay_first_call(timeline_entry: dict, mode: str) -> tuple:
     api_url = timeline_entry["request"]["url"]
     raw_hdrs = {h["name"]: h["value"] for h in timeline_entry["request"]["headers"]}
@@ -118,6 +119,43 @@ async def teardown_chrome_session(tab, chrome, port: int, session_dir: str, mode
     kill_chrome_on_port(port)
     shutil.rmtree(session_dir, ignore_errors=True)
     print(f"[{mode}] Cleanup done.", file=sys.stderr)
+
+
+def storytype_walk(first_url: str, headers: dict, first_body: bytes, n: int, delay: float) -> dict:
+    all_articles: list = []
+    call_log: list = []
+    body = first_body
+    target_article = None
+
+    for call_num in range(n + 1):
+        articles = parse_articles(body)
+        if not articles:
+            call_log.append({"call": call_num, "error": "no articles parsed from body"})
+            break
+
+        found = record_walk_batch(articles, call_num, call_log)
+        if found:
+            target_article = found
+        all_articles.extend(articles)
+
+        if call_num >= n:
+            break
+
+        body = advance_walk_cursor(articles, headers, delay, call_num, call_log)
+        if body is None:
+            break
+
+    type_dist = dict(Counter(
+        a.get("storyType") or "NULL" for a in all_articles
+    ).most_common())
+
+    return {
+        "call_log": call_log,
+        "all_articles": all_articles,
+        "type_distribution": type_dist,
+        "total_articles": len(all_articles),
+        "target_article": target_article,
+    }
 
 
 def record_walk_batch(articles: list, call_num: int, call_log: list) -> dict | None:
@@ -175,43 +213,6 @@ def advance_walk_cursor(articles: list, headers: dict, delay: float, call_num: i
         return None
 
     return resp.content
-
-
-def storytype_walk(first_url: str, headers: dict, first_body: bytes, n: int, delay: float) -> dict:
-    all_articles: list = []
-    call_log: list = []
-    body = first_body
-    target_article = None
-
-    for call_num in range(n + 1):
-        articles = parse_articles(body)
-        if not articles:
-            call_log.append({"call": call_num, "error": "no articles parsed from body"})
-            break
-
-        found = record_walk_batch(articles, call_num, call_log)
-        if found:
-            target_article = found
-        all_articles.extend(articles)
-
-        if call_num >= n:
-            break
-
-        body = advance_walk_cursor(articles, headers, delay, call_num, call_log)
-        if body is None:
-            break
-
-    type_dist = dict(Counter(
-        a.get("storyType") or "NULL" for a in all_articles
-    ).most_common())
-
-    return {
-        "call_log": call_log,
-        "all_articles": all_articles,
-        "type_distribution": type_dist,
-        "total_articles": len(all_articles),
-        "target_article": target_article,
-    }
 
 
 if __name__ == "__main__":

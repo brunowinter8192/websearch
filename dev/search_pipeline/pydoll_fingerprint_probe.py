@@ -76,16 +76,14 @@ CHECK_PERMISSIONS_JS = """
 })()
 """
 
-# FUNCTIONS
-
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
 
 # ORCHESTRATOR
+
+def main():
+    asyncio.run(run_probe())
+
+
+# FUNCTIONS
 
 async def run_probe():
     print(f"[probe] Starting Chrome via browser.py with existing options...")
@@ -111,7 +109,6 @@ async def run_probe():
     finally:
         await close_browser()
 
-# FUNCTIONS
 
 async def _read_probe_data(tab) -> tuple[list, dict, str]:
     print("[probe] Extracting sannysoft result table...")
@@ -185,8 +182,12 @@ def _print_json_summary(passed: list, failed: list, unknown: list, table_results
     print("JSON_SUMMARY_END")
 
 
-def main():
-    asyncio.run(run_probe())
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
+
 
 if __name__ == "__main__":
     main()

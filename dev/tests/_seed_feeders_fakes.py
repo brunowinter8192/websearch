@@ -1,12 +1,8 @@
+# INFRASTRUCTURE
 import json
 
 
-class _FakeResponse:
-    def __init__(self, status_code: int, content: bytes = b"", text: str = None):
-        self.status_code = status_code
-        self.content = content
-        self.text = text if text is not None else content.decode("utf-8", errors="ignore")
-
+# FUNCTIONS
 
 class _FakeAsyncClient:
 
@@ -49,3 +45,10 @@ class _RaisingAsyncClient:
 
     async def get(self, url, **kwargs):
         raise self._exc
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, content: bytes = b"", text: str = None):
+        self.status_code = status_code
+        self.content = content
+        self.text = text if text is not None else content.decode("utf-8", errors="ignore")

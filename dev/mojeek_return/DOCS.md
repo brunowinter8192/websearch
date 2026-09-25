@@ -67,7 +67,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
 **Calls out:** none.
 
-### verify_mojeek_pydoll_core.py (338 LOC)
+### verify_mojeek_pydoll_core.py (337 LOC)
 
 **Purpose:** Verification of the probe checks against a real headless Chrome, one check per fixture server and profile; run by explicit path.
 **Reads:** `fixtures/*.html`.

@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 import logging
 import os
@@ -8,9 +9,7 @@ import pytest
 import src.search.browser_lock as browser_lock
 
 
-def _old_started_at(seconds):
-    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
+# FUNCTIONS
 
 def test_stale_takeover_logs_pid_and_age_before_breaking(tmp_path, caplog):
     lock_path = tmp_path / "session.lock"
@@ -44,3 +43,7 @@ def test_sidecar_is_written_atomically_without_leftover_tmp(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["session.json", "session.lock"]
     assert json.loads(lock_path.with_suffix(".json").read_text())["pid"] == os.getpid()
     handle.release()
+
+
+def _old_started_at(seconds):
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")

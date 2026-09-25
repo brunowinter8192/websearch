@@ -8,13 +8,6 @@ CHROMIUM_REVISION_TAG = "chromium-1228"
 
 # FUNCTIONS
 
-def find_app_bundle(executable_path: str) -> Path | None:
-    for parent in Path(executable_path).parents:
-        if parent.suffix == ".app":
-            return parent
-    return None
-
-
 def resolve_and_verify_bundle(executable_path: str | None) -> Path:
     if not executable_path:
         raise RuntimeError("Run B captured no browser process — cannot resolve bundle for the plist step")
@@ -47,3 +40,10 @@ def read_codesign_status(bundle_path: Path) -> dict:
     verify = subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle_path)], capture_output=True, text=True)
     flags_line = next((l for l in dv.stderr.splitlines() if l.startswith("CodeDirectory") or l.startswith("Signature")), "")
     return {"verify_returncode": verify.returncode, "verify_stderr": verify.stderr.strip(), "signature_line": flags_line}
+
+
+def find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None

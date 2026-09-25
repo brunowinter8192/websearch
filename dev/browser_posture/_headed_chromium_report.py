@@ -15,19 +15,35 @@ CRAWL4AI_UNCONDITIONAL_ARGS = {
 
 # FUNCTIONS
 
-def pct(count: int, total: int) -> str:
-    if total == 0:
-        return "n/a"
-    return f"{round(100 * count / total)}%"
+def write_report(
+    run_a: dict, run_b: dict, run_c: dict | None, bundle_path: Path,
+    original_lsuielement: bool | None, plist_end_state: bool | None, plist_format_restored: bool,
+    codesign_before: dict, codesign_after: dict | None, orphans: list[str], report_dir: Path,
+) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = report_dir / f"04_headed_chromium_probe_{ts}.md"
+    crawl4ai_version = importlib.metadata.version("crawl4ai")
+    patchright_version = importlib.metadata.version("patchright")
 
+    lines = [
+        f"# Headed Chromium (patchright) Launch Probe — {ts}",
+        "",
+        "Dev-only probe (macOS). All three launches use `try_scrape`'s exact BrowserConfig/adapter/"
+        "strategy shape against a local throwaway page (never a third-party site). "
+        f"`crawl4ai=={crawl4ai_version}`, `patchright=={patchright_version}`.",
+        "",
+    ]
+    lines += _build_executable_section(run_a, run_b)
+    lines += _build_backgrounding_flags_section(run_a, run_b)
+    lines += _build_lsuielement_header(
+        bundle_path, original_lsuielement, plist_end_state, plist_format_restored,
+        codesign_before, codesign_after,
+    )
+    lines += _build_lsuielement_table(original_lsuielement, run_b, run_c)
+    lines += _build_teardown_section(orphans)
 
-def attribute_flag(flag: str, cmdline: list[str] | None) -> str:
-    present = bool(cmdline) and flag in cmdline
-    if not present:
-        return "absent"
-    if flag in CRAWL4AI_UNCONDITIONAL_ARGS:
-        return "present — crawl4ai arg list"
-    return "present — driver-injected (not in crawl4ai's _build_browser_args output)"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _build_executable_section(run_a: dict, run_b: dict) -> list[str]:
@@ -170,32 +186,16 @@ def _build_teardown_section(orphans: list[str]) -> list[str]:
     return lines
 
 
-def write_report(
-    run_a: dict, run_b: dict, run_c: dict | None, bundle_path: Path,
-    original_lsuielement: bool | None, plist_end_state: bool | None, plist_format_restored: bool,
-    codesign_before: dict, codesign_after: dict | None, orphans: list[str], report_dir: Path,
-) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = report_dir / f"04_headed_chromium_probe_{ts}.md"
-    crawl4ai_version = importlib.metadata.version("crawl4ai")
-    patchright_version = importlib.metadata.version("patchright")
+def attribute_flag(flag: str, cmdline: list[str] | None) -> str:
+    present = bool(cmdline) and flag in cmdline
+    if not present:
+        return "absent"
+    if flag in CRAWL4AI_UNCONDITIONAL_ARGS:
+        return "present — crawl4ai arg list"
+    return "present — driver-injected (not in crawl4ai's _build_browser_args output)"
 
-    lines = [
-        f"# Headed Chromium (patchright) Launch Probe — {ts}",
-        "",
-        "Dev-only probe (macOS). All three launches use `try_scrape`'s exact BrowserConfig/adapter/"
-        "strategy shape against a local throwaway page (never a third-party site). "
-        f"`crawl4ai=={crawl4ai_version}`, `patchright=={patchright_version}`.",
-        "",
-    ]
-    lines += _build_executable_section(run_a, run_b)
-    lines += _build_backgrounding_flags_section(run_a, run_b)
-    lines += _build_lsuielement_header(
-        bundle_path, original_lsuielement, plist_end_state, plist_format_restored,
-        codesign_before, codesign_after,
-    )
-    lines += _build_lsuielement_table(original_lsuielement, run_b, run_c)
-    lines += _build_teardown_section(orphans)
 
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def pct(count: int, total: int) -> str:
+    if total == 0:
+        return "n/a"
+    return f"{round(100 * count / total)}%"

@@ -12,20 +12,31 @@ ENGINE_WATCHDOG_BUDGET_MS = 6000.0
 
 # FUNCTIONS
 
-def _fmt_ms(value) -> str:
-    return "-" if value is None else f"{value:.0f}"
+def build_report_md(
+    phases: list, persistence: dict, live_requests: int, gap_s: float, budget_s: float,
+    prior_spend_note: str = "",
+) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    queries_per_phase = {p.name: [m.label for m in p.measurements] for p in phases}
+    lines = _build_header(ts, live_requests, gap_s, prior_spend_note)
+    lines += _build_phase_descriptions(phases)
+    lines += _build_summary_table(phases)
+    lines += _build_q1_section(phases)
+    lines += _build_q2_section(phases)
+    lines += _build_q3_section(phases, _build_profile_persistence_section(persistence) + _cookie_lines(phases))
+    lines += _build_widget_section(phases)
+    lines += _build_limits_section()
+    lines += _build_methodology_section(queries_per_phase, gap_s, budget_s)
+    return "\n".join(lines)
 
 
-def _phase_query_rows(phase) -> list[str]:
-    rows = []
-    for m in phase.measurements:
-        rows.append(
-            f"| {phase.name} | {m.label} | {m.challenge_served} | {m.verdict} | "
-            f"{m.result_link_count} | {_fmt_ms(m.nav_ms)} | {_fmt_ms(m.widget_seen_ms)} | "
-            f"{_fmt_ms(m.verify_fired_ms)} | {_fmt_ms(m.verified_ms)} | {_fmt_ms(m.results_ms)} | "
-            f"{_fmt_ms(m.total_ms)} | {_fmt_ms(m.pow_time_ms)} |"
-        )
-    return rows
+def write_report(report: str, report_dir: Path) -> Path:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"mojeek_pydoll_probe_{ts}.md"
+    report_path.write_text(report)
+    print(f"Report written to {report_path}")
+    return report_path
 
 
 def _build_header(ts: str, live_requests: int, gap_s: float, prior_spend_note: str) -> list[str]:
@@ -48,6 +59,19 @@ def _build_header(ts: str, live_requests: int, gap_s: float, prior_spend_note: s
     ]
 
 
+def _build_phase_descriptions(phases: list) -> list[str]:
+    lines = ["## Phases", ""]
+    for phase in phases:
+        lines += [
+            f"**{phase.name}** — {phase.description}",
+            f"Profile: `{phase.profile_dir}`",
+            f"Queries challenged: {sum(1 for m in phase.measurements if m.challenge_served)} "
+            f"of {len(phase.measurements)}",
+            "",
+        ]
+    return lines
+
+
 def _build_summary_table(phases: list) -> list[str]:
     lines = [
         "## Per-query result",
@@ -61,19 +85,6 @@ def _build_summary_table(phases: list) -> list[str]:
     for phase in phases:
         lines += _phase_query_rows(phase)
     lines.append("")
-    return lines
-
-
-def _build_phase_descriptions(phases: list) -> list[str]:
-    lines = ["## Phases", ""]
-    for phase in phases:
-        lines += [
-            f"**{phase.name}** — {phase.description}",
-            f"Profile: `{phase.profile_dir}`",
-            f"Queries challenged: {sum(1 for m in phase.measurements if m.challenge_served)} "
-            f"of {len(phase.measurements)}",
-            "",
-        ]
     return lines
 
 
@@ -108,66 +119,6 @@ def _build_q2_section(phases: list) -> list[str]:
     lines += _q2_split_lines(challenged)
     lines += _q2_tab_lines(all_measurements)
     return lines
-
-
-def _q2_intro_lines() -> list[str]:
-    return [
-        "## Q2 — what does a challenged query cost in wall-clock time?",
-        "",
-        "Clock starts at the instruction before `tab.go_to(...)` and stops at the first poll at "
-        "which the production selector `ul.results-standard > li > a.ob` matches. Poll interval "
-        "is 200ms, which is this measurement's granularity. `new_tab()` and `kill_tab()` are "
-        "measured separately below because production's per-engine watchdog covers them too.",
-        "",
-        "| Population | n | min | median | max | over 6.0s |",
-        "|---|---|---|---|---|---|",
-    ]
-
-
-def _q2_population_rows(challenged_totals: list, unchallenged_totals: list) -> list[str]:
-    lines = []
-    for label, totals in (("challenged", challenged_totals), ("unchallenged", unchallenged_totals)):
-        stats = summarize_durations(totals)
-        over = count_over_budget(totals, ENGINE_WATCHDOG_BUDGET_MS)
-        lines.append(
-            f"| {label} | {stats['n']} | {_fmt_ms(stats['min_ms'])} | {_fmt_ms(stats['median_ms'])} | "
-            f"{_fmt_ms(stats['max_ms'])} | {over} |"
-        )
-    return lines
-
-
-def _q2_split_lines(challenged: list) -> list[str]:
-    lines = ["", "### Splits inside the challenged span", ""]
-    for name, values in (
-        ("navigation", [m.nav_ms for m in challenged]),
-        ("widget in DOM", [m.widget_seen_ms for m in challenged]),
-        ("verify() dispatched", [m.verify_fired_ms for m in challenged]),
-        ("client-side verified", [m.verified_ms for m in challenged]),
-        ("results present", [m.results_ms for m in challenged]),
-        ("ALTCHA self-reported PoW", [m.pow_time_ms for m in challenged]),
-    ):
-        stats = summarize_durations(values)
-        lines.append(
-            f"- {name}: n={stats['n']}, min={_fmt_ms(stats['min_ms'])}ms, "
-            f"median={_fmt_ms(stats['median_ms'])}ms, max={_fmt_ms(stats['max_ms'])}ms"
-        )
-    return lines
-
-
-def _q2_tab_lines(all_measurements: list) -> list[str]:
-    tab_stats = summarize_durations([m.new_tab_ms for m in all_measurements])
-    kill_stats = summarize_durations([m.kill_tab_ms for m in all_measurements])
-    return [
-        "",
-        f"- `new_tab()` around the span: n={tab_stats['n']}, median={_fmt_ms(tab_stats['median_ms'])}ms, "
-        f"max={_fmt_ms(tab_stats['max_ms'])}ms",
-        f"- `kill_tab()` after the span: n={kill_stats['n']}, median={_fmt_ms(kill_stats['median_ms'])}ms, "
-        f"max={_fmt_ms(kill_stats['max_ms'])}ms",
-        "",
-        f"`ENGINE_WATCHDOG_TIMEOUT` in `src/search/search_web.py` is 6.0s and this milestone does "
-        "not change it. The 'over 6.0s' column counts individual queries, not an average.",
-        "",
-    ]
 
 
 def _build_q3_section(phases: list, cookie_notes: list[str]) -> list[str]:
@@ -313,28 +264,77 @@ def _build_methodology_section(queries_per_phase: dict, gap_s: float, budget_s: 
     ]
 
 
-def build_report_md(
-    phases: list, persistence: dict, live_requests: int, gap_s: float, budget_s: float,
-    prior_spend_note: str = "",
-) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    queries_per_phase = {p.name: [m.label for m in p.measurements] for p in phases}
-    lines = _build_header(ts, live_requests, gap_s, prior_spend_note)
-    lines += _build_phase_descriptions(phases)
-    lines += _build_summary_table(phases)
-    lines += _build_q1_section(phases)
-    lines += _build_q2_section(phases)
-    lines += _build_q3_section(phases, _build_profile_persistence_section(persistence) + _cookie_lines(phases))
-    lines += _build_widget_section(phases)
-    lines += _build_limits_section()
-    lines += _build_methodology_section(queries_per_phase, gap_s, budget_s)
-    return "\n".join(lines)
+def _phase_query_rows(phase) -> list[str]:
+    rows = []
+    for m in phase.measurements:
+        rows.append(
+            f"| {phase.name} | {m.label} | {m.challenge_served} | {m.verdict} | "
+            f"{m.result_link_count} | {_fmt_ms(m.nav_ms)} | {_fmt_ms(m.widget_seen_ms)} | "
+            f"{_fmt_ms(m.verify_fired_ms)} | {_fmt_ms(m.verified_ms)} | {_fmt_ms(m.results_ms)} | "
+            f"{_fmt_ms(m.total_ms)} | {_fmt_ms(m.pow_time_ms)} |"
+        )
+    return rows
 
 
-def write_report(report: str, report_dir: Path) -> Path:
-    report_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"mojeek_pydoll_probe_{ts}.md"
-    report_path.write_text(report)
-    print(f"Report written to {report_path}")
-    return report_path
+def _q2_intro_lines() -> list[str]:
+    return [
+        "## Q2 — what does a challenged query cost in wall-clock time?",
+        "",
+        "Clock starts at the instruction before `tab.go_to(...)` and stops at the first poll at "
+        "which the production selector `ul.results-standard > li > a.ob` matches. Poll interval "
+        "is 200ms, which is this measurement's granularity. `new_tab()` and `kill_tab()` are "
+        "measured separately below because production's per-engine watchdog covers them too.",
+        "",
+        "| Population | n | min | median | max | over 6.0s |",
+        "|---|---|---|---|---|---|",
+    ]
+
+
+def _q2_population_rows(challenged_totals: list, unchallenged_totals: list) -> list[str]:
+    lines = []
+    for label, totals in (("challenged", challenged_totals), ("unchallenged", unchallenged_totals)):
+        stats = summarize_durations(totals)
+        over = count_over_budget(totals, ENGINE_WATCHDOG_BUDGET_MS)
+        lines.append(
+            f"| {label} | {stats['n']} | {_fmt_ms(stats['min_ms'])} | {_fmt_ms(stats['median_ms'])} | "
+            f"{_fmt_ms(stats['max_ms'])} | {over} |"
+        )
+    return lines
+
+
+def _q2_split_lines(challenged: list) -> list[str]:
+    lines = ["", "### Splits inside the challenged span", ""]
+    for name, values in (
+        ("navigation", [m.nav_ms for m in challenged]),
+        ("widget in DOM", [m.widget_seen_ms for m in challenged]),
+        ("verify() dispatched", [m.verify_fired_ms for m in challenged]),
+        ("client-side verified", [m.verified_ms for m in challenged]),
+        ("results present", [m.results_ms for m in challenged]),
+        ("ALTCHA self-reported PoW", [m.pow_time_ms for m in challenged]),
+    ):
+        stats = summarize_durations(values)
+        lines.append(
+            f"- {name}: n={stats['n']}, min={_fmt_ms(stats['min_ms'])}ms, "
+            f"median={_fmt_ms(stats['median_ms'])}ms, max={_fmt_ms(stats['max_ms'])}ms"
+        )
+    return lines
+
+
+def _q2_tab_lines(all_measurements: list) -> list[str]:
+    tab_stats = summarize_durations([m.new_tab_ms for m in all_measurements])
+    kill_stats = summarize_durations([m.kill_tab_ms for m in all_measurements])
+    return [
+        "",
+        f"- `new_tab()` around the span: n={tab_stats['n']}, median={_fmt_ms(tab_stats['median_ms'])}ms, "
+        f"max={_fmt_ms(tab_stats['max_ms'])}ms",
+        f"- `kill_tab()` after the span: n={kill_stats['n']}, median={_fmt_ms(kill_stats['median_ms'])}ms, "
+        f"max={_fmt_ms(kill_stats['max_ms'])}ms",
+        "",
+        f"`ENGINE_WATCHDOG_TIMEOUT` in `src/search/search_web.py` is 6.0s and this milestone does "
+        "not change it. The 'over 6.0s' column counts individual queries, not an average.",
+        "",
+    ]
+
+
+def _fmt_ms(value) -> str:
+    return "-" if value is None else f"{value:.0f}"

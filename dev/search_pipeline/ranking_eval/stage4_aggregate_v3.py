@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -59,24 +58,6 @@ def run_aggregate_v3(pool_dir: Path, oracle_dir: Path, no_oracle: bool) -> None:
 
 
 # FUNCTIONS
-
-def _query_slug(query: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def _jaccard(a: list[str], b: list[str]) -> float:
-    sa, sb = set(a), set(b)
-    union  = sa | sb
-    return len(sa & sb) / len(union) if union else 0.0
-
-
-def _percentile(vals: list[float], p: int) -> float:
-    if not vals:
-        return 0.0
-    sv = sorted(vals)
-    idx = int(len(sv) * p / 100)
-    return sv[min(idx, len(sv) - 1)]
-
 
 def _load_and_score_pair(
     pool_dir: Path, oracle_dir: Path, mode: str, query: str, no_oracle: bool
@@ -192,6 +173,16 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
     return path
 
 
+def _query_slug(query: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
+
+
+def _jaccard(a: list[str], b: list[str]) -> float:
+    sa, sb = set(a), set(b)
+    union  = sa | sb
+    return len(sa & sb) / len(union) if union else 0.0
+
+
 def _summary_per_mode_jaccard(scored: list[dict]) -> list[str]:
     lines = ["## Per-Mode Mean Jaccard", ""]
     header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
@@ -283,6 +274,14 @@ def _summary_pareto(results: list[dict], overall: dict) -> list[str]:
         lines.append(f"| {METHOD_LABELS[k]} | {j:.3f} | {ms:.0f} | {status} |")
     lines.append("")
     return lines
+
+
+def _percentile(vals: list[float], p: int) -> float:
+    if not vals:
+        return 0.0
+    sv = sorted(vals)
+    idx = int(len(sv) * p / 100)
+    return sv[min(idx, len(sv) - 1)]
 
 
 if __name__ == "__main__":

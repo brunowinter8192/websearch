@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import subprocess
 import tempfile
 from pathlib import Path
@@ -5,6 +6,8 @@ from pathlib import Path
 import pytest
 from _pytest.outcomes import Failed
 
+
+# FUNCTIONS
 
 def test_osascript_call_is_trapped():
     with pytest.raises(Failed):

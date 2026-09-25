@@ -247,6 +247,11 @@ def count_categories(urls: list, prefix: str) -> dict:
     return cats
 
 
+def save_discovered(urls: list) -> None:
+    DISCOVERED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DISCOVERED_FILE.write_text("\n".join(sorted(urls)) + "\n", encoding="utf-8")
+
+
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
         return frozenset(ln.strip() for ln in f if ln.strip())
@@ -267,11 +272,6 @@ def compute_recall(found_urls: list, gold: frozenset) -> dict:
         "missing_urls": missing,
         "noise_urls": noise,
     }
-
-
-def save_discovered(urls: list) -> None:
-    DISCOVERED_FILE.parent.mkdir(parents=True, exist_ok=True)
-    DISCOVERED_FILE.write_text("\n".join(sorted(urls)) + "\n", encoding="utf-8")
 
 
 def build_report(log: list, recall: dict, gold: frozenset,

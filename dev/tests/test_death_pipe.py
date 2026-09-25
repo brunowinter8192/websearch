@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import os
 import subprocess
 import sys
@@ -9,49 +10,7 @@ import pytest
 import src.death_pipe as death_pipe
 
 
-def _spawn_dummy() -> subprocess.Popen:
-    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-
-
-@pytest.fixture
-def dummy_process():
-    dummy = _spawn_dummy()
-    yield dummy
-    if dummy.poll() is None:
-        dummy.kill()
-    dummy.wait(timeout=5)
-
-
-@pytest.fixture
-def watchdog_log_path(tmp_path, monkeypatch):
-    log_path = tmp_path / "cli.log"
-    monkeypatch.setenv("WEBSEARCH_DEATH_PIPE_LOG_PATH", str(log_path))
-    return log_path
-
-
-def _wait_until(predicate, timeout_s: float = 5.0) -> bool:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if predicate():
-            return True
-        time.sleep(0.05)
-    return False
-
-
-def _find_watchdog(target_pid: int) -> psutil.Process:
-    for proc in psutil.process_iter(["cmdline"]):
-        cmdline = proc.info["cmdline"] or []
-        if any(part.endswith("death_pipe.py") for part in cmdline) and str(target_pid) in cmdline:
-            return proc
-    raise AssertionError("watchdog process not found")
-
-
-def _has_exited(proc: psutil.Process) -> bool:
-    try:
-        return proc.status() == psutil.STATUS_ZOMBIE
-    except psutil.NoSuchProcess:
-        return True
-
+# FUNCTIONS
 
 def test_spawn_watchdog_returns_none_when_nothing_to_protect():
     assert death_pipe.spawn_watchdog([], cleanup_dir=None) is None
@@ -139,3 +98,47 @@ def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
     result = death_pipe._terminate_then_kill([404])
     assert waited == [[]]
     assert result == []
+
+
+@pytest.fixture
+def dummy_process():
+    dummy = _spawn_dummy()
+    yield dummy
+    if dummy.poll() is None:
+        dummy.kill()
+    dummy.wait(timeout=5)
+
+
+def _wait_until(predicate, timeout_s: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _find_watchdog(target_pid: int) -> psutil.Process:
+    for proc in psutil.process_iter(["cmdline"]):
+        cmdline = proc.info["cmdline"] or []
+        if any(part.endswith("death_pipe.py") for part in cmdline) and str(target_pid) in cmdline:
+            return proc
+    raise AssertionError("watchdog process not found")
+
+
+def _has_exited(proc: psutil.Process) -> bool:
+    try:
+        return proc.status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
+
+
+@pytest.fixture
+def watchdog_log_path(tmp_path, monkeypatch):
+    log_path = tmp_path / "cli.log"
+    monkeypatch.setenv("WEBSEARCH_DEATH_PIPE_LOG_PATH", str(log_path))
+    return log_path
+
+
+def _spawn_dummy() -> subprocess.Popen:
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])

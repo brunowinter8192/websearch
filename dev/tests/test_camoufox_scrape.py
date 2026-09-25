@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import logging
 
 import pytest
@@ -9,6 +10,8 @@ from dev.tests._camoufox_scrape_fakes import (
     _FakeAsyncWebCrawler, _UrlsplitAsyncWebCrawler, _FAKE_MARKDOWN_TEXT,
 )
 
+
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_try_scrape_camoufox_normal_fetch(monkeypatch):

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +12,7 @@ DEAD_BUCKETS = [
     "proxy_handshake_error", "resolve_error", "tls_error",
     "http_non200", "bad_body", "unknown",
 ]
+
 
 # FUNCTIONS
 

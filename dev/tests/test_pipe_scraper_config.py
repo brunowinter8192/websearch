@@ -1,8 +1,11 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.crawler import pipe_scraper_config
 from src.crawler import pipe_scraper_constants
 
+
+# FUNCTIONS
 
 def test_extract_pipe_config_stamp_reads_real_objects():
     browser_cfg = pipe_scraper_config.BrowserConfig(headless=True, verbose=False, enable_stealth=True)

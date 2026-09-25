@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -119,10 +118,59 @@ def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
 
 # FUNCTIONS
 
-def proxy_key(proto: str, host_port: str) -> str:
-    clean        = host_port.split("@")[-1]
-    host, port_s = clean.rsplit(":", 1)
-    return f"{proto}://{host}:{int(port_s)}"
+def _load_monosans() -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(MONOSANS_URL, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+        raw = resp.json()
+        entries = []
+        for entry in raw:
+            proto = entry["protocol"]
+            host  = entry["host"]
+            port  = entry["port"]
+            user  = entry.get("username")
+            pw    = entry.get("password")
+            hp    = f"{user}:{pw}@{host}:{port}" if (user and pw) else f"{host}:{port}"
+            entries.append((proto, hp))
+        return entries
+    return fetch_with_retry(_do)
+
+
+def _try_source(url: str, fn, entries: list, sources: list) -> None:
+    try:
+        result = fn()
+        entries.extend(result)
+        sources.append({"url": url, "ok": True, "count": len(result)})
+    except Exception:
+        sources.append({"url": url, "ok": False, "count": 0})
+
+
+def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, m.group()) for ln in resp.text.splitlines()
+                for m in (_IP_PORT_RE.search(ln),) if m]
+    return fetch_with_retry(_do)
+
+
+def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, ln.strip()) for ln in resp.text.splitlines() if ln.strip()]
+    return fetch_with_retry(_do)
+
+
+def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    seen:   set[str]               = set()
+    result: list[tuple[str, str]]  = []
+    for proto, hp in entries:
+        key = proxy_key(proto, hp)
+        if key not in seen:
+            seen.add(key)
+            result.append((proto, hp))
+    return result
 
 
 class PersistentCooldownManager:
@@ -160,56 +208,7 @@ def fetch_with_retry(fn):
     raise last_exc
 
 
-def _load_monosans() -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(MONOSANS_URL, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        raw = resp.json()
-        entries = []
-        for entry in raw:
-            proto = entry["protocol"]
-            host  = entry["host"]
-            port  = entry["port"]
-            user  = entry.get("username")
-            pw    = entry.get("password")
-            hp    = f"{user}:{pw}@{host}:{port}" if (user and pw) else f"{host}:{port}"
-            entries.append((proto, hp))
-        return entries
-    return fetch_with_retry(_do)
-
-
-def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, ln.strip()) for ln in resp.text.splitlines() if ln.strip()]
-    return fetch_with_retry(_do)
-
-
-def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, m.group()) for ln in resp.text.splitlines()
-                for m in (_IP_PORT_RE.search(ln),) if m]
-    return fetch_with_retry(_do)
-
-
-def _try_source(url: str, fn, entries: list, sources: list) -> None:
-    try:
-        result = fn()
-        entries.extend(result)
-        sources.append({"url": url, "ok": True, "count": len(result)})
-    except Exception:
-        sources.append({"url": url, "ok": False, "count": 0})
-
-
-def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    seen:   set[str]               = set()
-    result: list[tuple[str, str]]  = []
-    for proto, hp in entries:
-        key = proxy_key(proto, hp)
-        if key not in seen:
-            seen.add(key)
-            result.append((proto, hp))
-    return result
+def proxy_key(proto: str, host_port: str) -> str:
+    clean        = host_port.split("@")[-1]
+    host, port_s = clean.rsplit(":", 1)
+    return f"{proto}://{host}:{int(port_s)}"

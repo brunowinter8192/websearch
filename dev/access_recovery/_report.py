@@ -4,11 +4,24 @@ from pathlib import Path
 
 # FUNCTIONS
 
-def count_outcomes(records: list[dict]) -> dict:
-    counts = {"OK": 0, "EMPTY_PARSED": 0, "NO_CONTAINERS": 0, "BLOCKED": 0, "ERROR": 0}
-    for r in records:
-        counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
-    return counts
+def write_report(records: list[dict], run_ts: str, report_dir: Path,
+                  num_variants: list, nav_delay_s: float) -> Path:
+    path = report_dir / f"google_dom_probe_{run_ts}.md"
+    by_num = {n: [r for r in records if r["num"] == n] for n in num_variants}
+    counts = count_outcomes(records)
+
+    lines = []
+    lines += _build_header(run_ts, records, by_num, num_variants, nav_delay_s)
+    lines += _build_outcome_counts_section(counts)
+    lines += _build_num_variant_section(by_num, num_variants)
+    lines += _build_per_navigation_table(records)
+    lines += _build_ok_samples_section(records)
+    lines += _build_empty_parsed_section(records, run_ts)
+    lines += _build_blocked_section(records)
+    lines += _build_error_section(records)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _build_header(run_ts: str, records: list[dict], by_num: dict, num_variants: list, nav_delay_s: float) -> list[str]:
@@ -151,21 +164,8 @@ def _build_error_section(records: list[dict]) -> list[str]:
     return lines
 
 
-def write_report(records: list[dict], run_ts: str, report_dir: Path,
-                  num_variants: list, nav_delay_s: float) -> Path:
-    path = report_dir / f"google_dom_probe_{run_ts}.md"
-    by_num = {n: [r for r in records if r["num"] == n] for n in num_variants}
-    counts = count_outcomes(records)
-
-    lines = []
-    lines += _build_header(run_ts, records, by_num, num_variants, nav_delay_s)
-    lines += _build_outcome_counts_section(counts)
-    lines += _build_num_variant_section(by_num, num_variants)
-    lines += _build_per_navigation_table(records)
-    lines += _build_ok_samples_section(records)
-    lines += _build_empty_parsed_section(records, run_ts)
-    lines += _build_blocked_section(records)
-    lines += _build_error_section(records)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
+def count_outcomes(records: list[dict]) -> dict:
+    counts = {"OK": 0, "EMPTY_PARSED": 0, "NO_CONTAINERS": 0, "BLOCKED": 0, "ERROR": 0}
+    for r in records:
+        counts[r["outcome"]] = counts.get(r["outcome"], 0) + 1
+    return counts

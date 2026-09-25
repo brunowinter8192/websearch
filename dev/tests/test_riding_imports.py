@@ -1,5 +1,8 @@
+# INFRASTRUCTURE
 from pathlib import Path
 
+
+# FUNCTIONS
 
 def test_riding_package_imports_defaults_and_late_import():
     import src.news.engine.proxy_riding.rider as rider_mod

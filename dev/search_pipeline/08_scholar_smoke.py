@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -72,14 +71,6 @@ async def run_query(engine: ScholarEngine, query: str) -> dict:
     return record
 
 
-def _derive_status(count: int) -> str:
-    if count >= 3:
-        return "OK"
-    if count > 0:
-        return "SUSPECT"
-    return "EMPTY"
-
-
 def write_report(records: list[dict], report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"scholar_smoke_{ts}.md"
@@ -123,6 +114,14 @@ def write_report(records: list[dict], report_dir: Path) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _derive_status(count: int) -> str:
+    if count >= 3:
+        return "OK"
+    if count > 0:
+        return "SUSPECT"
+    return "EMPTY"
 
 
 if __name__ == "__main__":

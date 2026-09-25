@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import sys
 from pathlib import Path
@@ -46,25 +47,8 @@ JS_TEST_URLS = [
 ]
 
 
-def url_to_slug(url: str) -> str:
-    parsed = urlparse(url)
-    path = parsed.path.strip("/")
-    if not path and not parsed.query:
-        return parsed.netloc.replace(".", "_")
-    parts = path.replace("/", "_").replace(".", "_")
-    if parsed.query:
-        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
-        parts = f"{parts}_{query_slug}" if parts else query_slug
-    return parts[:80]
-
-
-def get_urls():
-    if len(sys.argv) > 1:
-        return sys.argv[1:]
-    return JS_TEST_URLS
-
-
 # ORCHESTRATOR
+
 async def main():
     urls = get_urls()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -100,6 +84,12 @@ async def main():
 
 # FUNCTIONS
 
+def get_urls():
+    if len(sys.argv) > 1:
+        return sys.argv[1:]
+    return JS_TEST_URLS
+
+
 async def scrape_url_configs(sem, crawler, url, results):
     async with sem:
         domain = url.split("//")[-1].split("/")[0].replace(".", "_")
@@ -115,6 +105,18 @@ async def scrape_url_configs(sem, crawler, url, results):
             out_path.write_text(raw_md, encoding="utf-8")
 
             results[(url, name)] = (len(raw_md), word_count)
+
+
+def url_to_slug(url: str) -> str:
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+    if not path and not parsed.query:
+        return parsed.netloc.replace(".", "_")
+    parts = path.replace("/", "_").replace(".", "_")
+    if parsed.query:
+        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
+        parts = f"{parts}_{query_slug}" if parts else query_slug
+    return parts[:80]
 
 
 if __name__ == "__main__":

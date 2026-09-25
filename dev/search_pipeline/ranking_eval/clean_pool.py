@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -96,22 +95,6 @@ def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
 
 
-def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
-    result = []
-    for entry in pool:
-        remaining = [e for e in entry.get("engines", []) if e not in drop_engines]
-        if not remaining:
-            continue
-        fe = dict(entry)
-        fe["engines"]      = remaining
-        fe["positions"]    = {e: p for e, p in entry.get("positions", {}).items()
-                              if e not in drop_engines}
-        fe["min_position"] = (min(fe["positions"].values())
-                              if fe["positions"] else entry.get("min_position", 999))
-        result.append(fe)
-    return result
-
-
 def _process_pair(v2_dir: Path, mode: str, query: str, slug: str, pair_key: str) -> dict:
     pool_file   = next(v2_dir.glob(f"{pair_key}*_pool.json"),   None)
     oracle_file = next(v2_dir.glob(f"{pair_key}*_oracle.json"), None)
@@ -205,6 +188,22 @@ def _write_summary(v2_dir: Path, rows: list[dict]) -> None:
 
     lines.append("")
     (v2_dir / "oracle_v3clean_summary.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
+    result = []
+    for entry in pool:
+        remaining = [e for e in entry.get("engines", []) if e not in drop_engines]
+        if not remaining:
+            continue
+        fe = dict(entry)
+        fe["engines"]      = remaining
+        fe["positions"]    = {e: p for e, p in entry.get("positions", {}).items()
+                              if e not in drop_engines}
+        fe["min_position"] = (min(fe["positions"].values())
+                              if fe["positions"] else entry.get("min_position", 999))
+        result.append(fe)
+    return result
 
 
 if __name__ == "__main__":

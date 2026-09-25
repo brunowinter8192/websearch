@@ -37,35 +37,6 @@ async def url_discovery_probe_workflow() -> None:
 
 # FUNCTIONS
 
-def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
-    return CrawlerRunConfig(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        deep_crawl_strategy=strategy,
-        stream=False,
-        verbose=False,
-    )
-
-
-def _result_rows(results) -> list:
-    rows = []
-    for r in results:
-        rows.append({
-            "url": r.url,
-            "success": bool(r.success),
-            "status_code": getattr(r, "status_code", None),
-            "depth": (r.metadata or {}).get("depth") if hasattr(r, "metadata") else None,
-        })
-    return rows
-
-
-def _capture_and_stop_callback(holder: dict):
-    async def callback(state: dict) -> None:
-        holder["state"] = state
-        holder["strategy"].cancel()
-    return callback
-
-
 async def run_experiment_1_existence_and_start_url(crawler: AsyncWebCrawler) -> dict:
     pending_urls = [TRAVEL_URL, MYSTERY_URL, PHILOSOPHY_URL]
     resume_state = {"pending": [{"url": u, "parent_url": None} for u in pending_urls]}
@@ -192,6 +163,35 @@ def write_report(exp1: dict, exp2: dict, exp3: dict, exp4: dict) -> Path:
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report_path
+
+
+def _run_config(strategy: BFSDeepCrawlStrategy) -> CrawlerRunConfig:
+    return CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        deep_crawl_strategy=strategy,
+        stream=False,
+        verbose=False,
+    )
+
+
+def _result_rows(results) -> list:
+    rows = []
+    for r in results:
+        rows.append({
+            "url": r.url,
+            "success": bool(r.success),
+            "status_code": getattr(r, "status_code", None),
+            "depth": (r.metadata or {}).get("depth") if hasattr(r, "metadata") else None,
+        })
+    return rows
+
+
+def _capture_and_stop_callback(holder: dict):
+    async def callback(state: dict) -> None:
+        holder["state"] = state
+        holder["strategy"].cancel()
+    return callback
 
 
 def _format_experiment_1_section(exp1: dict) -> list:

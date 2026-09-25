@@ -3,6 +3,26 @@ from pathlib import Path
 
 
 # FUNCTIONS
+
+def write_warmth_report(
+    path: Path,
+    ts: str,
+    target_url: str,
+    test_url: str,
+    baseline_status: int | None,
+    intervals: list,
+    ladder_results: list,
+    feedpage_result: dict | None,
+    subprocess_result: dict | None,
+) -> None:
+    lines = []
+    lines += _render_header(ts, test_url, baseline_status)
+    lines += _render_ladder_section(intervals, ladder_results)
+    lines += _render_feedpage_section(target_url, feedpage_result)
+    lines += _render_subprocess_section(subprocess_result)
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def _render_header(ts: str, test_url: str, baseline_status: int | None) -> list:
     lines = ["# CoinDesk IP Warmth Probe Report"]
     lines.append(f"\n**Run:** {ts}\n")
@@ -85,22 +105,3 @@ def _render_subprocess_section(subprocess_result: dict | None) -> list:
     else:
         lines.append(f"\nSubprocess result ambiguous: `{subprocess_result}`\n")
     return lines
-
-
-def write_warmth_report(
-    path: Path,
-    ts: str,
-    target_url: str,
-    test_url: str,
-    baseline_status: int | None,
-    intervals: list,
-    ladder_results: list,
-    feedpage_result: dict | None,
-    subprocess_result: dict | None,
-) -> None:
-    lines = []
-    lines += _render_header(ts, test_url, baseline_status)
-    lines += _render_ladder_section(intervals, ladder_results)
-    lines += _render_feedpage_section(target_url, feedpage_result)
-    lines += _render_subprocess_section(subprocess_result)
-    path.write_text("\n".join(lines), encoding="utf-8")

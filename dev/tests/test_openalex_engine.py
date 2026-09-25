@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.search.cache import format_engine_pool
@@ -7,60 +8,7 @@ from src.search.result import SearchResult
 import src.search.engines.openalex as openalex_mod
 
 
-class _FakeResponse:
-    def __init__(self, status_code: int, payload: dict | None = None):
-        self.status_code = status_code
-        self._payload = payload or {}
-
-    def json(self):
-        return self._payload
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise RuntimeError(f"HTTP {self.status_code}")
-
-
-class _FakeAsyncClient:
-
-    def __init__(self, response: _FakeResponse, capture: dict, *a, **kw):
-        self._response = response
-        self._capture = capture
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def get(self, url, params=None, **kwargs):
-        self._capture["url"] = url
-        self._capture["params"] = params
-        return self._response
-
-
-def _install_fake_client(monkeypatch, response: _FakeResponse) -> dict:
-    capture: dict = {}
-    monkeypatch.setattr(
-        openalex_mod.httpx, "AsyncClient",
-        lambda *a, **kw: _FakeAsyncClient(response, capture, *a, **kw),
-    )
-    return capture
-
-
-def _work(title="A Study", oa_url="https://openalex.org/W1", pdf_url="__unset__"):
-    work = {
-        "title": title,
-        "ids": {},
-        "doi": "https://doi.org/10.1/xyz",
-        "id": oa_url,
-        "abstract_inverted_index": None,
-        "cited_by_count": 0,
-        "publication_date": "2018-03-15",
-    }
-    if pdf_url != "__unset__":
-        work["best_oa_location"] = {"pdf_url": pdf_url} if pdf_url is not None else None
-    return work
-
+# FUNCTIONS
 
 def test_extract_pdf_url_present():
     work = _work(pdf_url="https://mdpi.com/paper.pdf")
@@ -176,20 +124,6 @@ async def test_search_base_method_returns_plain_list(monkeypatch):
     assert results[0].pdf_url == "https://x.com/p.pdf"
 
 
-class _RaisingAsyncClient:
-    def __init__(self, *a, **kw):
-        pass
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def get(self, url, params=None, **kwargs):
-        raise RuntimeError("simulated network failure")
-
-
 @pytest.mark.asyncio
 async def test_search_base_method_propagates_exception(monkeypatch):
     monkeypatch.setattr(openalex_mod.httpx, "AsyncClient", lambda *a, **kw: _RaisingAsyncClient())
@@ -231,3 +165,72 @@ def test_format_engine_pool_no_pdf_line_when_key_missing():
     pool = [{"position": 1, "title": "T", "url": "https://doi.org/x", "snippet": ""}]
     out = format_engine_pool(pool, "openalex", "q")
     assert "PDF:" not in out
+
+
+def _work(title="A Study", oa_url="https://openalex.org/W1", pdf_url="__unset__"):
+    work = {
+        "title": title,
+        "ids": {},
+        "doi": "https://doi.org/10.1/xyz",
+        "id": oa_url,
+        "abstract_inverted_index": None,
+        "cited_by_count": 0,
+        "publication_date": "2018-03-15",
+    }
+    if pdf_url != "__unset__":
+        work["best_oa_location"] = {"pdf_url": pdf_url} if pdf_url is not None else None
+    return work
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, payload: dict | None = None):
+        self.status_code = status_code
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+
+def _install_fake_client(monkeypatch, response: _FakeResponse) -> dict:
+    capture: dict = {}
+    monkeypatch.setattr(
+        openalex_mod.httpx, "AsyncClient",
+        lambda *a, **kw: _FakeAsyncClient(response, capture, *a, **kw),
+    )
+    return capture
+
+
+class _RaisingAsyncClient:
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def get(self, url, params=None, **kwargs):
+        raise RuntimeError("simulated network failure")
+
+
+class _FakeAsyncClient:
+
+    def __init__(self, response: _FakeResponse, capture: dict, *a, **kw):
+        self._response = response
+        self._capture = capture
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def get(self, url, params=None, **kwargs):
+        self._capture["url"] = url
+        self._capture["params"] = params
+        return self._response

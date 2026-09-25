@@ -111,6 +111,41 @@ async def warmth_probe_workflow() -> None:
 
 
 # FUNCTIONS
+
+def get_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def launch_background_chrome(port: int, session_dir: str) -> None:
+    subprocess.run(
+        [
+            "open", "-gna", "Google Chrome", "--args",
+            f"--remote-debugging-port={port}",
+            f"--user-data-dir={session_dir}",
+            f"--user-agent={REAL_UA}",
+            "--window-size=1920,1080",
+            "--disable-blink-features=AutomationControlled",
+            "--no-first-run",
+            "--no-default-browser-check",
+        ],
+        check=True,
+    )
+
+
+def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
+    url = f"http://localhost:{port}/json/version"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as r:
+                return json.loads(r.read())["webSocketDebuggerUrl"]
+        except Exception:
+            time.sleep(0.5)
+    raise TimeoutError(f"Chrome not ready on port {port}")
+
+
 async def run_capture_phase(tab) -> dict | None:
     print(f"Phase W: navigating to {TARGET_URL} …", file=sys.stderr)
     await tab.go_to(TARGET_URL, timeout=60)
@@ -155,65 +190,6 @@ async def teardown_chrome_session(tab, chrome, port: int, session_dir: str) -> N
     kill_chrome_on_port(port)
     shutil.rmtree(session_dir, ignore_errors=True)
     print("Phase W: Chrome closed — timing ladder starts now.", file=sys.stderr)
-
-
-def get_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def launch_background_chrome(port: int, session_dir: str) -> None:
-    subprocess.run(
-        [
-            "open", "-gna", "Google Chrome", "--args",
-            f"--remote-debugging-port={port}",
-            f"--user-data-dir={session_dir}",
-            f"--user-agent={REAL_UA}",
-            "--window-size=1920,1080",
-            "--disable-blink-features=AutomationControlled",
-            "--no-first-run",
-            "--no-default-browser-check",
-        ],
-        check=True,
-    )
-
-
-def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
-    url = f"http://localhost:{port}/json/version"
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(url, timeout=2) as r:
-                return json.loads(r.read())["webSocketDebuggerUrl"]
-        except Exception:
-            time.sleep(0.5)
-    raise TimeoutError(f"Chrome not ready on port {port}")
-
-
-def kill_chrome_on_port(port: int) -> None:
-    subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
-
-
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
-
-
-async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
-    async with tab.request.record() as capture:
-        for i in range(n_clicks):
-            raw = await tab.execute_script(_JS_CLICK_BTN)
-            clicked = bool(_extract_value(raw))
-            print(f"  click {i + 1}/{n_clicks}: {'OK' if clicked else 'miss'}", file=sys.stderr)
-            await asyncio.sleep(2.5)
-    for entry in capture.entries:
-        if TIMELINE_API_PATH in entry["request"]["url"]:
-            return entry
-    return None
-
-
-def filter_headers(raw: dict) -> dict:
-    return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
 
 
 def run_warmth_ladder(url: str, headers: dict, intervals: list) -> list:
@@ -280,6 +256,27 @@ def run_phase_c(test_url: str, test_headers: dict, ladder_results: list) -> tupl
     return feedpage_result, subprocess_result
 
 
+async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
+    async with tab.request.record() as capture:
+        for i in range(n_clicks):
+            raw = await tab.execute_script(_JS_CLICK_BTN)
+            clicked = bool(_extract_value(raw))
+            print(f"  click {i + 1}/{n_clicks}: {'OK' if clicked else 'miss'}", file=sys.stderr)
+            await asyncio.sleep(2.5)
+    for entry in capture.entries:
+        if TIMELINE_API_PATH in entry["request"]["url"]:
+            return entry
+    return None
+
+
+def filter_headers(raw: dict) -> dict:
+    return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
+
+
+def kill_chrome_on_port(port: int) -> None:
+    subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
+
+
 def fetch_feedpage(api_headers: dict) -> tuple:
     feed_headers = {
         k: v for k, v in api_headers.items()
@@ -326,6 +323,10 @@ def subprocess_cold_test(state_file: Path) -> dict:
     finally:
         if tmp_script and os.path.exists(tmp_script):
             os.unlink(tmp_script)
+
+
+def _extract_value(raw):
+    return raw["result"]["result"]["value"]
 
 
 if __name__ == "__main__":

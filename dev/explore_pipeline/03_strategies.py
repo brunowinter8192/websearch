@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import time
@@ -31,6 +32,8 @@ STRATEGIES = {
     },
 }
 
+
+# FUNCTIONS
 
 async def main(url: str, depth: int, max_pages: int):
     domain = urlparse(url).netloc

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -59,6 +58,38 @@ async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
     return query_records
 
 
+def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, bool]:
+    zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
+    min_expected = max(3, len(query_records) // 4) if not smoke else 0
+    cascade_ok = zero_n >= min_expected
+    print(
+        f"\nzero_cascade={zero_n}/{len(query_records)}  cascade_reproduced={cascade_ok}",
+        file=sys.stderr,
+    )
+    return zero_n, cascade_ok
+
+
+def _report_smoke_ok() -> None:
+    print("Smoke OK — re-run without --smoke for full 20-query run.", file=sys.stderr)
+
+
+def _report_cascade_warning() -> None:
+    print(
+        "WARNING: cascade did not reproduce — instrumentation may be interfering. "
+        "Data may be invalid.",
+        file=sys.stderr,
+    )
+
+
+def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    rp = _write_report(query_records, cascade_ok, zero_n, REPORT_DIR)
+    fp = _write_findings(query_records, rp, cascade_ok, zero_n, FINDINGS_DIR)
+    print(f"\nReport:   {rp}", file=sys.stderr)
+    print(f"Findings: {fp}", file=sys.stderr)
+
+
 async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
     n_before = len(_acq_events)
     t_start = time.monotonic()
@@ -96,38 +127,6 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
     if smoke:
         _dump_smoke(new_events, eng_summary)
     return record
-
-
-def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, bool]:
-    zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
-    min_expected = max(3, len(query_records) // 4) if not smoke else 0
-    cascade_ok = zero_n >= min_expected
-    print(
-        f"\nzero_cascade={zero_n}/{len(query_records)}  cascade_reproduced={cascade_ok}",
-        file=sys.stderr,
-    )
-    return zero_n, cascade_ok
-
-
-def _report_smoke_ok() -> None:
-    print("Smoke OK — re-run without --smoke for full 20-query run.", file=sys.stderr)
-
-
-def _report_cascade_warning() -> None:
-    print(
-        "WARNING: cascade did not reproduce — instrumentation may be interfering. "
-        "Data may be invalid.",
-        file=sys.stderr,
-    )
-
-
-def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    rp = _write_report(query_records, cascade_ok, zero_n, REPORT_DIR)
-    fp = _write_findings(query_records, rp, cascade_ok, zero_n, FINDINGS_DIR)
-    print(f"\nReport:   {rp}", file=sys.stderr)
-    print(f"Findings: {fp}", file=sys.stderr)
 
 
 if __name__ == "__main__":

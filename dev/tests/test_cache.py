@@ -1,16 +1,10 @@
+# INFRASTRUCTURE
 import src.search.cache as cache_mod
 from src.search.cache import cache_write, cache_read, format_engine_pool
 from src.search.result import SearchResult
 
 
-def _pool(engine_positions):
-    return [
-        SearchResult(
-            url="https://x.com/a", title="T", snippet="S", engine="duckduckgo", position=1,
-            engine_positions=engine_positions,
-        )
-    ]
-
+# FUNCTIONS
 
 def test_cache_write_read_round_trip_preserves_engine_positions(tmp_path, monkeypatch):
     monkeypatch.setattr(cache_mod, "CACHE_DIR", tmp_path)
@@ -45,3 +39,12 @@ def test_format_engine_pool_does_not_render_engine_positions():
     out = format_engine_pool(pool, "duckduckgo", "q")
     assert "brave" not in out
     assert "engine_positions" not in out
+
+
+def _pool(engine_positions):
+    return [
+        SearchResult(
+            url="https://x.com/a", title="T", snippet="S", engine="duckduckgo", position=1,
+            engine_positions=engine_positions,
+        )
+    ]
