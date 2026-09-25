@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+# INFRASTRUCTURE
 import re
 import sys
 from pathlib import Path
@@ -16,11 +16,76 @@ RE_PAGINATION = re.compile(r'^\d+ of \d+\[\]\([^\)]*\)\s*$')
 RE_NAV_LINK_LINE = re.compile(r'^(\[([^\]]+)\]\([^\)]+\))+\s*$')
 
 
-def is_footer_nav_line(line: str) -> bool:
-    stripped = line.strip()
-    if not stripped:
-        return False
-    return bool(RE_NAV_LINK_LINE.match(stripped))
+# ORCHESTRATOR
+
+def run_main() -> None:
+    test_arg = _compute_test_arg()
+    main(test_arg)
+
+
+# FUNCTIONS
+
+def _compute_test_arg():
+    test_arg = sys.argv[1] if len(sys.argv) > 1 else None
+    return test_arg
+
+
+def main(test_file: str = None):
+    if test_file:
+        p = Path(test_file)
+        before, after = process_file(p)
+        print(f"TEST: {p.name}")
+        print(f"  Before: {before} chars")
+        print(f"  After:  {after} chars")
+        print(f"  Reduction: {(before - after) / before * 100:.1f}%")
+        return
+
+    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
+    if not files:
+        print(f"No files found matching {INPUT_DIR}/{FILE_PATTERN}")
+        sys.exit(1)
+
+    total_before = 0
+    total_after = 0
+    processed = 0
+
+    for path in files:
+        before, after = process_file(path)
+        total_before += before
+        total_after += after
+        processed += 1
+        if processed % 100 == 0:
+            print(f"  Processed {processed}/{len(files)} files...")
+
+    reduction = (total_before - total_after) / total_before * 100 if total_before > 0 else 0
+    print(f"\nFILES PROCESSED: {processed}")
+    print(f"Total chars before: {total_before:,}")
+    print(f"Total chars after:  {total_after:,}")
+    print(f"Reduction: {reduction:.1f}%")
+
+
+def process_file(path: Path) -> tuple[int, int]:
+    original = path.read_text(encoding='utf-8')
+    cleaned = clean_content(original)
+    path.write_text(cleaned, encoding='utf-8')
+    return len(original), len(cleaned)
+
+
+def clean_content(text: str) -> str:
+    lines = text.split('\n')
+    result = []
+
+    source_line, content_start = _extract_source_and_content_start(lines)
+    if source_line is not None:
+        result.append(source_line)
+        result.append('')
+
+    content_lines = lines[content_start:]
+    content_lines = _strip_footer_nav(content_lines)
+    result.extend(_filter_content_lines(content_lines))
+
+    final = _collapse_and_trim(result)
+    return '\n'.join(final) + '\n'
 
 
 def _extract_source_and_content_start(lines: list[str]) -> tuple[str | None, int]:
@@ -55,24 +120,6 @@ def _strip_footer_nav(content_lines: list[str]) -> list[str]:
         end = temp_end
 
     return content_lines[:end]
-
-
-def _try_merge_split_heading(content_lines: list[str], i: int) -> tuple[str, int] | None:
-    line = content_lines[i]
-    split_match = RE_SPLIT_HEADING.match(line)
-    if not split_match:
-        return None
-
-    hashes = split_match.group(1)
-    next_i = i + 1
-    while next_i < len(content_lines) and content_lines[next_i].strip() == '':
-        next_i += 1
-    if next_i < len(content_lines):
-        next_line = content_lines[next_i].strip()
-        if next_line and not next_line.startswith('#') and not RE_EMPTY_ANCHOR.match(next_line):
-            return f"{hashes} {next_line}", next_i + 1
-
-    return "", i + 1
 
 
 def _filter_content_lines(content_lines: list[str]) -> list[str]:
@@ -119,64 +166,30 @@ def _collapse_and_trim(lines: list[str]) -> list[str]:
     return final
 
 
-def clean_content(text: str) -> str:
-    lines = text.split('\n')
-    result = []
-
-    source_line, content_start = _extract_source_and_content_start(lines)
-    if source_line is not None:
-        result.append(source_line)
-        result.append('')
-
-    content_lines = lines[content_start:]
-    content_lines = _strip_footer_nav(content_lines)
-    result.extend(_filter_content_lines(content_lines))
-
-    final = _collapse_and_trim(result)
-    return '\n'.join(final) + '\n'
+def is_footer_nav_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    return bool(RE_NAV_LINK_LINE.match(stripped))
 
 
-def process_file(path: Path) -> tuple[int, int]:
-    original = path.read_text(encoding='utf-8')
-    cleaned = clean_content(original)
-    path.write_text(cleaned, encoding='utf-8')
-    return len(original), len(cleaned)
+def _try_merge_split_heading(content_lines: list[str], i: int) -> tuple[str, int] | None:
+    line = content_lines[i]
+    split_match = RE_SPLIT_HEADING.match(line)
+    if not split_match:
+        return None
+
+    hashes = split_match.group(1)
+    next_i = i + 1
+    while next_i < len(content_lines) and content_lines[next_i].strip() == '':
+        next_i += 1
+    if next_i < len(content_lines):
+        next_line = content_lines[next_i].strip()
+        if next_line and not next_line.startswith('#') and not RE_EMPTY_ANCHOR.match(next_line):
+            return f"{hashes} {next_line}", next_i + 1
+
+    return "", i + 1
 
 
-def main(test_file: str = None):
-    if test_file:
-        p = Path(test_file)
-        before, after = process_file(p)
-        print(f"TEST: {p.name}")
-        print(f"  Before: {before} chars")
-        print(f"  After:  {after} chars")
-        print(f"  Reduction: {(before - after) / before * 100:.1f}%")
-        return
-
-    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
-    if not files:
-        print(f"No files found matching {INPUT_DIR}/{FILE_PATTERN}")
-        sys.exit(1)
-
-    total_before = 0
-    total_after = 0
-    processed = 0
-
-    for path in files:
-        before, after = process_file(path)
-        total_before += before
-        total_after += after
-        processed += 1
-        if processed % 100 == 0:
-            print(f"  Processed {processed}/{len(files)} files...")
-
-    reduction = (total_before - total_after) / total_before * 100 if total_before > 0 else 0
-    print(f"\nFILES PROCESSED: {processed}")
-    print(f"Total chars before: {total_before:,}")
-    print(f"Total chars after:  {total_after:,}")
-    print(f"Reduction: {reduction:.1f}%")
-
-
-if __name__ == '__main__':
-    test_arg = sys.argv[1] if len(sys.argv) > 1 else None
-    main(test_arg)
+if __name__ == "__main__":
+    run_main()

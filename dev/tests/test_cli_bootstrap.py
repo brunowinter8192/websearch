@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import importlib
 import logging
 import sys
@@ -5,13 +6,7 @@ import sys
 import pytest
 
 
-@pytest.fixture
-def cli_module(monkeypatch):
-    monkeypatch.delitem(sys.modules, "cli", raising=False)
-    module = importlib.import_module("cli")
-    yield module
-    sys.modules.pop("cli", None)
-
+# FUNCTIONS
 
 def test_importing_cli_has_no_side_effects(monkeypatch, tmp_path):
     root_handlers = list(logging.getLogger().handlers)
@@ -63,3 +58,11 @@ def test_main_configures_logging_before_parsing_arguments(cli_module, monkeypatc
     monkeypatch.setattr(cli_module, "build_parser", lambda: _Parser())
     cli_module.main()
     assert order == ["logging", "hook", "parse"]
+
+
+@pytest.fixture
+def cli_module(monkeypatch):
+    monkeypatch.delitem(sys.modules, "cli", raising=False)
+    module = importlib.import_module("cli")
+    yield module
+    sys.modules.pop("cli", None)

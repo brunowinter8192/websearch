@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,7 +9,7 @@ from proxy_status_log import proxy_key
 COOLDOWN_S = 3600
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class PersistentCooldownManager:
 
@@ -39,4 +38,3 @@ class PersistentCooldownManager:
         if not self._burned_utc:
             return None
         return min(self._burned_utc.values()) + self._cooldown_td
-

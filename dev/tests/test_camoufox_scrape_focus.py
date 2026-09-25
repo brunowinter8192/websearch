@@ -1,7 +1,10 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.scraper import camoufox_scrape
 
+
+# FUNCTIONS
 
 def test_find_app_bundle_locates_dotapp_ancestor(tmp_path):
     app = tmp_path / "Camoufox.app"
@@ -15,18 +18,6 @@ def test_find_app_bundle_returns_none_when_not_in_a_bundle(tmp_path):
     bare = tmp_path / "some_binary"
     bare.write_text("")
     assert camoufox_scrape._find_app_bundle(str(bare)) is None
-
-
-def _make_fake_app_bundle(tmp_path, existing_plist: dict | None = None):
-    import plistlib
-    app = tmp_path / "Camoufox.app"
-    (app / "Contents" / "MacOS").mkdir(parents=True)
-    executable = app / "Contents" / "MacOS" / "camoufox"
-    executable.write_text("")
-    plist_path = app / "Contents" / "Info.plist"
-    with open(plist_path, "wb") as f:
-        plistlib.dump(existing_plist or {"CFBundleName": "Camoufox"}, f)
-    return str(executable), plist_path
 
 
 def test_ensure_no_focus_steal_sets_lsuielement(tmp_path, monkeypatch):
@@ -85,3 +76,15 @@ def test_ensure_no_focus_steal_unreadable_plist_raises(tmp_path, monkeypatch):
     executable.write_text("")
     with pytest.raises(FileNotFoundError):
         camoufox_scrape._ensure_no_focus_steal(str(executable))
+
+
+def _make_fake_app_bundle(tmp_path, existing_plist: dict | None = None):
+    import plistlib
+    app = tmp_path / "Camoufox.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    executable = app / "Contents" / "MacOS" / "camoufox"
+    executable.write_text("")
+    plist_path = app / "Contents" / "Info.plist"
+    with open(plist_path, "wb") as f:
+        plistlib.dump(existing_plist or {"CFBundleName": "Camoufox"}, f)
+    return str(executable), plist_path

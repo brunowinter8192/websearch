@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import statistics
 import sys
 from datetime import datetime, timezone
@@ -13,6 +12,34 @@ _BACKFILL_TOTAL = 61_000
 
 
 # FUNCTIONS
+
+def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
+    jobs  = state.job_records
+    rides = state.ride_records
+
+    counts     = _compute_counts(jobs, state)
+    throughput = _compute_throughput(jobs, counts["n_ok"], t_job_start)
+    sizes      = _compute_size_distributions(jobs)
+    ok_completion_s     = _compute_completion_times(jobs, t_job_start)
+    ride_stats          = _compute_ride_stats(rides, counts["n_ok"])
+    regwall_rate_by_pos = _compute_regwall_by_position(jobs)
+    retry               = _compute_retry_outcomes(jobs)
+
+    wasted_ratio = counts["n_regwall_fetches"] / max(counts["n_total_fetches"], 1)
+
+    return {
+        **counts,
+        **throughput,
+        **sizes,
+        "ok_completion_s": ok_completion_s,
+        **ride_stats,
+        "regwall_rate_by_pos": regwall_rate_by_pos,
+        **retry,
+        "wasted_ratio": wasted_ratio,
+        "termination": state.termination,
+    }
+
+
 def _compute_counts(jobs: list, state: RiderState) -> dict:
     n_total_fetches   = len(jobs)
     n_ok              = sum(1 for j in jobs if j.status == "ok")
@@ -109,33 +136,6 @@ def _compute_retry_outcomes(jobs: list) -> dict:
     return {
         "retried_ok": retried_ok, "retried_failed": retried_failed,
         "n_urls_with_regwall": len(url_rw),
-    }
-
-
-def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
-    jobs  = state.job_records
-    rides = state.ride_records
-
-    counts     = _compute_counts(jobs, state)
-    throughput = _compute_throughput(jobs, counts["n_ok"], t_job_start)
-    sizes      = _compute_size_distributions(jobs)
-    ok_completion_s     = _compute_completion_times(jobs, t_job_start)
-    ride_stats          = _compute_ride_stats(rides, counts["n_ok"])
-    regwall_rate_by_pos = _compute_regwall_by_position(jobs)
-    retry               = _compute_retry_outcomes(jobs)
-
-    wasted_ratio = counts["n_regwall_fetches"] / max(counts["n_total_fetches"], 1)
-
-    return {
-        **counts,
-        **throughput,
-        **sizes,
-        "ok_completion_s": ok_completion_s,
-        **ride_stats,
-        "regwall_rate_by_pos": regwall_rate_by_pos,
-        **retry,
-        "wasted_ratio": wasted_ratio,
-        "termination": state.termination,
     }
 
 

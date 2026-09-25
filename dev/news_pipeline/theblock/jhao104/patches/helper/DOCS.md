@@ -1,7 +1,7 @@
 # dev/news_pipeline/theblock/jhao104/patches/helper/
 
 ## Role
-Overlay file for the vendored jhao104 proxy_pool clone: replaces upstream `helper/validator.py` so the validator chain checks Cloudflare pass on theblock.co. Touch it only to change that validator; it is not runnable on its own.
+Overlay file for the vendored jhao104 proxy_pool clone: replaces upstream `helper/validator.py` so the validator chain checks Cloudflare pass on theblock.co. Touch it only to change that validator; it is not runnable on its own. Exempt from the module layout (markers, ordering): it stays a diffable upstream copy.
 
 ## Public Interface
 No `__init__.py` — not a package. `jhao104/setup.sh` copies the file verbatim over the upstream clone; it imports upstream modules that exist only there.

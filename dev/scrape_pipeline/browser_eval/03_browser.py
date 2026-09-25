@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import sys
 from pathlib import Path
@@ -46,17 +47,23 @@ JS_TEST_URLS = [
 ]
 
 
-def url_to_slug(url: str) -> str:
-    parsed = urlparse(url)
-    path = parsed.path.strip("/")
-    if not path and not parsed.query:
-        return parsed.netloc.replace(".", "_")
-    parts = path.replace("/", "_").replace(".", "_")
-    if parsed.query:
-        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
-        parts = f"{parts}_{query_slug}" if parts else query_slug
-    return parts[:80]
+# ORCHESTRATOR
 
+async def main():
+    urls = get_urls()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    browser_config = BrowserConfig(headless=True, verbose=False)
+    semaphore = asyncio.Semaphore(PARALLEL_URLS)
+
+    results = await _open_crawler(browser_config, semaphore, urls)
+
+    _run_browser_checks(urls, results)
+
+    _print_output_saved_to()
+
+
+# FUNCTIONS
 
 def get_urls():
     if len(sys.argv) > 1:
@@ -64,22 +71,18 @@ def get_urls():
     return JS_TEST_URLS
 
 
-# ORCHESTRATOR
-async def main():
-    urls = get_urls()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    browser_config = BrowserConfig(headless=True, verbose=False)
-    semaphore = asyncio.Semaphore(PARALLEL_URLS)
+async def _open_crawler(browser_config, semaphore, urls):
     results = {}
-
     async with AsyncWebCrawler(config=browser_config) as crawler:
         tasks = [
             scrape_url_configs(semaphore, crawler, url, results)
             for url in urls
         ]
         await asyncio.gather(*tasks)
+    return results
 
+
+def _run_browser_checks(urls, results):
     for url in urls:
         domain = url.split("//")[-1].split("/")[0].replace(".", "_")
         slug = url_to_slug(url)
@@ -95,10 +98,10 @@ async def main():
             chars, words = results.get((url, config_name), (0, 0))
             print(f"{config_name:<16} {chars:>10,} {words:>10,}")
 
+
+def _print_output_saved_to():
     print(f"\nOutput saved to: {OUTPUT_DIR}")
 
-
-# FUNCTIONS
 
 async def scrape_url_configs(sem, crawler, url, results):
     async with sem:
@@ -115,6 +118,18 @@ async def scrape_url_configs(sem, crawler, url, results):
             out_path.write_text(raw_md, encoding="utf-8")
 
             results[(url, name)] = (len(raw_md), word_count)
+
+
+def url_to_slug(url: str) -> str:
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+    if not path and not parsed.query:
+        return parsed.netloc.replace(".", "_")
+    parts = path.replace("/", "_").replace(".", "_")
+    if parsed.query:
+        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
+        parts = f"{parts}_{query_slug}" if parts else query_slug
+    return parts[:80]
 
 
 if __name__ == "__main__":

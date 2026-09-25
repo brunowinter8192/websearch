@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -11,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _branch_probe_instrument import _acq_events, _pre_snapshots
+from _branch_probe_instrument import _acq_events, _pre_snapshots, install_instrument
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -35,6 +34,27 @@ BACKOFF_IMMUNE = frozenset({"crossref", "openalex", "stack_exchange", "open_libr
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Sleep-branch discriminator probe — Phase 3 (backoff vs tokencap)."
+    )
+    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
+                        help="Limit to first N queries (default: all from queries.txt)")
+    parser.add_argument("--smoke", action="store_true",
+                        help="4-query dry-run: verify instrumentation, no report written")
+    args = parser.parse_args()
+    install_instrument()
+    if args.smoke and args.max_queries is None:
+        _apply_smoke_query_limit(args)
+    asyncio.run(run_branch_probe(args.max_queries, args.smoke))
+
+
+# FUNCTIONS
+
+def _apply_smoke_query_limit(args):
+    args.max_queries = 4
+
+
 async def run_branch_probe(max_queries: int | None, smoke: bool) -> None:
     _start_probe_clock()
     queries = _load_queries(QUERIES_FILE, max_queries)
@@ -49,8 +69,6 @@ async def run_branch_probe(max_queries: int | None, smoke: bool) -> None:
     _write_outputs(query_records, cascade_ok, zero_n)
 
 
-# FUNCTIONS
-
 async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
     print(f"branch probe | queries={len(queries)} smoke={smoke}", file=sys.stderr)
     stop_canary, canary_task = await _start_canary_monitor()
@@ -63,48 +81,6 @@ async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
         await _stop_canary_monitor(stop_canary, canary_task)
         await close_browser()
     return query_records
-
-
-async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
-    n_before = len(_acq_events)
-    snap = _snapshot_limiters(qi)
-    _pre_snapshots.append(snap)
-
-    t_start = time.monotonic()
-    _, timings = await search_web_workflow(query, "en", None, None, _with_timings=True)
-    t_end = time.monotonic()
-
-    det = timings.get("engine_details", {})
-    google_status = det.get("google", {}).get("status", "—")
-    all_statuses = {k: v.get("status", "—") for k, v in det.items()}
-    all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
-    category = (
-        "empty" if google_status == "EMPTY"
-        else "zero_cascade" if all_rate_skip
-        else "normal"
-    )
-
-    new_events = _acq_events[n_before:]
-    eng_detail = _build_engine_detail(new_events, all_statuses, snap)
-    disc = _query_discriminator(eng_detail)
-
-    record = {
-        "qi": qi, "query": query, "t_start": t_start, "t_end": t_end,
-        "duration_s": t_end - t_start, "google_status": google_status,
-        "all_statuses": all_statuses, "category": category,
-        "total_ms": timings.get("total_ms", 0),
-        "eng_detail": eng_detail, "disc": disc, "snap": snap,
-    }
-
-    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
-    print(
-        f"[{qi:2}/{total}] {query[:48]!r:50} "
-        f"cat={category:<12} disc={disc:<24} ev={len(new_events)} {flag}",
-        file=sys.stderr,
-    )
-    if smoke:
-        _dump_smoke(new_events, eng_detail, snap, BACKOFF_IMMUNE)
-    return record
 
 
 def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, int, bool]:
@@ -150,15 +126,47 @@ def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> 
     print(f"Findings: {fp}", file=sys.stderr)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Sleep-branch discriminator probe — Phase 3 (backoff vs tokencap)."
+async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
+    n_before = len(_acq_events)
+    snap = _snapshot_limiters(qi)
+    _pre_snapshots.append(snap)
+
+    t_start = time.monotonic()
+    _, timings = await search_web_workflow(query, "en", None, None, _with_timings=True)
+    t_end = time.monotonic()
+
+    det = timings.get("engine_details", {})
+    google_status = det.get("google", {}).get("status", "—")
+    all_statuses = {k: v.get("status", "—") for k, v in det.items()}
+    all_rate_skip = bool(all_statuses) and all(s == "RATE_SKIP" for s in all_statuses.values())
+    category = (
+        "empty" if google_status == "EMPTY"
+        else "zero_cascade" if all_rate_skip
+        else "normal"
     )
-    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
-                        help="Limit to first N queries (default: all from queries.txt)")
-    parser.add_argument("--smoke", action="store_true",
-                        help="4-query dry-run: verify instrumentation, no report written")
-    args = parser.parse_args()
-    if args.smoke and args.max_queries is None:
-        args.max_queries = 4
-    asyncio.run(run_branch_probe(args.max_queries, args.smoke))
+
+    new_events = _acq_events[n_before:]
+    eng_detail = _build_engine_detail(new_events, all_statuses, snap)
+    disc = _query_discriminator(eng_detail)
+
+    record = {
+        "qi": qi, "query": query, "t_start": t_start, "t_end": t_end,
+        "duration_s": t_end - t_start, "google_status": google_status,
+        "all_statuses": all_statuses, "category": category,
+        "total_ms": timings.get("total_ms", 0),
+        "eng_detail": eng_detail, "disc": disc, "snap": snap,
+    }
+
+    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
+    print(
+        f"[{qi:2}/{total}] {query[:48]!r:50} "
+        f"cat={category:<12} disc={disc:<24} ev={len(new_events)} {flag}",
+        file=sys.stderr,
+    )
+    if smoke:
+        _dump_smoke(new_events, eng_detail, snap, BACKOFF_IMMUNE)
+    return record
+
+
+if __name__ == "__main__":
+    main()

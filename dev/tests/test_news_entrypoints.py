@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import logging
@@ -9,29 +10,7 @@ from src.news import discover_only, scrape_only
 from src.news.registry import get
 
 
-def _args(**overrides):
-    base = dict(skip_index=False, timeframe="delta", discover_only=False, scrape_only=False)
-    base.update(overrides)
-    return argparse.Namespace(**base)
-
-
-class _StubPlatform:
-    name = "stub"
-    collection = "stubcoll"
-    timeframe = "delta"
-    uses_master_list = False
-    supports_scrape_only = True
-    scrape_engine = "browser"
-
-    def __init__(self, entries=None):
-        self.entries = entries or []
-
-    async def discover(self):
-        return self.entries
-
-    def load_scrape_entries(self, year=None, from_date=None, to_date=None, limit=None):
-        return self.entries
-
+# FUNCTIONS
 
 def test_registry_returns_each_registered_platform_by_name():
     assert get("coindesk").name == "coindesk"
@@ -116,3 +95,27 @@ def test_scrape_only_with_everything_already_in_raw_writes_marker_and_stops(monk
     monkeypatch.setattr(scrape_only, "_run_scrape_only_riding", _must_not_run)
     asyncio.run(scrape_only.scrape_only_workflow(_StubPlatform(entries=[{"url": "u"}])))
     assert calls == [("marker", "stub")]
+
+
+class _StubPlatform:
+    name = "stub"
+    collection = "stubcoll"
+    timeframe = "delta"
+    uses_master_list = False
+    supports_scrape_only = True
+    scrape_engine = "browser"
+
+    def __init__(self, entries=None):
+        self.entries = entries or []
+
+    async def discover(self):
+        return self.entries
+
+    def load_scrape_entries(self, year=None, from_date=None, to_date=None, limit=None):
+        return self.entries
+
+
+def _args(**overrides):
+    base = dict(skip_index=False, timeframe="delta", discover_only=False, scrape_only=False)
+    base.update(overrides)
+    return argparse.Namespace(**base)

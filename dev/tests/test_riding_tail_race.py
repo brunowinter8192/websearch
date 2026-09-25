@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import hashlib
 import tempfile
@@ -5,9 +6,7 @@ import unittest.mock
 from pathlib import Path
 
 
-def _url_hash(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:12]
-
+# FUNCTIONS
 
 def test_1_surplus_slots_race_both_done() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
@@ -285,3 +284,6 @@ def test_5_fail_before_success_done_once() -> None:
         raw_files = list((p / RAW_SUBDIR).iterdir())
         assert len(raw_files) == 1,           f"raw file count={len(raw_files)} (expected 1)"
 
+
+def _url_hash(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]

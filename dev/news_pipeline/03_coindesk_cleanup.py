@@ -32,6 +32,25 @@ _RE_INLINE_LINK  = re.compile(r'\[([^\]]+)\]\([^)]+\)')
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CoinDesk article cleanup — extract body, strip nav/footer noise, normalize."
+    )
+    _add_arguments(parser)
+    args = parser.parse_args()
+    cleanup_workflow(Path(args.input), Path(args.output))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--input", default=str(INPUT_DIR),
+                        help=f"Input dir of scraped .md files (default: {INPUT_DIR})")
+    parser.add_argument("--output", default=str(OUTPUT_DIR),
+                        help=f"Output dir for cleaned .md files (default: {OUTPUT_DIR})")
+
+
 def cleanup_workflow(input_dir: Path, output_dir: Path):
     md_files = sorted(input_dir.glob("*.md"))
     if not md_files:
@@ -54,8 +73,6 @@ def cleanup_workflow(input_dir: Path, output_dir: Path):
     write_manifest(manifest, output_dir)
     print_summary(manifest, output_dir, total_ws_strips, total_para_inserts, total_tag_strips)
 
-
-# FUNCTIONS
 
 def process_file(path: Path, output_dir: Path) -> tuple[dict, int, int, int]:
     raw = path.read_text(encoding="utf-8")
@@ -81,22 +98,28 @@ def process_file(path: Path, output_dir: Path) -> tuple[dict, int, int, int]:
     return _manifest_entry(hash_name, fm_fields, original_chars, cleaned, anchor_name), ws_strips, para_inserts, tag_strips
 
 
-def _manifest_entry(hash_name: str, fm: dict, original_chars: int, cleaned: str, anchor: str) -> dict:
-    cleaned_chars = len(cleaned)
-    reduction = round((1 - cleaned_chars / original_chars) * 100, 1) if original_chars else 0.0
-    return {
-        "hash": hash_name,
-        "url": fm.get("url", ""),
-        "lastmod": fm.get("lastmod", ""),
-        "publication_date": fm.get("publication_date", ""),
-        "title": fm.get("title", ""),
-        "section": fm.get("section", ""),
-        "scraped_at": fm.get("scraped_at", ""),
-        "original_chars": original_chars,
-        "cleaned_chars": cleaned_chars,
-        "reduction_pct": reduction,
-        "end_anchor_used": anchor,
-    }
+def write_manifest(manifest: list[dict], output_dir: Path):
+    path = output_dir / "manifest.json"
+    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def print_summary(manifest: list[dict], output_dir: Path, ws_strips: int, para_inserts: int, tag_strips: int):
+    reductions = [e["reduction_pct"] for e in manifest]
+    anchor_dist: dict[str, int] = {}
+    for e in manifest:
+        anchor_dist[e["end_anchor_used"]] = anchor_dist.get(e["end_anchor_used"], 0) + 1
+
+    print(f"Files processed : {len(manifest)}")
+    if reductions:
+        print(f"Reduction %     : mean={statistics.mean(reductions):.1f}%  median={statistics.median(reductions):.1f}%  min={min(reductions):.1f}%  max={max(reductions):.1f}%")
+    print(f"Trailing-ws strips  : {ws_strips} lines")
+    print(f"Para blank inserts  : {para_inserts} lines")
+    print(f"Tag-footer strips   : {tag_strips} lines")
+    print("End-anchor dist :")
+    for anchor, count in sorted(anchor_dist.items(), key=lambda x: -x[1]):
+        print(f"  {anchor}: {count}")
+    print(f"Output          : {output_dir}")
+    print(f"Manifest        : {output_dir / 'manifest.json'}")
 
 
 def parse_frontmatter(raw: str) -> tuple[dict, list[str]]:
@@ -123,6 +146,24 @@ def find_start_anchor(body_lines: list[str]) -> int | None:
     return None
 
 
+def _manifest_entry(hash_name: str, fm: dict, original_chars: int, cleaned: str, anchor: str) -> dict:
+    cleaned_chars = len(cleaned)
+    reduction = round((1 - cleaned_chars / original_chars) * 100, 1) if original_chars else 0.0
+    return {
+        "hash": hash_name,
+        "url": fm.get("url", ""),
+        "lastmod": fm.get("lastmod", ""),
+        "publication_date": fm.get("publication_date", ""),
+        "title": fm.get("title", ""),
+        "section": fm.get("section", ""),
+        "scraped_at": fm.get("scraped_at", ""),
+        "original_chars": original_chars,
+        "cleaned_chars": cleaned_chars,
+        "reduction_pct": reduction,
+        "end_anchor_used": anchor,
+    }
+
+
 def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
     for i in range(start_idx + 1, len(body_lines)):
         line = body_lines[i]
@@ -130,6 +171,12 @@ def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
             if pattern.match(line):
                 return i, name
     return len(body_lines), "NONE"
+
+
+def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
+    pass1, ws_strips, tag_strips = _clean_body_pass1(lines)
+    result, para_inserts = _clean_body_pass2(pass1)
+    return result, ws_strips, para_inserts, tag_strips
 
 
 def _clean_body_pass1(lines: list[str]) -> tuple[list[str], int, int]:
@@ -184,48 +231,6 @@ def _clean_body_pass2(pass1: list[str]) -> tuple[list[str], int]:
         result.pop()
 
     return result, para_inserts
-
-
-def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:
-    pass1, ws_strips, tag_strips = _clean_body_pass1(lines)
-    result, para_inserts = _clean_body_pass2(pass1)
-    return result, ws_strips, para_inserts, tag_strips
-
-
-def write_manifest(manifest: list[dict], output_dir: Path):
-    path = output_dir / "manifest.json"
-    path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def print_summary(manifest: list[dict], output_dir: Path, ws_strips: int, para_inserts: int, tag_strips: int):
-    reductions = [e["reduction_pct"] for e in manifest]
-    anchor_dist: dict[str, int] = {}
-    for e in manifest:
-        anchor_dist[e["end_anchor_used"]] = anchor_dist.get(e["end_anchor_used"], 0) + 1
-
-    print(f"Files processed : {len(manifest)}")
-    if reductions:
-        print(f"Reduction %     : mean={statistics.mean(reductions):.1f}%  median={statistics.median(reductions):.1f}%  min={min(reductions):.1f}%  max={max(reductions):.1f}%")
-    print(f"Trailing-ws strips  : {ws_strips} lines")
-    print(f"Para blank inserts  : {para_inserts} lines")
-    print(f"Tag-footer strips   : {tag_strips} lines")
-    print("End-anchor dist :")
-    for anchor, count in sorted(anchor_dist.items(), key=lambda x: -x[1]):
-        print(f"  {anchor}: {count}")
-    print(f"Output          : {output_dir}")
-    print(f"Manifest        : {output_dir / 'manifest.json'}")
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="CoinDesk article cleanup — extract body, strip nav/footer noise, normalize."
-    )
-    parser.add_argument("--input", default=str(INPUT_DIR),
-                        help=f"Input dir of scraped .md files (default: {INPUT_DIR})")
-    parser.add_argument("--output", default=str(OUTPUT_DIR),
-                        help=f"Output dir for cleaned .md files (default: {OUTPUT_DIR})")
-    args = parser.parse_args()
-    cleanup_workflow(Path(args.input), Path(args.output))
 
 
 if __name__ == "__main__":

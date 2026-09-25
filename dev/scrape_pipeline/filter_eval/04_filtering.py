@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import sys
 from pathlib import Path
@@ -56,6 +57,22 @@ CONFIGS = {
 DOMAINS_FILE = Path(__file__).parent.parent / "domains.txt"
 
 
+# ORCHESTRATOR
+
+async def main():
+    urls = get_urls()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    browser_config = BrowserConfig(headless=True, verbose=False)
+    semaphore = asyncio.Semaphore(PARALLEL_URLS)
+
+    await _run_filter_checks(browser_config, semaphore, urls)
+
+    _print_output_saved_to()
+
+
+# FUNCTIONS
+
 def get_urls():
     if len(sys.argv) > 1:
         return [sys.argv[1]]
@@ -68,35 +85,14 @@ def get_urls():
     return urls
 
 
-def check_code_integrity(md: str) -> dict:
-    in_code = False
-    code_blocks = 0
-    mangled_blocks = 0
-    for line in md.split('\n'):
-        if line.startswith('```'):
-            if not in_code:
-                in_code = True
-                code_blocks += 1
-            else:
-                in_code = False
-            continue
-        if in_code and line.strip():
-            if '$' in line and ' ' not in line and len(line) > 20:
-                mangled_blocks += 1
-                break
-    return {"code_blocks": code_blocks, "mangled": mangled_blocks > 0}
+async def _run_filter_checks(browser_config, semaphore, urls):
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        tasks = [process_url_with_semaphore(semaphore, crawler, url) for url in urls]
+        await asyncio.gather(*tasks)
 
 
-def url_to_slug(url: str) -> str:
-    parsed = urlparse(url)
-    path = parsed.path.strip("/")
-    if not path and not parsed.query:
-        return parsed.netloc.replace(".", "_")
-    parts = path.replace("/", "_").replace(".", "_")
-    if parsed.query:
-        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
-        parts = f"{parts}_{query_slug}" if parts else query_slug
-    return parts[:80]
+def _print_output_saved_to():
+    print(f"\nOutput saved to: {OUTPUT_DIR}")
 
 
 async def process_url_with_semaphore(sem, crawler, url):
@@ -128,18 +124,35 @@ async def process_url_with_semaphore(sem, crawler, url):
             print(f"{name:<16} {len(raw_md):>10,} {len(fit_md):>10,} {code_status:>10}")
 
 
-async def main():
-    urls = get_urls()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def url_to_slug(url: str) -> str:
+    parsed = urlparse(url)
+    path = parsed.path.strip("/")
+    if not path and not parsed.query:
+        return parsed.netloc.replace(".", "_")
+    parts = path.replace("/", "_").replace(".", "_")
+    if parsed.query:
+        query_slug = parsed.query.replace("&", "_").replace("=", "_").replace(".", "_")
+        parts = f"{parts}_{query_slug}" if parts else query_slug
+    return parts[:80]
 
-    browser_config = BrowserConfig(headless=True, verbose=False)
-    semaphore = asyncio.Semaphore(PARALLEL_URLS)
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        tasks = [process_url_with_semaphore(semaphore, crawler, url) for url in urls]
-        await asyncio.gather(*tasks)
-
-    print(f"\nOutput saved to: {OUTPUT_DIR}")
+def check_code_integrity(md: str) -> dict:
+    in_code = False
+    code_blocks = 0
+    mangled_blocks = 0
+    for line in md.split('\n'):
+        if line.startswith('```'):
+            if not in_code:
+                in_code = True
+                code_blocks += 1
+            else:
+                in_code = False
+            continue
+        if in_code and line.strip():
+            if '$' in line and ' ' not in line and len(line) > 20:
+                mangled_blocks += 1
+                break
+    return {"code_blocks": code_blocks, "mangled": mangled_blocks > 0}
 
 
 if __name__ == "__main__":

@@ -1,26 +1,10 @@
+# INFRASTRUCTURE
 import subprocess
 
 import src.scraper.index_scrapes as index_scrapes
 
 
-def _write_sidecar(sidecar_dir, ts, url, content):
-    sidecar_dir.mkdir(parents=True, exist_ok=True)
-    slug = index_scrapes.url_slug(url)
-    filename = f"{ts.replace(':', '-')}_{slug}.md"
-    header = (
-        f"<!-- url: {url} -->\n"
-        f"<!-- ts: {ts} -->\n"
-        f"<!-- bytes: {len(content.encode('utf-8'))} -->\n"
-        f"<!-- mode: filtered -->\n"
-        f"<!-- engine: chromium -->\n"
-    )
-    (sidecar_dir / filename).write_text(header + "\n" + content, encoding="utf-8")
-    return sidecar_dir / filename
-
-
-def _raising_run(*args, **kwargs):
-    raise AssertionError("subprocess.run must not be called")
-
+# FUNCTIONS
 
 def test_find_sidecar_picks_latest_among_multiple_scrapes(tmp_path):
     sidecar_dir = tmp_path / "scrape_content"
@@ -157,3 +141,22 @@ def test_workflow_end_to_end(tmp_path, monkeypatch):
     statuses = {o.url: o.status for o in result.outcomes}
     assert statuses[found_url] == "indexed"
     assert statuses[missing_url] == "no_sidecar"
+
+
+def _write_sidecar(sidecar_dir, ts, url, content):
+    sidecar_dir.mkdir(parents=True, exist_ok=True)
+    slug = index_scrapes.url_slug(url)
+    filename = f"{ts.replace(':', '-')}_{slug}.md"
+    header = (
+        f"<!-- url: {url} -->\n"
+        f"<!-- ts: {ts} -->\n"
+        f"<!-- bytes: {len(content.encode('utf-8'))} -->\n"
+        f"<!-- mode: filtered -->\n"
+        f"<!-- engine: chromium -->\n"
+    )
+    (sidecar_dir / filename).write_text(header + "\n" + content, encoding="utf-8")
+    return sidecar_dir / filename
+
+
+def _raising_run(*args, **kwargs):
+    raise AssertionError("subprocess.run must not be called")

@@ -16,19 +16,6 @@ _handle = None
 
 # FUNCTIONS
 
-def _build_options() -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.add_argument(f"--user-data-dir={SESSION_DIR}")
-    options.block_popups = True
-    options.block_notifications = True
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.webrtc_leak_protection = True
-    options.add_argument("--disable-background-timer-throttling")
-    options.add_argument("--disable-backgrounding-occluded-windows")
-    options.add_argument("--disable-renderer-backgrounding")
-    return options
-
-
 async def new_tab():
     global _handle
     if _handle is None:
@@ -46,3 +33,16 @@ async def close_browser() -> None:
     if _handle is not None:
         await teardown(_handle)
         _handle = None
+
+
+def _build_options() -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.block_popups = True
+    options.block_notifications = True
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.webrtc_leak_protection = True
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-renderer-backgrounding")
+    return options

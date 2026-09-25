@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 from src.search.degraded_notice import (
     DEGRADED_ENGINE_FAILURE_RATIO,
     BROWSER_REPAIR_COMMAND,
@@ -6,49 +7,10 @@ from src.search.degraded_notice import (
     prepend_degraded_notice,
 )
 
-
-def _stats(*rows):
-    return {row[0]: {"status": row[1], "drop_reason": row[2] if len(row) > 2 else None} for row in rows}
-
-
 WATCHDOG = "asyncio.TimeoutError after 6.0s watchdog"
 
 
-def _ws_refused(port):
-    return (
-        f"Failed to get browser ws address: Cannot connect to host localhost:{port} ssl:default "
-        f"[Multiple exceptions: [Errno 61] Connect call failed ('::1', {port}, 0, 0), "
-        f"[Errno 61] Connect call failed ('127.0.0.1', {port})]"
-    )
-
-
-def _nav_refused(url):
-    return f"Navigation to {url} failed: net::ERR_CONNECTION_REFUSED"
-
-
-def _record_2026_09_21_0841():
-    reason = _ws_refused(9256)
-    return _stats(
-        ("google", "TIMEOUT_WATCHDOG", WATCHDOG), ("duckduckgo", "TIMEOUT_WATCHDOG", WATCHDOG),
-        ("mojeek", "TIMEOUT_WATCHDOG", WATCHDOG), ("openalex", "OK"),
-        ("startpage", "ERROR_BROWSER", reason), ("brave", "ERROR_BROWSER", reason),
-        ("bing", "ERROR_BROWSER", reason), ("yandex", "ERROR_BROWSER", reason),
-    )
-
-
-def _record_2026_09_24_1713_excalidraw():
-    q = "excalidraw+text+shifts+when+editing+safari"
-    return _stats(
-        ("google", "ERROR_BROWSER", _nav_refused(f"https://www.google.com/search?q={q}&hl=en&num=100")),
-        ("duckduckgo", "ERROR_BROWSER", _nav_refused(f"https://html.duckduckgo.com/html/?q={q}&kl=wt-wt")),
-        ("mojeek", "ERROR_BROWSER", _nav_refused(f"https://www.mojeek.com/search?q={q}&safe=1")),
-        ("openalex", "ERROR_HTTP", "502 Bad Gateway"),
-        ("startpage", "ERROR_BROWSER", _nav_refused("https://www.startpage.com/")),
-        ("brave", "ERROR_BROWSER", _nav_refused(f"https://search.brave.com/search?q={q}")),
-        ("bing", "ERROR_BROWSER", _nav_refused(f"https://www.bing.com/search?q={q}")),
-        ("yandex", "ERROR_BROWSER", _nav_refused(f"https://yandex.com/search/?text={q}")),
-    )
-
+# FUNCTIONS
 
 def test_threshold_is_thirty_percent():
     assert DEGRADED_ENGINE_FAILURE_RATIO == 0.30
@@ -231,3 +193,43 @@ def test_prepend_is_byte_identical_to_breakdown_alone_on_healthy_run():
     )
     breakdown_text = 'Engine breakdown for "q":\n  google               10\n\nUse ... drilldown.'
     assert prepend_degraded_notice(breakdown_text, engine_stats) == breakdown_text
+
+
+def _record_2026_09_21_0841():
+    reason = _ws_refused(9256)
+    return _stats(
+        ("google", "TIMEOUT_WATCHDOG", WATCHDOG), ("duckduckgo", "TIMEOUT_WATCHDOG", WATCHDOG),
+        ("mojeek", "TIMEOUT_WATCHDOG", WATCHDOG), ("openalex", "OK"),
+        ("startpage", "ERROR_BROWSER", reason), ("brave", "ERROR_BROWSER", reason),
+        ("bing", "ERROR_BROWSER", reason), ("yandex", "ERROR_BROWSER", reason),
+    )
+
+
+def _record_2026_09_24_1713_excalidraw():
+    q = "excalidraw+text+shifts+when+editing+safari"
+    return _stats(
+        ("google", "ERROR_BROWSER", _nav_refused(f"https://www.google.com/search?q={q}&hl=en&num=100")),
+        ("duckduckgo", "ERROR_BROWSER", _nav_refused(f"https://html.duckduckgo.com/html/?q={q}&kl=wt-wt")),
+        ("mojeek", "ERROR_BROWSER", _nav_refused(f"https://www.mojeek.com/search?q={q}&safe=1")),
+        ("openalex", "ERROR_HTTP", "502 Bad Gateway"),
+        ("startpage", "ERROR_BROWSER", _nav_refused("https://www.startpage.com/")),
+        ("brave", "ERROR_BROWSER", _nav_refused(f"https://search.brave.com/search?q={q}")),
+        ("bing", "ERROR_BROWSER", _nav_refused(f"https://www.bing.com/search?q={q}")),
+        ("yandex", "ERROR_BROWSER", _nav_refused(f"https://yandex.com/search/?text={q}")),
+    )
+
+
+def _stats(*rows):
+    return {row[0]: {"status": row[1], "drop_reason": row[2] if len(row) > 2 else None} for row in rows}
+
+
+def _ws_refused(port):
+    return (
+        f"Failed to get browser ws address: Cannot connect to host localhost:{port} ssl:default "
+        f"[Multiple exceptions: [Errno 61] Connect call failed ('::1', {port}, 0, 0), "
+        f"[Errno 61] Connect call failed ('127.0.0.1', {port})]"
+    )
+
+
+def _nav_refused(url):
+    return f"Navigation to {url} failed: net::ERR_CONNECTION_REFUSED"

@@ -6,6 +6,40 @@ COINDESK_ORIGIN = date(2013, 9, 1)
 
 
 # FUNCTIONS
+
+def write_run_report(
+    path: Path,
+    ts: str,
+    run_elapsed: float,
+    clicks_done: int,
+    total_urls: int,
+    oldest_date: str,
+    stop_reason: str,
+    click_times: list[float],
+    stage_a_cap: int | None,
+    disabled_retry_hits: int = 0,
+) -> None:
+    cap_label = str(stage_a_cap) if stage_a_cap is not None else "UNCAPPED"
+    elapsed_str = format_elapsed(run_elapsed)
+
+    lines: list[str] = []
+    lines += _render_header(ts, cap_label)
+    lines += _render_summary(clicks_done, total_urls, oldest_date, stop_reason,
+                              disabled_retry_hits, elapsed_str, run_elapsed)
+
+    if not click_times:
+        lines.append("_(No click timing data — 0 clicks completed)_")
+        path.write_text("\n".join(lines), encoding="utf-8")
+        return
+
+    stats = compute_timing_stats(click_times)
+    lines += _render_timing_table(stats)
+    lines += _render_growth_assessment(stats)
+    lines += _render_stage_b_projection(oldest_date, clicks_done, run_elapsed, elapsed_str, stats["avg_t"])
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def format_elapsed(run_elapsed: float) -> str:
     h, rem = divmod(int(run_elapsed), 3600)
     m, s = divmod(rem, 60)
@@ -105,36 +139,3 @@ def _render_stage_b_projection(oldest_date: str, clicks_done: int, run_elapsed: 
     else:
         lines.append("_(Insufficient data for projection)_")
     return lines
-
-
-def write_run_report(
-    path: Path,
-    ts: str,
-    run_elapsed: float,
-    clicks_done: int,
-    total_urls: int,
-    oldest_date: str,
-    stop_reason: str,
-    click_times: list[float],
-    stage_a_cap: int | None,
-    disabled_retry_hits: int = 0,
-) -> None:
-    cap_label = str(stage_a_cap) if stage_a_cap is not None else "UNCAPPED"
-    elapsed_str = format_elapsed(run_elapsed)
-
-    lines: list[str] = []
-    lines += _render_header(ts, cap_label)
-    lines += _render_summary(clicks_done, total_urls, oldest_date, stop_reason,
-                              disabled_retry_hits, elapsed_str, run_elapsed)
-
-    if not click_times:
-        lines.append("_(No click timing data — 0 clicks completed)_")
-        path.write_text("\n".join(lines), encoding="utf-8")
-        return
-
-    stats = compute_timing_stats(click_times)
-    lines += _render_timing_table(stats)
-    lines += _render_growth_assessment(stats)
-    lines += _render_stage_b_projection(oldest_date, clicks_done, run_elapsed, elapsed_str, stats["avg_t"])
-
-    path.write_text("\n".join(lines), encoding="utf-8")

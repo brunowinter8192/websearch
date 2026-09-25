@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -14,8 +13,6 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent.parent))
 
 from src.search.browser import new_tab, close_browser
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 DESCRIPTION = "DOM inspection tool — diagnose engine selector drift. Run when engine returns persistent EMPTY/TIMEOUT."
 
@@ -95,6 +92,23 @@ return JSON.stringify(_attrs);"""
 
 # ORCHESTRATOR
 
+def main() -> None:
+    _configure_logging()
+    parser = argparse.ArgumentParser(description=DESCRIPTION)
+    parser.add_argument("engine", choices=list(ENGINE_REGISTRY))
+    parser.add_argument("query")
+    parser.add_argument("--wait-s", type=float, default=3.0, dest="wait_s",
+                        help="Fixed post-navigate wait for JS rendering (default: 3.0s)")
+    args = parser.parse_args()
+    asyncio.run(run_inspection(args.engine, args.query, args.wait_s))
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
 async def run_inspection(engine_name: str, query: str, wait_s: float) -> None:
     cfg = ENGINE_REGISTRY.get(engine_name, {})
     if cfg.get("_todo"):
@@ -130,43 +144,12 @@ async def run_inspection(engine_name: str, query: str, wait_s: float) -> None:
     print(f"Report: {report_path}", file=sys.stderr)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=DESCRIPTION)
-    parser.add_argument("engine", choices=list(ENGINE_REGISTRY))
-    parser.add_argument("query")
-    parser.add_argument("--wait-s", type=float, default=3.0, dest="wait_s",
-                        help="Fixed post-navigate wait for JS rendering (default: 3.0s)")
-    args = parser.parse_args()
-    asyncio.run(run_inspection(args.engine, args.query, args.wait_s))
-
-
-# FUNCTIONS
-
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
 async def run_js_dict(tab, js: str) -> dict:
     raw = await tab.execute_script(js)
     val = _extract_value(raw)
     if not val:
         return {}
     return json.loads(val)
-
-
-async def run_js_int(tab, js: str) -> int:
-    raw = await tab.execute_script(js)
-    val = _extract_value(raw)
-    return int(val or 0)
-
-
-async def run_js_str(tab, js: str) -> str:
-    raw = await tab.execute_script(js)
-    val = _extract_value(raw)
-    return str(val) if val is not None else ""
 
 
 def _build_h1_js(selectors: dict) -> str:
@@ -178,12 +161,24 @@ def _build_h1_js(selectors: dict) -> str:
     return "\n".join(lines)
 
 
+async def run_js_str(tab, js: str) -> str:
+    raw = await tab.execute_script(js)
+    val = _extract_value(raw)
+    return str(val) if val is not None else ""
+
+
 def _build_h6_js(top_class: str) -> str:
     escaped = top_class.replace("'", "\\'")
     return (
         f"var _el = document.querySelector('.{escaped}');"
         f" return _el ? _el.outerHTML.slice(0, 2000) : 'NOT_FOUND';"
     )
+
+
+async def run_js_int(tab, js: str) -> int:
+    raw = await tab.execute_script(js)
+    val = _extract_value(raw)
+    return int(val or 0)
 
 
 def _build_h7_js(exclude_domain: str) -> str:
@@ -195,6 +190,28 @@ def _build_h7_js(exclude_domain: str) -> str:
         "}",
         "return _ext;",
     ])
+
+
+def build_report(
+    engine_name: str, query: str, url: str, wait_s: float, ts: str,
+    h1: dict, h2: dict, h2_all: dict, h3: dict, h4: dict, h5: dict,
+    h6: str, h7: int, cfg: dict,
+) -> str:
+    status, diag_detail = diagnose(h1, h2, h3, h7, cfg)
+    L = _render_h1(engine_name, query, url, wait_s, ts, h1, cfg)
+    L += _render_h2(h2, h2_all)
+    L += _render_h3(h3)
+    L += _render_h4(h4)
+    L += _render_h5(h5)
+    L += _render_h6_h7_diagnosis(h6, h7, cfg, status, diag_detail)
+    return "\n".join(L)
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
 
 
 def diagnose(h1: dict, h2: dict, h3: dict, h7: int, cfg: dict) -> tuple[str, str]:
@@ -220,21 +237,6 @@ def diagnose(h1: dict, h2: dict, h3: dict, h7: int, cfg: dict) -> tuple[str, str
         f"Container `{cfg['current_selectors']['container']}` matches 0. "
         f"Recommended: {rec}"
     )
-
-
-def build_report(
-    engine_name: str, query: str, url: str, wait_s: float, ts: str,
-    h1: dict, h2: dict, h2_all: dict, h3: dict, h4: dict, h5: dict,
-    h6: str, h7: int, cfg: dict,
-) -> str:
-    status, diag_detail = diagnose(h1, h2, h3, h7, cfg)
-    L = _render_h1(engine_name, query, url, wait_s, ts, h1, cfg)
-    L += _render_h2(h2, h2_all)
-    L += _render_h3(h3)
-    L += _render_h4(h4)
-    L += _render_h5(h5)
-    L += _render_h6_h7_diagnosis(h6, h7, cfg, status, diag_detail)
-    return "\n".join(L)
 
 
 def _render_h1(engine_name: str, query: str, url: str, wait_s: float, ts: str, h1: dict, cfg: dict) -> list[str]:

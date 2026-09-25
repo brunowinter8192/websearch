@@ -23,6 +23,25 @@ _REQUEST_TIMESTAMPS: list = []
 
 # FUNCTIONS
 
+def start_fixture_server(host: str = DEFAULT_HOST, port: int = 0):
+    global _ROUTES, _REQUEST_TIMESTAMPS
+    server = http.server.ThreadingHTTPServer((host, port), _FixtureHandler)
+    bound_port = server.server_address[1]
+    base_url = f"http://{host}:{bound_port}/"
+    _ROUTES = _build_routes(base_url)
+    with _STATE_LOCK:
+        _STATE.update(request_count=0, rate_limit_limit=None, rate_limit_window_s=None, thin_body=False)
+        _REQUEST_TIMESTAMPS = []
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, bound_port
+
+
+def stop_fixture_server(server: http.server.ThreadingHTTPServer, thread: threading.Thread) -> None:
+    server.shutdown()
+    thread.join(timeout=5)
+
+
 class _FixtureHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -96,22 +115,3 @@ class _FixtureHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         if body:
             self.wfile.write(body)
-
-
-def start_fixture_server(host: str = DEFAULT_HOST, port: int = 0):
-    global _ROUTES, _REQUEST_TIMESTAMPS
-    server = http.server.ThreadingHTTPServer((host, port), _FixtureHandler)
-    bound_port = server.server_address[1]
-    base_url = f"http://{host}:{bound_port}/"
-    _ROUTES = _build_routes(base_url)
-    with _STATE_LOCK:
-        _STATE.update(request_count=0, rate_limit_limit=None, rate_limit_window_s=None, thin_body=False)
-        _REQUEST_TIMESTAMPS = []
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server, thread, bound_port
-
-
-def stop_fixture_server(server: http.server.ThreadingHTTPServer, thread: threading.Thread) -> None:
-    server.shutdown()
-    thread.join(timeout=5)

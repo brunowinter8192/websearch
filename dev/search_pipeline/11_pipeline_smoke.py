@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -35,6 +34,41 @@ _STATUS_HINTS: dict[str, str] = {
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Full pipeline smoke: search_web_workflow per query, engine-reliability focus."
+    )
+    parser.add_argument(
+        "--max-queries",
+        dest="max_queries",
+        type=int,
+        default=None,
+        help="Limit to first N queries from queries.txt (default: all)",
+    )
+    parser.add_argument(
+        "--language",
+        default="en",
+        help="ISO language code (default: en)",
+    )
+    parser.add_argument(
+        "--engine-timeout",
+        dest="engine_timeout",
+        type=float,
+        default=None,
+        help="Hard timeout per engine call in seconds, e.g. 8.0 (default: None = no timeout)",
+    )
+    parser.add_argument(
+        "--report-prefix",
+        dest="report_prefix",
+        default="pipeline_smoke",
+        help="Report filename prefix (default: pipeline_smoke → pipeline_smoke_<ts>.md)",
+    )
+    args = parser.parse_args()
+    asyncio.run(run_pipeline_smoke(args.max_queries, args.language, args.engine_timeout, args.report_prefix))
+
+
+# FUNCTIONS
 
 async def run_pipeline_smoke(max_queries: int | None, language: str, engine_timeout: float | None = None, report_prefix: str = "pipeline_smoke") -> None:
     queries = _load_queries(QUERIES_FILE, max_queries)
@@ -77,12 +111,20 @@ async def run_pipeline_smoke(max_queries: int | None, language: str, engine_time
     print(f"Done: {ok}/{len(records)} queries with results", file=sys.stderr)
 
 
-# FUNCTIONS
-
 def _load_queries(path: Path, max_queries: int | None) -> list[str]:
     lines = path.read_text(encoding="utf-8").splitlines()
     qs = [ln.strip() for ln in lines if ln.strip()]
     return qs[:max_queries] if max_queries else qs
+
+
+def _build_record(query: str, pools: dict, timings: dict) -> dict:
+    engine_url_counts = {eng: len(pool) for eng, pool in pools.items()}
+    return {
+        "query":             query,
+        "total_urls":        sum(engine_url_counts.values()),
+        "engine_url_counts": engine_url_counts,
+        "timings":           timings,
+    }
 
 
 def _build_checkpoint(records: list[dict], prev_qi: int, qi: int, elapsed: float, prev_elapsed: float) -> dict:
@@ -107,14 +149,21 @@ def _build_checkpoint(records: list[dict], prev_qi: int, qi: int, elapsed: float
     }
 
 
-def _build_record(query: str, pools: dict, timings: dict) -> dict:
-    engine_url_counts = {eng: len(pool) for eng, pool in pools.items()}
-    return {
-        "query":             query,
-        "total_urls":        sum(engine_url_counts.values()),
-        "engine_url_counts": engine_url_counts,
-        "timings":           timings,
-    }
+def _write_report(records: list[dict], language: str, checkpoints: list[dict], prefix: str = "pipeline_smoke") -> Path:
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"{prefix}_{ts}.md"
+    lines = (
+        _render_header(records, language, ts)
+        + _render_summary(records)
+        + _render_timing_checkpoints(checkpoints)
+        + ["", "---", ""]
+        + _render_per_query_engine_breakdown(records)
+        + _render_timing_section(records)
+        + _render_engine_reliability(records)
+    )
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _render_header(records: list[dict], language: str, ts: str) -> list[str]:
@@ -138,6 +187,24 @@ def _render_summary(records: list[dict]) -> list[str]:
     for i, r in enumerate(records, 1):
         q = r["query"][:65].replace("|", "\\|")
         L.append(f"| {i} | {q} | {r['total_urls']} |")
+    return L
+
+
+def _render_timing_checkpoints(checkpoints: list[dict]) -> list[str]:
+    if not checkpoints:
+        return []
+    L: list[str] = [
+        "",
+        "## Timing Checkpoints",
+        "",
+        "| Milestone | Cumulative wall (s) | Avg/query in segment (s) | Engines OK | Engines RATE_SKIP |",
+        "|-----------|--------------------:|-------------------------:|-----------:|------------------:|",
+    ]
+    for cp in checkpoints:
+        L.append(
+            f"| {cp['milestone']} | {cp['cumulative_s']} | {cp['avg_per_q_s']} "
+            f"| {cp['engines_ok']} | {cp['engines_rate_skip']} |"
+        )
     return L
 
 
@@ -197,25 +264,6 @@ def _render_timing_section(records: list[dict]) -> list[str]:
             f"| {round(statistics.mean(all_total_ms))} | {max(all_total_ms)} |",
         ]
     return L
-
-
-def _render_timing_checkpoints(checkpoints: list[dict]) -> list[str]:
-    if not checkpoints:
-        return []
-    L: list[str] = [
-        "",
-        "## Timing Checkpoints",
-        "",
-        "| Milestone | Cumulative wall (s) | Avg/query in segment (s) | Engines OK | Engines RATE_SKIP |",
-        "|-----------|--------------------:|-------------------------:|-----------:|------------------:|",
-    ]
-    for cp in checkpoints:
-        L.append(
-            f"| {cp['milestone']} | {cp['cumulative_s']} | {cp['avg_per_q_s']} "
-            f"| {cp['engines_ok']} | {cp['engines_rate_skip']} |"
-        )
-    return L
-
 
 
 def _render_engine_reliability(records: list[dict]) -> list[str]:
@@ -319,51 +367,5 @@ def _top3_bottleneck(records: list[dict]) -> str:
     return ", ".join(f"{e} ({bottleneck_counts[e]}×)" for e in top3) if top3 else "—"
 
 
-def _write_report(records: list[dict], language: str, checkpoints: list[dict], prefix: str = "pipeline_smoke") -> Path:
-    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"{prefix}_{ts}.md"
-    lines = (
-        _render_header(records, language, ts)
-        + _render_summary(records)
-        + _render_timing_checkpoints(checkpoints)
-        + ["", "---", ""]
-        + _render_per_query_engine_breakdown(records)
-        + _render_timing_section(records)
-        + _render_engine_reliability(records)
-    )
-    lines.append("")
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Full pipeline smoke: search_web_workflow per query, engine-reliability focus."
-    )
-    parser.add_argument(
-        "--max-queries",
-        dest="max_queries",
-        type=int,
-        default=None,
-        help="Limit to first N queries from queries.txt (default: all)",
-    )
-    parser.add_argument(
-        "--language",
-        default="en",
-        help="ISO language code (default: en)",
-    )
-    parser.add_argument(
-        "--engine-timeout",
-        dest="engine_timeout",
-        type=float,
-        default=None,
-        help="Hard timeout per engine call in seconds, e.g. 8.0 (default: None = no timeout)",
-    )
-    parser.add_argument(
-        "--report-prefix",
-        dest="report_prefix",
-        default="pipeline_smoke",
-        help="Report filename prefix (default: pipeline_smoke → pipeline_smoke_<ts>.md)",
-    )
-    args = parser.parse_args()
-    asyncio.run(run_pipeline_smoke(args.max_queries, args.language, args.engine_timeout, args.report_prefix))
+    main()

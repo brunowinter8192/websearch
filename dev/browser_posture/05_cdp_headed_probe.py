@@ -34,25 +34,14 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     bundle_path = resolve_chromium_1228_bundle()
 
-    focus_samples: list[tuple[str, str]] = []
-    stage = {"name": "reference_launch"}
-    stop_event = asyncio.Event()
-    poll_task = asyncio.create_task(focus_poll_loop(focus_samples, stage, stop_event))
+    focus_samples, stage, stop_event, poll_task = _start_focus_poll()
 
     print("Reference: patchright-driven headed launch (probe 04 Run B shape)", file=sys.stderr)
     reference = await capture_reference_cmdline()
     await asyncio.to_thread(kill_survivors)
 
     user_data_dir = tempfile.mkdtemp(prefix="browser-posture-cdp-probe-")
-    try:
-        run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
-    finally:
-        stage["name"] = "teardown"
-        await asyncio.to_thread(kill_by_profile, user_data_dir)
-        await asyncio.to_thread(kill_survivors)
-        shutil.rmtree(user_data_dir, ignore_errors=True)
-        stop_event.set()
-        await poll_task
+    run_result = await _run_cdp_headed_check(bundle_path, user_data_dir, stage, stop_event, poll_task)
 
     orphans = check_orphans(user_data_dir)
     cmdline_diff = diff_cmdlines(run_result["self_cmdline"], reference["cmdline"])
@@ -61,32 +50,17 @@ async def run_probe() -> None:
         run_result["scrape_result"], run_result["self_cmdline"], cmdline_diff, focus_samples,
         orphans, REPORT_DIR,
     )
-    print(f"\nReport: {report_path}", file=sys.stderr)
-    print(f"Orphans after run: {len(orphans)}", file=sys.stderr)
+    _print_report(report_path, orphans)
 
 
 # FUNCTIONS
 
-async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_event: asyncio.Event) -> None:
-    while not stop_event.is_set():
-        app = await asyncio.to_thread(get_frontmost_app)
-        samples.append((stage["name"], app))
-        await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
-
-
-def find_chrome_descendant() -> psutil.Process | None:
-    try:
-        children = psutil.Process().children(recursive=True)
-    except psutil.Error:
-        return None
-    for proc in children:
-        try:
-            exe = proc.exe()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-        if "ms-playwright" in exe:
-            return proc
-    return None
+def _start_focus_poll():
+    focus_samples: list[tuple[str, str]] = []
+    stage = {"name": "reference_launch"}
+    stop_event = asyncio.Event()
+    poll_task = asyncio.create_task(focus_poll_loop(focus_samples, stage, stop_event))
+    return focus_samples, stage, stop_event, poll_task
 
 
 async def capture_reference_cmdline() -> dict:
@@ -130,33 +104,44 @@ async def capture_reference_cmdline() -> dict:
     return {"pid": info["pid"], "exe": info["exe"], "cmdline": info["cmdline"], "error": error}
 
 
-async def scrape_over_cdp(port: int, stage: dict) -> dict:
-    server, thread, http_port = start_probe_server()
-    url = f"http://127.0.0.1:{http_port}/"
-    browser_config = BrowserConfig(
-        cdp_url=f"http://127.0.0.1:{port}",
-        browser_mode="custom",
-        enable_stealth=True,
-        cdp_cleanup_on_close=True,
-        verbose=False,
-    )
-    adapter = UndetectedAdapter()
-    crawler_strategy = AsyncPlaywrightCrawlerStrategy(browser_config=browser_config, browser_adapter=adapter)
-    run_config = CrawlerRunConfig(
-        wait_until="load", page_timeout=15000, delay_before_return_html=1.0,
-        cache_mode=CacheMode.BYPASS, verbose=False,
-    )
+async def _run_cdp_headed_check(bundle_path, user_data_dir, stage, stop_event, poll_task):
     try:
-        stage["name"] = "cdp_connect_page_navigate"
-        async with AsyncWebCrawler(config=browser_config, crawler_strategy=crawler_strategy) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
-            success = bool(getattr(result, "success", False)) or bool(getattr(result, "html", None))
-            content_len = len(getattr(result, "html", "") or "")
-            return {"success": success, "error": getattr(result, "error_message", None), "content_len": content_len}
-    except Exception as e:
-        return {"success": False, "error": f"{type(e).__name__}: {e}", "content_len": 0}
+        run_result = await _run_self_launch_and_scrape(bundle_path, user_data_dir, stage)
     finally:
-        stop_probe_server(server, thread)
+        stage["name"] = "teardown"
+        await asyncio.to_thread(kill_by_profile, user_data_dir)
+        await asyncio.to_thread(kill_survivors)
+        shutil.rmtree(user_data_dir, ignore_errors=True)
+        stop_event.set()
+        await poll_task
+    return run_result
+
+
+def _print_report(report_path, orphans):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+    print(f"Orphans after run: {len(orphans)}", file=sys.stderr)
+
+
+async def focus_poll_loop(samples: list[tuple[str, str]], stage: dict, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        app = await asyncio.to_thread(get_frontmost_app)
+        samples.append((stage["name"], app))
+        await asyncio.sleep(FOCUS_POLL_INTERVAL_S)
+
+
+def find_chrome_descendant() -> psutil.Process | None:
+    try:
+        children = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return None
+    for proc in children:
+        try:
+            exe = proc.exe()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if "ms-playwright" in exe:
+            return proc
+    return None
 
 
 async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, stage: dict) -> dict:
@@ -195,6 +180,35 @@ async def _run_self_launch_and_scrape(bundle_path: Path, user_data_dir: str, sta
         "self_cmdline": self_cmdline,
         "self_pid": self_pid,
     }
+
+
+async def scrape_over_cdp(port: int, stage: dict) -> dict:
+    server, thread, http_port = start_probe_server()
+    url = f"http://127.0.0.1:{http_port}/"
+    browser_config = BrowserConfig(
+        cdp_url=f"http://127.0.0.1:{port}",
+        browser_mode="custom",
+        enable_stealth=True,
+        cdp_cleanup_on_close=True,
+        verbose=False,
+    )
+    adapter = UndetectedAdapter()
+    crawler_strategy = AsyncPlaywrightCrawlerStrategy(browser_config=browser_config, browser_adapter=adapter)
+    run_config = CrawlerRunConfig(
+        wait_until="load", page_timeout=15000, delay_before_return_html=1.0,
+        cache_mode=CacheMode.BYPASS, verbose=False,
+    )
+    try:
+        stage["name"] = "cdp_connect_page_navigate"
+        async with AsyncWebCrawler(config=browser_config, crawler_strategy=crawler_strategy) as crawler:
+            result = await crawler.arun(url=url, config=run_config)
+            success = bool(getattr(result, "success", False)) or bool(getattr(result, "html", None))
+            content_len = len(getattr(result, "html", "") or "")
+            return {"success": success, "error": getattr(result, "error_message", None), "content_len": content_len}
+    except Exception as e:
+        return {"success": False, "error": f"{type(e).__name__}: {e}", "content_len": 0}
+    finally:
+        stop_probe_server(server, thread)
 
 
 if __name__ == "__main__":

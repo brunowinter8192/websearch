@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -16,8 +15,6 @@ from src.cdp_value import extract_value
 from src.search.engines.google import (
     _inject_socs_cookie, _build_url, _wait_for_results,
 )
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 REPORT_DIR = SCRIPT_DIR / "md"
 QUERY = "python asyncio"
@@ -105,27 +102,61 @@ return JSON.stringify(_out);
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     url = _build_url(QUERY, "en", NUM)
+    _print_url(url)
+    probed = await _probe_page(url)
+    if probed is None:
+        return
+    counts, structure = probed
+
+    report_path = write_report(counts, structure, url)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _print_url(url):
     print(f"URL: {url}", file=sys.stderr)
+
+
+async def _probe_page(url):
     tab = await new_tab()
     try:
         await _inject_socs_cookie(tab)
         await tab.go_to(url, timeout=20)
         if not await _wait_for_results(tab):
             print("ERROR: no results loaded", file=sys.stderr)
-            return
+            return None
         counts = await read_counts(tab)
         structure = await read_structure(tab)
     finally:
         await tab.close()
         await close_browser()
+    return counts, structure
 
-    report_path = write_report(counts, structure, url)
+
+def write_report(counts: dict, structure: list, url: str) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"google_selector_probe_{ts}.md"
+    hypothesis, detail = diagnose(counts)
+
+    lines = _render_dom_counts(counts, ts, url)
+    lines += _render_structure(structure)
+    lines += _render_hypothesis(hypothesis, detail)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _print_report(report_path):
     print(f"Report: {report_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def read_counts(tab) -> dict:
     raw = await tab.execute_script(_JS_COUNTS)
@@ -172,19 +203,6 @@ def diagnose(counts: dict) -> tuple[str, str]:
             f"but `#rso h3` only sees {rso_h3}. Results live in a different DOM branch."
         )
     return label, detail
-
-
-def write_report(counts: dict, structure: list, url: str) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"google_selector_probe_{ts}.md"
-    hypothesis, detail = diagnose(counts)
-
-    lines = _render_dom_counts(counts, ts, url)
-    lines += _render_structure(structure)
-    lines += _render_hypothesis(hypothesis, detail)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _render_dom_counts(counts: dict, ts: str, url: str) -> list[str]:

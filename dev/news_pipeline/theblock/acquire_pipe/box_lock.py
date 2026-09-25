@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import fcntl
 import json
 import logging
@@ -17,27 +16,7 @@ _SIDECAR    = LOCK_DIR / "acquire_pipe.lock"
 _TS_FMT     = "%Y-%m-%dT%H:%M:%SZ"
 
 
-class LockBusyError(RuntimeError):
-    pass
-
-
 # FUNCTIONS
-
-def cleanup_stale() -> None:
-    if not _SIDECAR.exists():
-        return
-    data = json.loads(_SIDECAR.read_text(encoding="utf-8"))
-    pid  = data.get("pid")
-    if pid is None:
-        _SIDECAR.unlink(missing_ok=True)
-        return
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        _SIDECAR.unlink(missing_ok=True)
-    except PermissionError:
-        logger.warning("acquire_pipe lock holder pid=%s is owned by another user, sidecar kept", pid)
-
 
 @contextmanager
 def acquire(job: str, target: str):
@@ -64,6 +43,26 @@ def acquire(job: str, target: str):
         _SIDECAR.unlink(missing_ok=True)
         fcntl.flock(fd, fcntl.LOCK_UN)
         fd.close()
+
+
+def cleanup_stale() -> None:
+    if not _SIDECAR.exists():
+        return
+    data = json.loads(_SIDECAR.read_text(encoding="utf-8"))
+    pid  = data.get("pid")
+    if pid is None:
+        _SIDECAR.unlink(missing_ok=True)
+        return
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        _SIDECAR.unlink(missing_ok=True)
+    except PermissionError:
+        logger.warning("acquire_pipe lock holder pid=%s is owned by another user, sidecar kept", pid)
+
+
+class LockBusyError(RuntimeError):
+    pass
 
 
 def _busy_message() -> str:

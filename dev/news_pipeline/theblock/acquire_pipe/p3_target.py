@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 import re
 from pathlib import Path
@@ -14,16 +13,14 @@ DIRECT_TIMEOUT = 15.0
 _LOC_RE        = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 def build_sitemap_target(pool: list | None = None) -> list[str]:
     content = _fetch_index_direct()
     if content is None:
-        content = _fetch_index_via_proxy(pool if pool is not None else [])
+        content = _fetch_via_proxy(pool)
     return _parse_loc_urls(content)
 
-
-# FUNCTIONS
 
 def _fetch_index_direct() -> bytes | None:
     r = httpx.get(THEBLOCK_INDEX, timeout=DIRECT_TIMEOUT, follow_redirects=True)
@@ -33,6 +30,14 @@ def _fetch_index_direct() -> bytes | None:
         return r.content
     print(f"[sitemap] Direct fetch: status={r.status_code}, no XML marker — proxy fallback")
     return None
+
+
+def _fetch_via_proxy(pool):
+    return _fetch_index_via_proxy(pool if pool is not None else [])
+
+
+def _parse_loc_urls(content: bytes) -> list[str]:
+    return [m.group(1).decode().strip() for m in _LOC_RE.finditer(content)]
 
 
 def _fetch_index_via_proxy(pool: list) -> bytes:
@@ -47,7 +52,3 @@ def _fetch_index_via_proxy(pool: list) -> bytes:
         if status == "fail":
             cm.mark_burned(proto, hp)
     raise RuntimeError("sitemap index fetch failed: all proxy candidates exhausted")
-
-
-def _parse_loc_urls(content: bytes) -> list[str]:
-    return [m.group(1).decode().strip() for m in _LOC_RE.finditer(content)]

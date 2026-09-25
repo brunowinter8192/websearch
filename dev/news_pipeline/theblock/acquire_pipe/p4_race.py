@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import random
 import sys
 import threading
@@ -14,6 +13,49 @@ from p5_logger import AcquireLogger
 from p6_buffer import DEFAULT_CONCURRENCY
 
 
+# FUNCTIONS
+
+def run_race(
+    pool:            list[tuple[str, str]],
+    target_urls:     list[str],
+    content_type:    str,
+    logger:          AcquireLogger,
+    content_handler: Callable[[str, bytes], None] | None = None,
+    concurrency:     int = DEFAULT_CONCURRENCY,
+) -> tuple[list[str], list[str]]:
+    candidates = _compute_candidates(pool)
+    random.shuffle(candidates)
+
+    _url_list = list(target_urls)
+    state = RaceState(
+        candidates=candidates, proxy_idx=0, proxy_lock=threading.Lock(),
+        url_list=_url_list, url_idx=0, done_set=set(), done=[],
+        lock=threading.Lock(), total=len(_url_list),
+    )
+
+    _race_candidates(concurrency, state, logger, content_type, content_handler)
+
+    gap = _compute_gap(_url_list, state)
+    return state.done, gap
+
+
+def _compute_candidates(pool):
+    candidates  = pool[:]
+    return candidates
+
+
+def _race_candidates(concurrency, state, logger, content_type, content_handler):
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        futures = [ex.submit(_worker, state, logger, content_type, content_handler) for _ in range(concurrency)]
+        for f in as_completed(futures):
+            f.result()
+
+
+def _compute_gap(_url_list, state):
+    gap = [u for u in _url_list if u not in state.done_set]
+    return gap
+
+
 @dataclass
 class RaceState:
     candidates:  list[tuple[str, str]]
@@ -26,37 +68,6 @@ class RaceState:
     lock:        threading.Lock
     total:       int
 
-
-# ORCHESTRATOR
-
-def run_race(
-    pool:            list[tuple[str, str]],
-    target_urls:     list[str],
-    content_type:    str,
-    logger:          AcquireLogger,
-    content_handler: Callable[[str, bytes], None] | None = None,
-    concurrency:     int = DEFAULT_CONCURRENCY,
-) -> tuple[list[str], list[str]]:
-    candidates  = pool[:]
-    random.shuffle(candidates)
-
-    _url_list = list(target_urls)
-    state = RaceState(
-        candidates=candidates, proxy_idx=0, proxy_lock=threading.Lock(),
-        url_list=_url_list, url_idx=0, done_set=set(), done=[],
-        lock=threading.Lock(), total=len(_url_list),
-    )
-
-    with ThreadPoolExecutor(max_workers=concurrency) as ex:
-        futures = [ex.submit(_worker, state, logger, content_type, content_handler) for _ in range(concurrency)]
-        for f in as_completed(futures):
-            f.result()
-
-    gap = [u for u in _url_list if u not in state.done_set]
-    return state.done, gap
-
-
-# FUNCTIONS
 
 def _worker(
     state:           RaceState,

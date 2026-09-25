@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -23,6 +22,20 @@ SNIPPET_PREVIEW = 200
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Burst smoke test for searxng-cli search_batch.")
+    parser.add_argument("--queries-per-burst", type=int, default=4,
+                        help="Number of queries per search_batch call (default: 4)")
+    parser.add_argument("--cooldown", type=float, default=60.0,
+                        help="Seconds to wait between batches (default: 60)")
+    parser.add_argument("--max-queries", type=int, default=None,
+                        help="Cap total queries processed (default: all)")
+    args = parser.parse_args()
+    asyncio.run(run_burst_smoke(args.queries_per_burst, args.cooldown, args.max_queries))
+
+
+# FUNCTIONS
 
 async def run_burst_smoke(queries_per_burst: int, cooldown: float, max_queries: int | None) -> None:
     cfg = load_config(CONFIG_PATH)
@@ -62,8 +75,6 @@ async def run_burst_smoke(queries_per_burst: int, cooldown: float, max_queries: 
     print(f"Result: {dist} (out of {len(records)})", file=sys.stderr)
     print(f"Timing: mean {int(statistics.mean(times))}ms / max {max(times)}ms", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def load_config(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -115,6 +126,19 @@ async def run_batch(batch_queries: list[str], batch_idx: int) -> list[dict]:
                 for q in batch_queries]
 
 
+def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
+                 queries_per_burst, cooldown) -> Path:
+    path = report_dir / f"burst_{ts}.md"
+    counts = Counter(r["status"] for r in records)
+    lines = _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts)
+    lines += _render_status_distribution(counts)
+    lines += _render_per_query_results(records)
+    lines += _render_timing_summary(records, batch_times)
+    lines += _render_sample_results(records)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _record(query, batch_idx, status, count, domains, search_ms, sample_results, note=""):
     return {"query": query, "batch": batch_idx, "status": status,
             "count": count, "domains": domains, "search_ms": search_ms,
@@ -143,6 +167,10 @@ def parse_stdout(block: str) -> tuple[int, list[dict]]:
     return count, results
 
 
+def _domain(url: str) -> str:
+    return urlparse(url.strip()).netloc
+
+
 def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str:
     if returncode != 0:
         return "ERROR"
@@ -157,23 +185,6 @@ def derive_status(count: int, domains: int, stderr: str, returncode: int) -> str
     if "Google search failed" in stderr:
         return "ERROR"
     return "EMPTY"
-
-
-def _domain(url: str) -> str:
-    return urlparse(url.strip()).netloc
-
-
-def write_report(records, batch_times, total_s, report_dir, ts, n_batches,
-                 queries_per_burst, cooldown) -> Path:
-    path = report_dir / f"burst_{ts}.md"
-    counts = Counter(r["status"] for r in records)
-    lines = _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts)
-    lines += _render_status_distribution(counts)
-    lines += _render_per_query_results(records)
-    lines += _render_timing_summary(records, batch_times)
-    lines += _render_sample_results(records)
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _render_config_overview(records, ts, n_batches, queries_per_burst, cooldown, total_s, counts) -> list[str]:
@@ -259,12 +270,4 @@ def _render_sample_results(records) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Burst smoke test for searxng-cli search_batch.")
-    parser.add_argument("--queries-per-burst", type=int, default=4,
-                        help="Number of queries per search_batch call (default: 4)")
-    parser.add_argument("--cooldown", type=float, default=60.0,
-                        help="Seconds to wait between batches (default: 60)")
-    parser.add_argument("--max-queries", type=int, default=None,
-                        help="Cap total queries processed (default: all)")
-    args = parser.parse_args()
-    asyncio.run(run_burst_smoke(args.queries_per_burst, args.cooldown, args.max_queries))
+    main()

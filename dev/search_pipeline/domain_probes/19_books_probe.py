@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -16,8 +15,6 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 from src.search.engines import google as google_engine
 from src.search.engines import duckduckgo as duckduckgo_engine
 from src.search.browser import close_browser
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -59,57 +56,64 @@ MAX_PATH_LEN = 80
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
+    engines = _compute_engines()
 
-    all_runs: dict[str, list[dict]] = {}
-    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    run_stats = _compute_run_stats()
 
-    try:
-        for qi, base_query in enumerate(QUERIES, 1):
-            query = base_query + SUFFIX
-            print(f"\n=== Q{qi}/{len(QUERIES)}: {query!r} ===", file=sys.stderr)
-            run_results: list[dict] = []
-
-            for i, (eng_name, engine) in enumerate(engines):
-                max_r = ENGINE_MAX[eng_name]
-                print(f"  {eng_name} ...", file=sys.stderr, end="", flush=True)
-
-                t0 = time.monotonic()
-                try:
-                    results = (await engine.search_with_reason(query, "en", max_r))[0]
-                    ms = round((time.monotonic() - t0) * 1000)
-                    print(f" {len(results)} ({ms}ms)", file=sys.stderr)
-                    run_stats[eng_name]["total"] += len(results)
-                    for r in results:
-                        run_results.append({
-                            "engine":   eng_name,
-                            "position": r.position,
-                            "url":      r.url,
-                        })
-                except Exception as e:
-                    ms = round((time.monotonic() - t0) * 1000)
-                    print(f" ERROR {e} ({ms}ms)", file=sys.stderr)
-                    run_stats[eng_name]["errors"] += 1
-
-                if i < len(engines) - 1:
-                    await asyncio.sleep(BROWSER_SLEEP_S)
-
-            all_runs[base_query] = run_results
-    finally:
-        await close_browser()
+    all_runs = await _run_books_queries(engines, run_stats)
 
     report_path = write_report(all_runs, run_stats, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
+    _print_report(report_path)
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _compute_engines():
+    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
+    return engines
+
+
+def _compute_run_stats():
+    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    return run_stats
+
+
+async def _run_books_queries(engines, run_stats):
+    all_runs: dict[str, list[dict]] = {}
+    try:
+        for qi, base_query in enumerate(QUERIES, 1):
+            all_runs[base_query] = await _run_query(qi, base_query, engines, run_stats)
+    finally:
+        await close_browser()
+    return all_runs
+
 
 def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"books_probe_{ts}.md"
     path.write_text("\n".join(_build_report(all_runs, run_stats, ts)), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+async def _run_query(qi, base_query, engines, run_stats):
+    query = base_query + SUFFIX
+    print(f"\n=== Q{qi}/{len(QUERIES)}: {query!r} ===", file=sys.stderr)
+    run_results: list[dict] = []
+    for i, (eng_name, engine) in enumerate(engines):
+        await _query_engine(eng_name, engine, query, run_stats, run_results)
+        if i < len(engines) - 1:
+            await asyncio.sleep(BROWSER_SLEEP_S)
+    return run_results
 
 
 def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
@@ -128,6 +132,23 @@ def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     lines += _section_per_engine_distribution(all_runs)
     lines += _section_run_stats(all_runs, run_stats)
     return lines
+
+
+async def _query_engine(eng_name, engine, query, run_stats, run_results) -> None:
+    max_r = ENGINE_MAX[eng_name]
+    print(f"  {eng_name} ...", file=sys.stderr, end="", flush=True)
+
+    t0 = time.monotonic()
+    try:
+        results = (await engine.search_with_reason(query, "en", max_r))[0]
+        ms = round((time.monotonic() - t0) * 1000)
+        print(f" {len(results)} ({ms}ms)", file=sys.stderr)
+        run_stats[eng_name]["total"] += len(results)
+        _append_rows(run_results, eng_name, results)
+    except Exception as e:
+        ms = round((time.monotonic() - t0) * 1000)
+        print(f" ERROR {e} ({ms}ms)", file=sys.stderr)
+        run_stats[eng_name]["errors"] += 1
 
 
 def _section_url_listings(all_runs: dict) -> list[str]:
@@ -279,6 +300,15 @@ def _section_run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     total_all = sum(len(v) for v in all_runs.values())
     lines += ["", f"**Total URLs collected:** {total_all}", ""]
     return lines
+
+
+def _append_rows(run_results, eng_name, results) -> None:
+    for r in results:
+        run_results.append({
+            "engine":   eng_name,
+            "position": r.position,
+            "url":      r.url,
+        })
 
 
 def _domain(url: str) -> str:

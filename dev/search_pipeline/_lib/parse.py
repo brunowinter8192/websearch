@@ -12,11 +12,6 @@ KNOWN_ENGINES = {
 
 # FUNCTIONS
 
-def _repr_unquote(s: str) -> str:
-    s = s.strip()
-    return ast.literal_eval(s)
-
-
 def parse_smoke_report(path: Path) -> list[dict]:
     lines = path.read_text(encoding="utf-8").splitlines()
     records: list[dict] = []
@@ -114,3 +109,8 @@ def _apply_field_line(line: str, record: dict) -> None:
         eng = m.group(1).lower()
         if eng in KNOWN_ENGINES:
             record["snippets"][eng] = _repr_unquote(m.group(2))
+
+
+def _repr_unquote(s: str) -> str:
+    s = s.strip()
+    return ast.literal_eval(s)

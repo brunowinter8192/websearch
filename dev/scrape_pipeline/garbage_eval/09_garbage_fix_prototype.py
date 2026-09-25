@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import os
@@ -35,13 +34,14 @@ FIX2_URLS = [
 
 
 # ORCHESTRATOR
+
 async def run_fix_prototype():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = REPORTS_DIR / f"09_garbage_fix_prototype_{timestamp}.md"
+    report_path = _compute_report_path(timestamp)
 
-    all_urls = list(dict.fromkeys(url for _, url in FIX1_URLS + FIX2_URLS))
-    print(f"Scraping {len(all_urls)} unique URLs...")
+    all_urls = _compute_all_urls()
+    _print_scraping_unique_urls(all_urls)
     results = await scrape_all_urls(all_urls)
 
     fix1_section = build_fix1_section(results)
@@ -50,10 +50,24 @@ async def run_fix_prototype():
 
     report = "\n\n".join(["# Garbage Detection Fix Prototypes", fix1_section, fix2_section, recommendation])
     report_path.write_text(report, encoding="utf-8")
-    print(f"Report: {report_path}")
+    _print_report(report_path)
 
 
 # FUNCTIONS
+
+def _compute_report_path(timestamp):
+    report_path = REPORTS_DIR / f"09_garbage_fix_prototype_{timestamp}.md"
+    return report_path
+
+
+def _compute_all_urls():
+    all_urls = list(dict.fromkeys(url for _, url in FIX1_URLS + FIX2_URLS))
+    return all_urls
+
+
+def _print_scraping_unique_urls(all_urls):
+    print(f"Scraping {len(all_urls)} unique URLs...")
+
 
 async def scrape_all_urls(urls: list[str]) -> dict:
     markdown_generator = DefaultMarkdownGenerator(
@@ -134,20 +148,6 @@ def build_fix2_section(results: dict) -> str:
     return "\n".join(lines)
 
 
-def strip_consent_prefix(content: str) -> str:
-    if not content:
-        return content
-    sample = content[:3000].lower()
-    density = sum(sample.count(w) for w in CONSENT_WORDS)
-    if density <= CONSENT_DENSITY_THRESHOLD:
-        return content
-    match = re.search(r'\n(#{1,2} )', content[CONSENT_SKIP_OFFSET:])
-    if match:
-        pos = CONSENT_SKIP_OFFSET + match.start() + 1
-        return content[pos:]
-    return content
-
-
 def build_recommendation(results: dict) -> str:
     medium_url = "https://medium.com/nonexistent-article-xyz-12345"
     wiki_url = "https://en.wikipedia.org/wiki/Python_(programming_language)"
@@ -196,6 +196,24 @@ def build_recommendation(results: dict) -> str:
         )
 
     return "\n".join(lines)
+
+
+def _print_report(report_path):
+    print(f"Report: {report_path}")
+
+
+def strip_consent_prefix(content: str) -> str:
+    if not content:
+        return content
+    sample = content[:3000].lower()
+    density = sum(sample.count(w) for w in CONSENT_WORDS)
+    if density <= CONSENT_DENSITY_THRESHOLD:
+        return content
+    match = re.search(r'\n(#{1,2} )', content[CONSENT_SKIP_OFFSET:])
+    if match:
+        pos = CONSENT_SKIP_OFFSET + match.start() + 1
+        return content[pos:]
+    return content
 
 
 if __name__ == "__main__":

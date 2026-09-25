@@ -11,7 +11,7 @@ No `__init__.py` — not a package. Both scripts are CLI entry points; run the s
 
 ## Modules
 
-### sweep.py (264 LOC)
+### sweep.py (273 LOC)
 
 **Purpose:** Runs every configuration of the sweep matrix against the Q24 URL set.
 **Reads:** `sweep_config.yml`, Q24 URL set.
@@ -19,7 +19,7 @@ No `__init__.py` — not a package. Both scripts are CLI entry points; run the s
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`, `yaml`.
 
-### analyze.py (340 LOC)
+### analyze.py (354 LOC)
 
 **Purpose:** Scores each sweep candidate against the clean-raw baseline and ranks configurations with drill-down diffs.
 **Reads:** `sweep_data/<ts>/`, baseline from `../03_cleanup/cleaned_data/`.

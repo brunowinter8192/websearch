@@ -11,7 +11,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 
 ## Modules
 
-### mojeek_challenge_capture.py (165 LOC)
+### mojeek_challenge_capture.py (169 LOC)
 
 **Purpose:** Single-navigation capture of the challenge page as served, to settle which strings are real before an engine keys on one.
 **Reads:** One live navigation against mojeek.com.
@@ -19,7 +19,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** CLI only.
 **Calls out:** none.
 
-### mojeek_pydoll_probe.py (182 LOC)
+### mojeek_pydoll_probe.py (186 LOC)
 
 **Purpose:** Live three-phase probe: does the ALTCHA flow complete, what does it cost, does a solved challenge carry over.
 **Reads:** nothing; hardcoded queries, live navigations.
@@ -67,7 +67,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
 **Calls out:** none.
 
-### verify_mojeek_pydoll_core.py (338 LOC)
+### verify_mojeek_pydoll_core.py (337 LOC)
 
 **Purpose:** Verification of the probe checks against a real headless Chrome, one check per fixture server and profile; run by explicit path.
 **Reads:** `fixtures/*.html`.

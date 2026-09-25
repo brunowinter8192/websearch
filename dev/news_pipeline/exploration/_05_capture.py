@@ -88,23 +88,6 @@ def kill_chrome_on_port(port: int) -> None:
     subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
 
 
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
-
-
-async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
-    async with tab.request.record() as capture:
-        for i in range(n_clicks):
-            raw = await tab.execute_script(_JS_CLICK_BTN)
-            clicked = bool(_extract_value(raw))
-            print(f"  click {i + 1}/{n_clicks}: {'OK' if clicked else 'miss'}", file=sys.stderr)
-            await asyncio.sleep(2.5)
-    for entry in capture.entries:
-        if TIMELINE_API_PATH in entry["request"]["url"]:
-            return entry
-    return None
-
-
 def filter_headers(raw: dict) -> dict:
     return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
 
@@ -120,3 +103,20 @@ async def run_capture_phase(tab, mode: str) -> dict | None:
 
     print(f"[{mode}] Capturing timeline request ({CLICKS_TO_TRIGGER} clicks) …", file=sys.stderr)
     return await capture_timeline_request(tab, CLICKS_TO_TRIGGER)
+
+
+async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
+    async with tab.request.record() as capture:
+        for i in range(n_clicks):
+            raw = await tab.execute_script(_JS_CLICK_BTN)
+            clicked = bool(_extract_value(raw))
+            print(f"  click {i + 1}/{n_clicks}: {'OK' if clicked else 'miss'}", file=sys.stderr)
+            await asyncio.sleep(2.5)
+    for entry in capture.entries:
+        if TIMELINE_API_PATH in entry["request"]["url"]:
+            return entry
+    return None
+
+
+def _extract_value(raw):
+    return raw["result"]["result"]["value"]

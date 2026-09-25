@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import gzip
 from xml.etree import ElementTree
 
@@ -9,6 +10,8 @@ from src.crawler.seed_feeders_sitemap import fetch_sitemap, parse_sitemap_xml, r
 from src.crawler import sitemap_feeder
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _xml
 
+
+# FUNCTIONS
 
 def test_parse_sitemap_xml_urlset():
     content = _xml(

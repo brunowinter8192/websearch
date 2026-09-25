@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 from src.news.engine.proxy_pool.janitor import (
     _compute_stats,
     _compute_window_stats,
@@ -7,9 +8,7 @@ from src.news.engine.proxy_pool.janitor import (
 from dev.tests._proxy_pool_fakes import _attempt, _refresh, _write_and_read_md
 
 
-def _md(tmp_path, events, target=10, done=5):
-    return _write_and_read_md(_compute_stats, _write_md, tmp_path, events, target, done)
-
+# FUNCTIONS
 
 def test_urls_handled_is_distinct_urls():
     t0 = _parse_ts("2026-01-01T00:00:00Z")
@@ -96,3 +95,7 @@ def test_job_md_urls_handled_and_fetch_attempts_values(tmp_path):
     cols = [c.strip() for c in row.split("|")]
     assert cols[4] == "2", f"urls_handled wrong: {cols[4]}"
     assert cols[5] == "3", f"fetch_attempts wrong: {cols[5]}"
+
+
+def _md(tmp_path, events, target=10, done=5):
+    return _write_and_read_md(_compute_stats, _write_md, tmp_path, events, target, done)

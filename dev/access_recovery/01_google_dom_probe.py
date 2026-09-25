@@ -16,8 +16,6 @@ from _dom import (
 )
 from _report import write_report, count_outcomes
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-
 SCRIPT_DIR = Path(__file__).parent
 REPORT_DIR = SCRIPT_DIR / "md"
 HTML_DIR = SCRIPT_DIR / "html"
@@ -33,15 +31,45 @@ NUM_VARIANTS = [100, 10]
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     queries = _load_queries()
     run_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    html_run_dir = HTML_DIR / f"google_dom_probe_{run_ts}"
+    html_run_dir = _compute_html_run_dir(run_ts)
     html_run_dir.mkdir(parents=True, exist_ok=True)
 
-    records = []
-    nav_index = 0
+    total_navs = _compute_total_navs(queries)
+    records = await _run_navigations(queries, total_navs, html_run_dir)
+
+    report_path = write_report(records, run_ts, REPORT_DIR, NUM_VARIANTS, NAV_DELAY_S)
+    outcome_counts = count_outcomes(records)
+    _print_report(report_path, outcome_counts)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _load_queries() -> list[dict]:
+    with open(QUERIES_PATH, encoding="utf-8") as f:
+        return json.load(f)["queries"]
+
+
+def _compute_html_run_dir(run_ts):
+    html_run_dir = HTML_DIR / f"google_dom_probe_{run_ts}"
+    return html_run_dir
+
+
+def _compute_total_navs(queries):
     total_navs = len(queries) * len(NUM_VARIANTS)
+    return total_navs
+
+
+async def _run_navigations(queries, total_navs, html_run_dir):
+    nav_index = 0
+    records = []
     try:
         for qi, q in enumerate(queries):
             for num in NUM_VARIANTS:
@@ -59,24 +87,36 @@ async def run_probe() -> None:
                     await asyncio.sleep(NAV_DELAY_S)
     finally:
         await close_browser()
+    return records
 
-    report_path = write_report(records, run_ts, REPORT_DIR, NUM_VARIANTS, NAV_DELAY_S)
-    outcome_counts = count_outcomes(records)
+
+def _print_report(report_path, outcome_counts):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Outcomes: {outcome_counts}", file=sys.stderr)
 
 
-# FUNCTIONS
-
-def _load_queries() -> list[dict]:
-    with open(QUERIES_PATH, encoding="utf-8") as f:
-        return json.load(f)["queries"]
-
-
-def _slugify(text: str) -> str:
-    import re
-    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return slug[:60]
+async def run_navigation(query: str, axis: str, num: int, html_run_dir: Path) -> dict:
+    record: dict = {
+        "query": query, "axis": axis, "num": num, "outcome": "ERROR",
+        "count": 0, "samples": [], "containers_count": None, "diagnostic": None,
+        "landed_url": None, "error": None,
+    }
+    t0 = time.monotonic()
+    tab = await new_tab()
+    try:
+        await inject_socs_cookie(tab)
+        search_url = SEARCH_URL.format(quote_plus(query), "en", num)
+        current = await _navigate_with_consent(tab, search_url)
+        record["landed_url"] = current
+        await _classify_navigation(tab, record, current)
+        await _save_navigation_artifacts(tab, record, query, num, html_run_dir)
+    except Exception as e:
+        record["outcome"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
+    finally:
+        await kill_tab(tab)
+    record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
+    return record
 
 
 async def _navigate_with_consent(tab, search_url: str) -> str:
@@ -120,28 +160,10 @@ async def _save_navigation_artifacts(tab, record: dict, query: str, num: int, ht
         )
 
 
-async def run_navigation(query: str, axis: str, num: int, html_run_dir: Path) -> dict:
-    record: dict = {
-        "query": query, "axis": axis, "num": num, "outcome": "ERROR",
-        "count": 0, "samples": [], "containers_count": None, "diagnostic": None,
-        "landed_url": None, "error": None,
-    }
-    t0 = time.monotonic()
-    tab = await new_tab()
-    try:
-        await inject_socs_cookie(tab)
-        search_url = SEARCH_URL.format(quote_plus(query), "en", num)
-        current = await _navigate_with_consent(tab, search_url)
-        record["landed_url"] = current
-        await _classify_navigation(tab, record, current)
-        await _save_navigation_artifacts(tab, record, query, num, html_run_dir)
-    except Exception as e:
-        record["outcome"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:200]}"
-    finally:
-        await kill_tab(tab)
-    record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
-    return record
+def _slugify(text: str) -> str:
+    import re
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return slug[:60]
 
 
 if __name__ == "__main__":

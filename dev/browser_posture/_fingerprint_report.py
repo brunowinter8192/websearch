@@ -5,6 +5,34 @@ from pathlib import Path
 
 # FUNCTIONS
 
+def write_report(results: dict, orphans: list[str], report_dir: Path, variants: list, hardcoded_props: dict) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = report_dir / f"03_fingerprint_patch_probe_{ts}.md"
+
+    none = results["none"]
+    href = results["headless_reference"]
+    verdict = _compute_activetext_verdict(none, href)
+
+    lines = [
+        f"# Fingerprint-Patch Consistency Probe — {ts}",
+        "",
+        "Dev-only probe (macOS, headed-backgrounded only): does `src/search/browser.py`'s "
+        "`JS_FINGERPRINT_PATCHES` (written for headless) still make sense under headed? 4 variants "
+        "+ 1 headless reference (artifact test only). Targets: local artifact page (system colors + "
+        "screen/window props), bot.sannysoft.com, CreepJS.",
+        "",
+    ]
+    lines += _build_activetext_section(results, variants, href, verdict)
+    lines += _build_screen_props_section(results, variants, href)
+    lines += _build_sannysoft_section(results, variants)
+    lines += _build_creepjs_section(results, variants)
+    lines += _build_per_block_verdict_section(results, hardcoded_props, verdict)
+    lines += _build_teardown_section(orphans)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _compute_activetext_verdict(none: dict, href: dict) -> dict:
     red_headed_nopatch = none["colors"].get("activeText") == "rgb(255, 0, 0)"
     red_headless_nopatch = href["colors"].get("activeText") == "rgb(255, 0, 0)"
@@ -156,6 +184,27 @@ def _build_creepjs_section(results: dict, variants: list) -> list[str]:
     return lines
 
 
+def _build_per_block_verdict_section(results: dict, hardcoded_props: dict, verdict: dict) -> list[str]:
+    lines = ["", "## Per-Block Verdict", ""]
+    lines.append(_build_block_b_verdict(verdict))
+    lines.append("")
+    lines.append(_build_block_a_verdict(results, hardcoded_props))
+    return lines
+
+
+def _build_teardown_section(orphans: list[str]) -> list[str]:
+    lines = [
+        "",
+        "## Teardown",
+        "",
+        f"Orphan Chrome processes pinned to any `browser-posture-probe` profile after the run: {len(orphans)}",
+    ]
+    if orphans:
+        lines.append("")
+        lines.extend(f"    {o}" for o in orphans)
+    return lines
+
+
 def _build_block_b_verdict(verdict: dict) -> str:
     if verdict["red_headless_nopatch"] and not verdict["red_headed_nopatch"]:
         return (
@@ -205,52 +254,3 @@ def _build_block_a_verdict(results: dict, hardcoded_props: dict) -> str:
         "this machine's real one), values must be internally consistent with each other and with what "
         "the renderer actually does — Milestone 3's concern."
     )
-
-
-def _build_per_block_verdict_section(results: dict, hardcoded_props: dict, verdict: dict) -> list[str]:
-    lines = ["", "## Per-Block Verdict", ""]
-    lines.append(_build_block_b_verdict(verdict))
-    lines.append("")
-    lines.append(_build_block_a_verdict(results, hardcoded_props))
-    return lines
-
-
-def _build_teardown_section(orphans: list[str]) -> list[str]:
-    lines = [
-        "",
-        "## Teardown",
-        "",
-        f"Orphan Chrome processes pinned to any `browser-posture-probe` profile after the run: {len(orphans)}",
-    ]
-    if orphans:
-        lines.append("")
-        lines.extend(f"    {o}" for o in orphans)
-    return lines
-
-
-def write_report(results: dict, orphans: list[str], report_dir: Path, variants: list, hardcoded_props: dict) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = report_dir / f"03_fingerprint_patch_probe_{ts}.md"
-
-    none = results["none"]
-    href = results["headless_reference"]
-    verdict = _compute_activetext_verdict(none, href)
-
-    lines = [
-        f"# Fingerprint-Patch Consistency Probe — {ts}",
-        "",
-        "Dev-only probe (macOS, headed-backgrounded only): does `src/search/browser.py`'s "
-        "`JS_FINGERPRINT_PATCHES` (written for headless) still make sense under headed? 4 variants "
-        "+ 1 headless reference (artifact test only). Targets: local artifact page (system colors + "
-        "screen/window props), bot.sannysoft.com, CreepJS.",
-        "",
-    ]
-    lines += _build_activetext_section(results, variants, href, verdict)
-    lines += _build_screen_props_section(results, variants, href)
-    lines += _build_sannysoft_section(results, variants)
-    lines += _build_creepjs_section(results, variants)
-    lines += _build_per_block_verdict_section(results, hardcoded_props, verdict)
-    lines += _build_teardown_section(orphans)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path

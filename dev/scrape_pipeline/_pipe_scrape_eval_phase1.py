@@ -9,14 +9,32 @@ from _pipe_scrape_eval_common import DISCOVERED_URLS, REPORTS_DIR, compute_metri
 
 # FUNCTIONS
 
-def fmt_sweep_row(concurrency: int, m: dict, wall_s: float) -> str:
-    waf_safe = "✓" if m['waf_429'] == 0 else "✗"
-    return (
-        f"| {concurrency} | {m['ok']}/{m['total']} | {m['empty']} | "
-        f"{m['http_error']} | {m['waf_429']} | "
-        f"{m['lat_p50']} | {m['lat_p95']} | {m['lat_max']} | "
-        f"{wall_s:.0f}s | {waf_safe} |"
-    )
+async def phase1_concurrency_sweep(urls: list[str], sample_n: int = 30) -> int:
+    sample = stratify(urls, sample_n)
+    print(f"Phase 1: concurrency sweep — {len(sample)} stratified URLs, delay=1.0s, timeout=15000ms")
+    print(f"Sample (first 3): {sample[:3]}")
+
+    sweep_rows = []
+    for concurrency in [1, 3, 5, 10]:
+        print(f"\n  concurrency={concurrency} ...", flush=True)
+        t0 = time.time()
+        results = await scrape_urls(
+            sample, delay_s=1.0, page_timeout_ms=15000, concurrency=concurrency
+        )
+        wall_s = time.time() - t0
+        m = compute_metrics(results)
+        sweep_rows.append((concurrency, m, wall_s))
+        print(f"  ok={m['ok']}/{m['total']} empty={m['empty']} 429s={m['waf_429']} "
+              f"p50={m['lat_p50']}ms p95={m['lat_p95']}ms wall={wall_s:.0f}s")
+
+        if m['waf_429'] > 0:
+            print(f"  ✗ WAF triggered at concurrency={concurrency} — stopping sweep early")
+            break
+
+    report_path, best = write_phase1_report(sweep_rows, len(sample))
+    print(f"\nPhase 1 report: {report_path}")
+    print(f"Recommended concurrency: {best}")
+    return best
 
 
 def write_phase1_report(sweep_rows: list[tuple], sample_n: int) -> tuple[Path, int]:
@@ -64,29 +82,11 @@ def write_phase1_report(sweep_rows: list[tuple], sample_n: int) -> tuple[Path, i
     return path, best
 
 
-async def phase1_concurrency_sweep(urls: list[str], sample_n: int = 30) -> int:
-    sample = stratify(urls, sample_n)
-    print(f"Phase 1: concurrency sweep — {len(sample)} stratified URLs, delay=1.0s, timeout=15000ms")
-    print(f"Sample (first 3): {sample[:3]}")
-
-    sweep_rows = []
-    for concurrency in [1, 3, 5, 10]:
-        print(f"\n  concurrency={concurrency} ...", flush=True)
-        t0 = time.time()
-        results = await scrape_urls(
-            sample, delay_s=1.0, page_timeout_ms=15000, concurrency=concurrency
-        )
-        wall_s = time.time() - t0
-        m = compute_metrics(results)
-        sweep_rows.append((concurrency, m, wall_s))
-        print(f"  ok={m['ok']}/{m['total']} empty={m['empty']} 429s={m['waf_429']} "
-              f"p50={m['lat_p50']}ms p95={m['lat_p95']}ms wall={wall_s:.0f}s")
-
-        if m['waf_429'] > 0:
-            print(f"  ✗ WAF triggered at concurrency={concurrency} — stopping sweep early")
-            break
-
-    report_path, best = write_phase1_report(sweep_rows, len(sample))
-    print(f"\nPhase 1 report: {report_path}")
-    print(f"Recommended concurrency: {best}")
-    return best
+def fmt_sweep_row(concurrency: int, m: dict, wall_s: float) -> str:
+    waf_safe = "✓" if m['waf_429'] == 0 else "✗"
+    return (
+        f"| {concurrency} | {m['ok']}/{m['total']} | {m['empty']} | "
+        f"{m['http_error']} | {m['waf_429']} | "
+        f"{m['lat_p50']} | {m['lat_p95']} | {m['lat_max']} | "
+        f"{wall_s:.0f}s | {waf_safe} |"
+    )

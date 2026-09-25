@@ -1,9 +1,12 @@
+# INFRASTRUCTURE
 import json
 
 import pytest
 
 from src.news.platforms.coindesk.timeline import parse_articles
 
+
+# FUNCTIONS
 
 def test_parse_articles_raises_on_invalid_json():
     with pytest.raises(json.JSONDecodeError):
@@ -12,13 +15,6 @@ def test_parse_articles_raises_on_invalid_json():
 
 def test_parse_articles_returns_empty_list_for_real_bottom_shape():
     assert parse_articles(b'{"foo": 1}') == []
-
-
-def _article(**over):
-    base = {"_id": "abc", "pathname": "/markets/2026/09/24/x/", "storyType": "news", "title": "T",
-            "articleDates": {"displayDate": "2026-09-24T10:00:00Z"}}
-    base.update(over)
-    return base
 
 
 def test_parse_articles_reads_the_observed_shape():
@@ -48,3 +44,10 @@ def test_parse_articles_does_not_accept_alternative_date_keys():
     art["displayDate"] = "2026-09-24"
     with pytest.raises(KeyError):
         parse_articles(json.dumps([art]).encode())
+
+
+def _article(**over):
+    base = {"_id": "abc", "pathname": "/markets/2026/09/24/x/", "storyType": "news", "title": "T",
+            "articleDates": {"displayDate": "2026-09-24T10:00:00Z"}}
+    base.update(over)
+    return base

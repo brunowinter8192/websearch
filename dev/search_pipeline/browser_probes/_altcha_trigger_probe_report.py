@@ -6,6 +6,29 @@ from pathlib import Path
 
 # FUNCTIONS
 
+def build_report_md(
+    inspection, trigger_results: list, search_url: str, pause_s: float,
+    result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
+) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lines = _build_header(ts, search_url, len(trigger_results), pause_s)
+    lines += _build_summary_table(trigger_results)
+    lines += _build_inspection_section(inspection)
+    for result in trigger_results:
+        lines += _build_trigger_section(result)
+    lines += _build_methodology_section(result_link_selector, block_marker_text, in_flight_marker_text, settle_timeout_s)
+    return "\n".join(lines)
+
+
+def write_report(report: str, report_dir: Path) -> Path:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"altcha_trigger_probe_{ts}.md"
+    report_path.write_text(report)
+    print(f"Report written to {report_path}")
+    return report_path
+
+
 def _build_header(ts: str, search_url: str, trigger_count: int, pause_s: float) -> list[str]:
     return [
         "# ALTCHA Trigger Probe",
@@ -34,17 +57,6 @@ def _build_summary_table(trigger_results: list) -> list[str]:
     return lines
 
 
-def _build_event_table(events: list[dict]) -> list[str]:
-    if not events:
-        return ["(no widget events observed)"]
-    lines = ["| t_ms | event | detail |", "|---|---|---|"]
-    t0 = events[0]["t_ms"]
-    for e in events:
-        detail = e.get("detail") or ""
-        lines.append(f"| {e['t_ms'] - t0} | {e['event']} | {detail} |")
-    return lines
-
-
 def _build_inspection_section(inspection) -> list[str]:
     lines = ["## Step 1 — Passive Inspection", ""]
     if inspection.error:
@@ -59,55 +71,6 @@ def _build_inspection_section(inspection) -> list[str]:
     lines += _build_event_table(inspection.events)
     lines.append("")
     return lines
-
-
-def _inspection_facts(inspection) -> list[str]:
-    return [
-        f"Widget found: {inspection.widget_found}",
-        f"Page title at capture: {inspection.page_title}",
-        f"Widget state (getState()): {inspection.state}",
-        f"Shadow root mode (via CDP DOM.describeNode, pierce=True — sees closed roots too): "
-        f"{inspection.shadow_mode}",
-        f"Interactive element located via: {inspection.interactive_element_selector} "
-        f"(tag: {inspection.interactive_element_tag})",
-        "",
-        f"humanInteractionSignature (getConfiguration()): {inspection.his_enabled}",
-        "",
-        "### Attributes as served today",
-        "",
-        "```json",
-        json.dumps(inspection.attributes, indent=2),
-        "```",
-        "",
-        "### getConfiguration() output",
-        "",
-        "```json",
-        json.dumps(inspection.configuration, indent=2),
-        "```",
-        "",
-        "### Deviations from ALTCHA's documented defaults",
-        "",
-    ]
-
-
-def _inspection_markup(inspection) -> list[str]:
-    return [
-        "",
-        "### Surrounding form markup",
-        "",
-        "```html",
-        inspection.form_outer_html or "(no enclosing form found)",
-        "```",
-        "",
-        "### Widget markup",
-        "",
-        "```html",
-        inspection.widget_outer_html or "(unavailable)",
-        "```",
-        "",
-        "### Events observed during passive load (no trigger fired)",
-        "",
-    ]
 
 
 def _build_trigger_section(result) -> list[str]:
@@ -161,6 +124,66 @@ def _build_methodology_section(
         + _methodology_click_delivery()
         + _methodology_page_outcome(result_link_selector, block_marker_text, in_flight_marker_text, settle_timeout_s)
     )
+
+
+def _inspection_facts(inspection) -> list[str]:
+    return [
+        f"Widget found: {inspection.widget_found}",
+        f"Page title at capture: {inspection.page_title}",
+        f"Widget state (getState()): {inspection.state}",
+        f"Shadow root mode (via CDP DOM.describeNode, pierce=True — sees closed roots too): "
+        f"{inspection.shadow_mode}",
+        f"Interactive element located via: {inspection.interactive_element_selector} "
+        f"(tag: {inspection.interactive_element_tag})",
+        "",
+        f"humanInteractionSignature (getConfiguration()): {inspection.his_enabled}",
+        "",
+        "### Attributes as served today",
+        "",
+        "```json",
+        json.dumps(inspection.attributes, indent=2),
+        "```",
+        "",
+        "### getConfiguration() output",
+        "",
+        "```json",
+        json.dumps(inspection.configuration, indent=2),
+        "```",
+        "",
+        "### Deviations from ALTCHA's documented defaults",
+        "",
+    ]
+
+
+def _inspection_markup(inspection) -> list[str]:
+    return [
+        "",
+        "### Surrounding form markup",
+        "",
+        "```html",
+        inspection.form_outer_html or "(no enclosing form found)",
+        "```",
+        "",
+        "### Widget markup",
+        "",
+        "```html",
+        inspection.widget_outer_html or "(unavailable)",
+        "```",
+        "",
+        "### Events observed during passive load (no trigger fired)",
+        "",
+    ]
+
+
+def _build_event_table(events: list[dict]) -> list[str]:
+    if not events:
+        return ["(no widget events observed)"]
+    lines = ["| t_ms | event | detail |", "|---|---|---|"]
+    t0 = events[0]["t_ms"]
+    for e in events:
+        detail = e.get("detail") or ""
+        lines.append(f"| {e['t_ms'] - t0} | {e['event']} | {detail} |")
+    return lines
 
 
 def _methodology_setup() -> list[str]:
@@ -262,26 +285,3 @@ def _methodology_page_outcome(
         "does not conflate the two.",
         "",
     ]
-
-
-def build_report_md(
-    inspection, trigger_results: list, search_url: str, pause_s: float,
-    result_link_selector: str, block_marker_text: str, in_flight_marker_text: str, settle_timeout_s: float,
-) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    lines = _build_header(ts, search_url, len(trigger_results), pause_s)
-    lines += _build_summary_table(trigger_results)
-    lines += _build_inspection_section(inspection)
-    for result in trigger_results:
-        lines += _build_trigger_section(result)
-    lines += _build_methodology_section(result_link_selector, block_marker_text, in_flight_marker_text, settle_timeout_s)
-    return "\n".join(lines)
-
-
-def write_report(report: str, report_dir: Path) -> Path:
-    report_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"altcha_trigger_probe_{ts}.md"
-    report_path.write_text(report)
-    print(f"Report written to {report_path}")
-    return report_path

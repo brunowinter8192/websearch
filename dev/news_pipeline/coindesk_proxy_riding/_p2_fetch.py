@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import hashlib
 import sys
 import time
@@ -70,6 +69,16 @@ async def _fetch_one_url(
     return status, len(html) if html else None, markdown_len, elapsed, html, err
 
 
+def _write_raw(url_hash: str, html: str, output_dir: Path) -> Path:
+    path = output_dir / RAW_SUBDIR / f"{url_hash}.html"
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
+def _url_hash(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]
+
+
 def _classify_fetch_result(result) -> tuple:
     if not result.success:
         emsg   = (result.error_message or "").lower()
@@ -85,13 +94,3 @@ def _classify_fetch_result(result) -> tuple:
 
 def _is_regwall(markdown: str) -> bool:
     return any(sig in markdown for sig in REGWALL_SIGNALS)
-
-
-def _write_raw(url_hash: str, html: str, output_dir: Path) -> Path:
-    path = output_dir / RAW_SUBDIR / f"{url_hash}.html"
-    path.write_text(html, encoding="utf-8")
-    return path
-
-
-def _url_hash(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:12]

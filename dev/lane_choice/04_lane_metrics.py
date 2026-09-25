@@ -16,6 +16,12 @@ from _lane_metrics_report import write_report
 
 # ORCHESTRATOR
 
+def main():
+    lane_metrics_workflow()
+
+
+# FUNCTIONS
+
 def lane_metrics_workflow() -> None:
     t_start = time.perf_counter()
 
@@ -40,10 +46,6 @@ def lane_metrics_workflow() -> None:
     print(f"PROSE cap: {cap} words (p{PROSE_PERCENTILE} of {distribution['n']} chromium blocks)", file=sys.stderr)
     print(f"Report: {report_path}", file=sys.stderr)
     print(f"Wall time: {wall_s:.1f}s", file=sys.stderr)
-
-
-def main():
-    lane_metrics_workflow()
 
 
 if __name__ == "__main__":

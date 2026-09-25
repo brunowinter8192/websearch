@@ -1,5 +1,8 @@
+# INFRASTRUCTURE
 from pathlib import Path
 
+
+# FUNCTIONS
 
 def _attempt(proxy: str, url: str, ts: str, result: str = "ok") -> dict:
     return {"proxy_key": proxy, "url": url, "ts": ts, "result": result}

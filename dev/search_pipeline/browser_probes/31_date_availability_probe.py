@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -9,10 +8,8 @@ import time
 from pathlib import Path
 
 from _date_availability_probe_browser import _extract_value, _kill_tab, _new_tab, close_browser
-from _date_availability_probe_nav import CONTAINER_SELECTOR, NAV_FUNCS
+from _date_availability_probe_nav import CONTAINER_SELECTOR, nav_funcs
 from _date_availability_probe_report import write_report
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -33,7 +30,21 @@ QUERIES = [
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    records = await _run_engines()
+
+    report_path = write_report(records, REPORT_DIR, QUERIES, RETRY_COOLDOWN_S)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+async def _run_engines():
     records = []
     try:
         for engine in CONTAINER_SELECTOR:
@@ -56,12 +67,46 @@ async def run_probe() -> None:
             await asyncio.sleep(INTER_ENGINE_DELAY_S)
     finally:
         await close_browser()
+    return records
 
-    report_path = write_report(records, REPORT_DIR, QUERIES, RETRY_COOLDOWN_S)
+
+def _print_report(report_path):
     print(f"\nReport: {report_path}", file=sys.stderr)
 
 
-# FUNCTIONS
+async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
+    record: dict = {
+        "engine": engine, "query": query, "axis": axis, "retry": retry,
+        "status": "EMPTY", "diag": None, "container_count": 0, "samples": [],
+    }
+    tab = await _new_tab()
+    t0 = time.monotonic()
+    try:
+        ok, diag = await nav_funcs()[engine](tab, query)
+        if ok:
+            evidence = await _dump_date_evidence(tab, engine)
+            record["container_count"] = evidence["count"]
+            record["samples"] = evidence["samples"]
+            record["status"] = "OK" if evidence["count"] > 0 else "EMPTY"
+        else:
+            record["diag"] = diag
+            record["status"] = "BLOCKED" if (diag or {}).get("marker") else "EMPTY"
+    except Exception as e:
+        record["status"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:160]}"
+    finally:
+        record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
+        await _kill_tab(tab)
+    return record
+
+
+async def _dump_date_evidence(tab, engine: str) -> dict:
+    js = _build_date_dump_js(CONTAINER_SELECTOR[engine], CONTAINER_LIMIT)
+    val = _extract_value(await tab.execute_script(js))
+    if not val:
+        return {"count": 0, "samples": []}
+    return json.loads(val)
+
 
 def _build_date_dump_js(container_selector: str, limit: int) -> str:
     escaped = container_selector.replace("'", "\\'")
@@ -97,40 +142,6 @@ for (var _i = 0; _i < _n; _i++) {{
 }}
 return JSON.stringify({{count: _cs.length, samples: _out}});
 """
-
-
-async def _dump_date_evidence(tab, engine: str) -> dict:
-    js = _build_date_dump_js(CONTAINER_SELECTOR[engine], CONTAINER_LIMIT)
-    val = _extract_value(await tab.execute_script(js))
-    if not val:
-        return {"count": 0, "samples": []}
-    return json.loads(val)
-
-
-async def run_engine_query(engine: str, query: str, axis: str, retry: bool) -> dict:
-    record: dict = {
-        "engine": engine, "query": query, "axis": axis, "retry": retry,
-        "status": "EMPTY", "diag": None, "container_count": 0, "samples": [],
-    }
-    tab = await _new_tab()
-    t0 = time.monotonic()
-    try:
-        ok, diag = await NAV_FUNCS[engine](tab, query)
-        if ok:
-            evidence = await _dump_date_evidence(tab, engine)
-            record["container_count"] = evidence["count"]
-            record["samples"] = evidence["samples"]
-            record["status"] = "OK" if evidence["count"] > 0 else "EMPTY"
-        else:
-            record["diag"] = diag
-            record["status"] = "BLOCKED" if (diag or {}).get("marker") else "EMPTY"
-    except Exception as e:
-        record["status"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:160]}"
-    finally:
-        record["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
-        await _kill_tab(tab)
-    return record
 
 
 if __name__ == "__main__":

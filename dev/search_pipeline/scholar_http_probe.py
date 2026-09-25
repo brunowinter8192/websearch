@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import logging
 from urllib.parse import quote_plus
@@ -32,7 +31,7 @@ _COOKIES = {"CONSENT": "YES+"}
 _TIMEOUT = 6.0
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class ScholarHTTPProbe:
     name = "scholar_http"
@@ -67,8 +66,6 @@ class ScholarHTTPProbe:
             self._limiter.reset_backoff()
         return results, reason
 
-
-# FUNCTIONS
 
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -82,47 +81,27 @@ _BACKOFF    = (1, 2, 4, 8)
 COOLDOWN_S  = 3600
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
     entries: list[tuple[str, str]] = []
     sources: list[dict]            = []
 
     _try_source(MONOSANS_URL, _load_monosans, entries, sources)
-    for proto, url in ROOSTERKID_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in DATABAY_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
-    for proto, url in THESPEEDX_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
-    for proto, url in THEMIRALAY_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in R00TEE_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in IPLOCATE_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in SUNNY9577_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ALIILAPRO_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in DPANGESTUW_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ZAEEM20_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ZLOI_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in HOOKZOF_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+    _try_roosterkid_sources(entries, sources)
+    _try_databay_sources(entries, sources)
+    _try_thespeedx_sources(entries, sources)
+    _try_themiralay_sources(entries, sources)
+    _try_r00tee_sources(entries, sources)
+    _try_iplocate_sources(entries, sources)
+    _try_sunny9577_sources(entries, sources)
+    _try_aliilapro_sources(entries, sources)
+    _try_dpangestuw_sources(entries, sources)
+    _try_zaeem20_sources(entries, sources)
+    _try_zloi_sources(entries, sources)
+    _try_hookzof_sources(entries, sources)
 
     return _merge_dedup(entries), sources
-
-
-# FUNCTIONS
-
-def proxy_key(proto: str, host_port: str) -> str:
-    clean        = host_port.split("@")[-1]
-    host, port_s = clean.rsplit(":", 1)
-    return f"{proto}://{host}:{int(port_s)}"
 
 
 class PersistentCooldownManager:
@@ -148,18 +127,6 @@ class PersistentCooldownManager:
         return sum(1 for dt in self._burned_utc.values() if (now - dt) < self._cooldown_td)
 
 
-def fetch_with_retry(fn):
-    last_exc = None
-    for delay in (None, *_BACKOFF):
-        if delay is not None:
-            time.sleep(delay)
-        try:
-            return fn()
-        except Exception as exc:
-            last_exc = exc
-    raise last_exc
-
-
 def _load_monosans() -> list[tuple[str, str]]:
     def _do():
         resp = httpx.get(MONOSANS_URL, timeout=FETCH_TIMEOUT)
@@ -178,30 +145,64 @@ def _load_monosans() -> list[tuple[str, str]]:
     return fetch_with_retry(_do)
 
 
-def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, ln.strip()) for ln in resp.text.splitlines() if ln.strip()]
-    return fetch_with_retry(_do)
+def _try_roosterkid_sources(entries, sources):
+    for proto, url in ROOSTERKID_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
 
 
-def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, m.group()) for ln in resp.text.splitlines()
-                for m in (_IP_PORT_RE.search(ln),) if m]
-    return fetch_with_retry(_do)
+def _try_databay_sources(entries, sources):
+    for proto, url in DATABAY_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
 
 
-def _try_source(url: str, fn, entries: list, sources: list) -> None:
-    try:
-        result = fn()
-        entries.extend(result)
-        sources.append({"url": url, "ok": True, "count": len(result)})
-    except Exception:
-        sources.append({"url": url, "ok": False, "count": 0})
+def _try_thespeedx_sources(entries, sources):
+    for proto, url in THESPEEDX_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
+
+
+def _try_themiralay_sources(entries, sources):
+    for proto, url in THEMIRALAY_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_r00tee_sources(entries, sources):
+    for proto, url in R00TEE_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_iplocate_sources(entries, sources):
+    for proto, url in IPLOCATE_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_sunny9577_sources(entries, sources):
+    for proto, url in SUNNY9577_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_aliilapro_sources(entries, sources):
+    for proto, url in ALIILAPRO_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_dpangestuw_sources(entries, sources):
+    for proto, url in DPANGESTUW_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_zaeem20_sources(entries, sources):
+    for proto, url in ZAEEM20_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_zloi_sources(entries, sources):
+    for proto, url in ZLOI_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _try_hookzof_sources(entries, sources):
+    for proto, url in HOOKZOF_SOURCES:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
 
 
 def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -213,3 +214,47 @@ def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:
             seen.add(key)
             result.append((proto, hp))
     return result
+
+
+def _try_source(url: str, fn, entries: list, sources: list) -> None:
+    try:
+        result = fn()
+        entries.extend(result)
+        sources.append({"url": url, "ok": True, "count": len(result)})
+    except Exception:
+        sources.append({"url": url, "ok": False, "count": 0})
+
+
+def proxy_key(proto: str, host_port: str) -> str:
+    clean        = host_port.split("@")[-1]
+    host, port_s = clean.rsplit(":", 1)
+    return f"{proto}://{host}:{int(port_s)}"
+
+
+def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, m.group()) for ln in resp.text.splitlines()
+                for m in (_IP_PORT_RE.search(ln),) if m]
+    return fetch_with_retry(_do)
+
+
+def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, ln.strip()) for ln in resp.text.splitlines() if ln.strip()]
+    return fetch_with_retry(_do)
+
+
+def fetch_with_retry(fn):
+    last_exc = None
+    for delay in (None, *_BACKOFF):
+        if delay is not None:
+            time.sleep(delay)
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc

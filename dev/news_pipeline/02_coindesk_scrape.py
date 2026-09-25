@@ -18,6 +18,27 @@ OUTPUT_DIR = Path(__file__).parent / "02_output"
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CoinDesk raw scrape — reads discover JSON, writes per-article .md with YAML frontmatter."
+    )
+    parser.add_argument(
+        "--input", default=None,
+        help="Path to discover_*.json (default: newest in 01_json/)"
+    )
+    args = parser.parse_args()
+    input_path = _compute_input_path(args)
+    asyncio.run(scrape_workflow(input_path))
+
+
+# FUNCTIONS
+
+def _compute_input_path(args):
+    input_path = Path(args.input) if args.input else pick_latest_input()
+    return input_path
+
+
 async def scrape_workflow(input_path: Path):
     entries = load_entries(input_path)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -45,7 +66,17 @@ async def scrape_workflow(input_path: Path):
     print_summary(manifest, time.perf_counter() - t_start)
 
 
-# FUNCTIONS
+def pick_latest_input() -> Path:
+    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
+    if not candidates:
+        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
+    return candidates[-1]
+
+
+def load_entries(input_path: Path) -> list[dict]:
+    return json.loads(input_path.read_text(encoding="utf-8"))
+
+
 async def scrape_one_url(crawler: AsyncWebCrawler, entry: dict, run_config: CrawlerRunConfig,
                           i: int, total: int) -> dict:
     url = entry["url"]
@@ -76,8 +107,27 @@ async def scrape_one_url(crawler: AsyncWebCrawler, entry: dict, run_config: Craw
 
     return result_entry
 
-def load_entries(input_path: Path) -> list[dict]:
-    return json.loads(input_path.read_text(encoding="utf-8"))
+
+def write_manifest(manifest: list[dict]):
+    manifest_path = OUTPUT_DIR / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Manifest: {manifest_path}", file=sys.stderr)
+
+
+def print_summary(manifest: list[dict], total_s: float):
+    ok = [e for e in manifest if e["status"] == "ok"]
+    failed = [e for e in manifest if e["status"] == "failed"]
+    empty = [e for e in manifest if e["status"] == "empty"]
+    total_chars = sum(e["char_count"] or 0 for e in ok)
+    slowest = max(ok, key=lambda e: e.get("elapsed_s", 0), default=None)
+
+    print(f"\nDone in {total_s:.0f}s")
+    print(f"  ok      : {len(ok)}")
+    print(f"  empty   : {len(empty)}")
+    print(f"  failed  : {len(failed)}")
+    print(f"  total chars: {total_chars:,}")
+    if slowest:
+        print(f"  slowest : {slowest['url']} ({slowest.get('elapsed_s', '?')}s)")
 
 
 def scrape_one(entry: dict, url_hash: str) -> dict:
@@ -106,48 +156,6 @@ def write_article(entry: dict, url_hash: str, content: str) -> Path:
     file_path = OUTPUT_DIR / f"{url_hash}.md"
     file_path.write_text(frontmatter + content, encoding="utf-8")
     return file_path
-
-
-def write_manifest(manifest: list[dict]):
-    manifest_path = OUTPUT_DIR / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Manifest: {manifest_path}", file=sys.stderr)
-
-
-def print_summary(manifest: list[dict], total_s: float):
-    ok = [e for e in manifest if e["status"] == "ok"]
-    failed = [e for e in manifest if e["status"] == "failed"]
-    empty = [e for e in manifest if e["status"] == "empty"]
-    total_chars = sum(e["char_count"] or 0 for e in ok)
-    slowest = max(ok, key=lambda e: e.get("elapsed_s", 0), default=None)
-
-    print(f"\nDone in {total_s:.0f}s")
-    print(f"  ok      : {len(ok)}")
-    print(f"  empty   : {len(empty)}")
-    print(f"  failed  : {len(failed)}")
-    print(f"  total chars: {total_chars:,}")
-    if slowest:
-        print(f"  slowest : {slowest['url']} ({slowest.get('elapsed_s', '?')}s)")
-
-
-def pick_latest_input() -> Path:
-    candidates = sorted(INPUT_DIR.glob("discover_*.json"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
-        raise FileNotFoundError(f"No discover_*.json found in {INPUT_DIR}")
-    return candidates[-1]
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="CoinDesk raw scrape — reads discover JSON, writes per-article .md with YAML frontmatter."
-    )
-    parser.add_argument(
-        "--input", default=None,
-        help="Path to discover_*.json (default: newest in 01_json/)"
-    )
-    args = parser.parse_args()
-    input_path = Path(args.input) if args.input else pick_latest_input()
-    asyncio.run(scrape_workflow(input_path))
 
 
 if __name__ == "__main__":

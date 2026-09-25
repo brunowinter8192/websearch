@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import argparse
 import random
 import re
@@ -29,6 +28,20 @@ _NUM_RE       = re.compile(r"_(\d+)\.xml$")
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="48h article delta probe: theblock.co highest post-sitemap → parallel race fetch → raw HTML"
+    )
+    parser.add_argument(
+        "--hours", type=float, default=48.0,
+        help="Lookback window in hours; <2 hits → fallback to 2 newest (default: 48)",
+    )
+    args = parser.parse_args()
+    probe_48h_article_fetch_workflow(hours=args.hours)
+
+
+# FUNCTIONS
 
 def probe_48h_article_fetch_workflow(hours: float) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -81,8 +94,6 @@ def probe_48h_article_fetch_workflow(hours: float) -> None:
             print(f"  → FAILED (all {RACE_WIDTH} parallel proxies missed)")
 
 
-# FUNCTIONS
-
 def _fetch_index(pool: list) -> list[str]:
     content = _fetch_index_direct()
     if content is None:
@@ -93,21 +104,28 @@ def _fetch_index(pool: list) -> list[str]:
     return [u.decode().strip() for u in locs if b"post_type_post" in u]
 
 
-def _fetch_index_direct() -> bytes | None:
-    r = httpx.get(INDEX_URL, timeout=DIRECT_TIMEOUT, follow_redirects=True)
-    head = r.content[:500]
-    if r.status_code == 200 and any(m in head for m in XML_MARKERS):
-        print(f"[sitemap] Direct OK ({len(r.content):,} bytes)")
-        return r.content
-    print(f"[sitemap] Direct: status={r.status_code}, no XML marker — parallel fallback")
-    return None
-
-
 def _pick_highest_numbered(urls: list[str]) -> str:
     def _num(u: str) -> int:
         m = _NUM_RE.search(u)
         return int(m.group(1)) if m else -1
     return max(urls, key=_num)
+
+
+def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
+    results: list[tuple[str, datetime]] = []
+    for block in _URL_BLOCK_RE.finditer(content):
+        body  = block.group(1)
+        loc_m = _LOC_RE.search(body)
+        mod_m = _MOD_RE.search(body)
+        if not loc_m or not mod_m:
+            continue
+        url     = loc_m.group(1).decode().strip()
+        mod_raw = mod_m.group(1).decode().strip().replace("Z", "+00:00")
+        mod = datetime.fromisoformat(mod_raw)
+        if mod.tzinfo is None:
+            mod = mod.replace(tzinfo=timezone.utc)
+        results.append((url, mod))
+    return results
 
 
 def _fetch_parallel(
@@ -131,30 +149,15 @@ def _fetch_parallel(
     return False, b""
 
 
-def _parse_url_blocks(content: bytes) -> list[tuple[str, datetime]]:
-    results: list[tuple[str, datetime]] = []
-    for block in _URL_BLOCK_RE.finditer(content):
-        body  = block.group(1)
-        loc_m = _LOC_RE.search(body)
-        mod_m = _MOD_RE.search(body)
-        if not loc_m or not mod_m:
-            continue
-        url     = loc_m.group(1).decode().strip()
-        mod_raw = mod_m.group(1).decode().strip().replace("Z", "+00:00")
-        mod = datetime.fromisoformat(mod_raw)
-        if mod.tzinfo is None:
-            mod = mod.replace(tzinfo=timezone.utc)
-        results.append((url, mod))
-    return results
+def _fetch_index_direct() -> bytes | None:
+    r = httpx.get(INDEX_URL, timeout=DIRECT_TIMEOUT, follow_redirects=True)
+    head = r.content[:500]
+    if r.status_code == 200 and any(m in head for m in XML_MARKERS):
+        print(f"[sitemap] Direct OK ({len(r.content):,} bytes)")
+        return r.content
+    print(f"[sitemap] Direct: status={r.status_code}, no XML marker — parallel fallback")
+    return None
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="48h article delta probe: theblock.co highest post-sitemap → parallel race fetch → raw HTML"
-    )
-    parser.add_argument(
-        "--hours", type=float, default=48.0,
-        help="Lookback window in hours; <2 hits → fallback to 2 newest (default: 48)",
-    )
-    args = parser.parse_args()
-    probe_48h_article_fetch_workflow(hours=args.hours)
+    main()

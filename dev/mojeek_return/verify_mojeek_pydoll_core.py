@@ -35,40 +35,80 @@ BLOCKED_BUDGET_S = 10.0
 FIXTURE_BUDGET_S = 15.0
 
 
-
-class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
-    def do_GET(self):
-        if self.path.startswith(SET_COOKIE_PATH):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.send_header("Set-Cookie", PERSISTENT_COOKIE)
-            self.send_header("Set-Cookie", SESSION_COOKIE)
-            self.send_header("Content-Length", str(len(SET_COOKIE_HTML)))
-            self.end_headers()
-            self.wfile.write(SET_COOKIE_HTML)
-            return
-        super().do_GET()
-
-    def log_message(self, fmt, *args):
-        return
-
-
 # FUNCTIONS
 
-def start_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
-    handler = functools.partial(_FixtureHandler, directory=str(FIXTURE_DIR))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    port = server.server_address[1]
-    return server, f"http://127.0.0.1:{port}"
+def test_pure_function_checks():
+    run_pure_function_checks()
 
 
-def _free_port() -> int:
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    return port
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_aborts_on_dead_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_aborts_on_dead_control(handle)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_tripwire_passes_on_live_control(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_tripwire_passes_on_live_control(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_results_page_without_challenge(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_results_page_without_challenge(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_challenge_success_path(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_challenge_success_path(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_stuck_challenge_is_not_blocked(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_stuck_challenge_is_not_blocked(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_genuine_block(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_genuine_block(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_cookie_capture_and_diff(fixture_browser):
+    handle, base_url, profile_dir = fixture_browser
+    await check_cookie_capture_and_diff(handle, base_url)
+
+
+@pytest.mark.browser
+@pytest.mark.asyncio
+async def test_report_builds_from_fixture_measurements(fixture_browser, tmp_path):
+    handle, base_url, profile_dir = fixture_browser
+    measurements = await _collect_fixture_measurements(handle, base_url)
+    check_report_builds_from_fixture_measurements(profile_dir, tmp_path / "report.md", measurements)
+
+
+@pytest_asyncio.fixture
+async def fixture_browser():
+    server, base_url = start_fixture_server()
+    profile_dir = tempfile.mkdtemp(prefix="mojeek-fixture-profile-")
+    handle = await launch_browser(profile_dir)
+    try:
+        yield handle, base_url, profile_dir
+    finally:
+        await teardown(handle)
+        shutil.rmtree(profile_dir, ignore_errors=True)
+        server.shutdown()
 
 
 async def check_tripwire_aborts_on_dead_control(handle) -> None:
@@ -141,13 +181,6 @@ async def check_challenge_success_path(handle, base_url: str) -> None:
     )
 
 
-def _marks_are_ordered(m) -> bool:
-    marks = [m.nav_ms, m.widget_seen_ms, m.verify_fired_ms, m.verified_ms, m.results_ms]
-    if any(mark is None for mark in marks):
-        return False
-    return all(marks[i] <= marks[i + 1] for i in range(len(marks) - 1))
-
-
 async def check_stuck_challenge_is_not_blocked(handle, base_url: str) -> None:
     m = await run_query(handle, "fixture_stuck", f"{base_url}/challenge_stuck.html", STUCK_BUDGET_S)
     check(
@@ -210,18 +243,13 @@ async def check_cookie_capture_and_diff(handle, base_url: str) -> None:
     await check_cookies_are_visible_from_a_blank_tab(handle)
 
 
-async def check_cookies_are_visible_from_a_blank_tab(handle) -> None:
-    tab = await new_tab(handle)
-    try:
-        blank = await read_cookie_fingerprints(tab, "127.0.0.1")
-    finally:
-        await kill_tab(handle, tab)
-    check(
-        "cookies are read browser-wide, not scoped to whatever the tab currently shows",
-        {c["name"] for c in blank} >= {"fixture_gate", "fixture_session"},
-        f"a fresh about:blank tab reported {[c['name'] for c in blank]} - if this is empty the "
-        "reader is scoped to the current page and every before-navigation snapshot is void",
-    )
+async def _collect_fixture_measurements(handle, base_url: str) -> dict:
+    return {
+        "results": await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S),
+        "challenge": await run_query(handle, "fixture_challenge", f"{base_url}/challenge_success.html", FIXTURE_BUDGET_S),
+        "stuck": await run_query(handle, "fixture_stuck", f"{base_url}/challenge_stuck.html", STUCK_BUDGET_S),
+        "blocked": await run_query(handle, "fixture_blocked", f"{base_url}/challenge_blocked.html", BLOCKED_BUDGET_S),
+    }
 
 
 def check_report_builds_from_fixture_measurements(profile_dir: str, report_path: Path, measurements: dict) -> None:
@@ -255,84 +283,55 @@ def check_report_builds_from_fixture_measurements(profile_dir: str, report_path:
     check("live request count is the number of Mojeek navigations", count_live_requests(phases) == 5)
 
 
-async def _collect_fixture_measurements(handle, base_url: str) -> dict:
-    return {
-        "results": await run_query(handle, "fixture_results", f"{base_url}/results_no_challenge.html", FIXTURE_BUDGET_S),
-        "challenge": await run_query(handle, "fixture_challenge", f"{base_url}/challenge_success.html", FIXTURE_BUDGET_S),
-        "stuck": await run_query(handle, "fixture_stuck", f"{base_url}/challenge_stuck.html", STUCK_BUDGET_S),
-        "blocked": await run_query(handle, "fixture_blocked", f"{base_url}/challenge_blocked.html", BLOCKED_BUDGET_S),
-    }
+def start_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
+    handler = functools.partial(_FixtureHandler, directory=str(FIXTURE_DIR))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    return server, f"http://127.0.0.1:{port}"
 
 
-@pytest_asyncio.fixture
-async def fixture_browser():
-    server, base_url = start_fixture_server()
-    profile_dir = tempfile.mkdtemp(prefix="mojeek-fixture-profile-")
-    handle = await launch_browser(profile_dir)
+def _free_port() -> int:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+def _marks_are_ordered(m) -> bool:
+    marks = [m.nav_ms, m.widget_seen_ms, m.verify_fired_ms, m.verified_ms, m.results_ms]
+    if any(mark is None for mark in marks):
+        return False
+    return all(marks[i] <= marks[i + 1] for i in range(len(marks) - 1))
+
+
+async def check_cookies_are_visible_from_a_blank_tab(handle) -> None:
+    tab = await new_tab(handle)
     try:
-        yield handle, base_url, profile_dir
+        blank = await read_cookie_fingerprints(tab, "127.0.0.1")
     finally:
-        await teardown(handle)
-        shutil.rmtree(profile_dir, ignore_errors=True)
-        server.shutdown()
+        await kill_tab(handle, tab)
+    check(
+        "cookies are read browser-wide, not scoped to whatever the tab currently shows",
+        {c["name"] for c in blank} >= {"fixture_gate", "fixture_session"},
+        f"a fresh about:blank tab reported {[c['name'] for c in blank]} - if this is empty the "
+        "reader is scoped to the current page and every before-navigation snapshot is void",
+    )
 
 
-def test_pure_function_checks():
-    run_pure_function_checks()
+class _FixtureHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith(SET_COOKIE_PATH):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Set-Cookie", PERSISTENT_COOKIE)
+            self.send_header("Set-Cookie", SESSION_COOKIE)
+            self.send_header("Content-Length", str(len(SET_COOKIE_HTML)))
+            self.end_headers()
+            self.wfile.write(SET_COOKIE_HTML)
+            return
+        super().do_GET()
 
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_tripwire_aborts_on_dead_control(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_tripwire_aborts_on_dead_control(handle)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_tripwire_passes_on_live_control(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_tripwire_passes_on_live_control(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_results_page_without_challenge(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_results_page_without_challenge(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_challenge_success_path(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_challenge_success_path(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_stuck_challenge_is_not_blocked(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_stuck_challenge_is_not_blocked(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_genuine_block(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_genuine_block(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_cookie_capture_and_diff(fixture_browser):
-    handle, base_url, profile_dir = fixture_browser
-    await check_cookie_capture_and_diff(handle, base_url)
-
-
-@pytest.mark.browser
-@pytest.mark.asyncio
-async def test_report_builds_from_fixture_measurements(fixture_browser, tmp_path):
-    handle, base_url, profile_dir = fixture_browser
-    measurements = await _collect_fixture_measurements(handle, base_url)
-    check_report_builds_from_fixture_measurements(profile_dir, tmp_path / "report.md", measurements)
+    def log_message(self, fmt, *args):
+        return

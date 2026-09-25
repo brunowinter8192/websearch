@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -38,6 +37,26 @@ METHOD_LABELS = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Stage 4 v3 — Aggregate (Phase 13)")
+    parser.add_argument("--pool-dir",   required=True,        help="Directory with *_pool.json + *_methods_v3.json")
+    parser.add_argument("--oracle-dir", default=str(V2_DEFAULT), help="Directory with *_oracle_v3clean.json")
+    parser.add_argument("--no-oracle",  action="store_true",  help="Skip oracle (smoke mode)")
+    args       = parser.parse_args()
+    pool_dir   = Path(args.pool_dir)
+    oracle_dir = Path(args.oracle_dir)
+    _check_input_dirs(pool_dir, oracle_dir)
+    run_aggregate_v3(pool_dir=pool_dir, oracle_dir=oracle_dir, no_oracle=args.no_oracle)
+
+
+# FUNCTIONS
+
+def _check_input_dirs(pool_dir, oracle_dir):
+    for p in (pool_dir, oracle_dir):
+        if not p.exists():
+            sys.exit(f"ERROR: directory does not exist: {p}")
+
+
 def run_aggregate_v3(pool_dir: Path, oracle_dir: Path, no_oracle: bool) -> None:
     results = []
     for mode in MODES:
@@ -56,26 +75,6 @@ def run_aggregate_v3(pool_dir: Path, oracle_dir: Path, no_oracle: bool) -> None:
 
     summary_path = _write_summary_md(results, pool_dir)
     print(f"\nSummary: {summary_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-def _query_slug(query: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def _jaccard(a: list[str], b: list[str]) -> float:
-    sa, sb = set(a), set(b)
-    union  = sa | sb
-    return len(sa & sb) / len(union) if union else 0.0
-
-
-def _percentile(vals: list[float], p: int) -> float:
-    if not vals:
-        return 0.0
-    sv = sorted(vals)
-    idx = int(len(sv) * p / 100)
-    return sv[min(idx, len(sv) - 1)]
 
 
 def _load_and_score_pair(
@@ -192,6 +191,16 @@ def _write_summary_md(results: list[dict], pool_dir: Path) -> Path:
     return path
 
 
+def _query_slug(query: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
+
+
+def _jaccard(a: list[str], b: list[str]) -> float:
+    sa, sb = set(a), set(b)
+    union  = sa | sb
+    return len(sa & sb) / len(union) if union else 0.0
+
+
 def _summary_per_mode_jaccard(scored: list[dict]) -> list[str]:
     lines = ["## Per-Mode Mean Jaccard", ""]
     header = "| Mode | " + " | ".join(METHOD_LABELS[k] for k in METHOD_KEYS) + " | Winner |"
@@ -285,15 +294,13 @@ def _summary_pareto(results: list[dict], overall: dict) -> list[str]:
     return lines
 
 
+def _percentile(vals: list[float], p: int) -> float:
+    if not vals:
+        return 0.0
+    sv = sorted(vals)
+    idx = int(len(sv) * p / 100)
+    return sv[min(idx, len(sv) - 1)]
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Stage 4 v3 — Aggregate (Phase 13)")
-    parser.add_argument("--pool-dir",   required=True,        help="Directory with *_pool.json + *_methods_v3.json")
-    parser.add_argument("--oracle-dir", default=str(V2_DEFAULT), help="Directory with *_oracle_v3clean.json")
-    parser.add_argument("--no-oracle",  action="store_true",  help="Skip oracle (smoke mode)")
-    args       = parser.parse_args()
-    pool_dir   = Path(args.pool_dir)
-    oracle_dir = Path(args.oracle_dir)
-    for p in (pool_dir, oracle_dir):
-        if not p.exists():
-            sys.exit(f"ERROR: directory does not exist: {p}")
-    run_aggregate_v3(pool_dir=pool_dir, oracle_dir=oracle_dir, no_oracle=args.no_oracle)
+    main()

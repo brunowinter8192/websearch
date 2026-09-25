@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -31,6 +30,30 @@ METHOD_LABELS = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Value eval aggregator — Stage 4")
+    parser.add_argument("--ts-dir",    required=True,        help="Directory with pool/methods/oracle JSONs")
+    parser.add_argument("--ts-out",    default=None,         help="Timestamp tag for output file names")
+    parser.add_argument("--no-oracle", action="store_true",  help="Skip oracle (smoke mode)")
+    args    = parser.parse_args()
+    ts_out = _compute_ts_out(args)
+    ts_dir  = Path(args.ts_dir)
+    if not ts_dir.exists():
+        _exit_without_ts_dir(ts_dir)
+    run_aggregate(ts_dir=ts_dir, ts_out=ts_out, no_oracle=args.no_oracle)
+
+
+# FUNCTIONS
+
+def _compute_ts_out(args):
+    ts_out  = args.ts_out or datetime.now().strftime("%Y%m%d_%H%M%S")
+    return ts_out
+
+
+def _exit_without_ts_dir(ts_dir):
+    sys.exit(f"ERROR: ts_dir does not exist: {ts_dir}")
+
+
 def run_aggregate(ts_dir: Path, ts_out: str, no_oracle: bool) -> None:
     results = []
     for mode in MODES:
@@ -49,18 +72,6 @@ def run_aggregate(ts_dir: Path, ts_out: str, no_oracle: bool) -> None:
 
     summary_path = _write_summary_md(results, ts_out)
     print(f"\nSummary: {summary_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-def _query_slug(query: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def _jaccard(a: list[str], b: list[str]) -> float:
-    sa, sb = set(a), set(b)
-    union  = sa | sb
-    return len(sa & sb) / len(union) if union else 0.0
 
 
 def _load_and_score_pair(
@@ -118,6 +129,43 @@ def _write_query_md(result: dict, ts: str) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _write_summary_md(results: list[dict], ts: str) -> Path:
+    path       = REPORT_DIR / f"value_eval_summary_{ts}.md"
+    has_oracle = any(r["oracle_urls"] for r in results)
+
+    lines = [
+        "# Value Eval Summary",
+        "",
+        f"**Pairs:** {len(results)} / 16  ",
+        f"**Oracle:** {'present' if has_oracle else 'pending (smoke mode)'}  ",
+        f"**Timestamp:** {ts}  ",
+        "",
+    ]
+
+    if has_oracle:
+        scored = [r for r in results if r["oracle_urls"]]
+        lines += _summary_per_mode_table(scored)
+        if scored:
+            lines += _summary_overall_winner(scored)
+            lines += _summary_mode_signals(scored)
+
+    else:
+        lines += _summary_smoke_coverage(results)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _query_slug(query: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
+
+
+def _jaccard(a: list[str], b: list[str]) -> float:
+    sa, sb = set(a), set(b)
+    union  = sa | sb
+    return len(sa & sb) / len(union) if union else 0.0
 
 
 def _render_query_header(result: dict, mode: str, query: str, mm: dict) -> list[str]:
@@ -183,77 +231,6 @@ def _render_comparison(result: dict, mm: dict) -> list[str]:
     else:
         lines += _comparison_pool_coverage(result, mm)
     return lines
-
-
-def _comparison_with_oracle(result: dict) -> list[str]:
-    oracle_set = set(result["oracle_urls"])
-    lines = [
-        "| Method | Jaccard | Oracle URLs captured |",
-        "|--------|---------|----------------------|",
-    ]
-    for key in METHOD_KEYS:
-        method_set = set(result["methods"].get(key, []))
-        shared     = oracle_set & method_set
-        j          = result["overlaps"][key]
-        lines.append(
-            f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
-        )
-    lines.append("")
-
-    all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
-    missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
-    lines += ["### Oracle URLs missed by all methods", ""]
-    if missed:
-        for u in missed:
-            lines.append(f"- {u}")
-    else:
-        lines.append("_All oracle URLs captured by at least one method._")
-    lines.append("")
-    return lines
-
-
-def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
-    mps = mm.get("method_pool_sizes", {})
-    lines = [
-        "| Method | Pool size | Top-10 count | ms |",
-        "|--------|-----------|--------------|----|",
-    ]
-    for key in METHOD_KEYS:
-        urls      = result["methods"].get(key, [])
-        ms        = mm.get(f"{key}_ms", "?")
-        pool_size = mps.get(key, result["pool_size"])
-        lines.append(
-            f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
-        )
-    lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
-    return lines
-
-
-def _write_summary_md(results: list[dict], ts: str) -> Path:
-    path       = REPORT_DIR / f"value_eval_summary_{ts}.md"
-    has_oracle = any(r["oracle_urls"] for r in results)
-
-    lines = [
-        "# Value Eval Summary",
-        "",
-        f"**Pairs:** {len(results)} / 16  ",
-        f"**Oracle:** {'present' if has_oracle else 'pending (smoke mode)'}  ",
-        f"**Timestamp:** {ts}  ",
-        "",
-    ]
-
-    if has_oracle:
-        scored = [r for r in results if r["oracle_urls"]]
-        lines += _summary_per_mode_table(scored)
-        if scored:
-            lines += _summary_overall_winner(scored)
-            lines += _summary_mode_signals(scored)
-
-    else:
-        lines += _summary_smoke_coverage(results)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 def _summary_per_mode_table(scored: list[dict]) -> list[str]:
@@ -329,14 +306,49 @@ def _summary_smoke_coverage(results: list[dict]) -> list[str]:
     return lines
 
 
+def _comparison_with_oracle(result: dict) -> list[str]:
+    oracle_set = set(result["oracle_urls"])
+    lines = [
+        "| Method | Jaccard | Oracle URLs captured |",
+        "|--------|---------|----------------------|",
+    ]
+    for key in METHOD_KEYS:
+        method_set = set(result["methods"].get(key, []))
+        shared     = oracle_set & method_set
+        j          = result["overlaps"][key]
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {j:.3f} | {len(shared)} / {len(oracle_set)} |"
+        )
+    lines.append("")
+
+    all_method_urls = set(u for key in METHOD_KEYS for u in result["methods"].get(key, []))
+    missed = [u for u in result["oracle_urls"] if u not in all_method_urls]
+    lines += ["### Oracle URLs missed by all methods", ""]
+    if missed:
+        for u in missed:
+            lines.append(f"- {u}")
+    else:
+        lines.append("_All oracle URLs captured by at least one method._")
+    lines.append("")
+    return lines
+
+
+def _comparison_pool_coverage(result: dict, mm: dict) -> list[str]:
+    mps = mm.get("method_pool_sizes", {})
+    lines = [
+        "| Method | Pool size | Top-10 count | ms |",
+        "|--------|-----------|--------------|----|",
+    ]
+    for key in METHOD_KEYS:
+        urls      = result["methods"].get(key, [])
+        ms        = mm.get(f"{key}_ms", "?")
+        pool_size = mps.get(key, result["pool_size"])
+        lines.append(
+            f"| {METHOD_LABELS[key]} | {pool_size} | {len(urls)} | {ms} |"
+        )
+    lines += ["", "_Oracle not yet selected — Jaccard not computed._", ""]
+    return lines
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Value eval aggregator — Stage 4")
-    parser.add_argument("--ts-dir",    required=True,        help="Directory with pool/methods/oracle JSONs")
-    parser.add_argument("--ts-out",    default=None,         help="Timestamp tag for output file names")
-    parser.add_argument("--no-oracle", action="store_true",  help="Skip oracle (smoke mode)")
-    args    = parser.parse_args()
-    ts_out  = args.ts_out or datetime.now().strftime("%Y%m%d_%H%M%S")
-    ts_dir  = Path(args.ts_dir)
-    if not ts_dir.exists():
-        sys.exit(f"ERROR: ts_dir does not exist: {ts_dir}")
-    run_aggregate(ts_dir=ts_dir, ts_out=ts_out, no_oracle=args.no_oracle)
+    main()

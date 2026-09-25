@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import json
 import logging
@@ -8,58 +9,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-class _NoopLimiter:
-    async def acquire(self):
-        return None
-
+# FUNCTIONS
 
 @pytest.fixture(autouse=True)
 def _no_rate_limiting(monkeypatch):
     from src.search import search_web
     monkeypatch.setattr(search_web, "get_limiter", lambda name: _NoopLimiter())
-
-
-@pytest.fixture
-def cli_module(monkeypatch):
-    import importlib
-    import logging.handlers
-    import sys
-    monkeypatch.setattr(logging.handlers, "TimedRotatingFileHandler", lambda *a, **kw: logging.NullHandler())
-    monkeypatch.delitem(sys.modules, "cli", raising=False)
-    module = importlib.import_module("cli")
-    yield module
-    sys.modules.pop("cli", None)
-
-
-def _make_mock_engine_with_reason(
-    name: str, results: list, delay: float = 0.0, empty_reason: str | None = None, diagnosis: dict | None = None,
-    partial_facts: dict | None = None,
-):
-    eng = MagicMock()
-    eng.name = name
-
-    async def _search_with_reason(query, language, max_results, partial=None):
-        if partial_facts is not None and partial is not None:
-            partial.update(partial_facts)
-        if delay:
-            await asyncio.sleep(delay)
-        return results, empty_reason, diagnosis
-
-    eng.search_with_reason = _search_with_reason
-    return eng
-
-
-async def _fake_prewarm_browser() -> None:
-    return None
-
-
-def _now_ts() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def _fake_result(url: str = "https://example.com", title: str = "T", snippet: str = "S", engine: str = "mock"):
-    from src.search.result import SearchResult
-    return SearchResult(url=url, title=title, snippet=snippet, engine=engine, position=1)
 
 
 def test_log_query_writes_jsonl(tmp_path, monkeypatch):
@@ -182,23 +137,6 @@ async def test_engine_with_timing_empty():
     assert status == "EMPTY"
     assert drop_reason is None
     assert diagnosis is None
-
-
-async def _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, default_engines,
-                                                     query="test query"):
-    from src.search import search_web
-    log_file = tmp_path / "query_log.jsonl"
-    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
-
-    with (
-        patch.object(search_web, "ENGINES", mock_engines),
-        patch.object(search_web, "_DEFAULT_ENGINES", default_engines),
-        patch.object(search_web, "cache_write"),
-        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
-    ):
-        await search_web.search_web_workflow(query, language="en")
-
-    return log_file.read_text().splitlines()
 
 
 @pytest.mark.asyncio
@@ -345,3 +283,68 @@ def test_log_drilldown_all_cache_status_and_pool_combinations(tmp_path, monkeypa
     assert miss_failed["cache_status"] == "miss_then_search_failed"
     assert miss_failed["engine_in_pools"] is False
     assert miss_failed["urls"] == []
+
+
+class _NoopLimiter:
+    async def acquire(self):
+        return None
+
+
+def _now_ts() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def _fake_result(url: str = "https://example.com", title: str = "T", snippet: str = "S", engine: str = "mock"):
+    from src.search.result import SearchResult
+    return SearchResult(url=url, title=title, snippet=snippet, engine=engine, position=1)
+
+
+def _make_mock_engine_with_reason(
+    name: str, results: list, delay: float = 0.0, empty_reason: str | None = None, diagnosis: dict | None = None,
+    partial_facts: dict | None = None,
+):
+    eng = MagicMock()
+    eng.name = name
+
+    async def _search_with_reason(query, language, max_results, partial=None):
+        if partial_facts is not None and partial is not None:
+            partial.update(partial_facts)
+        if delay:
+            await asyncio.sleep(delay)
+        return results, empty_reason, diagnosis
+
+    eng.search_with_reason = _search_with_reason
+    return eng
+
+
+async def _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, default_engines,
+                                                     query="test query"):
+    from src.search import search_web
+    log_file = tmp_path / "query_log.jsonl"
+    monkeypatch.setenv("WEBSEARCH_QUERY_LOG_PATH", str(log_file))
+
+    with (
+        patch.object(search_web, "ENGINES", mock_engines),
+        patch.object(search_web, "_DEFAULT_ENGINES", default_engines),
+        patch.object(search_web, "cache_write"),
+        patch.object(search_web, "_prewarm_browser", _fake_prewarm_browser),
+    ):
+        await search_web.search_web_workflow(query, language="en")
+
+    return log_file.read_text().splitlines()
+
+
+@pytest.fixture
+def cli_module(monkeypatch):
+    import importlib
+    import logging.handlers
+    import sys
+    monkeypatch.setattr(logging.handlers, "TimedRotatingFileHandler", lambda *a, **kw: logging.NullHandler())
+    monkeypatch.delitem(sys.modules, "cli", raising=False)
+    module = importlib.import_module("cli")
+    yield module
+    sys.modules.pop("cli", None)
+
+
+async def _fake_prewarm_browser() -> None:
+    return None

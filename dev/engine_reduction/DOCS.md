@@ -11,7 +11,7 @@ Fixed set of real agent queries -> live OpenAlex API fetch per query -> per-quer
 
 ## Modules
 
-### openalex_pdf_probe.py (215 LOC)
+### openalex_pdf_probe.py (227 LOC)
 
 **Purpose:** Measures how often an OpenAlex work carries a direct PDF URL versus landing page only versus none, over full page and top ten.
 **Reads:** Live HTTP against the OpenAlex works API.

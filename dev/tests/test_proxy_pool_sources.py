@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 
 from src.news.engine.proxy_pool.janitor import (
@@ -8,9 +9,7 @@ from src.news.engine.proxy_pool.janitor import (
 from dev.tests._proxy_pool_fakes import _attempt, _write_and_read_md
 
 
-def _md(tmp_path, events, target=10, done=5):
-    return _write_and_read_md(_compute_stats, _write_md, tmp_path, events, target, done)
-
+# FUNCTIONS
 
 def test_record_pool_source_writes_jsonl_event(tmp_path):
     from src.news.engine.proxy_pool.logger import AcquireLogger
@@ -32,14 +31,6 @@ def test_record_pool_source_writes_jsonl_event(tmp_path):
 
     assert events[1]["ok"]    is False
     assert events[1]["count"] == 0
-
-
-def _pool_source(url: str, ok: bool, count: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
-    return {"event": "pool_source", "url": url, "ok": ok, "count": count, "ts": ts}
-
-
-def _pool_refresh(size: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
-    return {"event": "pool_refresh", "size": size, "ts": ts}
 
 
 def test_group_pool_sources_single_refresh():
@@ -148,3 +139,15 @@ def test_record_pool_source_writes_error_when_given(tmp_path):
     assert events[0]["error"] == "ConnectError"
     assert events[1]["reason"] == "http_403"
     assert "reason" not in events[2]
+
+
+def _pool_refresh(size: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
+    return {"event": "pool_refresh", "size": size, "ts": ts}
+
+
+def _pool_source(url: str, ok: bool, count: int, ts: str = "2026-01-01T00:00:00Z") -> dict:
+    return {"event": "pool_source", "url": url, "ok": ok, "count": count, "ts": ts}
+
+
+def _md(tmp_path, events, target=10, done=5):
+    return _write_and_read_md(_compute_stats, _write_md, tmp_path, events, target, done)

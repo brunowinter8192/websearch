@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import json
@@ -16,6 +17,40 @@ DOMAINS_FILE = Path(__file__).parent / "domains.txt"
 TRAILING_SLASH = re.compile(r'/$')
 
 
+# ORCHESTRATOR
+
+def run_main() -> None:
+    parser = argparse.ArgumentParser(description="Crawl a website and report URL discovery metrics")
+    parser.add_argument("url", nargs="?", help="Seed URL to crawl")
+    parser.add_argument("--label", help="Report filename prefix (default: derived from domain)")
+    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
+    parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
+    parser.add_argument("--all", action="store_true", help="Crawl all domains from domains.txt")
+    args = parser.parse_args()
+
+    if args.all:
+        asyncio.run(run_all())
+    elif args.url:
+        label = _compute_label(args)
+        asyncio.run(main(args.url, args.depth, args.max_pages, label))
+    else:
+        parser.error("Either provide a URL or use --all")
+
+
+# FUNCTIONS
+
+async def run_all():
+    domains = load_domains()
+    print(f"Batch crawl: {len(domains)} domains from domains.txt\n")
+    tasks = [main(d["url"], d["depth"], d["max_pages"], d["label"]) for d in domains]
+    await asyncio.gather(*tasks)
+
+
+def _compute_label(args):
+    label = args.label or urlparse(args.url).netloc.replace('.', '_')
+    return label
+
+
 async def main(url: str, depth: int, max_pages: int, label: str):
     domain = urlparse(url).netloc
     results = await crawl_website(url, domain, depth, max_pages)
@@ -23,6 +58,22 @@ async def main(url: str, depth: int, max_pages: int, label: str):
     report = build_report(url, domain, depth, max_pages, len(results), unique)
     save_report(report, label)
     print_report(report)
+
+
+def load_domains():
+    entries = []
+    with open(DOMAINS_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                parts = line.split("|")
+                entries.append({
+                    "label": parts[0],
+                    "url": parts[1],
+                    "depth": int(parts[2]),
+                    "max_pages": int(parts[3]),
+                })
+    return entries
 
 
 async def crawl_website(url: str, domain: str, depth: int, max_pages: int) -> list:
@@ -121,42 +172,5 @@ def print_report(report):
         print(f"  {status}  {u['url']}")
 
 
-def load_domains():
-    entries = []
-    with open(DOMAINS_FILE) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                parts = line.split("|")
-                entries.append({
-                    "label": parts[0],
-                    "url": parts[1],
-                    "depth": int(parts[2]),
-                    "max_pages": int(parts[3]),
-                })
-    return entries
-
-
-async def run_all():
-    domains = load_domains()
-    print(f"Batch crawl: {len(domains)} domains from domains.txt\n")
-    tasks = [main(d["url"], d["depth"], d["max_pages"], d["label"]) for d in domains]
-    await asyncio.gather(*tasks)
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Crawl a website and report URL discovery metrics")
-    parser.add_argument("url", nargs="?", help="Seed URL to crawl")
-    parser.add_argument("--label", help="Report filename prefix (default: derived from domain)")
-    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
-    parser.add_argument("--max-pages", type=int, default=50, help="Max pages to crawl (default: 50)")
-    parser.add_argument("--all", action="store_true", help="Crawl all domains from domains.txt")
-    args = parser.parse_args()
-
-    if args.all:
-        asyncio.run(run_all())
-    elif args.url:
-        label = args.label or urlparse(args.url).netloc.replace('.', '_')
-        asyncio.run(main(args.url, args.depth, args.max_pages, label))
-    else:
-        parser.error("Either provide a URL or use --all")
+    run_main()

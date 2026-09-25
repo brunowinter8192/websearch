@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import subprocess
 import tempfile
 
@@ -9,15 +10,7 @@ from src.scraper import camoufox_scrape
 from src.crawler import pipe_scraper
 
 
-def _launch_trap(qualified_name: str):
-    def _trap(*args, **kwargs):
-        pytest.fail(
-            f"real browser launch attempted via {qualified_name} — this test must mock it before "
-            f"reaching here",
-            pytrace=False,
-        )
-    return _trap
-
+# FUNCTIONS
 
 @pytest.fixture(autouse=True)
 def _no_real_browser_launch(monkeypatch):
@@ -52,3 +45,13 @@ def _no_real_osascript(monkeypatch):
 @pytest.fixture(autouse=True)
 def _constant_system_locale(monkeypatch):
     monkeypatch.setattr(camoufox_scrape, "_resolve_system_locale", lambda: "en-US")
+
+
+def _launch_trap(qualified_name: str):
+    def _trap(*args, **kwargs):
+        pytest.fail(
+            f"real browser launch attempted via {qualified_name} — this test must mock it before "
+            f"reaching here",
+            pytrace=False,
+        )
+    return _trap

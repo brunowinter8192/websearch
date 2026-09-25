@@ -10,14 +10,6 @@ CHECKPOINT_FILE = OUTPUT_DIR / "checkpoint.json"
 
 # FUNCTIONS
 
-def log(log_fh, msg: str) -> None:
-    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    line = f"[{ts}] {msg}"
-    print(line, flush=True)
-    log_fh.write(line + "\n")
-    log_fh.flush()
-
-
 def save_checkpoint(call_num: int, last_id: str, last_date: str, year_counts: dict, total: int) -> None:
     data = {
         "call_num": call_num,
@@ -40,3 +32,11 @@ def log_checkpoint(log_fh, ok_calls: int, total_articles: int, oldest_date, last
         f" wall={wall}s avg_elapsed={avg_el}s"
         f" rewarms={rewarm_count} fallbacks={fallback_count}"
     ))
+
+
+def log(log_fh, msg: str) -> None:
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    line = f"[{ts}] {msg}"
+    print(line, flush=True)
+    log_fh.write(line + "\n")
+    log_fh.flush()

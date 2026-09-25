@@ -85,30 +85,6 @@ def classify_carry_over(
     return CARRY_OVER_NONE
 
 
-def cookie_is_session_scoped(cookie: dict) -> bool:
-    expires = cookie.get("expires")
-    if expires is None:
-        return True
-    return expires <= SESSION_EXPIRY_SENTINEL
-
-
-def fingerprint_cookie(cookie: dict) -> dict:
-    value = cookie.get("value") or ""
-    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
-    return {
-        "name": cookie.get("name"),
-        "domain": cookie.get("domain"),
-        "path": cookie.get("path"),
-        "expires": cookie.get("expires"),
-        "session_scoped": cookie_is_session_scoped(cookie),
-        "http_only": cookie.get("httpOnly"),
-        "secure": cookie.get("secure"),
-        "same_site": cookie.get("sameSite"),
-        "value_length": len(value),
-        "value_sha256_12": digest,
-    }
-
-
 def fingerprint_cookies(cookies: list[dict], domain_filter: str | None = None) -> list[dict]:
     selected = []
     for cookie in cookies:
@@ -117,10 +93,6 @@ def fingerprint_cookies(cookies: list[dict], domain_filter: str | None = None) -
             continue
         selected.append(fingerprint_cookie(cookie))
     return sorted(selected, key=lambda c: (c["name"] or "", c["domain"] or ""))
-
-
-def _cookie_key(fingerprint: dict) -> tuple:
-    return (fingerprint["name"], fingerprint["domain"], fingerprint["path"])
 
 
 def diff_cookie_fingerprints(before: list[dict], after: list[dict]) -> dict:
@@ -167,3 +139,31 @@ def pow_link_rate(served_states: list[str]) -> float | None:
     if not served_states:
         return None
     return sum(1 for s in served_states if s == STATE_POW_LINK_BLOCK) / len(served_states)
+
+
+def fingerprint_cookie(cookie: dict) -> dict:
+    value = cookie.get("value") or ""
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return {
+        "name": cookie.get("name"),
+        "domain": cookie.get("domain"),
+        "path": cookie.get("path"),
+        "expires": cookie.get("expires"),
+        "session_scoped": cookie_is_session_scoped(cookie),
+        "http_only": cookie.get("httpOnly"),
+        "secure": cookie.get("secure"),
+        "same_site": cookie.get("sameSite"),
+        "value_length": len(value),
+        "value_sha256_12": digest,
+    }
+
+
+def _cookie_key(fingerprint: dict) -> tuple:
+    return (fingerprint["name"], fingerprint["domain"], fingerprint["path"])
+
+
+def cookie_is_session_scoped(cookie: dict) -> bool:
+    expires = cookie.get("expires")
+    if expires is None:
+        return True
+    return expires <= SESSION_EXPIRY_SENTINEL

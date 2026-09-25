@@ -1,9 +1,12 @@
+# INFRASTRUCTURE
 import pytest
 
 from dev.search_pipeline._lib.text import strip_bloat
 from src.config import MAX_SNIPPET_LEN
 from src.search.snippet import truncate
 
+
+# FUNCTIONS
 
 def test_truncate_leaves_short_text_untouched():
     short = "This is a short snippet under 200 chars."

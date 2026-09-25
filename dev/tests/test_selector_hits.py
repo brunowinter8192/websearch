@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 
 import pytest
@@ -5,14 +6,15 @@ import pytest
 from src.search.engines import bing, brave, google, yandex
 from src.search.selector_hits import collect_selector_hits
 
+ENGINE_ITEMS = {
+    google: {"url": "https://www.google.com/goto?url=a", "title": "T", "snippet": "S", "date": None},
+    bing: {"url": "https://e.test/a", "title": "T", "snippet": "S", "date_raw": ""},
+    brave: {"url": "https://e.test/a", "title": "T", "snippet": "S"},
+    yandex: {"url": "https://e.test/a", "title": "T", "snippet": "S"},
+}
 
-class _Tab:
-    def __init__(self, value):
-        self._value = value
 
-    async def execute_script(self, script):
-        return {"result": {"result": {"value": self._value}}}
-
+# FUNCTIONS
 
 def test_collect_selector_hits_counts_per_field_and_index():
     items = [{"sel": {"anchor": 0, "snippet": 1}}, {"sel": {"anchor": 0}}, {"sel": {}}, {}]
@@ -21,14 +23,6 @@ def test_collect_selector_hits_counts_per_field_and_index():
 
 def test_collect_selector_hits_empty():
     assert collect_selector_hits([]) == {}
-
-
-ENGINE_ITEMS = {
-    google: {"url": "https://www.google.com/goto?url=a", "title": "T", "snippet": "S", "date": None},
-    bing: {"url": "https://e.test/a", "title": "T", "snippet": "S", "date_raw": ""},
-    brave: {"url": "https://e.test/a", "title": "T", "snippet": "S"},
-    yandex: {"url": "https://e.test/a", "title": "T", "snippet": "S"},
-}
 
 
 @pytest.mark.parametrize("module", list(ENGINE_ITEMS), ids=lambda m: m.__name__.rsplit(".", 1)[-1])
@@ -67,3 +61,11 @@ def test_google_consent_branch_is_gone():
     assert not hasattr(google, "_handle_consent")
     assert not hasattr(google, "_JS_CONSENT")
     assert not hasattr(google, "CONSENT_DOMAIN")
+
+
+class _Tab:
+    def __init__(self, value):
+        self._value = value
+
+    async def execute_script(self, script):
+        return {"result": {"result": {"value": self._value}}}

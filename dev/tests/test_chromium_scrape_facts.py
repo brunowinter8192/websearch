@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import logging
 
@@ -6,6 +7,8 @@ import pytest
 from src.scraper import chromium_process, chromium_scrape
 from dev.tests._chromium_scrape_fakes import _patch_cdp_launch_mechanics, _FakeResult, _meta
 
+
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_try_scrape_returns_short_fit_markdown_unconditionally(monkeypatch):

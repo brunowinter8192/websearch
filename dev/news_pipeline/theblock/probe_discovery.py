@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import subprocess
 import re
@@ -44,6 +43,7 @@ RSS_PREPROBE_URLS = [
     "https://www.theblock.co/post/404341/bitcoin-stablecoins-tokenization-bitwise-cio-financial-advisors",
 ]
 
+
 # ORCHESTRATOR
 
 def probe_discovery_workflow():
@@ -67,93 +67,12 @@ def probe_discovery_workflow():
                           rss_urls, rss_rate_limited, ui_urls, ui_status)
     write_report(report)
 
-    total   = sub_stats["sub_count"]
-    fetched = sub_stats["fetched"]
-    remain  = sub_stats["remaining"]
-    status  = "COMPLETE" if remain == 0 else f"PARTIAL ({remain} subs pending — re-run to resume)"
-    print(f"\nReport written: {REPORT_PATH}")
-    print(f"Sitemap: {fetched}/{total} subs fetched — {status}")
+    total, fetched, remain = _read_sub_counts(sub_stats)
+    status = _compute_status(remain)
+    _print_report_written(fetched, total, status)
+
 
 # FUNCTIONS
-
-def curl_get(url, delay=0.0):
-    if delay:
-        time.sleep(delay)
-    result = subprocess.run(
-        ["curl", "-s", "-L", "--max-time", "20",
-         "-H", f"User-Agent: {UA}",
-         "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-         "-H", "Accept-Language: en-US,en;q=0.5",
-         url],
-        capture_output=True, text=True
-    )
-    return result.stdout
-
-def is_cf_blocked(text):
-    return '<Code>429</Code>' in text or '<Code>403</Code>' in text
-
-def extract_locs(xml_text):
-    return re.findall(r'<loc>\s*(https?://[^<\s]+)\s*</loc>', xml_text)
-
-def normalize_url(url):
-    url = re.sub(r'\?.*', '', url)
-    return url.rstrip('/')
-
-def sub_cache_path(sub_url):
-    name = sub_url.split('/')[-1].replace('.xml', '')
-    return CACHE_DIR / f"sub_{name}.json"
-
-def load_sub_cache(sub_url):
-    p = sub_cache_path(sub_url)
-    if not p.exists():
-        return None
-    d = json.loads(p.read_text())
-    return d.get("urls", [])
-
-def save_sub_cache(sub_url, urls):
-    p = sub_cache_path(sub_url)
-    p.write_text(json.dumps({"sub": sub_url, "url_count": len(urls), "urls": urls}))
-
-def fetch_sub_with_retry(sub_url):
-    for attempt, wait_secs in enumerate([0] + BACKOFF_WAIT):
-        if wait_secs:
-            print(f"\n    CF 429 — waiting {wait_secs}s (retry {attempt}/{MAX_RETRIES}) ...")
-            time.sleep(wait_secs)
-        xml = curl_get(sub_url)
-        if not is_cf_blocked(xml):
-            locs = [normalize_url(u) for u in extract_locs(xml)]
-            return locs, "ok"
-        if attempt == MAX_RETRIES:
-            return None, "cf_blocked"
-    return None, "cf_blocked"
-
-
-def _fetch_pending_subs(to_fetch):
-    blocked_subs = []
-    for i, sub_url in enumerate(to_fetch, 1):
-        sys.stdout.write(f"\r  [{i}/{len(to_fetch)}] {sub_url.split('/')[-1][:55]}   ")
-        sys.stdout.flush()
-        time.sleep(SUB_DELAY)
-        urls, status = fetch_sub_with_retry(sub_url)
-        if status == "ok":
-            save_sub_cache(sub_url, urls)
-        else:
-            blocked_subs.append(sub_url)
-            print(f"\n  FAILED (max retries): {sub_url.split('/')[-1]}")
-
-    if to_fetch:
-        print()
-    return blocked_subs
-
-def _aggregate_cached_subs(sub_urls):
-    all_urls_set = set()
-    fetched_count = 0
-    for sub_url in sub_urls:
-        cached = load_sub_cache(sub_url)
-        if cached is not None:
-            all_urls_set.update(cached)
-            fetched_count += 1
-    return all_urls_set, fetched_count
 
 def fetch_full_sitemap_union():
     index_xml = curl_get(f"{BASE}/sitemap_tbco_index.xml")
@@ -186,14 +105,6 @@ def fetch_full_sitemap_union():
         "remaining":   remaining,
         "blocked_subs": blocked_subs,
     }
-
-def _reconstruct_sub_urls_from_cache():
-    sub_urls = []
-    for f in sorted(CACHE_DIR.glob("sub_*.json")):
-        d = json.loads(f.read_text())
-        if d.get("sub"):
-            sub_urls.append(d["sub"])
-    return sub_urls
 
 
 def fetch_news_sitemap():
@@ -275,9 +186,122 @@ def fetch_ui_crawl():
     print(f"  UI total: {len(unique)} unique /post/ URLs across {pages_fetched} pages")
     return unique, status_notes
 
+
 def write_report(content):
     with open(REPORT_PATH, "w") as f:
         f.write(content)
+
+
+def _read_sub_counts(sub_stats):
+    return sub_stats["sub_count"], sub_stats["fetched"], sub_stats["remaining"]
+
+
+def _compute_status(remain):
+    status  = "COMPLETE" if remain == 0 else f"PARTIAL ({remain} subs pending — re-run to resume)"
+    return status
+
+
+def _print_report_written(fetched, total, status):
+    print(f"\nReport written: {REPORT_PATH}")
+    print(f"Sitemap: {fetched}/{total} subs fetched — {status}")
+
+
+def _reconstruct_sub_urls_from_cache():
+    sub_urls = []
+    for f in sorted(CACHE_DIR.glob("sub_*.json")):
+        d = json.loads(f.read_text())
+        if d.get("sub"):
+            sub_urls.append(d["sub"])
+    return sub_urls
+
+
+def _fetch_pending_subs(to_fetch):
+    blocked_subs = []
+    for i, sub_url in enumerate(to_fetch, 1):
+        sys.stdout.write(f"\r  [{i}/{len(to_fetch)}] {sub_url.split('/')[-1][:55]}   ")
+        sys.stdout.flush()
+        time.sleep(SUB_DELAY)
+        urls, status = fetch_sub_with_retry(sub_url)
+        if status == "ok":
+            save_sub_cache(sub_url, urls)
+        else:
+            blocked_subs.append(sub_url)
+            print(f"\n  FAILED (max retries): {sub_url.split('/')[-1]}")
+
+    if to_fetch:
+        print()
+    return blocked_subs
+
+
+def _aggregate_cached_subs(sub_urls):
+    all_urls_set = set()
+    fetched_count = 0
+    for sub_url in sub_urls:
+        cached = load_sub_cache(sub_url)
+        if cached is not None:
+            all_urls_set.update(cached)
+            fetched_count += 1
+    return all_urls_set, fetched_count
+
+
+def load_sub_cache(sub_url):
+    p = sub_cache_path(sub_url)
+    if not p.exists():
+        return None
+    d = json.loads(p.read_text())
+    return d.get("urls", [])
+
+
+def fetch_sub_with_retry(sub_url):
+    for attempt, wait_secs in enumerate([0] + BACKOFF_WAIT):
+        if wait_secs:
+            print(f"\n    CF 429 — waiting {wait_secs}s (retry {attempt}/{MAX_RETRIES}) ...")
+            time.sleep(wait_secs)
+        xml = curl_get(sub_url)
+        if not is_cf_blocked(xml):
+            locs = [normalize_url(u) for u in extract_locs(xml)]
+            return locs, "ok"
+        if attempt == MAX_RETRIES:
+            return None, "cf_blocked"
+    return None, "cf_blocked"
+
+
+def save_sub_cache(sub_url, urls):
+    p = sub_cache_path(sub_url)
+    p.write_text(json.dumps({"sub": sub_url, "url_count": len(urls), "urls": urls}))
+
+
+def curl_get(url, delay=0.0):
+    if delay:
+        time.sleep(delay)
+    result = subprocess.run(
+        ["curl", "-s", "-L", "--max-time", "20",
+         "-H", f"User-Agent: {UA}",
+         "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+         "-H", "Accept-Language: en-US,en;q=0.5",
+         url],
+        capture_output=True, text=True
+    )
+    return result.stdout
+
+
+def extract_locs(xml_text):
+    return re.findall(r'<loc>\s*(https?://[^<\s]+)\s*</loc>', xml_text)
+
+
+def is_cf_blocked(text):
+    return '<Code>429</Code>' in text or '<Code>403</Code>' in text
+
+
+def normalize_url(url):
+    url = re.sub(r'\?.*', '', url)
+    return url.rstrip('/')
+
+
+def sub_cache_path(sub_url):
+    name = sub_url.split('/')[-1].replace('.xml', '')
+    return CACHE_DIR / f"sub_{name}.json"
+
 
 if __name__ == "__main__":
     probe_discovery_workflow()

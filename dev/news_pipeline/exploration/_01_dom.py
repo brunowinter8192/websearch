@@ -172,10 +172,6 @@ def build_options(headless: bool, session_dir: str) -> ChromiumOptions:
     return opts
 
 
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
-
-
 async def inspect_containers(tab) -> dict:
     raw = await tab.execute_script(_JS_INSPECT)
     val = _extract_value(raw)
@@ -213,3 +209,7 @@ async def find_button(tab) -> dict | None:
 async def click_button(tab) -> bool:
     raw = await tab.execute_script(_JS_CLICK_BTN)
     return bool(_extract_value(raw))
+
+
+def _extract_value(raw):
+    return raw["result"]["result"]["value"]

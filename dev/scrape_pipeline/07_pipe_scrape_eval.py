@@ -13,6 +13,24 @@ from _pipe_scrape_eval_phase3 import phase3_full_run
 
 
 # ORCHESTRATOR
+
+def run_main() -> None:
+    parser = argparse.ArgumentParser(description='Pipe-scraper eval harness')
+    parser.add_argument(
+        'phase',
+        choices=['smoke', 'phase1', 'phase2', 'phase3'],
+        help='smoke | phase1: WAF/concurrency sweep | phase2: delay sweep | phase3: full run',
+    )
+    parser.add_argument(
+        '--delay', type=float, default=0.5,
+        help='delay_s for phase3 (Phase 2 result: 0.5s; default=0.5)',
+    )
+    args = parser.parse_args()
+    asyncio.run(main(args.phase, args.delay))
+
+
+# FUNCTIONS
+
 async def main(phase: str, delay: float) -> None:
     urls = load_urls()
     print(f"Loaded {len(urls)} URLs from {DISCOVERED_URLS}")
@@ -29,8 +47,6 @@ async def main(phase: str, delay: float) -> None:
         raise ValueError(f"Unknown phase: {phase!r}")
 
 
-# FUNCTIONS
-
 async def smoke_test(urls: list[str]) -> None:
     print(f"Smoke test: 1 URL — delay=1.0s, timeout=15000ms, concurrency=1")
     sample = [urls[0]]
@@ -46,16 +62,5 @@ async def smoke_test(urls: list[str]) -> None:
     print("Smoke OK")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Pipe-scraper eval harness')
-    parser.add_argument(
-        'phase',
-        choices=['smoke', 'phase1', 'phase2', 'phase3'],
-        help='smoke | phase1: WAF/concurrency sweep | phase2: delay sweep | phase3: full run',
-    )
-    parser.add_argument(
-        '--delay', type=float, default=0.5,
-        help='delay_s for phase3 (Phase 2 result: 0.5s; default=0.5)',
-    )
-    args = parser.parse_args()
-    asyncio.run(main(args.phase, args.delay))
+if __name__ == "__main__":
+    run_main()

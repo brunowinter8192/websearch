@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import logging
 
 import pytest
@@ -11,30 +12,7 @@ from dev.search_pipeline._google_fixture import (
 )
 
 
-def _spec(token, behavior, target=None):
-    return ResultSpec(title=token, snippet="", date=None, token=token, behavior=behavior, target=target)
-
-
-async def _run(specs):
-    server, thread, port = start_fixture_server(specs)
-    try:
-        items = [{"url": goto_url(port, s.token), "title": s.title, "snippet": "", "date": None} for s in specs]
-        return await _resolve_urls(_build_results(items, max_results=10))
-    finally:
-        stop_fixture_server(server, thread)
-
-
-class _RaisingSession:
-    def __init__(self, exc):
-        self.exc = exc
-
-    async def get(self, *args, **kwargs):
-        raise self.exc
-
-
-def _result():
-    return SearchResult(url="http://127.0.0.1:1/goto?url=x", title="t", snippet="", engine="google", position=1)
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_non_302_is_counted_with_status():
@@ -97,15 +75,6 @@ def test_log_drops_warns_only_when_something_dropped(caplog):
     assert "2 of 3" in caplog.records[0].getMessage()
 
 
-class _FakeTab:
-    async def go_to(self, url, timeout=None):
-        return None
-
-    @property
-    async def current_url(self):
-        return "https://www.google.com/search?q=x"
-
-
 @pytest.mark.asyncio
 async def test_search_with_reason_attaches_goto_resolution_to_diagnosis(monkeypatch):
     async def fake_new_tab():
@@ -141,3 +110,37 @@ async def test_search_with_reason_attaches_goto_resolution_to_diagnosis(monkeypa
     assert results == []
     assert diag["goto_resolution"] == {"found": 2, "resolved": 0, "dropped": 2, "reasons": {"timeout": 2}}
     assert diag["containers_found"] is True
+
+
+def _spec(token, behavior, target=None):
+    return ResultSpec(title=token, snippet="", date=None, token=token, behavior=behavior, target=target)
+
+
+async def _run(specs):
+    server, thread, port = start_fixture_server(specs)
+    try:
+        items = [{"url": goto_url(port, s.token), "title": s.title, "snippet": "", "date": None} for s in specs]
+        return await _resolve_urls(_build_results(items, max_results=10))
+    finally:
+        stop_fixture_server(server, thread)
+
+
+class _RaisingSession:
+    def __init__(self, exc):
+        self.exc = exc
+
+    async def get(self, *args, **kwargs):
+        raise self.exc
+
+
+def _result():
+    return SearchResult(url="http://127.0.0.1:1/goto?url=x", title="t", snippet="", engine="google", position=1)
+
+
+class _FakeTab:
+    async def go_to(self, url, timeout=None):
+        return None
+
+    @property
+    async def current_url(self):
+        return "https://www.google.com/search?q=x"

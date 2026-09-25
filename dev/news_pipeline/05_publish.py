@@ -20,6 +20,36 @@ DATE_RE = re.compile(r"/(\d{4})/(\d{2})/(\d{2})/")
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CoinDesk publish — copy cleaned MDs to RAG collection and index."
+    )
+    _add_arguments(parser)
+    parser.add_argument(
+        "--skip-index", action="store_true", default=False,
+        help="Copy files but skip rag-cli index (for testing)"
+    )
+    args = parser.parse_args()
+    n_copied, n_chunks = publish_workflow(
+        Path(args.input), Path(args.collection_dir), args.skip_index
+    )
+    _print_done_article_s(n_copied, n_chunks)
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument(
+        "--input", default=str(INPUT_DIR),
+        help=f"Directory of cleaned .md files + manifest.json (default: {INPUT_DIR})"
+    )
+    parser.add_argument(
+        "--collection-dir", default=str(COLLECTION_DIR),
+        help=f"RAG collection directory (default: {COLLECTION_DIR})"
+    )
+
+
 def publish_workflow(input_dir: Path, collection_dir: Path, skip_index: bool = False):
     manifest = load_manifest(input_dir)
     if not manifest:
@@ -39,7 +69,9 @@ def publish_workflow(input_dir: Path, collection_dir: Path, skip_index: bool = F
     return n_copied, indexed_chunks
 
 
-# FUNCTIONS
+def _print_done_article_s(n_copied, n_chunks):
+    print(f"Done: {n_copied} article(s) published, {n_chunks} chunk(s) indexed.")
+
 
 def load_manifest(input_dir: Path) -> list[dict]:
     manifest_path = input_dir / "manifest.json"
@@ -47,20 +79,6 @@ def load_manifest(input_dir: Path) -> list[dict]:
         print(f"No manifest.json in {input_dir}", file=sys.stderr)
         return []
     return json.loads(manifest_path.read_text(encoding="utf-8"))
-
-
-def url_hash(url: str) -> str:
-    return hashlib.sha256(url.encode()).hexdigest()[:12]
-
-
-def pub_date_str(entry: dict) -> str:
-    pub = entry.get("publication_date", "")
-    if pub and len(pub) >= 10:
-        return pub[:10]
-    m = DATE_RE.search(entry.get("url", ""))
-    if m:
-        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    return "unknown"
 
 
 def copy_articles(manifest: list[dict], input_dir: Path, collection_dir: Path) -> int:
@@ -91,6 +109,20 @@ def run_rag_index(collection: str) -> tuple[int, int]:
     return parse_index_result(result.stdout + result.stderr)
 
 
+def url_hash(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:12]
+
+
+def pub_date_str(entry: dict) -> str:
+    pub = entry.get("publication_date", "")
+    if pub and len(pub) >= 10:
+        return pub[:10]
+    m = DATE_RE.search(entry.get("url", ""))
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return "unknown"
+
+
 def parse_index_result(output: str) -> tuple[int, int]:
     m = re.search(r"Done:\s*(\d+)\s*files?\s*indexed\s*\((\d+)\s*chunks?\)", output)
     if m:
@@ -100,29 +132,6 @@ def parse_index_result(output: str) -> tuple[int, int]:
     files = int(files_m.group(1)) if files_m else 0
     chunks = int(chunks_m.group(1)) if chunks_m else 0
     return files, chunks
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="CoinDesk publish — copy cleaned MDs to RAG collection and index."
-    )
-    parser.add_argument(
-        "--input", default=str(INPUT_DIR),
-        help=f"Directory of cleaned .md files + manifest.json (default: {INPUT_DIR})"
-    )
-    parser.add_argument(
-        "--collection-dir", default=str(COLLECTION_DIR),
-        help=f"RAG collection directory (default: {COLLECTION_DIR})"
-    )
-    parser.add_argument(
-        "--skip-index", action="store_true", default=False,
-        help="Copy files but skip rag-cli index (for testing)"
-    )
-    args = parser.parse_args()
-    n_copied, n_chunks = publish_workflow(
-        Path(args.input), Path(args.collection_dir), args.skip_index
-    )
-    print(f"Done: {n_copied} article(s) published, {n_chunks} chunk(s) indexed.")
 
 
 if __name__ == "__main__":

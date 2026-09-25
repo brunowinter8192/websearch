@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 import time
 
@@ -10,38 +11,7 @@ from src.search.engines.mojeek import (
 )
 
 
-class _ScriptedTab:
-
-    def __init__(self, poll_replies, parse_value=None, diagnose_reply=None):
-        self.poll_replies = list(poll_replies)
-        self.parse_value = parse_value
-        self.diagnose_reply = diagnose_reply or {}
-        self.verify_calls = 0
-        self.poll_calls = 0
-
-    async def execute_script(self, script):
-        if script is mojeek_mod._JS_POLL:
-            self.poll_calls += 1
-            reply = self.poll_replies[min(self.poll_calls - 1, len(self.poll_replies) - 1)]
-            return {"result": {"result": {"value": json.dumps(reply)}}}
-        if script is mojeek_mod._JS_VERIFY:
-            self.verify_calls += 1
-            return {"result": {"result": {"value": json.dumps({"fired": True})}}}
-        if script is mojeek_mod._JS_DIAGNOSE:
-            return {"result": {"result": {"value": json.dumps(self.diagnose_reply)}}}
-        return {"result": {"result": {"value": self.parse_value}}}
-
-
-def _page(links=0, widget=False, verify_ready=False, state=None, note=None):
-    return {
-        "links": links, "challenge_widget": widget, "verify_ready": verify_ready,
-        "challenge_state": state, "captcha_note": note,
-    }
-
-
-async def _run_await_results(tab, deadline, target, partial=None):
-    return await _await_results(tab, deadline, target, [], time.perf_counter(), partial)
-
+# FUNCTIONS
 
 @pytest.fixture(autouse=True)
 def _fast_polls(monkeypatch):
@@ -234,3 +204,36 @@ async def test_parse_results_raises_on_invalid_json():
 async def test_parse_results_returns_empty_on_an_unreadable_read():
     tab = _ScriptedTab([], parse_value=None)
     assert await _parse_results(tab, max_results=10) == []
+
+
+def _page(links=0, widget=False, verify_ready=False, state=None, note=None):
+    return {
+        "links": links, "challenge_widget": widget, "verify_ready": verify_ready,
+        "challenge_state": state, "captcha_note": note,
+    }
+
+
+class _ScriptedTab:
+
+    def __init__(self, poll_replies, parse_value=None, diagnose_reply=None):
+        self.poll_replies = list(poll_replies)
+        self.parse_value = parse_value
+        self.diagnose_reply = diagnose_reply or {}
+        self.verify_calls = 0
+        self.poll_calls = 0
+
+    async def execute_script(self, script):
+        if script is mojeek_mod._JS_POLL:
+            self.poll_calls += 1
+            reply = self.poll_replies[min(self.poll_calls - 1, len(self.poll_replies) - 1)]
+            return {"result": {"result": {"value": json.dumps(reply)}}}
+        if script is mojeek_mod._JS_VERIFY:
+            self.verify_calls += 1
+            return {"result": {"result": {"value": json.dumps({"fired": True})}}}
+        if script is mojeek_mod._JS_DIAGNOSE:
+            return {"result": {"result": {"value": json.dumps(self.diagnose_reply)}}}
+        return {"result": {"result": {"value": self.parse_value}}}
+
+
+async def _run_await_results(tab, deadline, target, partial=None):
+    return await _await_results(tab, deadline, target, [], time.perf_counter(), partial)

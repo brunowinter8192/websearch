@@ -74,15 +74,14 @@ PHASE_FRESH_QUERIES = [
 ]
 
 
-@dataclass
-class Phase:
-    name: str
-    description: str
-    profile_dir: str
-    measurements: list = field(default_factory=list)
-
-
 # ORCHESTRATOR
+
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(probe_workflow())
+
+
+# FUNCTIONS
 
 async def probe_workflow() -> None:
     carryover_profile = tempfile.mkdtemp(prefix=WARM_PROFILE_PREFIX)
@@ -106,10 +105,12 @@ async def probe_workflow() -> None:
         discard_profiles([carryover_profile, fresh_profile])
 
 
-# FUNCTIONS
-
-def build_search_url(query: str) -> str:
-    return SEARCH_URL.format(quote_plus(query))
+@dataclass
+class Phase:
+    name: str
+    description: str
+    profile_dir: str
+    measurements: list = field(default_factory=list)
 
 
 async def run_phase(name: str, description: str, profile_dir: str, queries: list[str]) -> Phase:
@@ -138,12 +139,6 @@ def snapshot_cookie_store(profile_dir: str) -> dict:
         return {"path": str(path), "exists": False}
     stat = path.stat()
     return {"path": str(path), "exists": True, "size_bytes": stat.st_size, "mtime": stat.st_mtime}
-
-
-def _cookie_identity(fingerprint: dict) -> tuple:
-    return (
-        fingerprint["name"], fingerprint["domain"], fingerprint["path"], fingerprint["value_sha256_12"]
-    )
 
 
 def build_persistence_record(cold: Phase, warm: Phase, store_after_cold: dict, store_before_warm: dict) -> dict:
@@ -177,6 +172,15 @@ def discard_profiles(profile_dirs: list[str]) -> None:
         shutil.rmtree(profile_dir, ignore_errors=True)
 
 
+def build_search_url(query: str) -> str:
+    return SEARCH_URL.format(quote_plus(query))
+
+
+def _cookie_identity(fingerprint: dict) -> tuple:
+    return (
+        fingerprint["name"], fingerprint["domain"], fingerprint["path"], fingerprint["value_sha256_12"]
+    )
+
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(probe_workflow())
+    main()

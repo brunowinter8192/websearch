@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import sys
@@ -30,8 +29,7 @@ async def run_probe() -> None:
 
     smoke_path = _latest_report(SMOKE_REPORTS_GLOB, REPORT_DIR)
     free_path = _latest_report(FREE_WORD_REPORTS_GLOB, REPORT_DIR)
-    print(f"[pool] smoke={smoke_path.name}", file=sys.stderr)
-    print(f"[pool] free_word={free_path.name}", file=sys.stderr)
+    _print_pool_smoke(smoke_path, free_path)
 
     all_urls = _extract_pool(smoke_path, free_path)
     tier_pool = _filter_and_tier(all_urls)
@@ -39,13 +37,33 @@ async def run_probe() -> None:
     _write_pool_files(sampled_pool, doi_sample, ts, DATA_DIR)
 
     total = len(sampled_pool)
-    print(f"[pool] {total} URLs to classify (doi sample={len(doi_sample)}/all={sum(1 for u,t in tier_pool if t=='T3')})", file=sys.stderr)
+    _print_pool_urls_to(total, doi_sample, tier_pool)
 
     t_wall_start = time.monotonic()
     results = await _classify_all(sampled_pool)
-    wall_secs = time.monotonic() - t_wall_start
+    wall_secs = _compute_wall_secs(t_wall_start)
 
     report_path = _write_report(results, sampled_pool, doi_sample, wall_secs, smoke_path, free_path, ts, REPORT_DIR)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _print_pool_smoke(smoke_path, free_path):
+    print(f"[pool] smoke={smoke_path.name}", file=sys.stderr)
+    print(f"[pool] free_word={free_path.name}", file=sys.stderr)
+
+
+def _print_pool_urls_to(total, doi_sample, tier_pool):
+    print(f"[pool] {total} URLs to classify (doi sample={len(doi_sample)}/all={sum(1 for u,t in tier_pool if t=='T3')})", file=sys.stderr)
+
+
+def _compute_wall_secs(t_wall_start):
+    wall_secs = time.monotonic() - t_wall_start
+    return wall_secs
+
+
+def _print_report(report_path):
     print(f"\nReport: {report_path}", file=sys.stderr)
 
 

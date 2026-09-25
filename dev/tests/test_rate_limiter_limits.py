@@ -1,8 +1,11 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.search import rate_limiter
 from src.search.rate_limiter import ENGINE_LIMITS, MAX_REQUESTS, WINDOW_SECONDS, get_limiter
 
+
+# FUNCTIONS
 
 @pytest.fixture(autouse=True)
 def _fresh_limiters(monkeypatch):

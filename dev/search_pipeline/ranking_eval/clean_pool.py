@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -78,6 +77,21 @@ _BACKFILL: dict[str, list[dict]] = {
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Oracle cleanup — filter google+SS, backfill loss pairs")
+    parser.add_argument("--v2-dir", default=None, help="v2 ts_dir path (default: value_eval_v2_20260523_000156)")
+    args   = parser.parse_args()
+    v2_dir = _compute_v2_dir(args)
+    oracle_cleanup_workflow(v2_dir)
+
+
+# FUNCTIONS
+
+def _compute_v2_dir(args):
+    v2_dir = Path(args.v2_dir) if args.v2_dir else V2_DEFAULT
+    return v2_dir
+
+
 def oracle_cleanup_workflow(v2_dir: Path) -> None:
     summary_rows: list[dict] = []
     for mode in MODES:
@@ -90,26 +104,8 @@ def oracle_cleanup_workflow(v2_dir: Path) -> None:
     print(v2_dir / "oracle_v3clean_summary.md")
 
 
-# FUNCTIONS
-
 def _query_slug(query: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
-    result = []
-    for entry in pool:
-        remaining = [e for e in entry.get("engines", []) if e not in drop_engines]
-        if not remaining:
-            continue
-        fe = dict(entry)
-        fe["engines"]      = remaining
-        fe["positions"]    = {e: p for e, p in entry.get("positions", {}).items()
-                              if e not in drop_engines}
-        fe["min_position"] = (min(fe["positions"].values())
-                              if fe["positions"] else entry.get("min_position", 999))
-        result.append(fe)
-    return result
 
 
 def _process_pair(v2_dir: Path, mode: str, query: str, slug: str, pair_key: str) -> dict:
@@ -207,9 +203,21 @@ def _write_summary(v2_dir: Path, rows: list[dict]) -> None:
     (v2_dir / "oracle_v3clean_summary.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+def filter_pool(pool: list[dict], drop_engines: set[str]) -> list[dict]:
+    result = []
+    for entry in pool:
+        remaining = [e for e in entry.get("engines", []) if e not in drop_engines]
+        if not remaining:
+            continue
+        fe = dict(entry)
+        fe["engines"]      = remaining
+        fe["positions"]    = {e: p for e, p in entry.get("positions", {}).items()
+                              if e not in drop_engines}
+        fe["min_position"] = (min(fe["positions"].values())
+                              if fe["positions"] else entry.get("min_position", 999))
+        result.append(fe)
+    return result
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Oracle cleanup — filter google+SS, backfill loss pairs")
-    parser.add_argument("--v2-dir", default=None, help="v2 ts_dir path (default: value_eval_v2_20260523_000156)")
-    args   = parser.parse_args()
-    v2_dir = Path(args.v2_dir) if args.v2_dir else V2_DEFAULT
-    oracle_cleanup_workflow(v2_dir)
+    main()

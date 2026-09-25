@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from src.crawler.pipe_scraper_acquisition import onward_link_identity, _extract_
 from src.crawler.pipe_scraper_report import collect_onward_links, write_onward_links_file, print_summary
 from dev.tests._pipe_scraper_fakes import _FakeResult, _camoufox_meta
 
+
+# FUNCTIONS
 
 def test_onward_link_identity_strips_query_and_fragment():
     assert (onward_link_identity("https://x.test/docs/guide?tab=2#section")
@@ -29,11 +32,6 @@ def test_onward_link_identity_collapses_query_variants_to_one_key():
 def test_onward_link_identity_none_for_hostless_url():
     assert onward_link_identity("mailto:someone@example.com") is None
     assert onward_link_identity("javascript:void(0)") is None
-
-
-class _FakeLinksResult:
-    def __init__(self, internal=(), external=()):
-        self.links = {"internal": list(internal), "external": list(external)}
 
 
 def test_extract_onward_links_unions_internal_and_external_buckets():
@@ -112,12 +110,6 @@ def test_collect_onward_links_returns_none_for_camoufox_engine():
     assert collect_onward_links(urls, results, "camoufox") is None
 
 
-@pytest.fixture
-def onward_links_scratch_path(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipe_scraper_report, "Path", lambda p: tmp_path / Path(p).name)
-    return tmp_path / "pipe_scraper_test_onward_domain_scrape_links.txt"
-
-
 def test_write_onward_links_file_writes_one_url_per_line(onward_links_scratch_path):
     write_onward_links_file("pipe_scraper_test_onward_domain",
                               ["https://x.test/a", "https://x.test/b"])
@@ -134,10 +126,6 @@ def test_write_onward_links_file_writes_nothing_when_none(onward_links_scratch_p
     assert not onward_links_scratch_path.exists()
 
 
-def _summary_result(status_code=200, byte_count=100):
-    return {"status_code": status_code, "bytes": byte_count}
-
-
 def test_print_summary_reports_onward_link_count(capsys):
     print_summary([_summary_result()], 1.0, ["https://x.test/a", "https://x.test/b"])
     out = capsys.readouterr().out
@@ -149,23 +137,6 @@ def test_print_summary_reports_camoufox_cannot_collect_not_a_bare_zero(capsys):
     out = capsys.readouterr().out
     assert "onward links not collected (camoufox engine)" in out
     assert "0 onward links" not in out
-
-
-class _FakeLinksCrawler:
-    def __init__(self, *a, **kw):
-        pass
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def arun(self, url, config=None):
-        return _FakeResult(raw_markdown="x" * 500, links={
-            "internal": [{"href": "https://x.test/new"}, {"href": "https://other.test/x"}],
-            "external": [],
-        })
 
 
 @pytest.mark.asyncio
@@ -197,3 +168,35 @@ async def test_scrape_one_camoufox_never_produces_a_links_key(tmp_path, monkeypa
                                               concurrency_per_domain=1, engine="camoufox")
 
     assert "links" not in results[0]
+
+
+class _FakeLinksResult:
+    def __init__(self, internal=(), external=()):
+        self.links = {"internal": list(internal), "external": list(external)}
+
+
+@pytest.fixture
+def onward_links_scratch_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipe_scraper_report, "Path", lambda p: tmp_path / Path(p).name)
+    return tmp_path / "pipe_scraper_test_onward_domain_scrape_links.txt"
+
+
+def _summary_result(status_code=200, byte_count=100):
+    return {"status_code": status_code, "bytes": byte_count}
+
+
+class _FakeLinksCrawler:
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def arun(self, url, config=None):
+        return _FakeResult(raw_markdown="x" * 500, links={
+            "internal": [{"href": "https://x.test/new"}, {"href": "https://other.test/x"}],
+            "external": [],
+        })

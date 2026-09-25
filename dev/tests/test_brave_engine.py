@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import functools
 import http.server
@@ -16,7 +17,6 @@ from src.search.engines import brave as brave_mod
 logger = logging.getLogger(__name__)
 
 pytestmark = pytest.mark.browser
-
 
 _OWN_QUERY = "cloudflare turnstile captcha widget verify programmatically"
 _MARKER_IN_OWN_QUERY_HTML = f"""<!doctype html>
@@ -87,70 +87,10 @@ _ROUTES = {
     "/staggered_load.html": _STAGGERED_LOAD_HTML,
 }
 
-
-class _FixtureHandler(http.server.BaseHTTPRequestHandler):
-    routes: dict[str, str] = _ROUTES
-
-    def do_GET(self):
-        path = self.path.split("?", 1)[0]
-        body = self.routes.get(path)
-        if body is None:
-            self.send_response(404)
-            self.end_headers()
-            return
-        encoded = body.encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(encoded)))
-        self.end_headers()
-        self.wfile.write(encoded)
-
-    def log_message(self, fmt, *args):
-        return
+_REAL_FIXTURES_DIR = str(Path(__file__).resolve().parent.parent / "brave_return" / "fixtures")
 
 
-def _start_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    port = server.server_address[1]
-    return server, f"http://127.0.0.1:{port}"
-
-
-def _stop_fixture_server(server: http.server.ThreadingHTTPServer) -> None:
-    server.shutdown()
-    server.server_close()
-
-
-async def _start_headless_browser() -> Chrome:
-    options = ChromiumOptions()
-    options.headless = True
-    browser = Chrome(options)
-    await browser.start()
-    return browser
-
-
-async def _stop_headless_browser(browser: Chrome) -> None:
-    await browser.stop()
-
-
-async def _fixture_new_tab(browser: Chrome):
-    return await browser.new_tab()
-
-
-async def _fixture_kill_tab(browser: Chrome, tab) -> None:
-    target_id = getattr(tab, "_target_id", None)
-    if target_id is None:
-        return
-    try:
-        await asyncio.wait_for(browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0)
-    except Exception as e:
-        logger.warning("fixture kill_tab close_target failed (target_id=%s): %s", target_id, e)
-
-
-def _patch_brave_tab_lifecycle(monkeypatch, browser: Chrome) -> None:
-    monkeypatch.setattr(brave_mod, "new_tab", lambda: _fixture_new_tab(browser))
-    monkeypatch.setattr(brave_mod, "kill_tab", lambda tab: _fixture_kill_tab(browser, tab))
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_marker_word_from_own_query_no_longer_discards_real_results(monkeypatch):
@@ -244,17 +184,6 @@ async def test_unrelated_button_before_containers_never_leaks_into_success_diagn
         "challenge_triggered": False,
         "document_status_chain": [200], "http_status": 200,
     }
-
-
-_REAL_FIXTURES_DIR = str(Path(__file__).resolve().parent.parent / "brave_return" / "fixtures")
-
-
-def _start_real_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=_REAL_FIXTURES_DIR)
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    port = server.server_address[1]
-    return server, f"http://127.0.0.1:{port}"
 
 
 @pytest.mark.asyncio
@@ -389,3 +318,75 @@ async def test_stuck_challenge_cancelled_mid_loop_leaves_partial_facts_behind(mo
     assert "http_status" in partial
     assert isinstance(partial["elapsed_ms"], int)
     assert 0 <= partial["elapsed_ms"] < 300
+
+
+def _start_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    return server, f"http://127.0.0.1:{port}"
+
+
+async def _start_headless_browser() -> Chrome:
+    options = ChromiumOptions()
+    options.headless = True
+    browser = Chrome(options)
+    await browser.start()
+    return browser
+
+
+def _patch_brave_tab_lifecycle(monkeypatch, browser: Chrome) -> None:
+    monkeypatch.setattr(brave_mod, "new_tab", lambda: _fixture_new_tab(browser))
+    monkeypatch.setattr(brave_mod, "kill_tab", lambda tab: _fixture_kill_tab(browser, tab))
+
+
+async def _stop_headless_browser(browser: Chrome) -> None:
+    await browser.stop()
+
+
+def _stop_fixture_server(server: http.server.ThreadingHTTPServer) -> None:
+    server.shutdown()
+    server.server_close()
+
+
+def _start_real_fixture_server() -> tuple[http.server.ThreadingHTTPServer, str]:
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=_REAL_FIXTURES_DIR)
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    return server, f"http://127.0.0.1:{port}"
+
+
+class _FixtureHandler(http.server.BaseHTTPRequestHandler):
+    routes: dict[str, str] = _ROUTES
+
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        body = self.routes.get(path)
+        if body is None:
+            self.send_response(404)
+            self.end_headers()
+            return
+        encoded = body.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, fmt, *args):
+        return
+
+
+async def _fixture_new_tab(browser: Chrome):
+    return await browser.new_tab()
+
+
+async def _fixture_kill_tab(browser: Chrome, tab) -> None:
+    target_id = getattr(tab, "_target_id", None)
+    if target_id is None:
+        return
+    try:
+        await asyncio.wait_for(browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0)
+    except Exception as e:
+        logger.warning("fixture kill_tab close_target failed (target_id=%s): %s", target_id, e)

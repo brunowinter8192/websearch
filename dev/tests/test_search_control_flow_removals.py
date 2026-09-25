@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 import logging
 from types import SimpleNamespace
@@ -30,18 +31,7 @@ DIAGNOSE_CALLS = [
 ]
 
 
-class _TabReturning:
-    def __init__(self, value):
-        self.value = value
-
-    async def execute_script(self, script):
-        return {"result": {"result": {"value": self.value}}}
-
-
-class _Limiter:
-    async def acquire(self):
-        return None
-
+# FUNCTIONS
 
 def test_extract_value_raises_when_the_cdp_result_has_no_value():
     with pytest.raises(KeyError):
@@ -113,3 +103,16 @@ async def test_prewarm_failure_log_does_not_claim_a_retry(monkeypatch, caplog):
     assert "retry" not in messages[0].lower()
     assert "expected to fail individually" in messages[0]
     assert "DevToolsActivePort did not appear" in messages[0]
+
+
+class _TabReturning:
+    def __init__(self, value):
+        self.value = value
+
+    async def execute_script(self, script):
+        return {"result": {"result": {"value": self.value}}}
+
+
+class _Limiter:
+    async def acquire(self):
+        return None

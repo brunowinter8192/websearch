@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 from curl_cffi import requests as cffi
 
 THEBLOCK_INDEX = "https://www.theblock.co/sitemap_tbco_index.xml"
@@ -11,7 +10,17 @@ FETCH_TIMEOUT  = 15
 # ORCHESTRATOR
 
 def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[str, bytes]:
-    purl = f"{proto}://{host_port}"
+    purl = _proxy_url(proto, host_port)
+    return _fetch_or_fail(url, purl, content_type)
+
+
+# FUNCTIONS
+
+def _proxy_url(proto: str, host_port: str) -> str:
+    return f"{proto}://{host_port}"
+
+
+def _fetch_or_fail(url: str, purl: str, content_type: str) -> tuple[str, bytes]:
     try:
         s = cffi.Session(impersonate="chrome")
         r = s.get(url, proxies={"http": purl, "https": purl}, timeout=FETCH_TIMEOUT)
@@ -19,8 +28,6 @@ def fetch_url(proto: str, host_port: str, url: str, content_type: str) -> tuple[
     except Exception:
         return "fail", b""
 
-
-# FUNCTIONS
 
 def _validate(r, content_type: str) -> tuple[str, bytes]:
     if r.status_code in (404, 410):

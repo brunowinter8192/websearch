@@ -50,29 +50,6 @@ def _extract_pool(smoke_path: Path, free_path: Path) -> set[str]:
     return {u for u in urls if _has_real_path(u)}
 
 
-def _has_real_path(url: str) -> bool:
-    path = urlparse(url).path
-    return bool(path) and path != "/"
-
-
-def _url_tier(url: str) -> str | None:
-    d = _base_domain(url)
-    if d in TIER1_DOMAINS or any(d.endswith("." + t) for t in TIER1_DOMAINS):
-        return "T1"
-    if d in TIER2_DOMAINS or any(d.endswith("." + t) for t in TIER2_DOMAINS):
-        return "T2"
-    if d in TIER3_DOMAINS or any(d.endswith("." + t) for t in TIER3_DOMAINS):
-        return "T3"
-    if d in TIER4_DOMAINS or any(d.endswith("." + t) for t in TIER4_DOMAINS):
-        return "T4"
-    return None
-
-
-def _base_domain(url: str) -> str:
-    netloc = urlparse(url).netloc.lower()
-    return netloc[4:] if netloc.startswith("www.") else netloc
-
-
 def _filter_and_tier(all_urls: set[str]) -> list[tuple[str, str]]:
     tiered = [(u, t) for u in all_urls if (t := _url_tier(u)) is not None]
     tiered.sort(key=lambda x: (_base_domain(x[0]), x[0]))
@@ -98,3 +75,26 @@ def _write_pool_files(sampled_pool: list[tuple[str, str]], doi_sample: list[str]
     doi_path = data_dir / f"pool_doi_sample_{ts}.txt"
     doi_path.write_text("\n".join(doi_sample) + "\n", encoding="utf-8")
     print(f"[pool] written: {doi_path.name}", file=sys.stderr)
+
+
+def _has_real_path(url: str) -> bool:
+    path = urlparse(url).path
+    return bool(path) and path != "/"
+
+
+def _url_tier(url: str) -> str | None:
+    d = _base_domain(url)
+    if d in TIER1_DOMAINS or any(d.endswith("." + t) for t in TIER1_DOMAINS):
+        return "T1"
+    if d in TIER2_DOMAINS or any(d.endswith("." + t) for t in TIER2_DOMAINS):
+        return "T2"
+    if d in TIER3_DOMAINS or any(d.endswith("." + t) for t in TIER3_DOMAINS):
+        return "T3"
+    if d in TIER4_DOMAINS or any(d.endswith("." + t) for t in TIER4_DOMAINS):
+        return "T4"
+    return None
+
+
+def _base_domain(url: str) -> str:
+    netloc = urlparse(url).netloc.lower()
+    return netloc[4:] if netloc.startswith("www.") else netloc

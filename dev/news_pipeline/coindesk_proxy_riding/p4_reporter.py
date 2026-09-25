@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +22,24 @@ def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime)
 
 
 # FUNCTIONS
-def _fmt(v, spec="", unit="") -> str:
-    return f"{format(v, spec)}{unit}" if v is not None else "—"
+
+def _write_md(
+    job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
+) -> None:
+    job_id  = t_job_start.strftime("%Y%m%dT%H%M%SZ")
+    rw_rate = stats["n_regwall_fetches"] / max(stats["n_total_fetches"], 1)
+
+    lines = []
+    lines += _render_header_and_counts(job_id, state, stats)
+    lines += _render_throughput_section(stats)
+    lines += _render_html_size_section(stats)
+    lines += _render_markdown_len_section(stats)
+    lines += _render_proxy_and_regwall_section(stats, rw_rate)
+    lines += _render_failed_urls_section(state.job_records)
+    lines += _render_regwall_urls_section(state.job_records)
+    lines += _render_plots_section()
+
+    (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def _render_header_and_counts(job_id: str, state: RiderState, stats: dict) -> list:
@@ -187,20 +202,5 @@ def _render_plots_section() -> list:
     ]
 
 
-def _write_md(
-    job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
-) -> None:
-    job_id  = t_job_start.strftime("%Y%m%dT%H%M%SZ")
-    rw_rate = stats["n_regwall_fetches"] / max(stats["n_total_fetches"], 1)
-
-    lines = []
-    lines += _render_header_and_counts(job_id, state, stats)
-    lines += _render_throughput_section(stats)
-    lines += _render_html_size_section(stats)
-    lines += _render_markdown_len_section(stats)
-    lines += _render_proxy_and_regwall_section(stats, rw_rate)
-    lines += _render_failed_urls_section(state.job_records)
-    lines += _render_regwall_urls_section(state.job_records)
-    lines += _render_plots_section()
-
-    (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
+def _fmt(v, spec="", unit="") -> str:
+    return f"{format(v, spec)}{unit}" if v is not None else "—"

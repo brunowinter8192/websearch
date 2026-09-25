@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import json
@@ -24,51 +23,33 @@ ENGINES = ["crossref", "duckduckgo", "google", "lobsters", "mojeek",
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Pool diff v2 vs v3")
+    parser.add_argument("--v3-dir", default=None, help="v3 ts_dir path (default: latest value_eval_v3_* in runs/)")
+    args = parser.parse_args()
+    if args.v3_dir:
+        v3_dir = Path(args.v3_dir)
+    else:
+        candidates = sorted(DATA_DIR.glob("value_eval_v3_*"), reverse=True)
+        if not candidates:
+            raise SystemExit("No value_eval_v3_* dir found in runs/")
+        v3_dir = _compute_v3_dir(candidates)
+    pool_diff_workflow(v3_dir)
+
+
+# FUNCTIONS
+
+def _compute_v3_dir(candidates):
+    v3_dir = candidates[0]
+    return v3_dir
+
+
 def pool_diff_workflow(v3_dir: Path) -> None:
     rows     = _compute_rows(v3_dir)
     eng_rows = _compute_engine_rows(v2_dir=V2_REF, v3_dir=v3_dir)
     _write_report(rows, eng_rows, v3_dir)
     out = REPORT_DIR / "pool_diff_v2_vs_v3.md"
     print(out)
-
-
-# FUNCTIONS
-
-def _query_slug(query: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
-
-
-def _load_pool(path: Path) -> tuple[set[str], int, dict]:
-    d = json.loads(path.read_text(encoding="utf-8"))
-    urls = {m["url"] for m in d["pool"]}
-    google_count = d.get("google_count", 0)
-    engine_stats = d.get("engine_stats", {})
-    return urls, google_count, engine_stats
-
-
-def _engine_ok_counts(ts_dir: Path) -> dict[str, dict[str, int]]:
-    summary = ts_dir / "engine_report_summary.md"
-    if not summary.exists():
-        return {}
-    lines  = summary.read_text(encoding="utf-8").splitlines()
-    result: dict[str, dict[str, int]] = {}
-    in_table = False
-    for line in lines:
-        if line.startswith("| Engine | n |"):
-            in_table = True
-            continue
-        if in_table and line.startswith("|---"):
-            continue
-        if in_table and line.startswith("| "):
-            parts = [p.strip() for p in line.split("|")]
-            if len(parts) >= 4:
-                eng  = parts[1]
-                n    = int(parts[2]) if parts[2].isdigit() else 0
-                ok   = int(parts[3]) if parts[3].isdigit() else 0
-                result[eng] = {"ok": ok, "total": n}
-        elif in_table and not line.startswith("|"):
-            break
-    return result
 
 
 def _compute_rows(v3_dir: Path) -> list[dict]:
@@ -138,6 +119,43 @@ def _write_report(rows: list[dict], eng_rows: list[dict], v3_dir: Path) -> None:
     lines.append("")
     out = REPORT_DIR / "pool_diff_v2_vs_v3.md"
     out.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _query_slug(query: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", query.lower())[:30].strip("_")
+
+
+def _load_pool(path: Path) -> tuple[set[str], int, dict]:
+    d = json.loads(path.read_text(encoding="utf-8"))
+    urls = {m["url"] for m in d["pool"]}
+    google_count = d.get("google_count", 0)
+    engine_stats = d.get("engine_stats", {})
+    return urls, google_count, engine_stats
+
+
+def _engine_ok_counts(ts_dir: Path) -> dict[str, dict[str, int]]:
+    summary = ts_dir / "engine_report_summary.md"
+    if not summary.exists():
+        return {}
+    lines  = summary.read_text(encoding="utf-8").splitlines()
+    result: dict[str, dict[str, int]] = {}
+    in_table = False
+    for line in lines:
+        if line.startswith("| Engine | n |"):
+            in_table = True
+            continue
+        if in_table and line.startswith("|---"):
+            continue
+        if in_table and line.startswith("| "):
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 4:
+                eng  = parts[1]
+                n    = int(parts[2]) if parts[2].isdigit() else 0
+                ok   = int(parts[3]) if parts[3].isdigit() else 0
+                result[eng] = {"ok": ok, "total": n}
+        elif in_table and not line.startswith("|"):
+            break
+    return result
 
 
 def _render_pair_overlap(rows: list[dict], v3_dir: Path) -> list[str]:
@@ -229,14 +247,4 @@ def _render_highlights(ok_rows: list[dict]) -> list[str]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pool diff v2 vs v3")
-    parser.add_argument("--v3-dir", default=None, help="v3 ts_dir path (default: latest value_eval_v3_* in runs/)")
-    args = parser.parse_args()
-    if args.v3_dir:
-        v3_dir = Path(args.v3_dir)
-    else:
-        candidates = sorted(DATA_DIR.glob("value_eval_v3_*"), reverse=True)
-        if not candidates:
-            raise SystemExit("No value_eval_v3_* dir found in runs/")
-        v3_dir = candidates[0]
-    pool_diff_workflow(v3_dir)
+    main()

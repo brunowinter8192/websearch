@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -10,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _acquire_probe_instrument import _acq_events
+from _acquire_probe_instrument import _acq_events, install_instrument
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -30,6 +29,27 @@ FINDINGS_DIR = SCRIPT_DIR / "md"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="RateLimiter.acquire() instrumentation probe — Phase 2 bee."
+    )
+    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
+                        help="Limit to first N queries (default: all from queries.txt)")
+    parser.add_argument("--smoke", action="store_true",
+                        help="4-query dry-run: verify instrumentation live, no report written")
+    args = parser.parse_args()
+    install_instrument()
+    if args.smoke and args.max_queries is None:
+        _apply_smoke_query_limit(args)
+    asyncio.run(run_acquire_probe(args.max_queries, args.smoke))
+
+
+# FUNCTIONS
+
+def _apply_smoke_query_limit(args):
+    args.max_queries = 4
+
+
 async def run_acquire_probe(max_queries: int | None, smoke: bool) -> None:
     _start_probe_clock()
     queries = _load_queries(QUERIES_FILE, max_queries)
@@ -43,8 +63,6 @@ async def run_acquire_probe(max_queries: int | None, smoke: bool) -> None:
     _write_outputs(query_records, cascade_ok, zero_n)
 
 
-# FUNCTIONS
-
 async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
     print(f"acquire probe | queries={len(queries)} smoke={smoke}", file=sys.stderr)
     stop_canary, canary_task = await _start_canary_monitor()
@@ -57,6 +75,38 @@ async def _execute_queries(queries: list[str], smoke: bool) -> list[dict]:
         await _stop_canary_monitor(stop_canary, canary_task)
         await close_browser()
     return query_records
+
+
+def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, bool]:
+    zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
+    min_expected = max(3, len(query_records) // 4) if not smoke else 0
+    cascade_ok = zero_n >= min_expected
+    print(
+        f"\nzero_cascade={zero_n}/{len(query_records)}  cascade_reproduced={cascade_ok}",
+        file=sys.stderr,
+    )
+    return zero_n, cascade_ok
+
+
+def _report_smoke_ok() -> None:
+    print("Smoke OK — re-run without --smoke for full 20-query run.", file=sys.stderr)
+
+
+def _report_cascade_warning() -> None:
+    print(
+        "WARNING: cascade did not reproduce — instrumentation may be interfering. "
+        "Data may be invalid.",
+        file=sys.stderr,
+    )
+
+
+def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    rp = _write_report(query_records, cascade_ok, zero_n, REPORT_DIR)
+    fp = _write_findings(query_records, rp, cascade_ok, zero_n, FINDINGS_DIR)
+    print(f"\nReport:   {rp}", file=sys.stderr)
+    print(f"Findings: {fp}", file=sys.stderr)
 
 
 async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dict:
@@ -98,47 +148,5 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
     return record
 
 
-def _cascade_result(query_records: list[dict], smoke: bool) -> tuple[int, bool]:
-    zero_n = sum(1 for r in query_records if r["category"] == "zero_cascade")
-    min_expected = max(3, len(query_records) // 4) if not smoke else 0
-    cascade_ok = zero_n >= min_expected
-    print(
-        f"\nzero_cascade={zero_n}/{len(query_records)}  cascade_reproduced={cascade_ok}",
-        file=sys.stderr,
-    )
-    return zero_n, cascade_ok
-
-
-def _report_smoke_ok() -> None:
-    print("Smoke OK — re-run without --smoke for full 20-query run.", file=sys.stderr)
-
-
-def _report_cascade_warning() -> None:
-    print(
-        "WARNING: cascade did not reproduce — instrumentation may be interfering. "
-        "Data may be invalid.",
-        file=sys.stderr,
-    )
-
-
-def _write_outputs(query_records: list[dict], cascade_ok: bool, zero_n: int) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    rp = _write_report(query_records, cascade_ok, zero_n, REPORT_DIR)
-    fp = _write_findings(query_records, rp, cascade_ok, zero_n, FINDINGS_DIR)
-    print(f"\nReport:   {rp}", file=sys.stderr)
-    print(f"Findings: {fp}", file=sys.stderr)
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="RateLimiter.acquire() instrumentation probe — Phase 2 bee."
-    )
-    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
-                        help="Limit to first N queries (default: all from queries.txt)")
-    parser.add_argument("--smoke", action="store_true",
-                        help="4-query dry-run: verify instrumentation live, no report written")
-    args = parser.parse_args()
-    if args.smoke and args.max_queries is None:
-        args.max_queries = 4
-    asyncio.run(run_acquire_probe(args.max_queries, args.smoke))
+    main()

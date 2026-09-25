@@ -10,17 +10,6 @@ from _branch_probe_instrument import _acq_events
 
 # FUNCTIONS
 
-def _overall_verdict(records: list[dict]) -> str:
-    zc = [r["disc"] for r in records if r["category"] == "zero_cascade"]
-    if not zc:
-        return "no_cascade"
-    counts: dict[str, int] = defaultdict(int)
-    for d in zc:
-        key = "mixed" if (d.startswith("mixed") or d.startswith("partial")) else d
-        counts[key] += 1
-    return max(counts, key=lambda k: counts[k])
-
-
 def _write_report(
     records: list[dict],
     cascade_ok: bool,
@@ -43,6 +32,17 @@ def _write_report(
     lines += _report_verdict_key()
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _overall_verdict(records: list[dict]) -> str:
+    zc = [r["disc"] for r in records if r["category"] == "zero_cascade"]
+    if not zc:
+        return "no_cascade"
+    counts: dict[str, int] = defaultdict(int)
+    for d in zc:
+        key = "mixed" if (d.startswith("mixed") or d.startswith("partial")) else d
+        counts[key] += 1
+    return max(counts, key=lambda k: counts[k])
 
 
 def _report_header(

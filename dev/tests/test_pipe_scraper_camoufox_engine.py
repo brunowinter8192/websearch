@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 from datetime import datetime, timezone
 
@@ -8,6 +9,8 @@ from src.crawler import pipe_scraper_acquisition
 from src.crawler import pipe_scraper_constants
 from dev.tests._pipe_scraper_fakes import _FakeCrawler, _camoufox_meta, _install_fake_pacing
 
+
+# FUNCTIONS
 
 def test_camoufox_concurrency_default_is_conservative():
     assert pipe_scraper_constants.CAMOUFOX_CONCURRENCY_PER_DOMAIN == 1

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import json
@@ -14,8 +13,6 @@ from pydoll.browser.options import ChromiumOptions
 from pydoll.browser.managers import BrowserProcessManager
 
 from _brave_headed_lane_probe_report import write_report
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -78,7 +75,24 @@ _browser = None
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    records = await _run_queries()
+
+    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+    ok_count = _compute_ok_count(records)
+    pow_count = _compute_pow_count(records)
+    under_gate = _compute_under_gate(records)
+    _print_report(report_path, ok_count, records, pow_count, under_gate)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+async def _run_queries():
     records = []
     try:
         await _start_headed_background_browser()
@@ -95,30 +109,31 @@ async def run_probe() -> None:
             )
     finally:
         await _stop_headed_background_browser()
+    return records
 
-    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+
+def _compute_ok_count(records):
     ok_count = sum(1 for r in records if r["status"] == "OK")
+    return ok_count
+
+
+def _compute_pow_count(records):
     pow_count = sum(1 for r in records if r["pow_triggered"])
+    return pow_count
+
+
+def _compute_under_gate(records):
     under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
+    return under_gate
+
+
+def _print_report(report_path, ok_count, records, pow_count, under_gate):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(
         f"Result: {ok_count}/{len(records)} OK, {pow_count}/{len(records)} PoW-triggered, "
         f"{under_gate}/{len(records)} <= {LATENCY_GATE_S}s, longest clean run = {_longest_clean_run(records)}",
         file=sys.stderr,
     )
-
-
-# FUNCTIONS
-
-def _open_process_creator(command: list[str]) -> subprocess.Popen:
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
-    logging.info("Headed-background launch: %s", open_cmd)
-    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def _kill_stale_chrome() -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={PROFILE_DIR}"], capture_output=True)
 
 
 async def _start_headed_background_browser() -> None:
@@ -132,52 +147,6 @@ async def _start_headed_background_browser() -> None:
     _browser = Chrome(options)
     _browser._browser_process_manager = BrowserProcessManager(process_creator=_open_process_creator)
     await _browser.start()
-
-
-async def _stop_headed_background_browser() -> None:
-    global _browser
-    if _browser is not None:
-        try:
-            await _browser.stop()
-        except Exception as e:
-            logging.warning("browser.stop() failed (expected to fall through to pkill): %s", e)
-        _browser = None
-    _kill_stale_chrome()
-
-
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-async def _wait_for_results(tab) -> bool:
-    for _ in range(MAX_WAIT_CYCLES):
-        raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
-        if count and int(count) > 0:
-            return True
-        await asyncio.sleep(WAIT_INTERVAL)
-    return False
-
-
-async def _parse_results(tab, max_results: int = 10) -> list[dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return [item for item in items[:max_results] if item.get("url")]
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
 
 
 async def run_query(query: str, axis: str) -> dict:
@@ -210,6 +179,63 @@ async def run_query(query: str, axis: str) -> dict:
     finally:
         await tab.close()
     return record
+
+
+async def _stop_headed_background_browser() -> None:
+    global _browser
+    if _browser is not None:
+        try:
+            await _browser.stop()
+        except Exception as e:
+            logging.warning("browser.stop() failed (expected to fall through to pkill): %s", e)
+        _browser = None
+    _kill_stale_chrome()
+
+
+def _kill_stale_chrome() -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={PROFILE_DIR}"], capture_output=True)
+
+
+def _open_process_creator(command: list[str]) -> subprocess.Popen:
+    args = command[1:]
+    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    logging.info("Headed-background launch: %s", open_cmd)
+    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = _extract_value(raw)
+    diag = {"marker": None, "pow_link": False, "title": "", "url": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
+async def _wait_for_results(tab) -> bool:
+    for _ in range(MAX_WAIT_CYCLES):
+        raw = await tab.execute_script(_JS_WAIT)
+        count = _extract_value(raw)
+        if count and int(count) > 0:
+            return True
+        await asyncio.sleep(WAIT_INTERVAL)
+    return False
+
+
+async def _parse_results(tab, max_results: int = 10) -> list[dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = _extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return [item for item in items[:max_results] if item.get("url")]
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
 
 
 if __name__ == "__main__":

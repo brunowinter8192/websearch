@@ -12,14 +12,43 @@ RateLimiter = _rl_mod.RateLimiter
 
 _acq_events: list[tuple[str, str, float]] = []
 
+_orig_init = RateLimiter.__init__
+
+_orig_acquire = RateLimiter.acquire
+
 
 # FUNCTIONS
 
-def _get_name(limiter) -> str:
-    for name, lim in _rl_mod._limiters.items():
-        if lim is limiter:
-            return name
-    return "unknown"
+def install_instrument() -> None:
+    _require_limiter_internals()
+    RateLimiter.__init__ = _patched_init
+    RateLimiter.acquire = _patched_acquire
+    for limiter in _rl_mod._limiters.values():
+        limiter._lock = _WatchedLock(limiter._lock, limiter)
+
+
+def _require_limiter_internals() -> None:
+    if not hasattr(_rl_mod, "_limiters"):
+        raise RuntimeError("src.search.rate_limiter no longer has _limiters: the acquire instrument cannot wrap existing limiters")
+    for name, limiter in _rl_mod._limiters.items():
+        if not hasattr(limiter, "_lock"):
+            raise RuntimeError(f"limiter {name} has no _lock: the acquire instrument cannot wrap it")
+
+
+def _patched_init(self, *args, **kwargs) -> None:
+    _orig_init(self, *args, **kwargs)
+    self._lock = _WatchedLock(self._lock, self)
+
+
+async def _patched_acquire(self) -> None:
+    name = _get_name(self)
+    _acq_events.append((name, "enter", time.monotonic()))
+    try:
+        await _orig_acquire(self)
+        _acq_events.append((name, "exit_ok", time.monotonic()))
+    except BaseException as e:
+        _acq_events.append((name, f"exit_err:{type(e).__name__}", time.monotonic()))
+        raise
 
 
 class _WatchedLock:
@@ -44,27 +73,8 @@ class _WatchedLock:
         return result
 
 
-_orig_init = RateLimiter.__init__
-
-
-def _patched_init(self, *args, **kwargs) -> None:
-    _orig_init(self, *args, **kwargs)
-    self._lock = _WatchedLock(self._lock, self)
-
-
-_orig_acquire = RateLimiter.acquire
-
-
-async def _patched_acquire(self) -> None:
-    name = _get_name(self)
-    _acq_events.append((name, "enter", time.monotonic()))
-    try:
-        await _orig_acquire(self)
-        _acq_events.append((name, "exit_ok", time.monotonic()))
-    except BaseException as e:
-        _acq_events.append((name, f"exit_err:{type(e).__name__}", time.monotonic()))
-        raise
-
-
-RateLimiter.__init__ = _patched_init
-RateLimiter.acquire = _patched_acquire
+def _get_name(limiter) -> str:
+    for name, lim in _rl_mod._limiters.items():
+        if lim is limiter:
+            return name
+    return "unknown"

@@ -56,19 +56,6 @@ ARTIFACT_HTML = """<!doctype html>
 
 # FUNCTIONS
 
-class _ProbeHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        body = (ARTIFACT_HTML if self.path.startswith("/artifact") else PROBE_HTML).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, *args):
-        pass
-
-
 def start_probe_server() -> tuple[http.server.ThreadingHTTPServer, threading.Thread, int]:
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ProbeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -85,33 +72,9 @@ def profile_dir(name: str) -> str:
     return str(PROBE_PROFILE_ROOT / name)
 
 
-def kill_by_profile(profile: str) -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={profile}"], capture_output=True)
-
-
 def count_processes_for(profile: str) -> int:
     result = subprocess.run(["pgrep", "-f", f"user-data-dir={profile}"], capture_output=True, text=True)
     return len([line for line in result.stdout.splitlines() if line.strip()])
-
-
-def build_options(profile: str, headless: bool, extra_flags: list[str], window_args: bool) -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.headless = headless
-    options.add_argument(f"--user-data-dir={profile}")
-    options.block_popups = True
-    options.block_notifications = True
-    for flag in extra_flags:
-        options.add_argument(flag)
-    if window_args:
-        for arg in WINDOW_ARGS:
-            options.add_argument(arg)
-    return options
-
-
-def open_background_process_creator(command: list[str]) -> subprocess.Popen:
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
-    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 async def launch_chrome(
@@ -147,13 +110,6 @@ def spawn_plain_chrome(profile: str, window_args: list[str] | None = None) -> No
     if window_args:
         args += window_args
     subprocess.run(args)
-
-
-def extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
 
 
 async def read_visibility_state(tab) -> dict:
@@ -250,3 +206,47 @@ def get_frontmost_app() -> str:
         capture_output=True, text=True,
     )
     return result.stdout.strip()
+
+
+class _ProbeHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = (ARTIFACT_HTML if self.path.startswith("/artifact") else PROBE_HTML).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+def kill_by_profile(profile: str) -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={profile}"], capture_output=True)
+
+
+def build_options(profile: str, headless: bool, extra_flags: list[str], window_args: bool) -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.headless = headless
+    options.add_argument(f"--user-data-dir={profile}")
+    options.block_popups = True
+    options.block_notifications = True
+    for flag in extra_flags:
+        options.add_argument(flag)
+    if window_args:
+        for arg in WINDOW_ARGS:
+            options.add_argument(arg)
+    return options
+
+
+def open_background_process_creator(command: list[str]) -> subprocess.Popen:
+    args = command[1:]
+    open_cmd = ["open", "-g", "-n", "-a", "Google Chrome", "--args", *args]
+    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None

@@ -1,7 +1,10 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.search import search_web
 
+
+# FUNCTIONS
 
 def test_none_selects_the_default_engines():
     assert set(search_web._select_engines(None)) == set(search_web._DEFAULT_ENGINES)

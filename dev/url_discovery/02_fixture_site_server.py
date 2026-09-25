@@ -14,6 +14,15 @@ DEFAULT_PORT = 8935
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    args = parser.parse_args()
+    fixture_site_server_workflow(args.port)
+
+
+# FUNCTIONS
+
 def fixture_site_server_workflow(port: int) -> None:
     server, thread, bound_port = start_fixture_server(port=port)
     print(f"Fixture serving on http://127.0.0.1:{bound_port}/", file=sys.stderr)
@@ -29,7 +38,4 @@ def fixture_site_server_workflow(port: int) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    args = parser.parse_args()
-    fixture_site_server_workflow(args.port)
+    main()

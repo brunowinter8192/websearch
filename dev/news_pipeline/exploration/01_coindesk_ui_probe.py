@@ -23,6 +23,16 @@ PRE_TODAY_THRESHOLD = 3
 
 
 # ORCHESTRATOR
+
+def main():
+    parser = argparse.ArgumentParser(description="CoinDesk /latest-crypto-news UI probe via pydoll (headed by default)")
+    parser.add_argument("--headless", action="store_true", default=False, help="Run headless (default: headed)")
+    args = parser.parse_args()
+    asyncio.run(probe_workflow(args.headless))
+
+
+# FUNCTIONS
+
 async def probe_workflow(headless: bool):
     session_dir = tempfile.mkdtemp(prefix="coindesk_probe_")
     print(f"Browser session: {session_dir}", file=sys.stderr)
@@ -59,7 +69,6 @@ async def probe_workflow(headless: bool):
     print(f"\nJSON output: {path}")
 
 
-# FUNCTIONS
 async def run_initial_inspection(tab, today, report) -> dict:
     print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
     await tab.go_to(TARGET_URL, timeout=60)
@@ -142,51 +151,6 @@ def finalize_summary(report: dict, all_urls: dict):
     })
 
 
-def parse_url_date(url: str) -> datetime | None:
-    m = DATE_RE.search(url)
-    if not m:
-        return None
-    try:
-        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def count_pre_today(articles: list[dict], today) -> int:
-    return sum(1 for a in articles if (d := parse_url_date(a["url"])) and d.date() < today)
-
-
-def _date_span(urls: list[str]) -> str:
-    dates = [parse_url_date(u) for u in urls]
-    dates = [d for d in dates if d is not None]
-    if not dates:
-        return "(none)"
-    lo = min(dates).strftime("%m-%d")
-    hi = max(dates).strftime("%m-%d")
-    return f"[{lo}..{hi}]" if lo != hi else f"[{lo}]"
-
-
-def _group_by_date(articles: list[dict]) -> dict:
-    groups: dict = {}
-    for a in articles:
-        d = parse_url_date(a["url"])
-        if d:
-            key = d.date()
-            groups[key] = groups.get(key, 0) + 1
-    return groups
-
-
-def _sample_by_age(articles: list[dict]) -> list[dict]:
-    with_date = [(parse_url_date(a["url"]), a) for a in articles]
-    with_date = [(d, a) for d, a in with_date if d is not None]
-    if not with_date:
-        return []
-    with_date.sort(key=lambda x: x[0])
-    n = len(with_date)
-    indices = sorted({0, n // 2, n - 1})
-    return [{"url": with_date[i][1]["url"], "timeLabel": with_date[i][1]["timeLabel"]} for i in indices]
-
-
 def write_output(data: dict) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -211,11 +175,49 @@ def _print_summary(report: dict):
         print(f"  {(item['timeLabel'] or '(no label)'):<25}  {item['url'][22:90]}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="CoinDesk /latest-crypto-news UI probe via pydoll (headed by default)")
-    parser.add_argument("--headless", action="store_true", default=False, help="Run headless (default: headed)")
-    args = parser.parse_args()
-    asyncio.run(probe_workflow(args.headless))
+def _date_span(urls: list[str]) -> str:
+    dates = [parse_url_date(u) for u in urls]
+    dates = [d for d in dates if d is not None]
+    if not dates:
+        return "(none)"
+    lo = min(dates).strftime("%m-%d")
+    hi = max(dates).strftime("%m-%d")
+    return f"[{lo}..{hi}]" if lo != hi else f"[{lo}]"
+
+
+def count_pre_today(articles: list[dict], today) -> int:
+    return sum(1 for a in articles if (d := parse_url_date(a["url"])) and d.date() < today)
+
+
+def _group_by_date(articles: list[dict]) -> dict:
+    groups: dict = {}
+    for a in articles:
+        d = parse_url_date(a["url"])
+        if d:
+            key = d.date()
+            groups[key] = groups.get(key, 0) + 1
+    return groups
+
+
+def _sample_by_age(articles: list[dict]) -> list[dict]:
+    with_date = [(parse_url_date(a["url"]), a) for a in articles]
+    with_date = [(d, a) for d, a in with_date if d is not None]
+    if not with_date:
+        return []
+    with_date.sort(key=lambda x: x[0])
+    n = len(with_date)
+    indices = sorted({0, n // 2, n - 1})
+    return [{"url": with_date[i][1]["url"], "timeLabel": with_date[i][1]["timeLabel"]} for i in indices]
+
+
+def parse_url_date(url: str) -> datetime | None:
+    m = DATE_RE.search(url)
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 if __name__ == "__main__":

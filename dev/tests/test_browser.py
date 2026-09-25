@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import shutil
 import tempfile
@@ -9,13 +10,7 @@ import src.search.browser as browser
 from dev.tests._browser_fakes import FakeChrome, _reset_state
 
 
-class FakeCompletedProcess:
-    returncode = 0
-    stderr = ""
-
-    def __init__(self, stdout):
-        self.stdout = stdout
-
+# FUNCTIONS
 
 def test_find_app_bundle_walks_up_to_app_suffix():
     bundle = browser._find_app_bundle(
@@ -286,12 +281,6 @@ async def test_kill_own_chrome_runs_safety_net_and_release_when_close_browser_ra
     assert browser._lock_handle is None
 
 
-def _make_async_recorder(sink):
-    async def recorder():
-        sink.append(1)
-    return recorder
-
-
 def test_kill_own_chrome_atexit_runs_event_loop(monkeypatch):
     called = []
 
@@ -301,3 +290,17 @@ def test_kill_own_chrome_atexit_runs_event_loop(monkeypatch):
     monkeypatch.setattr(browser, "kill_own_chrome", fake_kill_own_chrome)
     browser.kill_own_chrome_atexit()
     assert called == [1]
+
+
+class FakeCompletedProcess:
+    returncode = 0
+    stderr = ""
+
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+
+def _make_async_recorder(sink):
+    async def recorder():
+        sink.append(1)
+    return recorder

@@ -55,31 +55,19 @@ BLOCK_MARKERS = [
 
 _browser = None
 
+_JS_GENERIC_DIAGNOSE = """
+var body = document.body ? document.body.innerText.toLowerCase() : '';
+var title = document.title.toLowerCase();
+var markers = %s;
+var hit = null;
+for (var i = 0; i < markers.length; i++) {
+    if (body.indexOf(markers[i]) !== -1 || title.indexOf(markers[i]) !== -1) { hit = markers[i]; break; }
+}
+return JSON.stringify({marker: hit, url: window.location.href, ready_state: document.readyState, title: document.title});
+""" % json.dumps(BLOCK_MARKERS)
+
 
 # FUNCTIONS
-
-def _kill_stale_chrome():
-    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
-
-
-def _build_options() -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.headless = not os.environ.get("WEBSEARCH_HEADED")
-    options.add_argument(f"--user-data-dir={SESSION_DIR}")
-    options.block_popups = True
-    options.block_notifications = True
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.webrtc_leak_protection = True
-    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
-    options.add_argument("--window-size=1920,1080")
-    return options
-
-
-async def _apply_fingerprint_patches(tab):
-    await tab._execute_command(
-        PageCommands.add_script_to_evaluate_on_new_document(source=JS_FINGERPRINT_PATCHES, run_immediately=True)
-    )
-
 
 async def _new_tab():
     global _browser
@@ -112,13 +100,6 @@ async def close_browser() -> None:
         _browser = None
 
 
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
 async def _wait_for(tab, selector: str, cycles: int, interval: float) -> bool:
     js = f"return document.querySelectorAll('{selector}').length"
     for _ in range(cycles):
@@ -129,20 +110,38 @@ async def _wait_for(tab, selector: str, cycles: int, interval: float) -> bool:
     return False
 
 
-_JS_GENERIC_DIAGNOSE = """
-var body = document.body ? document.body.innerText.toLowerCase() : '';
-var title = document.title.toLowerCase();
-var markers = %s;
-var hit = null;
-for (var i = 0; i < markers.length; i++) {
-    if (body.indexOf(markers[i]) !== -1 || title.indexOf(markers[i]) !== -1) { hit = markers[i]; break; }
-}
-return JSON.stringify({marker: hit, url: window.location.href, ready_state: document.readyState, title: document.title});
-""" % json.dumps(BLOCK_MARKERS)
-
-
 async def _generic_diagnose(tab) -> dict:
     val = _extract_value(await tab.execute_script(_JS_GENERIC_DIAGNOSE))
     if not val:
         return {"marker": None, "url": "", "ready_state": "", "title": ""}
     return json.loads(val)
+
+
+def _kill_stale_chrome():
+    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
+
+
+def _build_options() -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.headless = not os.environ.get("WEBSEARCH_HEADED")
+    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.block_popups = True
+    options.block_notifications = True
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.webrtc_leak_protection = True
+    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
+    options.add_argument("--window-size=1920,1080")
+    return options
+
+
+async def _apply_fingerprint_patches(tab):
+    await tab._execute_command(
+        PageCommands.add_script_to_evaluate_on_new_document(source=JS_FINGERPRINT_PATCHES, run_immediately=True)
+    )
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import json
 import shutil
 import statistics
@@ -21,16 +20,6 @@ def start_job(job_id: str) -> None:
     print(f"[janitor] start_job {job_id!r}: transient logs wiped")
 
 
-def _wipe_dir(path: Path) -> None:
-    if not path.exists():
-        return
-    for item in path.iterdir():
-        if item.is_file():
-            item.unlink()
-        elif item.is_dir():
-            shutil.rmtree(item)
-
-
 def end_job(job_id: str, jsonl_path: Path, target_count: int, done_count: int) -> None:
     job_dir = JOBS_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -47,6 +36,16 @@ def end_job(job_id: str, jsonl_path: Path, target_count: int, done_count: int) -
     print(f"[janitor] end_job {job_id!r}: job.md + plot → {job_dir}  transient dirs wiped")
 
 
+def _wipe_dir(path: Path) -> None:
+    if not path.exists():
+        return
+    for item in path.iterdir():
+        if item.is_file():
+            item.unlink()
+        elif item.is_dir():
+            shutil.rmtree(item)
+
+
 def _read_events(jsonl_path: Path) -> list[dict]:
     events = []
     for line in jsonl_path.read_text(encoding="utf-8").splitlines():
@@ -54,10 +53,6 @@ def _read_events(jsonl_path: Path) -> list[dict]:
         if line:
             events.append(json.loads(line))
     return events
-
-
-def _parse_ts(ts_str: str) -> datetime:
-    return datetime.strptime(ts_str, _TS_FMT).replace(tzinfo=timezone.utc)
 
 
 def _compute_stats(events: list[dict]) -> dict:
@@ -138,3 +133,7 @@ def _write_md(
         "",
     ]
     (job_dir / "job.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _parse_ts(ts_str: str) -> datetime:
+    return datetime.strptime(ts_str, _TS_FMT).replace(tzinfo=timezone.utc)

@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 LINK_DENSITY_SPLIT = 0.333333
 PREV_LINK_DENSITY_SPLIT = 0.555556
 CURR_WORDS_LOW_BRANCH_SPLIT = 16
@@ -14,24 +13,6 @@ ZERO_NEIGHBOR = {"num_words": 0, "link_density": 0.0}
 
 
 # FUNCTIONS
-
-def classify_block(curr: dict, prev: dict, nxt: dict) -> str:
-    if curr["link_density"] > LINK_DENSITY_SPLIT:
-        return "BOILERPLATE"
-    if prev["link_density"] <= PREV_LINK_DENSITY_SPLIT:
-        if curr["num_words"] > CURR_WORDS_LOW_BRANCH_SPLIT:
-            return "CONTENT"
-        if nxt["num_words"] > NEXT_WORDS_LOW_BRANCH_SPLIT:
-            return "CONTENT"
-        if prev["num_words"] > PREV_WORDS_LOW_BRANCH_SPLIT:
-            return "CONTENT"
-        return "BOILERPLATE"
-    if curr["num_words"] > CURR_WORDS_HIGH_BRANCH_SPLIT:
-        return "CONTENT"
-    if nxt["num_words"] > NEXT_WORDS_HIGH_BRANCH_SPLIT:
-        return "CONTENT"
-    return "BOILERPLATE"
-
 
 def classify_blocks(blocks: list[dict]) -> list[str]:
     n = len(blocks)
@@ -57,3 +38,21 @@ def apply_heading_rule(blocks: list[dict], tree_classifications: list[str]) -> l
             if cumulative_chars > HEADING_LOOKAHEAD_CHARS:
                 break
     return final
+
+
+def classify_block(curr: dict, prev: dict, nxt: dict) -> str:
+    if curr["link_density"] > LINK_DENSITY_SPLIT:
+        return "BOILERPLATE"
+    if prev["link_density"] <= PREV_LINK_DENSITY_SPLIT:
+        if curr["num_words"] > CURR_WORDS_LOW_BRANCH_SPLIT:
+            return "CONTENT"
+        if nxt["num_words"] > NEXT_WORDS_LOW_BRANCH_SPLIT:
+            return "CONTENT"
+        if prev["num_words"] > PREV_WORDS_LOW_BRANCH_SPLIT:
+            return "CONTENT"
+        return "BOILERPLATE"
+    if curr["num_words"] > CURR_WORDS_HIGH_BRANCH_SPLIT:
+        return "CONTENT"
+    if nxt["num_words"] > NEXT_WORDS_HIGH_BRANCH_SPLIT:
+        return "CONTENT"
+    return "BOILERPLATE"

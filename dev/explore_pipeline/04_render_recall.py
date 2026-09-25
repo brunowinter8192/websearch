@@ -35,6 +35,40 @@ REGRESSION_DOMAINS = [
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Measure URL discovery recall on docs.github.com/de/rest — 3 strategies vs gold standard"
+    )
+    _add_arguments(parser)
+    parser.add_argument("--no-regression", action="store_true",
+                        help="Skip regression check on non-SPA domains")
+    parser.add_argument("--strategies", type=str, default=None,
+                        help="Comma-separated strategy names to run (default: all). e.g. C_bfs_networkidle")
+    parser.add_argument("--delay", type=int, default=0,
+                        help="Seconds to sleep between strategies (default: 0, use 600 to avoid rate limiting)")
+    args = parser.parse_args()
+
+    only = _compute_only(args)
+    asyncio.run(render_recall_workflow(args.gold, args.max_pages, args.depth,
+                                      args.no_regression, only, args.delay))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
+                        help=f"Gold standard file (default: goldstandard/docs_github_rest.txt)")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
+                        help=f"Max pages per strategy (default: {DEFAULT_MAX_PAGES})")
+    parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH,
+                        help=f"BFS depth (default: {DEFAULT_DEPTH})")
+
+
+def _compute_only(args):
+    only = [s.strip() for s in args.strategies.split(",")] if args.strategies else None
+    return only
+
+
 async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
                                no_regression: bool, only_strategies: list[str] | None = None,
                                delay_between: int = 0):
@@ -72,64 +106,9 @@ async def render_recall_workflow(gold_path: Path, max_pages: int, depth: int,
     print(f"\nReport saved: {out_path}")
 
 
-# FUNCTIONS
-
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
         return frozenset(normalize_url(ln.strip()) for ln in f if ln.strip())
-
-
-def normalize_url(url: str) -> str:
-    parsed = urlparse(url)
-    path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
-    path = path.rstrip('/')
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
-
-
-async def discover_with_config(url: str, domain: str, max_pages: int, depth: int,
-                               wait_until: str, use_prefetch: bool) -> tuple[list[str], float]:
-    filters = [
-        DomainFilter(allowed_domains=[domain]),
-        ContentTypeFilter(allowed_types=["text/html"]),
-    ]
-
-    bfs = BFSDeepCrawlStrategy(
-        max_depth=depth,
-        include_external=False,
-        filter_chain=FilterChain(filters),
-        max_pages=max_pages,
-    )
-    run_kwargs: dict = dict(
-        deep_crawl_strategy=bfs,
-        cache_mode=CacheMode.BYPASS,
-        wait_until=wait_until,
-        verbose=False,
-    )
-    if use_prefetch:
-        run_kwargs["prefetch"] = True
-
-    browser_config = BrowserConfig(headless=True, verbose=False)
-    run_config = CrawlerRunConfig(**run_kwargs)
-
-    t0 = time.time()
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        results = await crawler.arun(url=url, config=run_config)
-    elapsed = time.time() - t0
-
-    if not isinstance(results, list):
-        results = [results]
-
-    seen: set[str] = set()
-    urls: list[str] = []
-    for r in results:
-        raw = getattr(r, "url", None)
-        if not raw:
-            continue
-        norm = normalize_url(raw)
-        if norm not in seen:
-            seen.add(norm)
-            urls.append(norm)
-    return urls, elapsed
 
 
 def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
@@ -178,6 +157,59 @@ def format_report(gold: frozenset, main_results: dict, regression_rows: list[dic
     lines += _format_best_strategy_missing(main_results)
     lines += _format_regression_check(regression_rows)
     return "\n".join(lines)
+
+
+def save_report(report: str) -> Path:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUTPUT_DIR / f"04_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"
+    path.write_text(report, encoding="utf-8")
+    return path
+
+
+async def discover_with_config(url: str, domain: str, max_pages: int, depth: int,
+                               wait_until: str, use_prefetch: bool) -> tuple[list[str], float]:
+    filters = [
+        DomainFilter(allowed_domains=[domain]),
+        ContentTypeFilter(allowed_types=["text/html"]),
+    ]
+
+    bfs = BFSDeepCrawlStrategy(
+        max_depth=depth,
+        include_external=False,
+        filter_chain=FilterChain(filters),
+        max_pages=max_pages,
+    )
+    run_kwargs: dict = dict(
+        deep_crawl_strategy=bfs,
+        cache_mode=CacheMode.BYPASS,
+        wait_until=wait_until,
+        verbose=False,
+    )
+    if use_prefetch:
+        run_kwargs["prefetch"] = True
+
+    browser_config = BrowserConfig(headless=True, verbose=False)
+    run_config = CrawlerRunConfig(**run_kwargs)
+
+    t0 = time.time()
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        results = await crawler.arun(url=url, config=run_config)
+    elapsed = time.time() - t0
+
+    if not isinstance(results, list):
+        results = [results]
+
+    seen: set[str] = set()
+    urls: list[str] = []
+    for r in results:
+        raw = getattr(r, "url", None)
+        if not raw:
+            continue
+        norm = normalize_url(raw)
+        if norm not in seen:
+            seen.add(norm)
+            urls.append(norm)
+    return urls, elapsed
 
 
 def _format_main_results_table(gold: frozenset, main_results: dict) -> list:
@@ -262,31 +294,12 @@ def _format_regression_check(regression_rows: list[dict]) -> list:
     return lines
 
 
-def save_report(report: str) -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUTPUT_DIR / f"04_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"
-    path.write_text(report, encoding="utf-8")
-    return path
+def normalize_url(url: str) -> str:
+    parsed = urlparse(url)
+    path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
+    path = path.rstrip('/')
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Measure URL discovery recall on docs.github.com/de/rest — 3 strategies vs gold standard"
-    )
-    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
-                        help=f"Gold standard file (default: goldstandard/docs_github_rest.txt)")
-    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
-                        help=f"Max pages per strategy (default: {DEFAULT_MAX_PAGES})")
-    parser.add_argument("--depth", type=int, default=DEFAULT_DEPTH,
-                        help=f"BFS depth (default: {DEFAULT_DEPTH})")
-    parser.add_argument("--no-regression", action="store_true",
-                        help="Skip regression check on non-SPA domains")
-    parser.add_argument("--strategies", type=str, default=None,
-                        help="Comma-separated strategy names to run (default: all). e.g. C_bfs_networkidle")
-    parser.add_argument("--delay", type=int, default=0,
-                        help="Seconds to sleep between strategies (default: 0, use 600 to avoid rate limiting)")
-    args = parser.parse_args()
-
-    only = [s.strip() for s in args.strategies.split(",")] if args.strategies else None
-    asyncio.run(render_recall_workflow(args.gold, args.max_pages, args.depth,
-                                      args.no_regression, only, args.delay))
+    main()

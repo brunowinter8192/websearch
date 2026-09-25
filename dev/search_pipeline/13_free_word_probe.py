@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -18,8 +17,6 @@ from src.search.engines import scholar as scholar_engine
 from src.search.engines import duckduckgo as duckduckgo_engine
 from src.search.engines import openalex as openalex_engine
 from src.search.browser import close_browser
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -62,59 +59,63 @@ BOOK_HOSTS = frozenset({"thalia.de", "openlibrary.org", "books.google.com", "goo
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
-    all_runs: dict[tuple[str, str], list[dict]] = {}
-    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    engines = _compute_engines()
+    run_stats = _compute_run_stats()
 
-    try:
-        for base_query in BASE_QUERIES:
-            for vkey, suffix in VARIANTS:
-                query = base_query + suffix
-                print(f"\n=== {query!r} ({vkey}) ===", file=sys.stderr)
-                run_results: list[dict] = []
-
-                for i, (eng_name, engine) in enumerate(engines):
-                    max_r = ENGINE_MAX[eng_name]
-                    sleep_s = BROWSER_SLEEP_S if eng_name in BROWSER_ENGINES else API_SLEEP_S
-                    print(f"  {eng_name} ...", file=sys.stderr, end="", flush=True)
-
-                    t0 = time.monotonic()
-                    try:
-                        results = (await engine.search_with_reason(query, "en", max_r))[0]
-                        ms = round((time.monotonic() - t0) * 1000)
-                        print(f" {len(results)} ({ms}ms)", file=sys.stderr)
-                        run_stats[eng_name]["total"] += len(results)
-                        for r in results:
-                            run_results.append({
-                                "engine":   eng_name,
-                                "position": r.position,
-                                "url":      r.url,
-                                "title":    r.title,
-                            })
-                    except Exception as e:
-                        ms = round((time.monotonic() - t0) * 1000)
-                        print(f" ERROR {e} ({ms}ms)", file=sys.stderr)
-                        run_stats[eng_name]["errors"] += 1
-
-                    if i < len(engines) - 1:
-                        await asyncio.sleep(sleep_s)
-
-                all_runs[(base_query, vkey)] = run_results
-    finally:
-        await close_browser()
+    all_runs = await _run_free_word_queries(engines, run_stats)
 
     report_path = write_report(all_runs, run_stats, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
+    _print_report(report_path)
 
 
 # FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _compute_engines():
+    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
+    return engines
+
+
+def _compute_run_stats():
+    run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
+    return run_stats
+
+
+async def _run_free_word_queries(engines, run_stats):
+    all_runs: dict[tuple[str, str], list[dict]] = {}
+    try:
+        for base_query in BASE_QUERIES:
+            for vkey, suffix in VARIANTS:
+                all_runs[(base_query, vkey)] = await _run_variant(base_query + suffix, vkey, engines, run_stats)
+    finally:
+        await close_browser()
+    return all_runs
+
 
 def write_report(all_runs: dict, run_stats: dict, report_dir: Path) -> Path:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = report_dir / f"free_word_injection_probe_{ts}.md"
     path.write_text("\n".join(_build_report(all_runs, run_stats, ts)), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+async def _run_variant(query, vkey, engines, run_stats):
+    print(f"\n=== {query!r} ({vkey}) ===", file=sys.stderr)
+    run_results: list[dict] = []
+    for i, (eng_name, engine) in enumerate(engines):
+        await _query_engine(eng_name, engine, query, run_stats, run_results)
+        if i < len(engines) - 1:
+            await asyncio.sleep(_engine_sleep_s(eng_name))
+    return run_results
 
 
 def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
@@ -130,6 +131,27 @@ def _build_report(all_runs: dict, run_stats: dict, ts: str) -> list[str]:
     lines += _summary_insights(all_runs)
     lines += _run_stats(all_runs, run_stats)
     return lines
+
+
+async def _query_engine(eng_name, engine, query, run_stats, run_results) -> None:
+    max_r = ENGINE_MAX[eng_name]
+    print(f"  {eng_name} ...", file=sys.stderr, end="", flush=True)
+
+    t0 = time.monotonic()
+    try:
+        results = (await engine.search_with_reason(query, "en", max_r))[0]
+        ms = round((time.monotonic() - t0) * 1000)
+        print(f" {len(results)} ({ms}ms)", file=sys.stderr)
+        run_stats[eng_name]["total"] += len(results)
+        _append_rows(run_results, eng_name, results)
+    except Exception as e:
+        ms = round((time.monotonic() - t0) * 1000)
+        print(f" ERROR {e} ({ms}ms)", file=sys.stderr)
+        run_stats[eng_name]["errors"] += 1
+
+
+def _engine_sleep_s(eng_name):
+    return BROWSER_SLEEP_S if eng_name in BROWSER_ENGINES else API_SLEEP_S
 
 
 def _url_listings(all_runs: dict) -> list[str]:
@@ -259,6 +281,16 @@ def _run_stats(all_runs: dict, run_stats: dict) -> list[str]:
     return lines
 
 
+def _append_rows(run_results, eng_name, results) -> None:
+    for r in results:
+        run_results.append({
+            "engine":   eng_name,
+            "position": r.position,
+            "url":      r.url,
+            "title":    r.title,
+        })
+
+
 def _stats(results: list[dict]) -> dict:
     domains = Counter(_domain(r["url"]) for r in results if _domain(r["url"]))
     return {
@@ -267,11 +299,6 @@ def _stats(results: list[dict]) -> dict:
         "book_count": sum(1 for r in results if _is_book(r["url"])),
         "domains":    domains,
     }
-
-
-def _domain(url: str) -> str:
-    host = urlparse(url).netloc.lower()
-    return host[4:] if host.startswith("www.") else host
 
 
 def _is_pdf(url: str) -> bool:
@@ -293,6 +320,11 @@ def _is_book(url: str) -> bool:
     if d == "springer.com" and "/book/" in u:
         return True
     return d == "jstor.org"
+
+
+def _domain(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
 
 
 if __name__ == "__main__":

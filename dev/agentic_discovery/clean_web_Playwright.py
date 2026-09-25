@@ -1,38 +1,57 @@
+# INFRASTRUCTURE
 from pathlib import Path
 import re
 
 INPUT_DIR = Path("/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/MCP/RAG/data/documents/Playwright")
 
 
-def find_content_start(lines: list[str]) -> int:
-    for i, line in enumerate(lines):
-        if line.startswith("# "):
-            return i
-    return -1
+# ORCHESTRATOR
+
+def main():
+    md_files = sorted(INPUT_DIR.glob("*.md"))
+    if not md_files:
+        _print_no_md_files()
+        return
 
 
-def find_content_end(lines: list[str], start: int) -> int:
-    for i in range(start, len(lines)):
-        line = lines[i]
+    total_before, total_after, skipped, processed = _clean_files(md_files)
 
-        if re.match(r'^\[(?:Previous|Next)\b', line):
-            return i
-
-        if line.strip() in ("Learn", "Community", "More"):
-            for j in range(i + 1, min(i + 4, len(lines))):
-                if lines[j].strip():
-                    if lines[j].strip().startswith("* ["):
-                        return i
-                    break
-
-    return len(lines)
+    reduction = _compute_reduction(total_after, total_before)
+    _print_files_processed_cleaned(processed, skipped, total_before, total_after, reduction)
 
 
-def extract_source_comment(lines: list[str]) -> str:
-    for line in lines[:3]:
-        if line.startswith("<!-- source:"):
-            return line.rstrip()
-    return ""
+# FUNCTIONS
+
+def _print_no_md_files():
+    print(f"No .md files found in {INPUT_DIR}")
+
+
+def _clean_files(md_files):
+    skipped = 0
+    processed = 0
+    total_after = 0
+    total_before = 0
+    for path in md_files:
+        before, after = clean_file(path)
+        total_before += before
+        total_after += after
+        if before == after:
+            skipped += 1
+        else:
+            processed += 1
+    return total_before, total_after, skipped, processed
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before else 0
+    return reduction
+
+
+def _print_files_processed_cleaned(processed, skipped, total_before, total_after, reduction):
+    print(f"FILES PROCESSED: {processed} cleaned, {skipped} unchanged")
+    print(f"Total chars before: {total_before:,}")
+    print(f"Total chars after:  {total_after:,}")
+    print(f"Reduction: {reduction:.1f}%")
 
 
 def clean_file(path: Path) -> tuple[int, int]:
@@ -67,31 +86,35 @@ def clean_file(path: Path) -> tuple[int, int]:
     return chars_before, len(cleaned)
 
 
-def main():
-    md_files = sorted(INPUT_DIR.glob("*.md"))
-    if not md_files:
-        print(f"No .md files found in {INPUT_DIR}")
-        return
+def extract_source_comment(lines: list[str]) -> str:
+    for line in lines[:3]:
+        if line.startswith("<!-- source:"):
+            return line.rstrip()
+    return ""
 
-    total_before = 0
-    total_after = 0
-    processed = 0
-    skipped = 0
 
-    for path in md_files:
-        before, after = clean_file(path)
-        total_before += before
-        total_after += after
-        if before == after:
-            skipped += 1
-        else:
-            processed += 1
+def find_content_start(lines: list[str]) -> int:
+    for i, line in enumerate(lines):
+        if line.startswith("# "):
+            return i
+    return -1
 
-    reduction = (1 - total_after / total_before) * 100 if total_before else 0
-    print(f"FILES PROCESSED: {processed} cleaned, {skipped} unchanged")
-    print(f"Total chars before: {total_before:,}")
-    print(f"Total chars after:  {total_after:,}")
-    print(f"Reduction: {reduction:.1f}%")
+
+def find_content_end(lines: list[str], start: int) -> int:
+    for i in range(start, len(lines)):
+        line = lines[i]
+
+        if re.match(r'^\[(?:Previous|Next)\b', line):
+            return i
+
+        if line.strip() in ("Learn", "Community", "More"):
+            for j in range(i + 1, min(i + 4, len(lines))):
+                if lines[j].strip():
+                    if lines[j].strip().startswith("* ["):
+                        return i
+                    break
+
+    return len(lines)
 
 
 if __name__ == "__main__":

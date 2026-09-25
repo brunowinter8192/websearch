@@ -4,14 +4,6 @@ LANES = ("chromium", "camoufox")
 
 # FUNCTIONS
 
-def winning_lane(chromium_value: float, camoufox_value: float) -> str:
-    if chromium_value > camoufox_value:
-        return "chromium"
-    if camoufox_value > chromium_value:
-        return "camoufox"
-    return "tie"
-
-
 def compute_aggregate(results: list[dict]) -> dict:
     words_wins = {"chromium": 0, "camoufox": 0, "tie": 0}
     pct_wins = {"chromium": 0, "camoufox": 0, "tie": 0}
@@ -50,3 +42,11 @@ def compute_aggregate(results: list[dict]) -> dict:
         "rescued_by_camoufox_prose": rescued_by_camoufox_prose,
         "not_rescued": not_rescued,
     }
+
+
+def winning_lane(chromium_value: float, camoufox_value: float) -> str:
+    if chromium_value > camoufox_value:
+        return "chromium"
+    if camoufox_value > chromium_value:
+        return "camoufox"
+    return "tie"

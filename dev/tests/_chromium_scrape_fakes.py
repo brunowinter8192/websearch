@@ -1,3 +1,5 @@
+# FUNCTIONS
+
 def _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process):
     async def _fake_resolve_bundle():
         return chromium_process.Path("/fake/chromium-1228/Google Chrome for Testing.app")
@@ -13,12 +15,6 @@ def _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process):
     monkeypatch.setattr(chromium_scrape, "pids_on_profile", lambda *a, **kw: [])
     monkeypatch.setattr(chromium_scrape, "reap_orphaned_scrapes", lambda: None)
     monkeypatch.setattr(chromium_scrape.watchdog_spawn, "spawn_watchdog", lambda *a, **kw: None)
-
-
-class _FakeMarkdown:
-    def __init__(self, raw_markdown, fit_markdown=None):
-        self.raw_markdown = raw_markdown
-        self.fit_markdown = fit_markdown if fit_markdown is not None else raw_markdown
 
 
 class _FakeResult:
@@ -45,3 +41,9 @@ def _meta(**overrides):
     }
     base.update(overrides)
     return base
+
+
+class _FakeMarkdown:
+    def __init__(self, raw_markdown, fit_markdown=None):
+        self.raw_markdown = raw_markdown
+        self.fit_markdown = fit_markdown if fit_markdown is not None else raw_markdown

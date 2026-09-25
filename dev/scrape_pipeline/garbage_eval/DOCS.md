@@ -11,7 +11,7 @@ Probe URLs -> Crawl4AI scrape -> inspection or prototype validation -> markdown 
 
 ## Modules
 
-### 07_result_inspect.py (103 LOC)
+### 07_result_inspect.py (117 LOC)
 
 **Purpose:** Enumerates all metadata fields of a crawl result across normal, 404, and consent-heavy pages.
 **Reads:** Hardcoded 3-URL probe set.
@@ -19,7 +19,7 @@ Probe URLs -> Crawl4AI scrape -> inspection or prototype validation -> markdown 
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 09_garbage_fix_prototype.py (202 LOC)
+### 09_garbage_fix_prototype.py (220 LOC)
 
 **Purpose:** Prototypes status-code 404 detection and consent-prefix stripping and validates against edge-case and baseline URLs.
 **Reads:** Hardcoded edge-case and baseline URL set.

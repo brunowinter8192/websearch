@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 
 import httpx
@@ -11,6 +12,8 @@ from src.crawler.seed_feeders_navtree import (
 from src.crawler import navtree_feeder
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _next_data_html, _rsc_html
 
+
+# FUNCTIONS
 
 def test_extract_payloads_detects_next_data_shape():
     html = _next_data_html({"props": {"pageProps": {"a": 1}}})
@@ -275,15 +278,6 @@ async def test_navtree_feeder_workflow_malformed_next_data_is_failed_with_error(
     assert result.error
 
 
-def _versioned_payload():
-    return {"props": {"pageProps": {"mainContext": {
-        "sidebarTree": {"href": "/de/guide", "childPages": [{"href": "/de/guide/intro", "childPages": []}]},
-        "allVersions": {"v1": {"version": "v1"}, "v2": {"version": "v2"}},
-        "currentVersion": "v1",
-        "currentPathWithoutLanguage": "/guide",
-    }}}}
-
-
 @pytest.mark.asyncio
 async def test_resolve_navigation_tree_absent_version_page_is_logged_and_skipped(caplog):
     routes = {"https://docs.example.com/de/guide": _FakeResponse(200, text=_next_data_html(_versioned_payload()))}
@@ -303,3 +297,12 @@ async def test_resolve_navigation_tree_version_page_server_error_raises():
     client = _FakeAsyncClient(routes)
     with pytest.raises(RuntimeError, match="503"):
         await resolve_navigation_tree(client, "https://docs.example.com/de/guide")
+
+
+def _versioned_payload():
+    return {"props": {"pageProps": {"mainContext": {
+        "sidebarTree": {"href": "/de/guide", "childPages": [{"href": "/de/guide/intro", "childPages": []}]},
+        "allVersions": {"v1": {"version": "v1"}, "v2": {"version": "v2"}},
+        "currentVersion": "v1",
+        "currentPathWithoutLanguage": "/guide",
+    }}}}

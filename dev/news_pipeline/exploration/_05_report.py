@@ -4,6 +4,29 @@ from pathlib import Path
 
 
 # FUNCTIONS
+
+def write_walk_report(report_path: Path, articles_path: Path, ts: str, api_url: str, n: int, results: dict) -> None:
+    lines = []
+    lines += _render_walk_header(ts, api_url, n, results)
+    lines += _render_type_distribution(results)
+    lines += _render_target_section(results)
+    lines += _render_walk_call_log(results)
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    articles_path.write_text(
+        json.dumps(results["all_articles"], indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def write_fixed_report(report_path: Path, ts: str, api_url: str, n: int, invalid_types: frozenset, results: list) -> None:
+    lines = []
+    lines += _render_fixed_header(ts, api_url, n, invalid_types)
+    lines += _render_fixed_summary(results)
+    lines += _render_fixed_call_log(results)
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def _render_walk_header(ts: str, api_url: str, n: int, results: dict) -> list:
     lines = ["# CoinDesk StoryType Walk Report"]
     lines.append(f"\n**Run:** {ts} | **Max calls:** {n}\n")
@@ -33,6 +56,50 @@ def _render_target_section(results: dict) -> list:
         lines.append("```\n")
     else:
         lines.append("⚠️ TARGET NOT ENCOUNTERED in walk responses.\n")
+    return lines
+
+
+def _render_walk_call_log(results: dict) -> list:
+    lines = ["## Call Log\n"]
+    lines.append("| Call | Status | Count | Newest | Oldest | Target? | Elapsed |")
+    lines.append("|------|--------|-------|--------|--------|---------|---------|")
+    for r in results["call_log"]:
+        lines.extend(_render_walk_call_row(r))
+    return lines
+
+
+def _render_fixed_header(ts: str, api_url: str, n: int, invalid_types: frozenset) -> list:
+    lines = ["# CoinDesk Fixed Cursor Loop Report"]
+    lines.append(f"\n**Run:** {ts} | **Max calls:** {n}\n")
+    lines.append(f"**Start URL:** `{api_url}`\n")
+    lines.append(f"**Invalid anchor types (skipped):** `{sorted(invalid_types) or '(none)'}`\n")
+    return lines
+
+
+def _render_fixed_summary(results: list) -> list:
+    summary = next((r for r in results if r.get("call") == "SUMMARY"), None)
+    if not summary:
+        return []
+    lines = ["## Summary\n"]
+    lines.append("| Metric | Value |")
+    lines.append("|--------|-------|")
+    lines.append(f"| Successful calls | {summary['total_calls']} |")
+    lines.append(f"| Total articles | {summary['total_articles']} |")
+    lines.append(f"| Oldest date reached | {summary['oldest_date']} |")
+    lines.append(f"| Avg elapsed / call | {summary['avg_elapsed']}s |")
+    lines.append(f"| Cursor-fix overrides | {summary['cursor_fixed_count']} |")
+    lines.append(f"| Non-200 responses | {summary['non_200']} |\n")
+    return lines
+
+
+def _render_fixed_call_log(results: list) -> list:
+    lines = ["## Per-Call Log\n"]
+    lines.append("| Call | Status | Articles | Anchor type | Fixed? | Skipped type | Oldest | Elapsed |")
+    lines.append("|------|--------|----------|-------------|--------|--------------|--------|---------|")
+    for r in results:
+        if r.get("call") == "SUMMARY":
+            continue
+        lines.extend(_render_fixed_call_row(r))
     return lines
 
 
@@ -68,53 +135,6 @@ def _render_walk_call_row(r: dict) -> list:
     return lines
 
 
-def _render_walk_call_log(results: dict) -> list:
-    lines = ["## Call Log\n"]
-    lines.append("| Call | Status | Count | Newest | Oldest | Target? | Elapsed |")
-    lines.append("|------|--------|-------|--------|--------|---------|---------|")
-    for r in results["call_log"]:
-        lines.extend(_render_walk_call_row(r))
-    return lines
-
-
-def write_walk_report(report_path: Path, articles_path: Path, ts: str, api_url: str, n: int, results: dict) -> None:
-    lines = []
-    lines += _render_walk_header(ts, api_url, n, results)
-    lines += _render_type_distribution(results)
-    lines += _render_target_section(results)
-    lines += _render_walk_call_log(results)
-
-    report_path.write_text("\n".join(lines), encoding="utf-8")
-    articles_path.write_text(
-        json.dumps(results["all_articles"], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-
-def _render_fixed_header(ts: str, api_url: str, n: int, invalid_types: frozenset) -> list:
-    lines = ["# CoinDesk Fixed Cursor Loop Report"]
-    lines.append(f"\n**Run:** {ts} | **Max calls:** {n}\n")
-    lines.append(f"**Start URL:** `{api_url}`\n")
-    lines.append(f"**Invalid anchor types (skipped):** `{sorted(invalid_types) or '(none)'}`\n")
-    return lines
-
-
-def _render_fixed_summary(results: list) -> list:
-    summary = next((r for r in results if r.get("call") == "SUMMARY"), None)
-    if not summary:
-        return []
-    lines = ["## Summary\n"]
-    lines.append("| Metric | Value |")
-    lines.append("|--------|-------|")
-    lines.append(f"| Successful calls | {summary['total_calls']} |")
-    lines.append(f"| Total articles | {summary['total_articles']} |")
-    lines.append(f"| Oldest date reached | {summary['oldest_date']} |")
-    lines.append(f"| Avg elapsed / call | {summary['avg_elapsed']}s |")
-    lines.append(f"| Cursor-fix overrides | {summary['cursor_fixed_count']} |")
-    lines.append(f"| Non-200 responses | {summary['non_200']} |\n")
-    return lines
-
-
 def _render_fixed_call_row(r: dict) -> list:
     lines = []
     fix_flag = "✅" if r.get("cursor_fixed") else "—"
@@ -135,22 +155,3 @@ def _render_fixed_call_row(r: dict) -> list:
             f" {r.get('oldest_so_far','?')} | {r.get('elapsed','?')}s |"
         )
     return lines
-
-
-def _render_fixed_call_log(results: list) -> list:
-    lines = ["## Per-Call Log\n"]
-    lines.append("| Call | Status | Articles | Anchor type | Fixed? | Skipped type | Oldest | Elapsed |")
-    lines.append("|------|--------|----------|-------------|--------|--------------|--------|---------|")
-    for r in results:
-        if r.get("call") == "SUMMARY":
-            continue
-        lines.extend(_render_fixed_call_row(r))
-    return lines
-
-
-def write_fixed_report(report_path: Path, ts: str, api_url: str, n: int, invalid_types: frozenset, results: list) -> None:
-    lines = []
-    lines += _render_fixed_header(ts, api_url, n, invalid_types)
-    lines += _render_fixed_summary(results)
-    lines += _render_fixed_call_log(results)
-    report_path.write_text("\n".join(lines), encoding="utf-8")

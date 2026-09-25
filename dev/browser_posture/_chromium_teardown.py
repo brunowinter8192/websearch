@@ -7,14 +7,6 @@ import psutil
 
 # FUNCTIONS
 
-def remove_stray_launchd_jobs() -> list[str]:
-    result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
-    labels = [line.split()[-1] for line in result.stdout.splitlines() if "chrome.for.testing" in line.lower()]
-    for label in labels:
-        subprocess.run(["launchctl", "remove", label], capture_output=True, text=True)
-    return labels
-
-
 def kill_survivors(rounds: int = 3, settle_s: float = 1.5) -> None:
     for _ in range(rounds):
         remove_stray_launchd_jobs()
@@ -47,3 +39,11 @@ def check_orphans() -> list[str]:
         if "chrome.for.testing" in line.lower()
     ]
     return orphans
+
+
+def remove_stray_launchd_jobs() -> list[str]:
+    result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
+    labels = [line.split()[-1] for line in result.stdout.splitlines() if "chrome.for.testing" in line.lower()]
+    for label in labels:
+        subprocess.run(["launchctl", "remove", label], capture_output=True, text=True)
+    return labels

@@ -17,11 +17,16 @@ _pre_snapshots: list[dict] = []
 
 # FUNCTIONS
 
-def _get_name(limiter) -> str:
-    for name, lim in _rl_mod._limiters.items():
-        if lim is limiter:
-            return name
-    return "unknown"
+def install_instrument() -> None:
+    _require_limiter_internals()
+    RateLimiter.acquire = _replacement_acquire
+
+
+def _require_limiter_internals() -> None:
+    if not hasattr(_rl_mod, "_limiters"):
+        raise RuntimeError("src.search.rate_limiter no longer has _limiters: the branch instrument cannot name limiters")
+    if not hasattr(RateLimiter, "acquire"):
+        raise RuntimeError("RateLimiter no longer has acquire: nothing to replace")
 
 
 async def _replacement_acquire(self) -> None:
@@ -55,4 +60,8 @@ async def _replacement_acquire(self) -> None:
         raise
 
 
-RateLimiter.acquire = _replacement_acquire
+def _get_name(limiter) -> str:
+    for name, lim in _rl_mod._limiters.items():
+        if lim is limiter:
+            return name
+    return "unknown"

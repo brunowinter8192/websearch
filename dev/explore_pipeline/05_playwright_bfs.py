@@ -27,6 +27,43 @@ MISSING_SAMPLE = 20
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Playwright-per-page BFS — measures URL discovery recall vs gold standard"
+    )
+    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
+                        help="Gold standard file (default: goldstandard/docs_github_rest.txt)")
+    _add_arguments(parser)
+    parser.add_argument("--stealth", action="store_true",
+                        help="Enable stealth mode (BrowserConfig enable_stealth + UndetectedAdapter)")
+    args = parser.parse_args()
+
+    asyncio.run(playwright_bfs_workflow(
+        args.seed, args.gold, args.include_pattern, args.max_pages, args.max_depth,
+        args.delay, args.page_timeout, args.concurrency, args.stealth,
+    ))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--seed", type=str, default=SEED_URL,
+                        help=f"Seed URL (default: {SEED_URL})")
+    parser.add_argument("--include-pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
+                        help=f"URL substring filter (default: {DEFAULT_INCLUDE_PATTERN})")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
+                        help=f"Max pages to fetch (default: {DEFAULT_MAX_PAGES})")
+    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH,
+                        help=f"Max BFS depth (default: {DEFAULT_MAX_DEPTH})")
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_S,
+                        help=f"delay_before_return_html in seconds (default: {DEFAULT_DELAY_S})")
+    parser.add_argument("--page-timeout", type=int, default=DEFAULT_PAGE_TIMEOUT_MS,
+                        help=f"page_timeout in ms (default: {DEFAULT_PAGE_TIMEOUT_MS})")
+    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
+                        choices=[1, 2, 3],
+                        help=f"Concurrent arun() calls (default: {DEFAULT_CONCURRENCY}, max: 3)")
+
+
 async def playwright_bfs_workflow(seed: str, gold_path: Path, include_pattern: str,
                                    max_pages: int, max_depth: int, delay_s: float,
                                    page_timeout_ms: int, concurrency: int, stealth: bool):
@@ -53,18 +90,9 @@ async def playwright_bfs_workflow(seed: str, gold_path: Path, include_pattern: s
     print(f"\nReport saved: {out_path}")
 
 
-# FUNCTIONS
-
 def load_gold(path: Path) -> frozenset:
     with open(path, encoding="utf-8") as f:
         return frozenset(normalize_url(ln.strip()) for ln in f if ln.strip())
-
-
-def normalize_url(url: str) -> str:
-    parsed = urlparse(url)
-    path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
-    path = path.rstrip('/')
-    return f"{parsed.scheme}://{parsed.netloc}{path}"
 
 
 def make_configs(delay_s: float, page_timeout_ms: int, stealth: bool) -> tuple:
@@ -127,6 +155,42 @@ async def bfs_crawl(seed: str, include_pattern: str, max_pages: int, max_depth: 
 
     stats = _build_bfs_stats(page_latencies, four_two_nine_count, stop_reason, failed)
     return found, stats
+
+
+def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
+    found_set = set(found_urls)
+    matched = found_set & gold
+    missing = gold - found_set
+    noise = found_set - gold
+    recall_pct = len(matched) / len(gold) * 100 if gold else 0.0
+    return {
+        "found": len(found_set),
+        "matched": len(matched),
+        "missing": len(missing),
+        "noise": len(noise),
+        "recall_pct": recall_pct,
+        "missing_sample": sorted(missing)[:MISSING_SAMPLE],
+        "found_set": found_set,
+    }
+
+
+def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
+                  elapsed: float, concurrency: int, stealth: bool,
+                  delay_s: float, page_timeout_ms: int) -> str:
+    lines = _format_header_and_recall_table(
+        seed, gold, recall, bfs_stats, elapsed, concurrency, stealth, delay_s, page_timeout_ms)
+    lines += _format_key_url_and_baseline(recall, concurrency, delay_s)
+    lines += _format_missing_sample(recall)
+    lines += _format_fetch_failures(bfs_stats)
+    lines += _format_early_stop(bfs_stats)
+    return "\n".join(lines)
+
+
+def save_report(report: str) -> Path:
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    path = OUTPUT_DIR / f"05_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"
+    path.write_text(report, encoding="utf-8")
+    return path
 
 
 def _build_batch(frontier: deque, concurrency: int, max_depth: int) -> list[tuple[str, int]]:
@@ -209,49 +273,6 @@ def _build_bfs_stats(page_latencies: list[int], four_two_nine_count: int, stop_r
         "min_latency_ms": min(page_latencies) if page_latencies else 0,
         "max_latency_ms": max(page_latencies) if page_latencies else 0,
     }
-
-
-async def fetch_page(crawler: AsyncWebCrawler, url: str,
-                     run_cfg: CrawlerRunConfig) -> tuple:
-    t0 = time.time()
-    try:
-        result = await crawler.arun(url=url, config=run_cfg)
-        latency_ms = int((time.time() - t0) * 1000)
-        status = result.status_code if hasattr(result, "status_code") else 200
-        links = result.links.get("internal", []) if isinstance(result.links, dict) else []
-        return status, links, latency_ms, None
-    except Exception as exc:
-        latency_ms = int((time.time() - t0) * 1000)
-        return None, [], latency_ms, f"{type(exc).__name__}: {exc}"
-
-
-def compute_recall(found_urls: list[str], gold: frozenset) -> dict:
-    found_set = set(found_urls)
-    matched = found_set & gold
-    missing = gold - found_set
-    noise = found_set - gold
-    recall_pct = len(matched) / len(gold) * 100 if gold else 0.0
-    return {
-        "found": len(found_set),
-        "matched": len(matched),
-        "missing": len(missing),
-        "noise": len(noise),
-        "recall_pct": recall_pct,
-        "missing_sample": sorted(missing)[:MISSING_SAMPLE],
-        "found_set": found_set,
-    }
-
-
-def format_report(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
-                  elapsed: float, concurrency: int, stealth: bool,
-                  delay_s: float, page_timeout_ms: int) -> str:
-    lines = _format_header_and_recall_table(
-        seed, gold, recall, bfs_stats, elapsed, concurrency, stealth, delay_s, page_timeout_ms)
-    lines += _format_key_url_and_baseline(recall, concurrency, delay_s)
-    lines += _format_missing_sample(recall)
-    lines += _format_fetch_failures(bfs_stats)
-    lines += _format_early_stop(bfs_stats)
-    return "\n".join(lines)
 
 
 def _format_header_and_recall_table(seed: str, gold: frozenset, recall: dict, bfs_stats: dict,
@@ -340,39 +361,26 @@ def _format_early_stop(bfs_stats: dict) -> list:
     return lines
 
 
-def save_report(report: str) -> Path:
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    path = OUTPUT_DIR / f"05_docs_github_rest_{datetime.now().strftime('%Y%m%d')}.md"
-    path.write_text(report, encoding="utf-8")
-    return path
+def normalize_url(url: str) -> str:
+    parsed = urlparse(url)
+    path = re.sub(r'/[^/]*@[^/]+', '', parsed.path)
+    path = path.rstrip('/')
+    return f"{parsed.scheme}://{parsed.netloc}{path}"
+
+
+async def fetch_page(crawler: AsyncWebCrawler, url: str,
+                     run_cfg: CrawlerRunConfig) -> tuple:
+    t0 = time.time()
+    try:
+        result = await crawler.arun(url=url, config=run_cfg)
+        latency_ms = int((time.time() - t0) * 1000)
+        status = result.status_code if hasattr(result, "status_code") else 200
+        links = result.links.get("internal", []) if isinstance(result.links, dict) else []
+        return status, links, latency_ms, None
+    except Exception as exc:
+        latency_ms = int((time.time() - t0) * 1000)
+        return None, [], latency_ms, f"{type(exc).__name__}: {exc}"
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Playwright-per-page BFS — measures URL discovery recall vs gold standard"
-    )
-    parser.add_argument("--gold", type=Path, default=GOLD_DEFAULT,
-                        help="Gold standard file (default: goldstandard/docs_github_rest.txt)")
-    parser.add_argument("--seed", type=str, default=SEED_URL,
-                        help=f"Seed URL (default: {SEED_URL})")
-    parser.add_argument("--include-pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
-                        help=f"URL substring filter (default: {DEFAULT_INCLUDE_PATTERN})")
-    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES,
-                        help=f"Max pages to fetch (default: {DEFAULT_MAX_PAGES})")
-    parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH,
-                        help=f"Max BFS depth (default: {DEFAULT_MAX_DEPTH})")
-    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_S,
-                        help=f"delay_before_return_html in seconds (default: {DEFAULT_DELAY_S})")
-    parser.add_argument("--page-timeout", type=int, default=DEFAULT_PAGE_TIMEOUT_MS,
-                        help=f"page_timeout in ms (default: {DEFAULT_PAGE_TIMEOUT_MS})")
-    parser.add_argument("--concurrency", type=int, default=DEFAULT_CONCURRENCY,
-                        choices=[1, 2, 3],
-                        help=f"Concurrent arun() calls (default: {DEFAULT_CONCURRENCY}, max: 3)")
-    parser.add_argument("--stealth", action="store_true",
-                        help="Enable stealth mode (BrowserConfig enable_stealth + UndetectedAdapter)")
-    args = parser.parse_args()
-
-    asyncio.run(playwright_bfs_workflow(
-        args.seed, args.gold, args.include_pattern, args.max_pages, args.max_depth,
-        args.delay, args.page_timeout, args.concurrency, args.stealth,
-    ))
+    main()

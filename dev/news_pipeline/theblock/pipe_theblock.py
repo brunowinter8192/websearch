@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import asyncio
 import random
 import sys
@@ -29,12 +27,13 @@ READ_TIMEOUT_S        = 5.0
 
 SITEMAP_INDEX_URL     = "https://www.theblock.co/sitemap_tbco_index.xml"
 
+
 # ORCHESTRATOR
 
 async def pipe_theblock_workflow() -> None:
     ts = datetime.now(timezone.utc)
     t0 = time.monotonic()
-    print(f"=== The Block proxy pipe  {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} ===\n")
+    _print_the_block_proxy(ts)
 
     sample, source_results, hp_to_sources, liveness_results, neutral_alive, elapsed_s1 = await run_stage1()
     cf_passing, elapsed_s2 = run_stage2(neutral_alive)
@@ -46,14 +45,19 @@ async def pipe_theblock_workflow() -> None:
 
     subs_fetched, total_subs, b_exhausted, b_active, elapsed_s3 = run_stage3(cf_passing)
 
-    print(f"Total elapsed: {time.monotonic()-t0:.0f}s")
+    _print_total_elapsed_s(t0)
     append_pipe_log(ts, len(sample), len(neutral_alive), len(cf_passing),
                     subs_fetched, total_subs, b_exhausted, b_active,
                     elapsed_s1, elapsed_s2, elapsed_s3)
     tracker_flush(ts, source_results, sample, liveness_results, neutral_alive, cf_passing,
                   hp_to_sources)
 
+
 # FUNCTIONS
+
+def _print_the_block_proxy(ts):
+    print(f"=== The Block proxy pipe  {ts.strftime('%Y-%m-%dT%H:%M:%SZ')} ===\n")
+
 
 async def run_stage1() -> tuple[list[tuple[str, str]], list[dict], dict[str, set[str]], list[dict], list[str], float]:
     print("[Stage 1] Fetching fresh pool + neutral liveness check ...")
@@ -72,30 +76,6 @@ async def run_stage1() -> tuple[list[tuple[str, str]], list[dict], dict[str, set
     print(f"  Neutral-alive: {len(neutral_alive):,}/{len(sample):,}  "
           f"({100*len(neutral_alive)/len(sample):.1f}%)  {elapsed_s1:.0f}s\n")
     return sample, source_results, hp_to_sources, liveness_results, neutral_alive, elapsed_s1
-
-
-async def fetch_fresh_pool() -> tuple[list[tuple[str, str]], list[dict], dict[str, set[str]]]:
-    source_results = await fetch_all_sources()
-    bucket: dict[str, set[str]] = {"http": set(), "socks4": set(), "socks5": set()}
-    hp_to_sources: dict[str, set[str]] = {}
-    for r in source_results:
-        bucket[r["bucket"]].update(r["proxies"])
-        for hp in r["proxies"]:
-            hp_to_sources.setdefault(hp, set()).add(r["url"])
-    entries: list[tuple[str, str]] = []
-    for proto, proxies in bucket.items():
-        for hp in proxies:
-            entries.append((proto, hp))
-    return entries, source_results, hp_to_sources
-
-
-def build_proxy_urls(liveness_results: list[dict]) -> list[str]:
-    urls = []
-    for r in liveness_results:
-        if r["alive"]:
-            proto = "socks5h" if r["proto"] == "socks5" else r["proto"]
-            urls.append(f"{proto}://{r['host_port']}")
-    return urls
 
 
 def run_stage2(neutral_alive: list[str]) -> tuple[list[str], float]:
@@ -137,6 +117,58 @@ def run_stage3(cf_passing: list[str]) -> tuple[int, int, list[int], list[int], f
     return subs_fetched, total_subs, b_exhausted, b_active, elapsed_s3
 
 
+def _print_total_elapsed_s(t0):
+    print(f"Total elapsed: {time.monotonic()-t0:.0f}s")
+
+
+def append_pipe_log(
+    ts: datetime,
+    raw_n: int,
+    neutral_n: int,
+    cf_n: int,
+    subs_fetched: int,
+    total_subs: int,
+    b_exhausted: list[int],
+    b_active: list[int],
+    elapsed_s1: float,
+    elapsed_s2: float,
+    elapsed_s3: float,
+) -> None:
+    lines = build_funnel_lines(
+        ts, raw_n, neutral_n, cf_n, subs_fetched, total_subs,
+        elapsed_s1, elapsed_s2, elapsed_s3,
+    )
+    lines += build_budget_lines(b_exhausted, b_active)
+
+    with PIPE_LOG.open("a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"Funnel log → {PIPE_LOG}")
+
+
+async def fetch_fresh_pool() -> tuple[list[tuple[str, str]], list[dict], dict[str, set[str]]]:
+    source_results = await fetch_all_sources()
+    bucket: dict[str, set[str]] = {"http": set(), "socks4": set(), "socks5": set()}
+    hp_to_sources: dict[str, set[str]] = {}
+    for r in source_results:
+        bucket[r["bucket"]].update(r["proxies"])
+        for hp in r["proxies"]:
+            hp_to_sources.setdefault(hp, set()).add(r["url"])
+    entries: list[tuple[str, str]] = []
+    for proto, proxies in bucket.items():
+        for hp in proxies:
+            entries.append((proto, hp))
+    return entries, source_results, hp_to_sources
+
+
+def build_proxy_urls(liveness_results: list[dict]) -> list[str]:
+    urls = []
+    for r in liveness_results:
+        if r["alive"]:
+            proto = "socks5h" if r["proto"] == "socks5" else r["proto"]
+            urls.append(f"{proto}://{r['host_port']}")
+    return urls
+
+
 def stage3_discovery(cf_proxies: list[str]) -> tuple[int, int, list[int], list[int]]:
     sub_urls = get_sitemap_index(cf_proxies)
     if not sub_urls:
@@ -169,68 +201,6 @@ def stage3_discovery(cf_proxies: list[str]) -> tuple[int, int, list[int], list[i
 
     b_active = [proxy_budget[p] for p in proxy_queue]
     return subs_fetched, total_subs, b_exhausted, b_active
-
-
-def fetch_one_sub(
-    sub_url: str,
-    proxy_queue: list[str],
-    proxy_idx: int,
-    proxy_budget: dict[str, int],
-    b_exhausted: list[int],
-    subs_fetched: int,
-) -> tuple[int, int]:
-    sub_name = sub_url.split("/")[-1]
-    fetched  = False
-    transient_tries = 0
-
-    while proxy_queue and not fetched:
-        if proxy_idx >= len(proxy_queue):
-            proxy_idx = 0
-        purl = proxy_queue[proxy_idx]
-
-        body, status = cf_get(purl, sub_url)
-
-        if status == 200 and is_xml(body):
-            locs = [normalize_url(u)
-                    for u in extract_locs(body.decode("utf-8", errors="replace"))]
-            save_sub_cache(sub_url, locs)
-            proxy_budget[purl] += 1
-            subs_fetched += 1
-            print(f"  [{subs_fetched:>2}] {sub_name:<55} "
-                  f"B_so_far={proxy_budget[purl]}  proxy={purl[:35]}…")
-            fetched = True
-
-        elif status in (403, 429):
-            b = proxy_budget[purl]
-            b_exhausted.append(b)
-            print(f"  [--] {purl[:35]}… exhausted  HTTP {status}  B={b}  "
-                  f"→ rotating ({len(proxy_queue)-1} proxies left)")
-            proxy_queue.pop(proxy_idx)
-            if proxy_idx >= len(proxy_queue):
-                proxy_idx = 0
-
-        else:
-            transient_tries += 1
-            proxy_idx += 1
-            if transient_tries >= len(proxy_queue):
-                print(f"  [!!] {sub_name} — all proxies failed transiently, skipping")
-                fetched = True
-    return proxy_idx, subs_fetched
-
-
-def get_sitemap_index(cf_proxies: list[str]) -> list[str]:
-    for purl in cf_proxies[:10]:
-        body, status = cf_get(purl, SITEMAP_INDEX_URL)
-        if status == 200 and is_xml(body):
-            locs = extract_locs(body.decode("utf-8", errors="replace"))
-            if locs:
-                print(f"  Index fetched via {purl[:40]}…  ({len(locs)} sub-URLs)")
-                return locs
-    return []
-
-
-def count_cached() -> int:
-    return sum(1 for _ in CACHE_DIR.glob("sub_*.json"))
 
 
 def build_funnel_lines(
@@ -299,28 +269,66 @@ def build_budget_lines(b_exhausted: list[int], b_active: list[int]) -> list[str]
     return lines
 
 
-def append_pipe_log(
-    ts: datetime,
-    raw_n: int,
-    neutral_n: int,
-    cf_n: int,
-    subs_fetched: int,
-    total_subs: int,
-    b_exhausted: list[int],
-    b_active: list[int],
-    elapsed_s1: float,
-    elapsed_s2: float,
-    elapsed_s3: float,
-) -> None:
-    lines = build_funnel_lines(
-        ts, raw_n, neutral_n, cf_n, subs_fetched, total_subs,
-        elapsed_s1, elapsed_s2, elapsed_s3,
-    )
-    lines += build_budget_lines(b_exhausted, b_active)
+def get_sitemap_index(cf_proxies: list[str]) -> list[str]:
+    for purl in cf_proxies[:10]:
+        body, status = cf_get(purl, SITEMAP_INDEX_URL)
+        if status == 200 and is_xml(body):
+            locs = extract_locs(body.decode("utf-8", errors="replace"))
+            if locs:
+                print(f"  Index fetched via {purl[:40]}…  ({len(locs)} sub-URLs)")
+                return locs
+    return []
 
-    with PIPE_LOG.open("a", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    print(f"Funnel log → {PIPE_LOG}")
+
+def fetch_one_sub(
+    sub_url: str,
+    proxy_queue: list[str],
+    proxy_idx: int,
+    proxy_budget: dict[str, int],
+    b_exhausted: list[int],
+    subs_fetched: int,
+) -> tuple[int, int]:
+    sub_name = sub_url.split("/")[-1]
+    fetched  = False
+    transient_tries = 0
+
+    while proxy_queue and not fetched:
+        if proxy_idx >= len(proxy_queue):
+            proxy_idx = 0
+        purl = proxy_queue[proxy_idx]
+
+        body, status = cf_get(purl, sub_url)
+
+        if status == 200 and is_xml(body):
+            locs = [normalize_url(u)
+                    for u in extract_locs(body.decode("utf-8", errors="replace"))]
+            save_sub_cache(sub_url, locs)
+            proxy_budget[purl] += 1
+            subs_fetched += 1
+            print(f"  [{subs_fetched:>2}] {sub_name:<55} "
+                  f"B_so_far={proxy_budget[purl]}  proxy={purl[:35]}…")
+            fetched = True
+
+        elif status in (403, 429):
+            b = proxy_budget[purl]
+            b_exhausted.append(b)
+            print(f"  [--] {purl[:35]}… exhausted  HTTP {status}  B={b}  "
+                  f"→ rotating ({len(proxy_queue)-1} proxies left)")
+            proxy_queue.pop(proxy_idx)
+            if proxy_idx >= len(proxy_queue):
+                proxy_idx = 0
+
+        else:
+            transient_tries += 1
+            proxy_idx += 1
+            if transient_tries >= len(proxy_queue):
+                print(f"  [!!] {sub_name} — all proxies failed transiently, skipping")
+                fetched = True
+    return proxy_idx, subs_fetched
+
+
+def count_cached() -> int:
+    return sum(1 for _ in CACHE_DIR.glob("sub_*.json"))
 
 
 if __name__ == "__main__":

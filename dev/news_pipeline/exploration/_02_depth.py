@@ -25,15 +25,36 @@ _SKIP_EXT = (".js", ".css", ".woff", ".woff2", ".otf", ".png", ".jpg", ".jpeg",
 _SKIP_PATH = ("/_next/static/", "/_next/image", "/api/cdn-fonts")
 
 
-# ORCHESTRATOR
+# FUNCTIONS
+
 async def depth_workflow():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report_path = OUTPUT_DIR / f"depth_report_{ts}.md"
-    print(f"Report → {report_path}", file=sys.stderr)
+    report_path = _compute_report_path(ts)
+    _print_report(report_path)
 
     coindesk_log: list[dict] = []
 
+    all_urls, oldest_date, stop_reason, milestone_rows, final_btn_state = await _discover_with_playwright(coindesk_log)
+
+    content_fetches, any_content_fetch = compute_content_fetch_flags(coindesk_log)
+
+    write_depth_report(report_path, len(all_urls), oldest_date, stop_reason,
+                       final_btn_state, milestone_rows, coindesk_log, any_content_fetch)
+
+    _print_depth_result(all_urls, oldest_date, stop_reason, any_content_fetch, report_path)
+
+
+def _compute_report_path(ts):
+    report_path = OUTPUT_DIR / f"depth_report_{ts}.md"
+    return report_path
+
+
+def _print_report(report_path):
+    print(f"Report → {report_path}", file=sys.stderr)
+
+
+async def _discover_with_playwright(coindesk_log):
     async with async_playwright() as p:
         browser = await p.chromium.launch(channel="chrome", headless=True)
         context = await browser.new_context(user_agent=REAL_UA)
@@ -48,43 +69,31 @@ async def depth_workflow():
 
         await context.close()
         await browser.close()
+    return all_urls, oldest_date, stop_reason, milestone_rows, final_btn_state
 
-    content_fetches, any_content_fetch = compute_content_fetch_flags(coindesk_log)
 
-    write_depth_report(report_path, len(all_urls), oldest_date, stop_reason,
-                       final_btn_state, milestone_rows, coindesk_log, any_content_fetch)
+def compute_content_fetch_flags(coindesk_log: list) -> tuple:
+    content_fetches = [e for e in coindesk_log if e["url"] != TARGET_URL
+                       and "latest-crypto-news" not in e["url"]
+                       or "_rsc" in e["url"] or "next-action" in e.get("method", "").lower()]
+    any_content_fetch = bool([e for e in coindesk_log
+                               if "_rsc" in e["url"]
+                               or e["method"] == "POST"
+                               or ("coindesk.com" in e["url"]
+                                   and "latest-crypto-news" not in e["url"]
+                                   and "metrics." not in e["url"]
+                                   and "downloads." not in e["url"]
+                                   and e["url"] != TARGET_URL)])
+    return content_fetches, any_content_fetch
 
+
+def _print_depth_result(all_urls, oldest_date, stop_reason, any_content_fetch, report_path):
     print(f"\n=== DEPTH RESULT ===", file=sys.stderr)
     print(f"Max unique URLs : {len(all_urls)}", file=sys.stderr)
     print(f"Oldest date     : {oldest_date}", file=sys.stderr)
     print(f"Stop reason     : {stop_reason}", file=sys.stderr)
     print(f"CoinDesk content fetch ever fired: {any_content_fetch}", file=sys.stderr)
     print(f"Report: {report_path}")
-
-
-# FUNCTIONS
-async def setup_and_capture_initial(page) -> tuple:
-    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
-    await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
-    await asyncio.sleep(3.0)
-
-    cookie_result = await page.evaluate(_JS_DISMISS_COOKIE)
-    print(f"Cookie consent: {cookie_result}", file=sys.stderr)
-    await asyncio.sleep(0.5)
-
-    all_urls: set[str] = set(await extract_articles(page))
-    oldest_date = compute_oldest(all_urls)
-    print(f"Batch 0: {len(all_urls)} initial | oldest={oldest_date}", file=sys.stderr)
-    return all_urls, oldest_date
-
-
-async def get_final_button_state(page) -> str:
-    final_btn_info = await page.evaluate(_JS_BTN_STATE)
-    return (
-        "GONE" if not final_btn_info.get("found")
-        else "DISABLED" if final_btn_info.get("disabled")
-        else "active"
-    )
 
 
 def record_coindesk_response(response, coindesk_log: list) -> None:
@@ -100,6 +109,52 @@ def record_coindesk_response(response, coindesk_log: list) -> None:
         "method": response.request.method,
         "status": response.status,
     })
+
+
+async def setup_and_capture_initial(page) -> tuple:
+    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
+    await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60000)
+    await asyncio.sleep(3.0)
+
+    cookie_result = await page.evaluate(_JS_DISMISS_COOKIE)
+    print(f"Cookie consent: {cookie_result}", file=sys.stderr)
+    await asyncio.sleep(0.5)
+
+    all_urls: set[str] = set(await extract_articles(page))
+    oldest_date = compute_oldest(all_urls)
+    print(f"Batch 0: {len(all_urls)} initial | oldest={oldest_date}", file=sys.stderr)
+    return all_urls, oldest_date
+
+
+async def run_depth_click_loop(page, all_urls: set, oldest_date: str) -> tuple:
+    stop_reason = f"cap ({DEPTH_CAP} clicks)"
+    milestone_rows: list[str] = []
+    prev_count = len(all_urls)
+
+    for click_n in range(1, DEPTH_CAP + 1):
+        outcome = await run_depth_click(page, click_n, all_urls, prev_count)
+        if outcome["stop"]:
+            stop_reason = outcome["stop_reason"]
+            break
+
+        oldest_date = outcome["oldest_date"]
+        prev_count = len(all_urls)
+
+        if click_n % 10 == 0 or click_n <= 5:
+            row = f"  click {click_n:>3}: total={len(all_urls):>4} | +{len(outcome['new_this']):>3} | oldest={oldest_date}"
+            print(row, file=sys.stderr)
+            milestone_rows.append(row.strip())
+
+    return stop_reason, milestone_rows, oldest_date
+
+
+async def get_final_button_state(page) -> str:
+    final_btn_info = await page.evaluate(_JS_BTN_STATE)
+    return (
+        "GONE" if not final_btn_info.get("found")
+        else "DISABLED" if final_btn_info.get("disabled")
+        else "active"
+    )
 
 
 async def run_depth_click(page, click_n: int, all_urls: set, prev_count: int) -> dict:
@@ -125,40 +180,3 @@ async def run_depth_click(page, click_n: int, all_urls: set, prev_count: int) ->
     oldest_date = compute_oldest(all_urls)
 
     return {"stop": False, "oldest_date": oldest_date, "new_this": new_this}
-
-
-async def run_depth_click_loop(page, all_urls: set, oldest_date: str) -> tuple:
-    stop_reason = f"cap ({DEPTH_CAP} clicks)"
-    milestone_rows: list[str] = []
-    prev_count = len(all_urls)
-
-    for click_n in range(1, DEPTH_CAP + 1):
-        outcome = await run_depth_click(page, click_n, all_urls, prev_count)
-        if outcome["stop"]:
-            stop_reason = outcome["stop_reason"]
-            break
-
-        oldest_date = outcome["oldest_date"]
-        prev_count = len(all_urls)
-
-        if click_n % 10 == 0 or click_n <= 5:
-            row = f"  click {click_n:>3}: total={len(all_urls):>4} | +{len(outcome['new_this']):>3} | oldest={oldest_date}"
-            print(row, file=sys.stderr)
-            milestone_rows.append(row.strip())
-
-    return stop_reason, milestone_rows, oldest_date
-
-
-def compute_content_fetch_flags(coindesk_log: list) -> tuple:
-    content_fetches = [e for e in coindesk_log if e["url"] != TARGET_URL
-                       and "latest-crypto-news" not in e["url"]
-                       or "_rsc" in e["url"] or "next-action" in e.get("method", "").lower()]
-    any_content_fetch = bool([e for e in coindesk_log
-                               if "_rsc" in e["url"]
-                               or e["method"] == "POST"
-                               or ("coindesk.com" in e["url"]
-                                   and "latest-crypto-news" not in e["url"]
-                                   and "metrics." not in e["url"]
-                                   and "downloads." not in e["url"]
-                                   and e["url"] != TARGET_URL)])
-    return content_fetches, any_content_fetch

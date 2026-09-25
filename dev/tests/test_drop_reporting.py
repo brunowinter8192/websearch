@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 import logging
 import os
@@ -11,27 +12,7 @@ from src.news.platforms.theblock import cleanup as theblock_cleanup
 from src.scraper import camoufox_scrape, chromium_scrape
 
 
-class _FramelessRequest:
-    resource_type = "document"
-
-    @property
-    def frame(self):
-        raise RuntimeError("Frame for this navigation request is not available")
-
-
-def _frameless_response():
-    return SimpleNamespace(request=_FramelessRequest(), url="https://x.test/sw", status=200)
-
-
-class _FakePage:
-    main_frame = object()
-
-    def __init__(self):
-        self.handlers = {}
-
-    def on(self, event, handler):
-        self.handlers[event] = handler
-
+# FUNCTIONS
 
 def test_camoufox_listener_logs_dropped_frameless_response(caplog):
     chain = []
@@ -58,12 +39,6 @@ def test_listener_still_records_main_frame_document_status():
     chain = []
     camoufox_scrape._make_document_status_listener(page, chain)(SimpleNamespace(request=request, url="u", status=301))
     assert chain == [301]
-
-
-@pytest.fixture
-def lock_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(box_lock, "LOCK_DIR", tmp_path)
-    return tmp_path
 
 
 def test_cleanup_stale_raises_on_unreadable_sidecar(lock_dir):
@@ -120,10 +95,6 @@ def test_onward_link_identity_hostless_stays_silent(caplog):
     assert caplog.messages == []
 
 
-def _push(text):
-    return "self.__next_f.push([1," + json.dumps(text) + "])"
-
-
 def test_rsc_stream_counts_non_json_rows(caplog):
     stream = '1:{"a":1}\n2:T5,hello\n3:{"b":2}'
     html = f"<script>{_push(stream)}</script>"
@@ -143,3 +114,35 @@ def test_theblock_malformed_json_ld_is_reported(capsys):
     assert found == article
     err = capsys.readouterr().err
     assert "malformed JSON-LD block skipped" in err and "https://theblock.test/a" in err
+
+
+class _FakePage:
+    main_frame = object()
+
+    def __init__(self):
+        self.handlers = {}
+
+    def on(self, event, handler):
+        self.handlers[event] = handler
+
+
+def _frameless_response():
+    return SimpleNamespace(request=_FramelessRequest(), url="https://x.test/sw", status=200)
+
+
+@pytest.fixture
+def lock_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(box_lock, "LOCK_DIR", tmp_path)
+    return tmp_path
+
+
+def _push(text):
+    return "self.__next_f.push([1," + json.dumps(text) + "])"
+
+
+class _FramelessRequest:
+    resource_type = "document"
+
+    @property
+    def frame(self):
+        raise RuntimeError("Frame for this navigation request is not available")

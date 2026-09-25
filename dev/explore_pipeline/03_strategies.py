@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import time
@@ -31,6 +32,20 @@ STRATEGIES = {
     },
 }
 
+
+# ORCHESTRATOR
+
+def run_main() -> None:
+    parser = argparse.ArgumentParser(description="Compare explore_site crawl strategies")
+    parser.add_argument("url", nargs="?", default="https://docs.crawl4ai.com", help="Test URL (default: docs.crawl4ai.com)")
+    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
+    parser.add_argument("--max-pages", type=int, default=50, help="Max pages (default: 50)")
+    args = parser.parse_args()
+
+    asyncio.run(main(args.url, args.depth, args.max_pages))
+
+
+# FUNCTIONS
 
 async def main(url: str, depth: int, max_pages: int):
     domain = urlparse(url).netloc
@@ -166,10 +181,4 @@ def save_report(report: str, domain: str):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare explore_site crawl strategies")
-    parser.add_argument("url", nargs="?", default="https://docs.crawl4ai.com", help="Test URL (default: docs.crawl4ai.com)")
-    parser.add_argument("--depth", type=int, default=2, help="Max crawl depth (default: 2)")
-    parser.add_argument("--max-pages", type=int, default=50, help="Max pages (default: 50)")
-    args = parser.parse_args()
-
-    asyncio.run(main(args.url, args.depth, args.max_pages))
+    run_main()

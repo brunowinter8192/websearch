@@ -50,17 +50,17 @@ REGWALL_MARKERS = [
 
 def main():
     urls = _load_urls(URL_FILE)
-    print(f"Loaded {len(urls)} URLs", flush=True)
+    _print_loaded_urls(urls)
 
     print("\n--- Candidate B1: shared browser, per-URL timezone (fresh context) ---", flush=True)
     t0 = time.time()
     asyncio.run(_run_b1(urls, B1_RAW))
-    b1_wall = int(time.time() - t0)
+    b1_wall = _compute_b1_wall(t0)
 
     print("\n--- Candidate B2: fresh crawler per URL (parallel, semaphore-gated) ---", flush=True)
     t0 = time.time()
     asyncio.run(_run_b2(urls, B2_RAW))
-    b2_wall = int(time.time() - t0)
+    b2_wall = _compute_b2_wall(t0)
 
     b1_rows = _build_rows(urls, B1_RAW)
     b2_rows = _build_rows(urls, B2_RAW)
@@ -78,32 +78,8 @@ def _load_urls(path: Path) -> list[str]:
     return [item["url"] for item in data]
 
 
-def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
-    kwargs = dict(
-        cache_mode=CacheMode.BYPASS,
-        wait_until="domcontentloaded",
-        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
-        page_timeout=PAGE_TIMEOUT_MS,
-        markdown_generator=DefaultMarkdownGenerator(),
-        verbose=False,
-    )
-    if timezone_id:
-        kwargs["timezone_id"] = timezone_id
-    return CrawlerRunConfig(**kwargs)
-
-
-def _url_to_filename(url: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
-    slug = re.sub(r"_+", "_", slug).strip("_")[:100]
-    return f"{slug}.md"
-
-
-def _save(url: str, raw_md: str, output_dir: Path) -> int:
-    if not raw_md:
-        return 0
-    content = f"<!-- source: {url} -->\n\n{raw_md}"
-    (output_dir / _url_to_filename(url)).write_text(content, encoding="utf-8")
-    return len(content.encode("utf-8"))
+def _print_loaded_urls(urls):
+    print(f"Loaded {len(urls)} URLs", flush=True)
 
 
 async def _run_b1(urls: list[str], output_dir: Path) -> None:
@@ -130,6 +106,11 @@ async def _run_b1(urls: list[str], output_dir: Path) -> None:
         await asyncio.gather(*[fetch_one(crawler, url, zones[i]) for i, url in enumerate(urls)])
 
 
+def _compute_b1_wall(t0):
+    b1_wall = int(time.time() - t0)
+    return b1_wall
+
+
 async def _run_b2(urls: list[str], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     sem = asyncio.Semaphore(CONCURRENCY)
@@ -150,6 +131,11 @@ async def _run_b2(urls: list[str], output_dir: Path) -> None:
                     print(f"  B2 ERR {url.split('/')[-1][:60]}: {e}", flush=True)
 
     await asyncio.gather(*[fetch_one(url) for url in urls])
+
+
+def _compute_b2_wall(t0):
+    b2_wall = int(time.time() - t0)
+    return b2_wall
 
 
 def _build_rows(urls: list[str], output_dir: Path) -> list[dict]:
@@ -243,6 +229,34 @@ def _print_comparison(b1_rows: list[dict], b1_wall: int,
 
     print(f"\nB1 review: {B1_REVIEW}")
     print(f"B2 review: {B2_REVIEW}")
+
+
+def _base_run_cfg(timezone_id: str = "") -> CrawlerRunConfig:
+    kwargs = dict(
+        cache_mode=CacheMode.BYPASS,
+        wait_until="domcontentloaded",
+        delay_before_return_html=DELAY_BEFORE_RETURN_HTML,
+        page_timeout=PAGE_TIMEOUT_MS,
+        markdown_generator=DefaultMarkdownGenerator(),
+        verbose=False,
+    )
+    if timezone_id:
+        kwargs["timezone_id"] = timezone_id
+    return CrawlerRunConfig(**kwargs)
+
+
+def _save(url: str, raw_md: str, output_dir: Path) -> int:
+    if not raw_md:
+        return 0
+    content = f"<!-- source: {url} -->\n\n{raw_md}"
+    (output_dir / _url_to_filename(url)).write_text(content, encoding="utf-8")
+    return len(content.encode("utf-8"))
+
+
+def _url_to_filename(url: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9]", "_", url.split("://")[-1])
+    slug = re.sub(r"_+", "_", slug).strip("_")[:100]
+    return f"{slug}.md"
 
 
 if __name__ == "__main__":

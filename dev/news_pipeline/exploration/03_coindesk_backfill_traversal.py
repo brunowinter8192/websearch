@@ -30,6 +30,7 @@ from _03_capture import (
 )
 from _03_log import write_log_header, write_log_line
 from _03_report import write_run_report
+import argparse
 
 TARGET_URL = "https://www.coindesk.com/latest-crypto-news"
 OUTPUT_DIR = Path(__file__).parent / "03_output"
@@ -42,6 +43,27 @@ DATE_RE = re.compile(r'/(\d{4})/(\d{2})/(\d{2})/')
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CoinDesk backfill traversal — stage A (capped) or stage B (uncapped)")
+    parser.add_argument("--full", action="store_true", help="Stage B: uncapped run (no click limit)")
+    parser.add_argument("--cap", type=int, default=None, metavar="N", help="Override click cap (default: STAGE_A_CAP=400)")
+    args = parser.parse_args()
+    cap = _resolve_cap(args)
+    asyncio.run(backfill_workflow(stage_a_cap=cap))
+
+
+# FUNCTIONS
+
+def _resolve_cap(args):
+    if args.full:
+        cap = None
+    elif args.cap is not None:
+        cap = args.cap
+    else:
+        cap = STAGE_A_CAP
+    return cap
+
 
 async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -91,16 +113,6 @@ async def backfill_workflow(stage_a_cap: int | None = STAGE_A_CAP) -> None:
     print(f"Report → {run['report_path']}")
 
 
-# FUNCTIONS
-def write_final_output(all_urls: dict, final_path: Path) -> None:
-    entries = build_entries(all_urls)
-    entries, n_filtered = filter_live_blogs(entries)
-    if n_filtered:
-        print(f"Filtered {n_filtered} live-blog URLs", file=sys.stderr)
-    final_path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Final output → {final_path} ({len(entries)} entries)", file=sys.stderr)
-
-
 def prepare_backfill_run(stage_a_cap: int | None) -> dict:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     log_path = OUTPUT_DIR / f"progress_{ts}.log"
@@ -127,6 +139,23 @@ def prepare_backfill_run(stage_a_cap: int | None) -> dict:
     }
 
 
+async def load_initial_feed(tab, state: dict, log_fh) -> None:
+    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+
+    raw_cookie = await tab.execute_script(_JS_DISMISS_COOKIE)
+    cookie_result = _extract_value(raw_cookie)
+    print(f"Cookie consent: {cookie_result}", file=sys.stderr)
+    await asyncio.sleep(0.5)
+
+    initial = await extract_articles(tab)
+    state["all_urls"] = {a["url"]: a for a in initial}
+    state["oldest"] = compute_oldest(state["all_urls"])
+    print(f"Batch 0: {len(state['all_urls'])} initial | oldest={state['oldest']}", file=sys.stderr)
+    write_log_line(log_fh, 0, len(state["all_urls"]), state["oldest"], len(state["all_urls"]), "initial", 0.0)
+
+
 async def run_click_loop(tab, state: dict, log_fh, checkpoint_path: Path, stage_a_cap: int | None) -> int:
     max_clicks = stage_a_cap if stage_a_cap is not None else 10_000_000
     click_n = 0
@@ -144,21 +173,75 @@ async def run_click_loop(tab, state: dict, log_fh, checkpoint_path: Path, stage_
     return click_n
 
 
-async def load_initial_feed(tab, state: dict, log_fh) -> None:
-    print(f"Navigating to {TARGET_URL} …", file=sys.stderr)
-    await tab.go_to(TARGET_URL, timeout=60)
-    await asyncio.sleep(3.0)
+async def teardown_backfill_session(state: dict, checkpoint_path: Path, tab, chrome, port, session_dir, log_fh) -> None:
+    if state["all_urls"]:
+        save_checkpoint(state["all_urls"], checkpoint_path)
+        print(f"Final checkpoint: {len(state['all_urls'])} URLs → {checkpoint_path}", file=sys.stderr)
+    if tab is not None:
+        try:
+            await tab.close()
+        except Exception as e:
+            print(f"tab.close (non-fatal): {e}", file=sys.stderr)
+    if chrome is not None:
+        try:
+            await chrome.close()
+        except Exception as e:
+            print(f"chrome.close (non-fatal): {e}", file=sys.stderr)
+    if port is not None:
+        kill_chrome_on_port(port)
+    if session_dir is not None:
+        shutil.rmtree(session_dir, ignore_errors=True)
+    print("Cleanup complete.", file=sys.stderr)
+    log_fh.close()
 
-    raw_cookie = await tab.execute_script(_JS_DISMISS_COOKIE)
-    cookie_result = _extract_value(raw_cookie)
-    print(f"Cookie consent: {cookie_result}", file=sys.stderr)
-    await asyncio.sleep(0.5)
 
-    initial = await extract_articles(tab)
-    state["all_urls"] = {a["url"]: a for a in initial}
+def write_final_output(all_urls: dict, final_path: Path) -> None:
+    entries = build_entries(all_urls)
+    entries, n_filtered = filter_live_blogs(entries)
+    if n_filtered:
+        print(f"Filtered {n_filtered} live-blog URLs", file=sys.stderr)
+    final_path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Final output → {final_path} ({len(entries)} entries)", file=sys.stderr)
+
+
+async def run_backfill_click(tab, click_n: int, state: dict, log_fh, checkpoint_path: Path) -> bool:
+    cycle_start = time.monotonic()
+
+    if await check_stop_conditions(tab, click_n, state, log_fh):
+        return True
+
+    prev_count = len(state["all_urls"])
+    clicked = await click_button(tab)
+    if not clicked:
+        state["stop_reason"] = "button GONE (mid-click)"
+        write_log_line(log_fh, click_n, len(state["all_urls"]), state["oldest"], 0, "GONE-MID", 0.0)
+        print(f"Click {click_n}: button vanished mid-click", file=sys.stderr)
+        return True
+
+    await asyncio.sleep(2.0)
+    await wait_for_new_articles(tab, prev_count)
+
+    fresh = await extract_articles(tab)
+    added = {a["url"]: a for a in fresh if a["url"] not in state["all_urls"]}
+    state["all_urls"].update(added)
     state["oldest"] = compute_oldest(state["all_urls"])
-    print(f"Batch 0: {len(state['all_urls'])} initial | oldest={state['oldest']}", file=sys.stderr)
-    write_log_line(log_fh, 0, len(state["all_urls"]), state["oldest"], len(state["all_urls"]), "initial", 0.0)
+    new_this = len(added)
+
+    cycle_elapsed = time.monotonic() - cycle_start
+    state["click_times"].append(cycle_elapsed)
+
+    return record_click_result(click_n, state, new_this, cycle_elapsed, log_fh, checkpoint_path)
+
+
+def compute_oldest(all_urls: dict) -> str:
+    dates = []
+    for url in all_urls:
+        dt = parse_url_date(url)
+        if dt:
+            dates.append(dt.date())
+    if not dates:
+        return "(none)"
+    return min(dates).strftime("%Y-%m-%d")
 
 
 async def check_stop_conditions(tab, click_n: int, state: dict, log_fh) -> bool:
@@ -203,91 +286,10 @@ def record_click_result(click_n: int, state: dict, new_this: int, cycle_elapsed:
     return False
 
 
-async def run_backfill_click(tab, click_n: int, state: dict, log_fh, checkpoint_path: Path) -> bool:
-    cycle_start = time.monotonic()
-
-    if await check_stop_conditions(tab, click_n, state, log_fh):
-        return True
-
-    prev_count = len(state["all_urls"])
-    clicked = await click_button(tab)
-    if not clicked:
-        state["stop_reason"] = "button GONE (mid-click)"
-        write_log_line(log_fh, click_n, len(state["all_urls"]), state["oldest"], 0, "GONE-MID", 0.0)
-        print(f"Click {click_n}: button vanished mid-click", file=sys.stderr)
-        return True
-
-    await asyncio.sleep(2.0)
-    await wait_for_new_articles(tab, prev_count)
-
-    fresh = await extract_articles(tab)
-    added = {a["url"]: a for a in fresh if a["url"] not in state["all_urls"]}
-    state["all_urls"].update(added)
-    state["oldest"] = compute_oldest(state["all_urls"])
-    new_this = len(added)
-
-    cycle_elapsed = time.monotonic() - cycle_start
-    state["click_times"].append(cycle_elapsed)
-
-    return record_click_result(click_n, state, new_this, cycle_elapsed, log_fh, checkpoint_path)
-
-
-async def teardown_backfill_session(state: dict, checkpoint_path: Path, tab, chrome, port, session_dir, log_fh) -> None:
-    if state["all_urls"]:
-        save_checkpoint(state["all_urls"], checkpoint_path)
-        print(f"Final checkpoint: {len(state['all_urls'])} URLs → {checkpoint_path}", file=sys.stderr)
-    if tab is not None:
-        try:
-            await tab.close()
-        except Exception as e:
-            print(f"tab.close (non-fatal): {e}", file=sys.stderr)
-    if chrome is not None:
-        try:
-            await chrome.close()
-        except Exception as e:
-            print(f"chrome.close (non-fatal): {e}", file=sys.stderr)
-    if port is not None:
-        kill_chrome_on_port(port)
-    if session_dir is not None:
-        shutil.rmtree(session_dir, ignore_errors=True)
-    print("Cleanup complete.", file=sys.stderr)
-    log_fh.close()
-
-
-def parse_url_date(url: str) -> datetime | None:
-    m = DATE_RE.search(url)
-    if not m:
-        return None
-    try:
-        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def compute_oldest(all_urls: dict) -> str:
-    dates = []
-    for url in all_urls:
-        dt = parse_url_date(url)
-        if dt:
-            dates.append(dt.date())
-    if not dates:
-        return "(none)"
-    return min(dates).strftime("%Y-%m-%d")
-
-
-def _url_to_iso(url: str) -> str:
-    dt = parse_url_date(url)
-    if dt is None:
-        return ""
-    return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
-
-
-def _extract_section(url: str) -> str:
-    try:
-        path = url.split("coindesk.com", 1)[1]
-        return path.strip("/").split("/")[0]
-    except (IndexError, ValueError):
-        return "unknown"
+def save_checkpoint(all_urls: dict, path: Path) -> None:
+    entries = build_entries(all_urls)
+    entries, _ = filter_live_blogs(entries)
+    path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def build_entries(all_urls: dict) -> list[dict]:
@@ -305,32 +307,40 @@ def build_entries(all_urls: dict) -> list[dict]:
     return entries
 
 
-def _is_live_blog(url: str) -> bool:
-    slug = urlparse(url).path.rstrip("/").split("/")[-1]
-    return slug.startswith("live-")
-
-
 def filter_live_blogs(entries: list[dict]) -> tuple[list[dict], int]:
     kept = [e for e in entries if not _is_live_blog(e["url"])]
     return kept, len(entries) - len(kept)
 
 
-def save_checkpoint(all_urls: dict, path: Path) -> None:
-    entries = build_entries(all_urls)
-    entries, _ = filter_live_blogs(entries)
-    path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
+def _url_to_iso(url: str) -> str:
+    dt = parse_url_date(url)
+    if dt is None:
+        return ""
+    return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+
+def _extract_section(url: str) -> str:
+    try:
+        path = url.split("coindesk.com", 1)[1]
+        return path.strip("/").split("/")[0]
+    except (IndexError, ValueError):
+        return "unknown"
+
+
+def _is_live_blog(url: str) -> bool:
+    slug = urlparse(url).path.rstrip("/").split("/")[-1]
+    return slug.startswith("live-")
+
+
+def parse_url_date(url: str) -> datetime | None:
+    m = DATE_RE.search(url)
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="CoinDesk backfill traversal — stage A (capped) or stage B (uncapped)")
-    parser.add_argument("--full", action="store_true", help="Stage B: uncapped run (no click limit)")
-    parser.add_argument("--cap", type=int, default=None, metavar="N", help="Override click cap (default: STAGE_A_CAP=400)")
-    args = parser.parse_args()
-    if args.full:
-        cap = None
-    elif args.cap is not None:
-        cap = args.cap
-    else:
-        cap = STAGE_A_CAP
-    asyncio.run(backfill_workflow(stage_a_cap=cap))
+    main()

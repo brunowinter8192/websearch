@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import os
@@ -21,25 +20,40 @@ TEST_URLS = [
 
 
 # ORCHESTRATOR
+
 async def run_result_inspection():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = _compute_report_path(timestamp)
+
+
+    sections = await _inspect_urls()
+
+    report_path.write_text("\n".join(sections), encoding="utf-8")
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _compute_report_path(timestamp):
     report_path = REPORTS_DIR / f"07_result_inspect_{timestamp}.md"
+    return report_path
 
-    sections = ["# Crawl4AI Result Object Inspection\n"]
 
+async def _inspect_urls():
+    sections = ['# Crawl4AI Result Object Inspection\n']
     for i, (label, url) in enumerate(TEST_URLS):
         print(f"Inspecting [{label}]: {url}")
         section = await inspect_url(label, url)
         sections.append(section)
         if i < len(TEST_URLS) - 1:
             await asyncio.sleep(2)
+    return sections
 
-    report_path.write_text("\n".join(sections), encoding="utf-8")
+
+def _print_report(report_path):
     print(f"Report: {report_path}")
 
-
-# FUNCTIONS
 
 async def inspect_url(label: str, url: str) -> str:
     browser_config = BrowserConfig(headless=True, verbose=False)

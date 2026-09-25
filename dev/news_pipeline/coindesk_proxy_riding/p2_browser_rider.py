@@ -1,5 +1,4 @@
 # INFRASTRUCTURE
-
 import asyncio
 import sys
 import time
@@ -14,12 +13,124 @@ from p0_pool import PersistentCooldownManager
 from _p2_fetch import RAW_SUBDIR, _fetch_one_url, _url_hash, _write_raw
 from _p2_state import JobRecord, RideRecord, RiderState, STALL_TIMEOUT_S
 from _p2_watchdog import _abort_stall, _watchdog
+import json
+
+TIMEOUT_S = 300
+
+N_SLOTS = 4
+
+N_URLS = 5
 
 PAGE_TIMEOUT_MS   = 8_000
 FAIL_THRESHOLD    = 2
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    load_backfill_pool = _import_pool_loader()
+    sample_urls = _import_url_sampler()
+
+
+    asyncio.run(_smoke(load_backfill_pool, sample_urls))
+
+
+# FUNCTIONS
+
+def _import_pool_loader():
+    from p0_pool import load_backfill_pool
+    return load_backfill_pool
+
+
+def _import_url_sampler():
+    from p3_url_sampler import sample_urls
+    return sample_urls
+
+
+async def _smoke(load_backfill_pool, sample_urls) -> None:
+    pool = await _load_pool(load_backfill_pool)
+    cm = PersistentCooldownManager()
+    urls = _sample_smoke_urls(sample_urls)
+    url_queue = _build_url_queue(urls)
+    _print_smoke_plan(urls)
+    out_dir = _smoke_output_dir()
+    t0 = time.monotonic()
+    state, state_timeout = await _run_with_timeout(url_queue, pool, cm, out_dir)
+    elapsed = _elapsed_since(t0)
+    raw_files = _list_raw_files(out_dir)
+    report = _build_smoke_report(elapsed, state_timeout, state, raw_files)
+    _print_smoke_report(report, raw_files)
+
+
+async def _load_pool(load_backfill_pool):
+    print("[smoke] loading proxy pool ...", file=sys.stderr)
+    pool, _ = await asyncio.get_running_loop().run_in_executor(None, load_backfill_pool)
+    print(f"[smoke] pool: {len(pool)} raw proxies", file=sys.stderr)
+    return pool
+
+
+def _sample_smoke_urls(sample_urls):
+    return sample_urls(500)[:N_URLS]
+
+
+def _build_url_queue(urls):
+    url_queue = asyncio.Queue()
+    [url_queue.put_nowait(u) for u in urls]
+    return url_queue
+
+
+def _print_smoke_plan(urls) -> None:
+    print(f"[smoke] {N_URLS} URLs / {N_SLOTS} slots:", file=sys.stderr)
+    [print(f"  {u}", file=sys.stderr) for u in urls]
+
+
+def _smoke_output_dir() -> Path:
+    return Path(__file__).parent / "smoke_output"
+
+
+async def _run_with_timeout(url_queue, pool, cm, out_dir):
+    try:
+        state = await asyncio.wait_for(
+            run_riding_pool(url_queue, pool, cm, out_dir,
+                            burn_threshold=2, n_slots=N_SLOTS, page_timeout_ms=8000),
+            timeout=TIMEOUT_S,
+        )
+        state_timeout = False
+    except asyncio.TimeoutError:
+        print("[smoke] TIMEOUT — partial results follow", file=sys.stderr)
+        state_timeout = True
+        state = None
+    return state, state_timeout
+
+
+def _elapsed_since(t0: float) -> float:
+    return time.monotonic() - t0
+
+
+def _list_raw_files(out_dir: Path) -> list:
+    raw_dir = out_dir / "raw"
+    return sorted(raw_dir.glob("*.html")) if raw_dir.exists() else []
+
+
+def _build_smoke_report(elapsed, state_timeout, state, raw_files) -> dict:
+    return {
+        "elapsed_s":      round(elapsed, 1),
+        "timeout":        state_timeout,
+        "n_ok":           state.n_ok           if state else "?",
+        "n_regwall":      state.n_regwall       if state else "?",
+        "n_failed":       state.n_failed        if state else "?",
+        "n_connect_fail": state.n_connect_fail  if state else "?",
+        "termination":    state.termination     if state else "timeout",
+        "proxies_used":   len(state.ride_records) if state else "?",
+        "raw_files":      len(raw_files),
+    }
+
+
+def _print_smoke_report(report, raw_files) -> None:
+    print(json.dumps(report, indent=2))
+    for f in raw_files[:3]:
+        print(f"  raw/{f.name}: {f.stat().st_size:,} bytes")
+
 
 async def run_riding_pool(
     url_queue:       asyncio.Queue,
@@ -62,8 +173,6 @@ async def run_riding_pool(
     return state
 
 
-# FUNCTIONS
-
 async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -> None:
     print(f"[slot {slot_id}] started", file=sys.stderr)
 
@@ -85,6 +194,16 @@ async def _run_slot(slot_id: int, crawler: AsyncWebCrawler, state: RiderState) -
         await _ride_one_proxy(slot_id, crawler, state, proto, hp)
 
     print(f"[slot {slot_id}] exit", file=sys.stderr)
+
+
+async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
+    async with state.proxy_lock:
+        eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
+        if not eligible:
+            return None
+        idx              = state.proxy_cursor % len(eligible)
+        state.proxy_cursor += 1
+        return eligible[idx]
 
 
 async def _ride_one_proxy(slot_id: int, crawler: AsyncWebCrawler, state: RiderState, proto: str, hp: str) -> None:
@@ -147,6 +266,28 @@ async def _ride_one_url(slot_id: int, state: RiderState, crawler: AsyncWebCrawle
     return should_break
 
 
+def _finalize_ride(slot_id: int, state: RiderState, pstr: str, proto: str, hp: str,
+                    t_bind: float, ride: dict) -> None:
+    r = RideRecord(
+        proxy_str=pstr, proto=proto, host_port=hp,
+        n_ok=ride["ride_ok"], n_regwall=ride["burn_count"],
+        n_connect_fail=1 if ride["cf_broke"] else 0,
+        n_failed=ride["fail_count"],
+        n_urls_attempted=len(ride["positions"]),
+        burned_threshold=ride["burn_count"] >= state.burn_threshold,
+        burned_connect=ride["cf_broke"],
+        ride_s=time.monotonic() - t_bind,
+        positions=ride["positions"],
+    )
+    state.ride_records.append(r)
+    state.cooldown_mgr.mark_burned(proto, hp)
+    print(
+        f"[slot {slot_id}] proxy done ok={ride['ride_ok']} rw={ride['burn_count']}"
+        f" cf={int(ride['cf_broke'])} n={len(ride['positions'])} {pstr}",
+        file=sys.stderr,
+    )
+
+
 def _apply_url_status(slot_id: int, state: RiderState, url: str, html: str,
                        ride: dict, job: JobRecord, ride_pos: int) -> bool:
     status = job.status
@@ -189,91 +330,5 @@ def _apply_url_status(slot_id: int, state: RiderState, url: str, html: str,
     return should_break
 
 
-def _finalize_ride(slot_id: int, state: RiderState, pstr: str, proto: str, hp: str,
-                    t_bind: float, ride: dict) -> None:
-    r = RideRecord(
-        proxy_str=pstr, proto=proto, host_port=hp,
-        n_ok=ride["ride_ok"], n_regwall=ride["burn_count"],
-        n_connect_fail=1 if ride["cf_broke"] else 0,
-        n_failed=ride["fail_count"],
-        n_urls_attempted=len(ride["positions"]),
-        burned_threshold=ride["burn_count"] >= state.burn_threshold,
-        burned_connect=ride["cf_broke"],
-        ride_s=time.monotonic() - t_bind,
-        positions=ride["positions"],
-    )
-    state.ride_records.append(r)
-    state.cooldown_mgr.mark_burned(proto, hp)
-    print(
-        f"[slot {slot_id}] proxy done ok={ride['ride_ok']} rw={ride['burn_count']}"
-        f" cf={int(ride['cf_broke'])} n={len(ride['positions'])} {pstr}",
-        file=sys.stderr,
-    )
-
-
-async def _next_proxy(state: RiderState) -> tuple[str, str] | None:
-    async with state.proxy_lock:
-        eligible = state.cooldown_mgr.eligible_candidates(state.proxy_pool)
-        if not eligible:
-            return None
-        idx              = state.proxy_cursor % len(eligible)
-        state.proxy_cursor += 1
-        return eligible[idx]
-
-
 if __name__ == "__main__":
-    import json
-    from p0_pool import load_backfill_pool
-    from p3_url_sampler import sample_urls
-
-    N_URLS    = 5
-    N_SLOTS   = 4
-    TIMEOUT_S = 300
-
-    async def smoke() -> None:
-        print("[smoke] loading proxy pool ...", file=sys.stderr)
-        pool, _ = await asyncio.get_running_loop().run_in_executor(None, load_backfill_pool)
-        print(f"[smoke] pool: {len(pool)} raw proxies", file=sys.stderr)
-
-        cm        = PersistentCooldownManager()
-        urls      = sample_urls(500)[:N_URLS]
-        url_queue = asyncio.Queue()
-        [url_queue.put_nowait(u) for u in urls]
-        print(f"[smoke] {N_URLS} URLs / {N_SLOTS} slots:", file=sys.stderr)
-        [print(f"  {u}", file=sys.stderr) for u in urls]
-
-        out_dir = Path(__file__).parent / "smoke_output"
-        t0      = time.monotonic()
-
-        try:
-            state = await asyncio.wait_for(
-                run_riding_pool(url_queue, pool, cm, out_dir,
-                                burn_threshold=2, n_slots=N_SLOTS, page_timeout_ms=8000),
-                timeout=TIMEOUT_S,
-            )
-            state_timeout = False
-        except asyncio.TimeoutError:
-            print("[smoke] TIMEOUT — partial results follow", file=sys.stderr)
-            state_timeout = True
-            state = None
-
-        elapsed   = time.monotonic() - t0
-        raw_dir   = out_dir / "raw"
-        raw_files = sorted(raw_dir.glob("*.html")) if raw_dir.exists() else []
-
-        report = {
-            "elapsed_s":      round(elapsed, 1),
-            "timeout":        state_timeout,
-            "n_ok":           state.n_ok           if state else "?",
-            "n_regwall":      state.n_regwall       if state else "?",
-            "n_failed":       state.n_failed        if state else "?",
-            "n_connect_fail": state.n_connect_fail  if state else "?",
-            "termination":    state.termination     if state else "timeout",
-            "proxies_used":   len(state.ride_records) if state else "?",
-            "raw_files":      len(raw_files),
-        }
-        print(json.dumps(report, indent=2))
-        for f in raw_files[:3]:
-            print(f"  raw/{f.name}: {f.stat().st_size:,} bytes")
-
-    asyncio.run(smoke())
+    main()

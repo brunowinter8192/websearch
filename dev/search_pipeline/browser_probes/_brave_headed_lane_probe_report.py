@@ -37,6 +37,24 @@ def write_report(records: list[dict], report_dir: Path, latency_gate_s: float) -
     return path
 
 
+def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
+    ms = sorted(r["elapsed_ms"] for r in records)
+    n = len(ms)
+    median = ms[n // 2] if n % 2 else (ms[n // 2 - 1] + ms[n // 2]) // 2
+    return ms[0], median, ms[-1]
+
+
+def _longest_clean_run(records: list[dict]) -> int:
+    best = cur = 0
+    for r in records:
+        if r["status"] == "OK":
+            cur += 1
+            best = max(best, cur)
+        else:
+            cur = 0
+    return best
+
+
 def _render_title_verdict(ts: str, verdict: str) -> list[str]:
     return [
         f"# Brave Headed-Background Lane Probe — {ts}",
@@ -132,21 +150,3 @@ def _render_non_ok(records: list[dict]) -> list[str]:
                 lines.append(f"- **Diagnosis:** `{json.dumps(r['diag'])}`")
             lines.append("")
     return lines
-
-
-def _latency_stats(records: list[dict]) -> tuple[int, int, int]:
-    ms = sorted(r["elapsed_ms"] for r in records)
-    n = len(ms)
-    median = ms[n // 2] if n % 2 else (ms[n // 2 - 1] + ms[n // 2]) // 2
-    return ms[0], median, ms[-1]
-
-
-def _longest_clean_run(records: list[dict]) -> int:
-    best = cur = 0
-    for r in records:
-        if r["status"] == "OK":
-            cur += 1
-            best = max(best, cur)
-        else:
-            cur = 0
-    return best

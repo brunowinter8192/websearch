@@ -26,6 +26,7 @@ from _04_replay import (
     replay_httpx,
 )
 from _04_report import write_report
+import argparse
 
 OUTPUT_DIR = Path(__file__).parent / "04_output"
 
@@ -33,6 +34,24 @@ CURSOR_LOOP_CALLS = 3
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="CoinDesk Timeline API HTTP replay probe")
+    _add_arguments(parser)
+    parser.add_argument("--rate-test", action="store_true",
+                        help="after the main loop, rerun with 2s delay to distinguish time- vs count-limit")
+    args = parser.parse_args()
+    asyncio.run(timeline_replay_workflow(loop=args.loop, delay=args.delay, rate_test=args.rate_test))
+
+
+# FUNCTIONS
+
+def _add_arguments(parser):
+    parser.add_argument("--loop", type=int, default=CURSOR_LOOP_CALLS, metavar="N",
+                        help=f"cursor-loop calls after initial capture (default: {CURSOR_LOOP_CALLS})")
+    parser.add_argument("--delay", type=float, default=CALL_DELAY, metavar="S",
+                        help=f"seconds between cursor calls (default: {CALL_DELAY})")
+
 
 async def timeline_replay_workflow(loop: int = CURSOR_LOOP_CALLS, delay: float = CALL_DELAY, rate_test: bool = False) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,7 +94,6 @@ async def timeline_replay_workflow(loop: int = CURSOR_LOOP_CALLS, delay: float =
         await teardown_replay_session(tab, chrome, port, session_dir)
 
 
-# FUNCTIONS
 def extract_and_replay(timeline_entry: dict) -> dict:
     api_url = timeline_entry["request"]["url"]
     raw_headers = {h["name"]: h["value"] for h in timeline_entry["request"]["headers"]}
@@ -136,13 +154,4 @@ async def teardown_replay_session(tab, chrome, port: int, session_dir: str) -> N
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="CoinDesk Timeline API HTTP replay probe")
-    parser.add_argument("--loop", type=int, default=CURSOR_LOOP_CALLS, metavar="N",
-                        help=f"cursor-loop calls after initial capture (default: {CURSOR_LOOP_CALLS})")
-    parser.add_argument("--delay", type=float, default=CALL_DELAY, metavar="S",
-                        help=f"seconds between cursor calls (default: {CALL_DELAY})")
-    parser.add_argument("--rate-test", action="store_true",
-                        help="after the main loop, rerun with 2s delay to distinguish time- vs count-limit")
-    args = parser.parse_args()
-    asyncio.run(timeline_replay_workflow(loop=args.loop, delay=args.delay, rate_test=args.rate_test))
+    main()

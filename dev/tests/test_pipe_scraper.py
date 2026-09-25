@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import json
 from datetime import datetime, timezone
 
@@ -9,6 +10,8 @@ from src.crawler import pipe_scraper_acquisition
 from src.crawler.pipe_scrape_logger import log_pipe_scrape
 from dev.tests._pipe_scraper_fakes import _now_ts, _FakeResult, _FakeCrawler, _install_fake_pacing
 
+
+# FUNCTIONS
 
 def test_log_pipe_scrape_writes_jsonl_record(tmp_path, monkeypatch):
     log_file = tmp_path / "pipe_scrape_log.jsonl"
@@ -201,21 +204,6 @@ async def test_scrape_all_records_carry_config_hash_and_config(tmp_path, monkeyp
     assert records[0]["config"]["remove_consent_popups"] is True
 
 
-class _FakeRedirectingCrawler:
-    def __init__(self, *a, **kw):
-        pass
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def arun(self, url, config=None):
-        return _FakeResult(raw_markdown="x" * 500,
-                            redirected_url="https://platform.claude.com/docs/en/api/overview")
-
-
 @pytest.mark.asyncio
 async def test_landed_url_recorded_on_plain_success_with_redirect(tmp_path, monkeypatch):
     log_file = tmp_path / "pipe_scrape_log.jsonl"
@@ -248,3 +236,18 @@ async def test_landed_url_recorded_on_plain_success_no_redirect(tmp_path, monkey
     r = records[0]
     assert r["landed_url"] is None
     assert "same_target" not in r
+
+
+class _FakeRedirectingCrawler:
+    def __init__(self, *a, **kw):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def arun(self, url, config=None):
+        return _FakeResult(raw_markdown="x" * 500,
+                            redirected_url="https://platform.claude.com/docs/en/api/overview")

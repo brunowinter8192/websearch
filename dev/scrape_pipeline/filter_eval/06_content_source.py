@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import asyncio
 import json
@@ -71,6 +72,75 @@ MARKDOWN_FIELD = {
 
 
 # ORCHESTRATOR
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Compare content_source configs across crawled domains")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--domain", help="Test single domain by crawl report label")
+    group.add_argument("--url", help="Test single URL directly")
+    group.add_argument("--all", action="store_true", help="Test all domains from crawling reports")
+    args = parser.parse_args()
+
+    if args.url:
+        asyncio.run(run_content_source_comparison([args.url], "single_url"))
+    elif args.domain:
+        crawl_report = find_crawl_report(args.domain)
+        if not crawl_report:
+            _print_no_crawl_report(args)
+            _list_crawl_reports()
+            exit(1)
+        urls = load_urls_from_crawl_report(crawl_report)
+        _print_domain_urls_max(args, urls)
+        asyncio.run(run_content_source_comparison(urls, args.domain))
+    else:
+        crawl_reports = find_all_crawl_reports()
+        if not crawl_reports:
+            _print_no_crawl_reports()
+            print("Run explore pipeline first: python dev/explore_pipeline/01_discovery.py --all")
+            exit(1)
+        _compare_reports(crawl_reports)
+
+
+# FUNCTIONS
+
+def find_crawl_report(label: str) -> Path | None:
+    matches = sorted(CRAWL_REPORTS_DIR.glob(f"{label}_*.json"))
+    return matches[-1] if matches else None
+
+
+def _print_no_crawl_report(args):
+    print(f"No crawl report found for: {args.domain}")
+    print(f"Available reports in {CRAWL_REPORTS_DIR}:")
+
+
+def _list_crawl_reports():
+    for p in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
+        print(f"  {p.name}")
+
+
+def _print_domain_urls_max(args, urls):
+    print(f"Domain: {args.domain} ({len(urls)} URLs, max {MAX_URLS_PER_DOMAIN})")
+
+
+def find_all_crawl_reports() -> list[tuple[str, Path]]:
+    reports = []
+    for path in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
+        label = path.stem.rsplit("_", 2)[0]
+        reports.append((label, path))
+    return reports
+
+
+def _print_no_crawl_reports():
+    print(f"No crawl reports found in {CRAWL_REPORTS_DIR}")
+
+
+def _compare_reports(crawl_reports):
+    for label, path in crawl_reports:
+        urls = load_urls_from_crawl_report(path)
+        print(f"\nDomain: {label} ({len(urls)} URLs, max {MAX_URLS_PER_DOMAIN})")
+        asyncio.run(run_content_source_comparison(urls, label))
+
+
 async def run_content_source_comparison(urls: list[str], label: str):
     browser_config = BrowserConfig(headless=True, verbose=False)
     domain_dir = OUTPUT_DIR / label
@@ -91,7 +161,12 @@ async def run_content_source_comparison(urls: list[str], label: str):
     print(f"  Output: {domain_dir}/")
 
 
-# FUNCTIONS
+def load_urls_from_crawl_report(report_path: Path) -> list[str]:
+    with open(report_path) as f:
+        data = json.load(f)
+    urls = [u["url"] for u in data["urls"] if u["has_content"]]
+    return urls[:MAX_URLS_PER_DOMAIN]
+
 
 async def scrape_with_semaphore(sem, crawler, url, domain_dir, index, total):
     async with sem:
@@ -128,54 +203,5 @@ def url_to_slug(url: str) -> str:
     return parts[:80]
 
 
-def load_urls_from_crawl_report(report_path: Path) -> list[str]:
-    with open(report_path) as f:
-        data = json.load(f)
-    urls = [u["url"] for u in data["urls"] if u["has_content"]]
-    return urls[:MAX_URLS_PER_DOMAIN]
-
-
-def find_crawl_report(label: str) -> Path | None:
-    matches = sorted(CRAWL_REPORTS_DIR.glob(f"{label}_*.json"))
-    return matches[-1] if matches else None
-
-
-def find_all_crawl_reports() -> list[tuple[str, Path]]:
-    reports = []
-    for path in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
-        label = path.stem.rsplit("_", 2)[0]
-        reports.append((label, path))
-    return reports
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compare content_source configs across crawled domains")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--domain", help="Test single domain by crawl report label")
-    group.add_argument("--url", help="Test single URL directly")
-    group.add_argument("--all", action="store_true", help="Test all domains from crawling reports")
-    args = parser.parse_args()
-
-    if args.url:
-        asyncio.run(run_content_source_comparison([args.url], "single_url"))
-    elif args.domain:
-        crawl_report = find_crawl_report(args.domain)
-        if not crawl_report:
-            print(f"No crawl report found for: {args.domain}")
-            print(f"Available reports in {CRAWL_REPORTS_DIR}:")
-            for p in sorted(CRAWL_REPORTS_DIR.glob("*.json")):
-                print(f"  {p.name}")
-            exit(1)
-        urls = load_urls_from_crawl_report(crawl_report)
-        print(f"Domain: {args.domain} ({len(urls)} URLs, max {MAX_URLS_PER_DOMAIN})")
-        asyncio.run(run_content_source_comparison(urls, args.domain))
-    else:
-        crawl_reports = find_all_crawl_reports()
-        if not crawl_reports:
-            print(f"No crawl reports found in {CRAWL_REPORTS_DIR}")
-            print("Run explore pipeline first: python dev/explore_pipeline/01_discovery.py --all")
-            exit(1)
-        for label, path in crawl_reports:
-            urls = load_urls_from_crawl_report(path)
-            print(f"\nDomain: {label} ({len(urls)} URLs, max {MAX_URLS_PER_DOMAIN})")
-            asyncio.run(run_content_source_comparison(urls, label))
+    main()

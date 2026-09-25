@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 from unittest.mock import MagicMock, call, patch
 
 import httpx
@@ -5,6 +6,8 @@ import pytest
 
 import src.news.engine.proxy_pool.pool_retry as pool_retry
 
+
+# FUNCTIONS
 
 def test_fetch_with_retry_recovers_after_transient_failure():
     call_count = [0]

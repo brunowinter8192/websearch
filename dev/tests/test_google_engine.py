@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.search.engines import google as google_mod
@@ -6,6 +7,8 @@ from dev.search_pipeline._google_fixture import (
     ResultSpec, HAPPY_SPECS, start_fixture_server, stop_fixture_server, goto_url,
 )
 
+
+# FUNCTIONS
 
 def test_build_results_maps_title_snippet_date_and_position():
     items = [
@@ -45,13 +48,6 @@ def test_build_results_empty_items_produces_clean_empty_not_exception():
 def test_js_parse_no_longer_prioritizes_wHYlTd_as_snippet_selector():
     assert ".wHYlTd" not in google_mod._JS_PARSE
     assert ".VwiC3b" in google_mod._JS_PARSE
-
-
-def _items_from_specs(specs: list[ResultSpec], port: int) -> list[dict]:
-    return [
-        {"url": goto_url(port, s.token), "title": s.title, "snippet": s.snippet, "date": s.date}
-        for s in specs
-    ]
 
 
 @pytest.mark.asyncio
@@ -140,3 +136,10 @@ async def test_resolve_urls_on_empty_input_is_a_clean_noop():
     resolved, stats = await _resolve_urls([])
     assert resolved == []
     assert stats == {"found": 0, "resolved": 0, "dropped": 0, "reasons": {}}
+
+
+def _items_from_specs(specs: list[ResultSpec], port: int) -> list[dict]:
+    return [
+        {"url": goto_url(port, s.token), "title": s.title, "snippet": s.snippet, "date": s.date}
+        for s in specs
+    ]

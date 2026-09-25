@@ -10,40 +10,6 @@ SENTENCE_END_CHARS = (".", "!", "?")
 
 # FUNCTIONS
 
-def is_token(word: str) -> bool:
-    return any(ch.isalpha() or ch.isdigit() for ch in word)
-
-
-def tokenize(text: str) -> list[str]:
-    return [w for w in text.split() if is_token(w)]
-
-
-def is_comment_line(line: str) -> bool:
-    return bool(COMMENT_LINE_RE.match(line.strip()))
-
-
-def is_heading_line(line: str) -> bool:
-    return line.lstrip().startswith("#")
-
-
-def contains_sentence_end(text: str) -> bool:
-    return any(ch in text for ch in SENTENCE_END_CHARS)
-
-
-def process_line(line: str) -> tuple[str, int]:
-    no_images = IMAGE_RE.sub("", line)
-    link_tokens = 0
-
-    def _reduce_link(match: re.Match) -> str:
-        nonlocal link_tokens
-        link_text = match.group(1)
-        link_tokens += len(tokenize(link_text))
-        return link_text
-
-    visible_text = LINK_RE.sub(_reduce_link, no_images)
-    return visible_text, link_tokens
-
-
 def read_blocks(path: Path) -> list[dict]:
     blocks = []
     with open(path, encoding="utf-8") as f:
@@ -66,3 +32,37 @@ def read_blocks(path: Path) -> list[dict]:
                 "has_sentence_end": contains_sentence_end(visible_text),
             })
     return blocks
+
+
+def is_comment_line(line: str) -> bool:
+    return bool(COMMENT_LINE_RE.match(line.strip()))
+
+
+def process_line(line: str) -> tuple[str, int]:
+    no_images = IMAGE_RE.sub("", line)
+    link_tokens = 0
+
+    def _reduce_link(match: re.Match) -> str:
+        nonlocal link_tokens
+        link_text = match.group(1)
+        link_tokens += len(tokenize(link_text))
+        return link_text
+
+    visible_text = LINK_RE.sub(_reduce_link, no_images)
+    return visible_text, link_tokens
+
+
+def is_heading_line(line: str) -> bool:
+    return line.lstrip().startswith("#")
+
+
+def contains_sentence_end(text: str) -> bool:
+    return any(ch in text for ch in SENTENCE_END_CHARS)
+
+
+def tokenize(text: str) -> list[str]:
+    return [w for w in text.split() if is_token(w)]
+
+
+def is_token(word: str) -> bool:
+    return any(ch.isalpha() or ch.isdigit() for ch in word)

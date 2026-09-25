@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import hashlib
 import json
 from datetime import datetime
@@ -14,6 +12,7 @@ FRESHNESS_LOG   = SCRIPT_DIR / "freshness_log.md"
 SNAPSHOTS_DIR   = SCRIPT_DIR / "source_snapshots"
 
 CF_RATE_MIN_N = 30
+
 
 # ORCHESTRATOR
 
@@ -37,6 +36,7 @@ def update_and_flush(
     diffs = compute_freshness_diffs(source_results)
     save_snapshots(source_results, ts)
     append_freshness_log(diffs, ts)
+
 
 # FUNCTIONS
 
@@ -63,61 +63,6 @@ def compute_run_stats(
     _count_proxy_urls(stats, cf_passing, hp_to_sources, "cf_passed")
 
     return stats
-
-
-def _init_stats(src_proxies: dict[str, set[str]]) -> dict[str, dict]:
-    return {
-        url: {"raw_unique": len(proxies), "checked": 0, "alive": 0,
-              "cf_checked": 0, "cf_passed": 0, "unique_latest": 0}
-        for url, proxies in src_proxies.items()
-    }
-
-
-def _count_unique_latest(
-    stats: dict[str, dict],
-    src_proxies: dict[str, set[str]],
-    hp_to_sources: dict[str, set[str]],
-) -> None:
-    for url, proxies in src_proxies.items():
-        stats[url]["unique_latest"] = sum(
-            1 for hp in proxies if len(hp_to_sources.get(hp, set())) == 1
-        )
-
-
-def _count_checked(
-    stats: dict[str, dict],
-    sample: list[tuple[str, str]],
-    hp_to_sources: dict[str, set[str]],
-) -> None:
-    for _proto, hp in sample:
-        for src_url in hp_to_sources.get(hp, set()):
-            if src_url in stats:
-                stats[src_url]["checked"] += 1
-
-
-def _count_alive(
-    stats: dict[str, dict],
-    liveness_results: list[dict],
-    hp_to_sources: dict[str, set[str]],
-) -> None:
-    for r in liveness_results:
-        if r["alive"]:
-            for src_url in hp_to_sources.get(r["host_port"], set()):
-                if src_url in stats:
-                    stats[src_url]["alive"] += 1
-
-
-def _count_proxy_urls(
-    stats: dict[str, dict],
-    proxy_urls: list[str],
-    hp_to_sources: dict[str, set[str]],
-    field: str,
-) -> None:
-    for purl in proxy_urls:
-        hp = purl.split("://")[1]
-        for src_url in hp_to_sources.get(hp, set()):
-            if src_url in stats:
-                stats[src_url][field] += 1
 
 
 def load_scoreboard() -> dict:
@@ -158,15 +103,6 @@ def save_scoreboard(scoreboard: dict) -> None:
     SCOREBOARD_JSON.write_text(
         json.dumps(scoreboard, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-
-
-def _rank_score(entry: dict) -> float:
-    if entry["cf_checked"] >= CF_RATE_MIN_N:
-        return entry["cf_passed"] / entry["cf_checked"]
-    alive_rate  = entry["alive"] / entry["checked"] if entry["checked"] else 0.0
-    raw_per_run = entry["raw_unique"] / entry["runs"] if entry["runs"] else 1.0
-    exclusivity = min(1.0, entry["unique_latest"] / raw_per_run) if raw_per_run else 0.0
-    return alive_rate * exclusivity
 
 
 def render_scoreboard_md(scoreboard: dict, ts: datetime) -> None:
@@ -280,8 +216,68 @@ def append_freshness_log(diffs: list[dict], ts: datetime) -> None:
     print(f"Freshness log → {FRESHNESS_LOG}")
 
 
-def _source_id(url: str) -> str:
-    return hashlib.sha1(url.encode()).hexdigest()[:12]
+def _init_stats(src_proxies: dict[str, set[str]]) -> dict[str, dict]:
+    return {
+        url: {"raw_unique": len(proxies), "checked": 0, "alive": 0,
+              "cf_checked": 0, "cf_passed": 0, "unique_latest": 0}
+        for url, proxies in src_proxies.items()
+    }
+
+
+def _count_unique_latest(
+    stats: dict[str, dict],
+    src_proxies: dict[str, set[str]],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
+    for url, proxies in src_proxies.items():
+        stats[url]["unique_latest"] = sum(
+            1 for hp in proxies if len(hp_to_sources.get(hp, set())) == 1
+        )
+
+
+def _count_checked(
+    stats: dict[str, dict],
+    sample: list[tuple[str, str]],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
+    for _proto, hp in sample:
+        for src_url in hp_to_sources.get(hp, set()):
+            if src_url in stats:
+                stats[src_url]["checked"] += 1
+
+
+def _count_alive(
+    stats: dict[str, dict],
+    liveness_results: list[dict],
+    hp_to_sources: dict[str, set[str]],
+) -> None:
+    for r in liveness_results:
+        if r["alive"]:
+            for src_url in hp_to_sources.get(r["host_port"], set()):
+                if src_url in stats:
+                    stats[src_url]["alive"] += 1
+
+
+def _count_proxy_urls(
+    stats: dict[str, dict],
+    proxy_urls: list[str],
+    hp_to_sources: dict[str, set[str]],
+    field: str,
+) -> None:
+    for purl in proxy_urls:
+        hp = purl.split("://")[1]
+        for src_url in hp_to_sources.get(hp, set()):
+            if src_url in stats:
+                stats[src_url][field] += 1
+
+
+def _rank_score(entry: dict) -> float:
+    if entry["cf_checked"] >= CF_RATE_MIN_N:
+        return entry["cf_passed"] / entry["cf_checked"]
+    alive_rate  = entry["alive"] / entry["checked"] if entry["checked"] else 0.0
+    raw_per_run = entry["raw_unique"] / entry["runs"] if entry["runs"] else 1.0
+    exclusivity = min(1.0, entry["unique_latest"] / raw_per_run) if raw_per_run else 0.0
+    return alive_rate * exclusivity
 
 
 def _source_label(url: str) -> str:
@@ -289,3 +285,7 @@ def _source_label(url: str) -> str:
         return f"proxyscrape/{url.split('protocol=')[-1]}"
     parts = url.rstrip("/").split("/")
     return "/".join(parts[-3:]) if len(parts) >= 3 else url
+
+
+def _source_id(url: str) -> str:
+    return hashlib.sha1(url.encode()).hexdigest()[:12]

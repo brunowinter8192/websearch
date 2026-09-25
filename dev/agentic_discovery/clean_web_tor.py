@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import re
 from pathlib import Path
 
@@ -13,6 +14,87 @@ UI_WIDGET_LINES = {
     "View for:",
     "Expand all Collapse all",
 }
+
+
+# ORCHESTRATOR
+
+def main() -> None:
+    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
+    if not files:
+        _print_no_files_found()
+        return
+
+    total_before, total_after, pattern_counts = _process_files(files)
+
+    reduction = _compute_reduction(total_after, total_before)
+
+    _print_report(len(files), pattern_counts, total_before, total_after, reduction)
+
+
+# FUNCTIONS
+
+def _print_no_files_found():
+    print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
+
+
+def _process_files(files: list) -> tuple[int, int, dict]:
+    total_before = 0
+    total_after = 0
+    pattern_counts = {
+        "footer_removed": 0,
+        "view_for_removed": 0,
+        "expand_collapse_removed": 0,
+    }
+
+    for path in files:
+        text_before = path.read_text(encoding="utf-8")
+        lines_before = text_before.splitlines()
+
+        has_footer, has_view_for, has_expand = _detect_patterns(lines_before)
+
+        before, after = clean_file(path)
+        total_before += before
+        total_after += after
+
+        if has_footer:
+            pattern_counts["footer_removed"] += 1
+        if has_view_for:
+            pattern_counts["view_for_removed"] += 1
+        if has_expand:
+            pattern_counts["expand_collapse_removed"] += 1
+
+    return total_before, total_after, pattern_counts
+
+
+def _compute_reduction(total_after, total_before):
+    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
+    return reduction
+
+
+def _print_report(num_files: int, pattern_counts: dict, total_before: int, total_after: int,
+                   reduction: float) -> None:
+    print(f"FILES PROCESSED: {num_files}")
+    print()
+    print("PATTERNS DETECTED:")
+    print(f"  - footer_block (Jobs/social/Copyleft): found in {pattern_counts['footer_removed']}/{num_files} files")
+    print(f"  - view_for_widget: found in {pattern_counts['view_for_removed']}/{num_files} files")
+    print(f"  - expand_collapse_widget: found in {pattern_counts['expand_collapse_removed']}/{num_files} files")
+    print()
+    print("CLEANUP RESULTS:")
+    print(f"  - Total chars before: {total_before:,}")
+    print(f"  - Total chars after:  {total_after:,}")
+    print(f"  - Reduction: {reduction:.1f}%")
+    print()
+    print(f"SCRIPT: dev/agentic_discovery/clean_web_tor.py")
+    print(f"OUTPUT: in-place (originals overwritten)")
+    print(f"STATUS: CLEAN")
+
+
+def _detect_patterns(lines_before: list) -> tuple[bool, bool, bool]:
+    has_footer = any(FOOTER_START_PATTERN.match(l) for l in lines_before)
+    has_view_for = any(l.strip() in {"View for: ", "View for:"} for l in lines_before)
+    has_expand = any("Expand all Collapse all" in l for l in lines_before)
+    return has_footer, has_view_for, has_expand
 
 
 def clean_file(path: Path) -> tuple[int, int]:
@@ -46,74 +128,6 @@ def clean_file(path: Path) -> tuple[int, int]:
 
     path.write_text(result, encoding="utf-8")
     return chars_before, len(result)
-
-
-def _detect_patterns(lines_before: list) -> tuple[bool, bool, bool]:
-    has_footer = any(FOOTER_START_PATTERN.match(l) for l in lines_before)
-    has_view_for = any(l.strip() in {"View for: ", "View for:"} for l in lines_before)
-    has_expand = any("Expand all Collapse all" in l for l in lines_before)
-    return has_footer, has_view_for, has_expand
-
-
-def _process_files(files: list) -> tuple[int, int, dict]:
-    total_before = 0
-    total_after = 0
-    pattern_counts = {
-        "footer_removed": 0,
-        "view_for_removed": 0,
-        "expand_collapse_removed": 0,
-    }
-
-    for path in files:
-        text_before = path.read_text(encoding="utf-8")
-        lines_before = text_before.splitlines()
-
-        has_footer, has_view_for, has_expand = _detect_patterns(lines_before)
-
-        before, after = clean_file(path)
-        total_before += before
-        total_after += after
-
-        if has_footer:
-            pattern_counts["footer_removed"] += 1
-        if has_view_for:
-            pattern_counts["view_for_removed"] += 1
-        if has_expand:
-            pattern_counts["expand_collapse_removed"] += 1
-
-    return total_before, total_after, pattern_counts
-
-
-def _print_report(num_files: int, pattern_counts: dict, total_before: int, total_after: int,
-                   reduction: float) -> None:
-    print(f"FILES PROCESSED: {num_files}")
-    print()
-    print("PATTERNS DETECTED:")
-    print(f"  - footer_block (Jobs/social/Copyleft): found in {pattern_counts['footer_removed']}/{num_files} files")
-    print(f"  - view_for_widget: found in {pattern_counts['view_for_removed']}/{num_files} files")
-    print(f"  - expand_collapse_widget: found in {pattern_counts['expand_collapse_removed']}/{num_files} files")
-    print()
-    print("CLEANUP RESULTS:")
-    print(f"  - Total chars before: {total_before:,}")
-    print(f"  - Total chars after:  {total_after:,}")
-    print(f"  - Reduction: {reduction:.1f}%")
-    print()
-    print(f"SCRIPT: dev/agentic_discovery/clean_web_tor.py")
-    print(f"OUTPUT: in-place (originals overwritten)")
-    print(f"STATUS: CLEAN")
-
-
-def main() -> None:
-    files = sorted(INPUT_DIR.glob(FILE_PATTERN))
-    if not files:
-        print(f"No files found matching {INPUT_DIR / FILE_PATTERN}")
-        return
-
-    total_before, total_after, pattern_counts = _process_files(files)
-
-    reduction = (1 - total_after / total_before) * 100 if total_before > 0 else 0
-
-    _print_report(len(files), pattern_counts, total_before, total_after, reduction)
 
 
 if __name__ == "__main__":

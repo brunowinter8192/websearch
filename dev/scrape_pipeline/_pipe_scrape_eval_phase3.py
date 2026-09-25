@@ -17,6 +17,44 @@ PHASE3_RETRY_COOLDOWN_S = 60.0
 
 # FUNCTIONS
 
+async def phase3_full_run(urls: list[str], delay_s: float, concurrency: int = 5) -> None:
+    print(f"Phase 3: {len(urls)} URLs | c={concurrency} | delay={delay_s}s | "
+          f"batch={PHASE3_BATCH_SIZE} | inter_batch={PHASE3_INTER_BATCH_S}s")
+
+    print("\nStep 1: WAF probe (up to 10min wait) ...")
+    clear = await waf_probe_wait(urls, n=3, max_attempts=10, wait_s=60.0)
+    if not clear:
+        print("ERROR: WAF ban did not lift — aborting Phase 3")
+        sys.exit(1)
+
+    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
+    output_dir = DATA_DIR / f"full_run_{ts}"
+
+    t0 = time.time()
+    all_results, main_wall_s = await run_main_pass_step(urls, delay_s, concurrency, output_dir, t0)
+    m_main = compute_metrics(all_results)
+    waf_urls_main, waf_onset = summarize_main_pass(all_results, m_main, main_wall_s)
+
+    retry_results = await run_retry_pass_step(waf_urls_main, delay_s, concurrency, output_dir)
+
+    total_wall_s = time.time() - t0
+    final_results = merge_retry_results(all_results, retry_results)
+    m_final = compute_metrics(final_results)
+
+    report_path = write_phase3_report(
+        m_main=m_main, m_final=m_final,
+        wall_s_main=main_wall_s, wall_s_total=total_wall_s,
+        delay_s=delay_s, concurrency=concurrency,
+        waf_urls_main=waf_urls_main, waf_onset=waf_onset,
+        retry_results=retry_results,
+        output_dir=output_dir, ts=ts,
+    )
+    print(f"\nPhase 3 report: {report_path}")
+    print(f"Output dir:    {output_dir}")
+    print(f"FINAL: ok={m_final['ok']}/{m_final['total']} 429s={m_final['waf_429']} "
+          f"empty={m_final['empty']} bytes_p50={m_final['bytes_p50']:,} wall={total_wall_s:.0f}s")
+
+
 async def waf_probe_wait(
     urls: list[str],
     n: int = 3,
@@ -39,6 +77,76 @@ async def waf_probe_wait(
             await asyncio.sleep(wait_s)
     print(f"  WAF still active after {max_attempts} probe attempts — aborting")
     return False
+
+
+async def run_main_pass_step(
+    urls: list[str], delay_s: float, concurrency: int, output_dir: Path, t0: float,
+) -> tuple[list[dict], float]:
+    print(f"\nStep 2: Main pass — {len(urls)} URLs in batches of {PHASE3_BATCH_SIZE} ...")
+    all_results: list[dict] = []
+    batches = [urls[i:i + PHASE3_BATCH_SIZE] for i in range(0, len(urls), PHASE3_BATCH_SIZE)]
+
+    for batch_idx, batch in enumerate(batches):
+        offset = batch_idx * PHASE3_BATCH_SIZE
+        print(f"  Batch {batch_idx + 1}/{len(batches)} (URLs {offset}–{offset + len(batch) - 1}) ...",
+              flush=True)
+        results = await scrape_urls(
+            batch, delay_s=delay_s, page_timeout_ms=15000,
+            concurrency=concurrency, output_dir=output_dir,
+        )
+        for i, r in enumerate(results):
+            r['position'] = offset + i
+        all_results.extend(results)
+
+        b_ok = sum(1 for r in results if r['outcome'] == 'ok')
+        b_429 = sum(1 for r in results if r['outcome'] == 'waf_429')
+        b_empty = sum(1 for r in results if r['outcome'] == 'empty')
+        print(f"    ok={b_ok} empty={b_empty} 429s={b_429}")
+
+        if batch_idx < len(batches) - 1:
+            print(f"    pause {PHASE3_INTER_BATCH_S:.0f}s ...", flush=True)
+            await asyncio.sleep(PHASE3_INTER_BATCH_S)
+
+    main_wall_s = time.time() - t0
+    return all_results, main_wall_s
+
+
+def summarize_main_pass(all_results: list[dict], m_main: dict, main_wall_s: float) -> tuple[list[str], int | None]:
+    waf_urls_main = [r['url'] for r in all_results if r['outcome'] == 'waf_429']
+    waf_positions = sorted(r['position'] for r in all_results if r['outcome'] == 'waf_429')
+    waf_onset = waf_positions[0] if waf_positions else None
+    print(f"\n  Main pass done: ok={m_main['ok']}/{m_main['total']} 429s={m_main['waf_429']} "
+          f"onset={waf_onset} wall={main_wall_s:.0f}s")
+    return waf_urls_main, waf_onset
+
+
+async def run_retry_pass_step(
+    waf_urls_main: list[str], delay_s: float, concurrency: int, output_dir: Path,
+) -> list[dict]:
+    retry_results: list[dict] = []
+    if waf_urls_main:
+        print(f"\nStep 3: Retry pass — {len(waf_urls_main)} URLs after {PHASE3_RETRY_COOLDOWN_S:.0f}s cooldown ...")
+        await asyncio.sleep(PHASE3_RETRY_COOLDOWN_S)
+        retry_results = await scrape_urls(
+            waf_urls_main, delay_s=delay_s, page_timeout_ms=15000,
+            concurrency=concurrency, output_dir=output_dir,
+        )
+        r_ok = sum(1 for r in retry_results if r['outcome'] == 'ok')
+        r_429 = sum(1 for r in retry_results if r['outcome'] == 'waf_429')
+        print(f"  Retry: ok={r_ok}/{len(retry_results)} still-429={r_429}")
+    else:
+        print("\nStep 3: No retry needed (0 WAF 429s in main pass)")
+    return retry_results
+
+
+def merge_retry_results(all_results: list[dict], retry_results: list[dict]) -> list[dict]:
+    final_results = list(all_results)
+    if retry_results:
+        retry_map = {r['url']: r for r in retry_results if r['outcome'] == 'ok'}
+        for i, r in enumerate(final_results):
+            if r['url'] in retry_map:
+                final_results[i] = retry_map[r['url']]
+    return final_results
 
 
 def write_phase3_report(
@@ -156,111 +264,3 @@ def _format_phase3_waf_urls_section(waf_urls_main: list[str]) -> list:
             lines.append(f"- {url}")
         return lines
     return ["", "## WAF-429 URLs", "", "None — WAF-safe at full scale (c=5, batched+paced)."]
-
-
-async def phase3_full_run(urls: list[str], delay_s: float, concurrency: int = 5) -> None:
-    print(f"Phase 3: {len(urls)} URLs | c={concurrency} | delay={delay_s}s | "
-          f"batch={PHASE3_BATCH_SIZE} | inter_batch={PHASE3_INTER_BATCH_S}s")
-
-    print("\nStep 1: WAF probe (up to 10min wait) ...")
-    clear = await waf_probe_wait(urls, n=3, max_attempts=10, wait_s=60.0)
-    if not clear:
-        print("ERROR: WAF ban did not lift — aborting Phase 3")
-        sys.exit(1)
-
-    ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
-    output_dir = DATA_DIR / f"full_run_{ts}"
-
-    t0 = time.time()
-    all_results, main_wall_s = await run_main_pass_step(urls, delay_s, concurrency, output_dir, t0)
-    m_main = compute_metrics(all_results)
-    waf_urls_main, waf_onset = summarize_main_pass(all_results, m_main, main_wall_s)
-
-    retry_results = await run_retry_pass_step(waf_urls_main, delay_s, concurrency, output_dir)
-
-    total_wall_s = time.time() - t0
-    final_results = merge_retry_results(all_results, retry_results)
-    m_final = compute_metrics(final_results)
-
-    report_path = write_phase3_report(
-        m_main=m_main, m_final=m_final,
-        wall_s_main=main_wall_s, wall_s_total=total_wall_s,
-        delay_s=delay_s, concurrency=concurrency,
-        waf_urls_main=waf_urls_main, waf_onset=waf_onset,
-        retry_results=retry_results,
-        output_dir=output_dir, ts=ts,
-    )
-    print(f"\nPhase 3 report: {report_path}")
-    print(f"Output dir:    {output_dir}")
-    print(f"FINAL: ok={m_final['ok']}/{m_final['total']} 429s={m_final['waf_429']} "
-          f"empty={m_final['empty']} bytes_p50={m_final['bytes_p50']:,} wall={total_wall_s:.0f}s")
-
-
-async def run_main_pass_step(
-    urls: list[str], delay_s: float, concurrency: int, output_dir: Path, t0: float,
-) -> tuple[list[dict], float]:
-    print(f"\nStep 2: Main pass — {len(urls)} URLs in batches of {PHASE3_BATCH_SIZE} ...")
-    all_results: list[dict] = []
-    batches = [urls[i:i + PHASE3_BATCH_SIZE] for i in range(0, len(urls), PHASE3_BATCH_SIZE)]
-
-    for batch_idx, batch in enumerate(batches):
-        offset = batch_idx * PHASE3_BATCH_SIZE
-        print(f"  Batch {batch_idx + 1}/{len(batches)} (URLs {offset}–{offset + len(batch) - 1}) ...",
-              flush=True)
-        results = await scrape_urls(
-            batch, delay_s=delay_s, page_timeout_ms=15000,
-            concurrency=concurrency, output_dir=output_dir,
-        )
-        for i, r in enumerate(results):
-            r['position'] = offset + i
-        all_results.extend(results)
-
-        b_ok = sum(1 for r in results if r['outcome'] == 'ok')
-        b_429 = sum(1 for r in results if r['outcome'] == 'waf_429')
-        b_empty = sum(1 for r in results if r['outcome'] == 'empty')
-        print(f"    ok={b_ok} empty={b_empty} 429s={b_429}")
-
-        if batch_idx < len(batches) - 1:
-            print(f"    pause {PHASE3_INTER_BATCH_S:.0f}s ...", flush=True)
-            await asyncio.sleep(PHASE3_INTER_BATCH_S)
-
-    main_wall_s = time.time() - t0
-    return all_results, main_wall_s
-
-
-def summarize_main_pass(all_results: list[dict], m_main: dict, main_wall_s: float) -> tuple[list[str], int | None]:
-    waf_urls_main = [r['url'] for r in all_results if r['outcome'] == 'waf_429']
-    waf_positions = sorted(r['position'] for r in all_results if r['outcome'] == 'waf_429')
-    waf_onset = waf_positions[0] if waf_positions else None
-    print(f"\n  Main pass done: ok={m_main['ok']}/{m_main['total']} 429s={m_main['waf_429']} "
-          f"onset={waf_onset} wall={main_wall_s:.0f}s")
-    return waf_urls_main, waf_onset
-
-
-async def run_retry_pass_step(
-    waf_urls_main: list[str], delay_s: float, concurrency: int, output_dir: Path,
-) -> list[dict]:
-    retry_results: list[dict] = []
-    if waf_urls_main:
-        print(f"\nStep 3: Retry pass — {len(waf_urls_main)} URLs after {PHASE3_RETRY_COOLDOWN_S:.0f}s cooldown ...")
-        await asyncio.sleep(PHASE3_RETRY_COOLDOWN_S)
-        retry_results = await scrape_urls(
-            waf_urls_main, delay_s=delay_s, page_timeout_ms=15000,
-            concurrency=concurrency, output_dir=output_dir,
-        )
-        r_ok = sum(1 for r in retry_results if r['outcome'] == 'ok')
-        r_429 = sum(1 for r in retry_results if r['outcome'] == 'waf_429')
-        print(f"  Retry: ok={r_ok}/{len(retry_results)} still-429={r_429}")
-    else:
-        print("\nStep 3: No retry needed (0 WAF 429s in main pass)")
-    return retry_results
-
-
-def merge_retry_results(all_results: list[dict], retry_results: list[dict]) -> list[dict]:
-    final_results = list(all_results)
-    if retry_results:
-        retry_map = {r['url']: r for r in retry_results if r['outcome'] == 'ok'}
-        for i, r in enumerate(final_results):
-            if r['url'] in retry_map:
-                final_results[i] = retry_map[r['url']]
-    return final_results

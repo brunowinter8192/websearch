@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import sys
 from collections import defaultdict
@@ -14,25 +13,49 @@ from _lib.parse import parse_smoke_report
 from _lib.text  import strip_bloat, lexical_density
 
 REPORT_DIR = SCRIPT_DIR / "md"
-_smoke_candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
-if not _smoke_candidates:
-    raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
-SMOKE_REPORT = _smoke_candidates[0]
-
 MIN_FLOOR = 40
 
 
 # ORCHESTRATOR
 
 def run_simulation() -> None:
-    records = parse_smoke_report(SMOKE_REPORT)
-    print(f"Parsed {len(records)} records", file=sys.stderr)
-    results = [_select_new(r) for r in records]
+    smoke_report = _latest_smoke_report()
+    records = parse_smoke_report(smoke_report)
+    _print_parsed_records(records)
+    results = _compute_results(records)
     path = write_report(records, results)
-    print(f"Report: {path}", file=sys.stderr)
+    _print_report(path)
 
 
 # FUNCTIONS
+
+def _print_parsed_records(records):
+    print(f"Parsed {len(records)} records", file=sys.stderr)
+
+
+def _compute_results(records):
+    results = [_select_new(r) for r in records]
+    return results
+
+
+def write_report(records: list[dict], results: list) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"snippet_selection_{ts}.md"
+    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
+        _compute_aggregates(records, results)
+    L = (
+        _render_header(ts)
+        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
+        + _render_per_query_picks(records, results)
+        + _render_floor_cases(floor_records, floor_n)
+    )
+    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    return path
+
+
+def _print_report(path):
+    print(f"Report: {path}", file=sys.stderr)
+
 
 def _select_new(record: dict):
     candidates = {}
@@ -84,7 +107,7 @@ def _render_header(ts: str) -> list[str]:
     return [
         f"# Snippet Selection Simulator — {ts}",
         "",
-        f"Source: `{SMOKE_REPORT.name}`  ",
+        f"Source: `{_latest_smoke_report().name}`  ",
         f"Logic: highest `clean_len × lex_density`; MIN_FLOOR={MIN_FLOOR} chars (best-of-worst if all below).",
         "",
     ]
@@ -170,19 +193,11 @@ def _render_floor_cases(floor_records: list, floor_n: int) -> list[str]:
     return L
 
 
-def write_report(records: list[dict], results: list) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"snippet_selection_{ts}.md"
-    no_content, analyzed, floor_records, new_dist, class_dist, per_class_total, floor_n = \
-        _compute_aggregates(records, results)
-    L = (
-        _render_header(ts)
-        + _render_summary(new_dist, analyzed, no_content, floor_n, per_class_total, class_dist)
-        + _render_per_query_picks(records, results)
-        + _render_floor_cases(floor_records, floor_n)
-    )
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
-    return path
+def _latest_smoke_report() -> Path:
+    candidates = sorted(REPORT_DIR.glob("pipeline_smoke_*.md"), reverse=True)
+    if not candidates:
+        raise FileNotFoundError(f"No pipeline_smoke_*.md found in {REPORT_DIR}")
+    return candidates[0]
 
 
 if __name__ == "__main__":

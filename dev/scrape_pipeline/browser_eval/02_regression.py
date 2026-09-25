@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import json
 import difflib
@@ -8,37 +7,84 @@ from pathlib import Path
 
 
 # ORCHESTRATOR
+
 def compare_all_baselines():
-    baselines_dir = Path(__file__).parent / "01_baselines"
+    baselines_dir = _compute_baselines_dir()
 
     if not baselines_dir.exists():
         print("No baselines directory found. Run run_baseline.py first.")
         return
 
-    domain_dirs = [d for d in baselines_dir.iterdir() if d.is_dir()]
+    domain_dirs = _compute_domain_dirs(baselines_dir)
 
     if not domain_dirs:
         print("No domain baselines found. Run run_baseline.py first.")
         return
 
-    print("=" * 80)
+    _print_top_rule()
     print("BASELINE COMPARISON REPORT")
+    _print_header_rule()
+
+
+    all_results = _compare_domains(domain_dirs)
+
+    save_comparison_report(all_results)
+
+    _print_bottom_rule(all_results)
+
+
+# FUNCTIONS
+
+def _compute_baselines_dir():
+    baselines_dir = Path(__file__).parent / "01_baselines"
+    return baselines_dir
+
+
+def _compute_domain_dirs(baselines_dir):
+    domain_dirs = [d for d in baselines_dir.iterdir() if d.is_dir()]
+    return domain_dirs
+
+
+def _print_top_rule():
     print("=" * 80)
 
-    all_results = []
 
+def _print_header_rule():
+    print("=" * 80)
+
+
+def _compare_domains(domain_dirs):
+    all_results = []
     for domain_dir in sorted(domain_dirs):
         result = compare_domain_iterations(domain_dir)
         if result:
             all_results.append(result)
+    return all_results
 
-    save_comparison_report(all_results)
 
+def save_comparison_report(results: list[dict]) -> None:
+    reports_dir = Path(__file__).parent / "md"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file = reports_dir / f"02_diff_report_{timestamp}.txt"
+
+    with open(report_file, 'w', encoding='utf-8') as f:
+        f.write("=" * 80 + "\n")
+        f.write("SCRAPING SUITE COMPARISON REPORT\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write("=" * 80 + "\n\n")
+
+        for result in results:
+            write_domain_result(f, result)
+
+    print(f"\nReport saved: {report_file}")
+
+
+def _print_bottom_rule(all_results):
     print("\n" + "=" * 80)
     print(f"Comparison completed: {len(all_results)} domains analyzed")
 
-
-# FUNCTIONS
 
 def compare_domain_iterations(domain_dir: Path) -> dict | None:
     metadata_files = sorted(domain_dir.glob("metadata_*.json"))
@@ -91,6 +137,22 @@ def compare_domain_iterations(domain_dir: Path) -> dict | None:
     }
 
 
+def write_domain_result(f, result: dict) -> None:
+    f.write(f"\nDOMAIN: {result['domain']}\n")
+    f.write("-" * 80 + "\n")
+    f.write(f"Iterations: {result['previous_iteration']} -> {result['latest_iteration']}\n")
+    f.write(f"Characters: {result['previous_chars']} -> {result['latest_chars']} ({result['char_diff']:+d}, {result['char_percent']:+.1f}%)\n")
+    f.write(f"Words: {result['previous_words']} -> {result['latest_words']} ({result['word_diff']:+d}, {result['word_percent']:+.1f}%)\n")
+    f.write(f"Status: {result['status']}\n")
+
+    if result['content_diff']:
+        f.write("\nCONTENT DIFF:\n")
+        f.write(result['content_diff'])
+        f.write("\n")
+
+    f.write("\n" + "=" * 80 + "\n")
+
+
 def load_metadata(metadata_file: Path) -> dict:
     with open(metadata_file, 'r') as f:
         return json.load(f)
@@ -128,41 +190,6 @@ def generate_content_diff(domain_dir: Path, prev_iter: int, latest_iter: int) ->
     )
 
     return '\n'.join(diff)
-
-
-def save_comparison_report(results: list[dict]) -> None:
-    reports_dir = Path(__file__).parent / "md"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_file = reports_dir / f"02_diff_report_{timestamp}.txt"
-
-    with open(report_file, 'w', encoding='utf-8') as f:
-        f.write("=" * 80 + "\n")
-        f.write("SCRAPING SUITE COMPARISON REPORT\n")
-        f.write(f"Generated: {datetime.now().isoformat()}\n")
-        f.write("=" * 80 + "\n\n")
-
-        for result in results:
-            write_domain_result(f, result)
-
-    print(f"\nReport saved: {report_file}")
-
-
-def write_domain_result(f, result: dict) -> None:
-    f.write(f"\nDOMAIN: {result['domain']}\n")
-    f.write("-" * 80 + "\n")
-    f.write(f"Iterations: {result['previous_iteration']} -> {result['latest_iteration']}\n")
-    f.write(f"Characters: {result['previous_chars']} -> {result['latest_chars']} ({result['char_diff']:+d}, {result['char_percent']:+.1f}%)\n")
-    f.write(f"Words: {result['previous_words']} -> {result['latest_words']} ({result['word_diff']:+d}, {result['word_percent']:+.1f}%)\n")
-    f.write(f"Status: {result['status']}\n")
-
-    if result['content_diff']:
-        f.write("\nCONTENT DIFF:\n")
-        f.write(result['content_diff'])
-        f.write("\n")
-
-    f.write("\n" + "=" * 80 + "\n")
 
 
 if __name__ == "__main__":

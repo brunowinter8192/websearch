@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import logging
@@ -17,8 +16,6 @@ from src.search.engines import scholar as scholar_engine
 from src.search.engines import duckduckgo as duckduckgo_engine
 from src.search.engines import openalex as openalex_engine
 from src.search.browser import close_browser
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 REPORT_DIR = SCRIPT_DIR / "md"
 
@@ -50,15 +47,34 @@ ENGINE_NOTES = {
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
+    engines = _compute_engines()
+
+    records = await _run_engines(engines)
+
+    report_path = write_report(records, REPORT_DIR)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+def _compute_engines():
     engines = [
         ("google",         google_engine),
         ("google_scholar", scholar_engine),
         ("duckduckgo",     duckduckgo_engine),
         ("openalex",       openalex_engine),
     ]
+    return engines
 
+
+async def _run_engines(engines):
     records = []
     try:
         for engine_name, engine in engines:
@@ -77,46 +93,7 @@ async def run_probe() -> None:
                     await asyncio.sleep(sleep_s)
     finally:
         await close_browser()
-
-    report_path = write_report(records, REPORT_DIR)
-    print(f"\nReport: {report_path}", file=sys.stderr)
-
-
-# FUNCTIONS
-
-async def probe_single(engine, engine_name: str, query: str, max_results: int) -> dict:
-    record = {
-        "engine":     engine_name,
-        "query":      query,
-        "requested":  max_results,
-        "returned":   0,
-        "latency_ms": 0,
-        "status":     "ERROR",
-    }
-    t0 = time.monotonic()
-    try:
-        results = (await engine.search_with_reason(query, "en", max_results))[0]
-        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
-        record["returned"] = len(results)
-        record["status"] = "OK" if results else "EMPTY"
-    except Exception as e:
-        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
-        record["status"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
-    return record
-
-
-def build_summary(records: list[dict]) -> dict[str, dict]:
-    seen_order = list(dict.fromkeys(r["engine"] for r in records))
-    summary = {}
-    for eng in seen_order:
-        eng_recs = [r for r in records if r["engine"] == eng]
-        summary[eng] = {
-            "requested":        eng_recs[0]["requested"],
-            "ceiling":          max(r["returned"] for r in eng_recs),
-            "median_latency_ms": round(median(r["latency_ms"] for r in eng_recs)),
-        }
-    return summary
+    return records
 
 
 def write_report(records: list[dict], report_dir: Path) -> Path:
@@ -162,6 +139,45 @@ def write_report(records: list[dict], report_dir: Path) -> Path:
 
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
+
+
+def _print_report(report_path):
+    print(f"\nReport: {report_path}", file=sys.stderr)
+
+
+async def probe_single(engine, engine_name: str, query: str, max_results: int) -> dict:
+    record = {
+        "engine":     engine_name,
+        "query":      query,
+        "requested":  max_results,
+        "returned":   0,
+        "latency_ms": 0,
+        "status":     "ERROR",
+    }
+    t0 = time.monotonic()
+    try:
+        results = (await engine.search_with_reason(query, "en", max_results))[0]
+        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
+        record["returned"] = len(results)
+        record["status"] = "OK" if results else "EMPTY"
+    except Exception as e:
+        record["latency_ms"] = round((time.monotonic() - t0) * 1000)
+        record["status"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
+    return record
+
+
+def build_summary(records: list[dict]) -> dict[str, dict]:
+    seen_order = list(dict.fromkeys(r["engine"] for r in records))
+    summary = {}
+    for eng in seen_order:
+        eng_recs = [r for r in records if r["engine"] == eng]
+        summary[eng] = {
+            "requested":        eng_recs[0]["requested"],
+            "ceiling":          max(r["returned"] for r in eng_recs),
+            "median_latency_ms": round(median(r["latency_ms"] for r in eng_recs)),
+        }
+    return summary
 
 
 if __name__ == "__main__":

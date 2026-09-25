@@ -9,28 +9,6 @@ PROD_SCRAPE_LOG_PATH = Path(
 
 # FUNCTIONS
 
-def _latest_ok_records_by_url_engine(log_path: Path) -> dict[tuple[str, str], dict]:
-    latest: dict[tuple[str, str], dict] = {}
-    with open(log_path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            if record.get("acquisition_error") or not record.get("bytes_returned"):
-                continue
-            if not record.get("content_path"):
-                continue
-            key = (record["url"], record.get("engine"))
-            if key not in latest or record["ts"] > latest[key]["ts"]:
-                latest[key] = record
-    return latest
-
-
-def _resolve_content_path(log_path: Path, record: dict) -> Path:
-    return log_path.parent / record["content_path"]
-
-
 def collect_pairs_from_scrape_log() -> list[dict]:
     latest = _latest_ok_records_by_url_engine(PROD_SCRAPE_LOG_PATH)
 
@@ -53,3 +31,25 @@ def collect_pairs_from_scrape_log() -> list[dict]:
             "camoufox_path": _resolve_content_path(PROD_SCRAPE_LOG_PATH, camoufox_record),
         })
     return pairs
+
+
+def _latest_ok_records_by_url_engine(log_path: Path) -> dict[tuple[str, str], dict]:
+    latest: dict[tuple[str, str], dict] = {}
+    with open(log_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            if record.get("acquisition_error") or not record.get("bytes_returned"):
+                continue
+            if not record.get("content_path"):
+                continue
+            key = (record["url"], record.get("engine"))
+            if key not in latest or record["ts"] > latest[key]["ts"]:
+                latest[key] = record
+    return latest
+
+
+def _resolve_content_path(log_path: Path, record: dict) -> Path:
+    return log_path.parent / record["content_path"]

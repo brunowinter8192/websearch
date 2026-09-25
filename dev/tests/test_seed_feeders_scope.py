@@ -1,11 +1,10 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.crawler.seed_feeders_scope import normalize_url, scope_and_dedup as _scope_and_dedup
 
 
-def scope_and_dedup(urls, seed_host):
-    return _scope_and_dedup(urls, seed_host)[0]
-
+# FUNCTIONS
 
 def test_normalize_url_lowercases_scheme_and_host():
     assert normalize_url("HTTP://Example.COM/a") == "http://example.com/a"
@@ -102,3 +101,7 @@ def test_scope_and_dedup_counts_dropped_malformed_urls():
     result, dropped = _scope_and_dedup(urls, "example.com")
     assert result == ["https://example.com/b"]
     assert dropped == 2
+
+
+def scope_and_dedup(urls, seed_host):
+    return _scope_and_dedup(urls, seed_host)[0]

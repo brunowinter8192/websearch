@@ -79,7 +79,22 @@ HARDCODED_PROPS = {
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     server, thread, port = start_probe_server()
+    artifact_url = _compute_artifact_url(port)
+    results = await _check_variants(artifact_url, server, thread)
+
+    orphans = check_orphans()
+    report_path = write_report(results, orphans, REPORT_DIR, VARIANTS, HARDCODED_PROPS)
+    _print_report(report_path, orphans)
+
+
+# FUNCTIONS
+
+def _compute_artifact_url(port):
     artifact_url = f"http://127.0.0.1:{port}/artifact"
+    return artifact_url
+
+
+async def _check_variants(artifact_url, server, thread):
     results = {}
     try:
         for variant in VARIANTS:
@@ -89,14 +104,18 @@ async def run_probe() -> None:
         results["headless_reference"] = await run_headless_reference(artifact_url)
     finally:
         stop_probe_server(server, thread)
+    return results
 
-    orphans = check_orphans()
-    report_path = write_report(results, orphans, REPORT_DIR, VARIANTS, HARDCODED_PROPS)
+
+def check_orphans() -> list[str]:
+    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def _print_report(report_path, orphans):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Orphan Chrome processes after run: {len(orphans)}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 async def run_variant(variant: dict, artifact_url: str) -> dict:
     profile = profile_dir(f"fp-{variant['slug']}")
@@ -169,11 +188,6 @@ async def extract_creepjs(tab) -> dict:
         "literal_lie_or_trust_wording_found": literal_lie_or_trust,
         "raw_excerpt": full[:1500],
     }
-
-
-def check_orphans() -> list[str]:
-    result = subprocess.run(["pgrep", "-fl", "browser-posture-probe"], capture_output=True, text=True)
-    return [line for line in result.stdout.splitlines() if line.strip()]
 
 
 if __name__ == "__main__":

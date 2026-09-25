@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import asyncio
 import os
 import signal
@@ -7,94 +8,7 @@ import unittest.mock
 from pathlib import Path
 
 
-def _build_job_records(t0, tmp_dir: Path) -> list:
-    from src.news.engine.proxy_riding.state import JobRecord
-
-    records = []
-    for i, url in enumerate(["https://www.coindesk.com/test/ok-1",
-                              "https://www.coindesk.com/test/ok-2"]):
-        records.append(JobRecord(
-            url=url,
-            url_hash=f"aabbcc{i:06d}",
-            status="ok",
-            char_count=5000,
-            markdown_len=2000,
-            elapsed_s=1.5,
-            error=None,
-            file=str(tmp_dir / "raw" / f"aabbcc{i:06d}.html"),
-            t_start=t0,
-            ride_position=i + 1,
-            proxy_str="http://proxy:8080",
-        ))
-    return records
-
-
-def _build_ride_record() -> object:
-    from src.news.engine.proxy_riding.state import RideRecord
-
-    return RideRecord(
-        proxy_str="http://proxy:8080",
-        proto="http",
-        host_port="proxy:8080",
-        n_ok=2,
-        n_regwall=1,
-        n_connect_fail=0,
-        n_failed=0,
-        n_urls_attempted=3,
-        burned_threshold=False,
-        burned_connect=False,
-        ride_s=4.5,
-        positions=[],
-    )
-
-
-def _make_state(tmp_dir: Path) -> object:
-    from src.news.engine.proxy_riding.state import RiderState
-    from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
-    from datetime import datetime, timezone
-
-    job_dir = tmp_dir / "scrape_jobs" / "20250101T000000Z"
-    q = asyncio.Queue()
-    q.put_nowait("https://www.coindesk.com/test/pending-1")
-
-    state = RiderState(
-        url_queue=q,
-        proxy_pool=[("http", "proxy:8080")],
-        cooldown_mgr=RidingCooldownManager(),
-        output_dir=tmp_dir,
-        job_dir=job_dir,
-        burn_threshold=2,
-        page_timeout_ms=8_000,
-        total_urls=3,
-        target_urls=frozenset([
-            "https://www.coindesk.com/test/ok-1",
-            "https://www.coindesk.com/test/ok-2",
-            "https://www.coindesk.com/test/pending-1",
-        ]),
-        stall_timeout_s=3600.0,
-    )
-    state.n_browsers = 1
-    state.n_slots    = 4
-    state.n_ok       = 2
-    state.n_regwall  = 1
-    state.n_failed   = 0
-    state.n_connect_fail = 0
-    state.last_progress_mono = time.monotonic()
-
-    t0 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-    state.t_job_start = t0
-
-    state.job_records.extend(_build_job_records(t0, tmp_dir))
-    state.done_urls = {
-        "https://www.coindesk.com/test/ok-1",
-        "https://www.coindesk.com/test/ok-2",
-    }
-
-    state.ride_records.append(_build_ride_record())
-
-    state.pool_samples = [(30.0, 500, 10), (60.0, 480, 30)]
-    return state
-
+# FUNCTIONS
 
 def test_abort_interrupted_sigint() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
@@ -163,3 +77,91 @@ def test_abort_interrupted_sigterm() -> None:
         md = (job_dir / "job.md").read_text()
         assert "interrupted" in md.lower(),      "termination=interrupted missing from job.md"
 
+
+def _make_state(tmp_dir: Path) -> object:
+    from src.news.engine.proxy_riding.state import RiderState
+    from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
+    from datetime import datetime, timezone
+
+    job_dir = tmp_dir / "scrape_jobs" / "20250101T000000Z"
+    q = asyncio.Queue()
+    q.put_nowait("https://www.coindesk.com/test/pending-1")
+
+    state = RiderState(
+        url_queue=q,
+        proxy_pool=[("http", "proxy:8080")],
+        cooldown_mgr=RidingCooldownManager(),
+        output_dir=tmp_dir,
+        job_dir=job_dir,
+        burn_threshold=2,
+        page_timeout_ms=8_000,
+        total_urls=3,
+        target_urls=frozenset([
+            "https://www.coindesk.com/test/ok-1",
+            "https://www.coindesk.com/test/ok-2",
+            "https://www.coindesk.com/test/pending-1",
+        ]),
+        stall_timeout_s=3600.0,
+    )
+    state.n_browsers = 1
+    state.n_slots    = 4
+    state.n_ok       = 2
+    state.n_regwall  = 1
+    state.n_failed   = 0
+    state.n_connect_fail = 0
+    state.last_progress_mono = time.monotonic()
+
+    t0 = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    state.t_job_start = t0
+
+    state.job_records.extend(_build_job_records(t0, tmp_dir))
+    state.done_urls = {
+        "https://www.coindesk.com/test/ok-1",
+        "https://www.coindesk.com/test/ok-2",
+    }
+
+    state.ride_records.append(_build_ride_record())
+
+    state.pool_samples = [(30.0, 500, 10), (60.0, 480, 30)]
+    return state
+
+
+def _build_job_records(t0, tmp_dir: Path) -> list:
+    from src.news.engine.proxy_riding.state import JobRecord
+
+    records = []
+    for i, url in enumerate(["https://www.coindesk.com/test/ok-1",
+                              "https://www.coindesk.com/test/ok-2"]):
+        records.append(JobRecord(
+            url=url,
+            url_hash=f"aabbcc{i:06d}",
+            status="ok",
+            char_count=5000,
+            markdown_len=2000,
+            elapsed_s=1.5,
+            error=None,
+            file=str(tmp_dir / "raw" / f"aabbcc{i:06d}.html"),
+            t_start=t0,
+            ride_position=i + 1,
+            proxy_str="http://proxy:8080",
+        ))
+    return records
+
+
+def _build_ride_record() -> object:
+    from src.news.engine.proxy_riding.state import RideRecord
+
+    return RideRecord(
+        proxy_str="http://proxy:8080",
+        proto="http",
+        host_port="proxy:8080",
+        n_ok=2,
+        n_regwall=1,
+        n_connect_fail=0,
+        n_failed=0,
+        n_urls_attempted=3,
+        burned_threshold=False,
+        burned_connect=False,
+        ride_s=4.5,
+        positions=[],
+    )

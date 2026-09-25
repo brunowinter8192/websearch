@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
-
 import argparse
 import asyncio
 import random
@@ -42,6 +40,7 @@ EVAL_LOADERS = {
     "roosterkid": ("roosterkid", load_roosterkid_proxies),
 }
 
+
 # ORCHESTRATOR
 
 async def probe_liveness_workflow() -> None:
@@ -63,48 +62,19 @@ async def probe_liveness_workflow() -> None:
         read_s=args.read_timeout,
     )
 
-    elapsed       = time.monotonic() - t0_wall
+    elapsed = _compute_elapsed(t0_wall)
     print_console_summary(results, args.concurrency, elapsed)
     append_sweep_log(
         results, ts, mode, len(entries),
         args.concurrency, args.connect_timeout, args.read_timeout, elapsed,
         skipped=skipped_count,
     )
-    if any(r["bucket"] == "unknown" for r in results):
-        write_unknown_log(results, ts)
+    _warn_on_unknown_bucket(results, ts)
     if args.source not in EVAL_ONLY_SOURCES:
         record_run(results, mode)
 
 
 # FUNCTIONS
-
-def load_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
-    if args.source in FILTERED_LOADERS:
-        return load_filtered_entries(args, FILTERED_LOADERS[args.source])
-    if args.source in EVAL_LOADERS:
-        return load_eval_entries(args.source, *EVAL_LOADERS[args.source])
-    return load_frozen_entries(args)
-
-
-def load_filtered_entries(args: argparse.Namespace, loader) -> tuple[list[tuple[str, str]], str, int]:
-    entries = loader()
-    to_check, skipped_fresh = partition_fresh(entries, args.recheck_window)
-    print(f"Freshness filter: {len(to_check)} to check, {len(skipped_fresh)} skipped (last_seen < {args.recheck_window}s ago)")
-    return to_check, args.source, len(skipped_fresh)
-
-
-def load_eval_entries(source: str, label: str, loader) -> tuple[list[tuple[str, str]], str, int]:
-    entries = loader()
-    print(f"{label} eval: {len(entries)} proxies (no freshness filter, no log write)")
-    return entries, source, 0
-
-
-def load_frozen_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
-    entries = load_frozen_pool(Path(args.input))
-    if args.sample:
-        return build_sample(entries, args.sample, args.seed), "sample", 0
-    return entries, "full", 0
-
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Proxy liveness checker + concurrency sweep")
@@ -145,19 +115,12 @@ async def freeze_pool() -> None:
     print(f"\nFrozen: {total:,} unique total | {ok}/{len(source_results)} sources OK | {elapsed:.1f}s")
 
 
-def load_frozen_pool(frozen_dir: Path) -> list[tuple[str, str]]:
-    entries: list[tuple[str, str]] = []
-    for proto in ("http", "socks4", "socks5"):
-        path = frozen_dir / f"{proto}.txt"
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line:
-                entries.append((proto, line))
-    return entries
-
-
-def build_sample(entries: list[tuple[str, str]], n: int, seed: int) -> list[tuple[str, str]]:
-    return random.Random(seed).sample(entries, min(n, len(entries)))
+def load_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
+    if args.source in FILTERED_LOADERS:
+        return load_filtered_entries(args, FILTERED_LOADERS[args.source])
+    if args.source in EVAL_LOADERS:
+        return load_eval_entries(args.source, *EVAL_LOADERS[args.source])
+    return load_frozen_entries(args)
 
 
 async def run_checks(
@@ -186,6 +149,51 @@ async def run_checks(
         await asyncio.gather(*[_one(i, proto, hp) for i, (proto, hp) in enumerate(entries)])
 
     return results
+
+
+def _compute_elapsed(t0_wall):
+    elapsed       = time.monotonic() - t0_wall
+    return elapsed
+
+
+def _warn_on_unknown_bucket(results, ts):
+    if any(r["bucket"] == "unknown" for r in results):
+        write_unknown_log(results, ts)
+
+
+def load_filtered_entries(args: argparse.Namespace, loader) -> tuple[list[tuple[str, str]], str, int]:
+    entries = loader()
+    to_check, skipped_fresh = partition_fresh(entries, args.recheck_window)
+    print(f"Freshness filter: {len(to_check)} to check, {len(skipped_fresh)} skipped (last_seen < {args.recheck_window}s ago)")
+    return to_check, args.source, len(skipped_fresh)
+
+
+def load_eval_entries(source: str, label: str, loader) -> tuple[list[tuple[str, str]], str, int]:
+    entries = loader()
+    print(f"{label} eval: {len(entries)} proxies (no freshness filter, no log write)")
+    return entries, source, 0
+
+
+def load_frozen_entries(args: argparse.Namespace) -> tuple[list[tuple[str, str]], str, int]:
+    entries = load_frozen_pool(Path(args.input))
+    if args.sample:
+        return build_sample(entries, args.sample, args.seed), "sample", 0
+    return entries, "full", 0
+
+
+def load_frozen_pool(frozen_dir: Path) -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    for proto in ("http", "socks4", "socks5"):
+        path = frozen_dir / f"{proto}.txt"
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                entries.append((proto, line))
+    return entries
+
+
+def build_sample(entries: list[tuple[str, str]], n: int, seed: int) -> list[tuple[str, str]]:
+    return random.Random(seed).sample(entries, min(n, len(entries)))
 
 
 if __name__ == "__main__":

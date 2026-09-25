@@ -11,7 +11,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 
 ## Modules
 
-### 19_books_probe.py (290 LOC)
+### 19_books_probe.py (320 LOC)
 
 **Purpose:** Book-domain inventory: appends `book` to twelve broad queries and records the raw domain pool, no classification.
 **Reads:** hardcoded 12-query set.
@@ -19,7 +19,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 20_docs_probe.py (85 LOC)
+### 20_docs_probe.py (119 LOC)
 
 **Purpose:** Docs-domain probe: appends `documentation` to twelve tech queries and evaluates heuristics H1-H13 against the URL pool.
 **Reads:** hardcoded query set via the config sibling.
@@ -35,7 +35,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Called by:** `20_docs_probe.py`, report sibling.
 **Calls out:** stdlib only.
 
-### _docs_probe_report.py (343 LOC)
+### _docs_probe_report.py (341 LOC)
 
 **Purpose:** Markdown report assembly for the docs probe: URL listings, domain frequency, heuristic coverage, miss-set analysis, run stats.
 **Reads:** none (arguments only).

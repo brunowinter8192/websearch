@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import pytest
 
 from src.crawler.navtree_feeder import navtree_feeder_workflow
@@ -10,16 +11,7 @@ from dev.url_discovery._fixture_site import (
 )
 
 
-@pytest.fixture(scope="module")
-def fixture_server():
-    server, thread, port = start_fixture_server()
-    yield port
-    stop_fixture_server(server, thread)
-
-
-def _fixture_url(port: int, path: str) -> str:
-    return f"http://{DEFAULT_HOST}:{port}{path}"
-
+# FUNCTIONS
 
 @pytest.mark.asyncio
 async def test_robots_feeder_against_fixture_collects_allow_and_disallow(fixture_server):
@@ -55,3 +47,14 @@ async def test_navtree_feeder_against_fixture_detects_rsc_app_router_shape(fixtu
     assert result.source == "navtree_tree"
     expected = {_fixture_url(fixture_server, p) for p in RSC_DEMO_CHILDREN}
     assert set(result.urls) == expected
+
+
+@pytest.fixture(scope="module")
+def fixture_server():
+    server, thread, port = start_fixture_server()
+    yield port
+    stop_fixture_server(server, thread)
+
+
+def _fixture_url(port: int, path: str) -> str:
+    return f"http://{DEFAULT_HOST}:{port}{path}"

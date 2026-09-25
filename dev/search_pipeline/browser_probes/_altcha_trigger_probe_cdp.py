@@ -4,39 +4,9 @@ INTERACTIVE_CANDIDATE_SELECTOR = "input[type=checkbox], input[type=radio], [role
 
 # FUNCTIONS
 
-async def cdp_get_document_root(cdp) -> int:
-    response = await cdp.send("DOM.getDocument", {"depth": -1, "pierce": True})
-    return response["root"]["nodeId"]
-
-
-async def cdp_query_selector(cdp, root_node_id: int, selector: str) -> int | None:
-    response = await cdp.send("DOM.querySelector", {"nodeId": root_node_id, "selector": selector})
-    return response.get("nodeId") or None
-
-
-async def cdp_describe_node(cdp, node_id: int) -> dict:
-    response = await cdp.send("DOM.describeNode", {"nodeId": node_id, "depth": 1, "pierce": True})
-    return response.get("node", {})
-
-
 async def cdp_find_widget_node(cdp) -> int | None:
     root_node_id = await cdp_get_document_root(cdp)
     return await cdp_query_selector(cdp, root_node_id, "altcha-widget")
-
-
-async def cdp_shadow_root_node(cdp, widget_node_id: int) -> tuple[int | None, str | None]:
-    node = await cdp_describe_node(cdp, widget_node_id)
-    shadow_roots = node.get("shadowRoots") or []
-    if not shadow_roots:
-        return None, None
-    shadow = shadow_roots[0]
-    mode = shadow.get("shadowRootType")
-    backend_node_id = shadow.get("backendNodeId")
-    if backend_node_id is None:
-        return None, mode
-    response = await cdp.send("DOM.pushNodesByBackendIdsToFrontend", {"backendNodeIds": [backend_node_id]})
-    node_ids = response.get("nodeIds") or []
-    return (node_ids[0] if node_ids else None), mode
 
 
 async def cdp_click_node(cdp, node_id: int) -> None:
@@ -70,3 +40,33 @@ async def locate_interactive_element(cdp, widget_node_id: int) -> dict:
         "target_tag": (target_node.get("nodeName") or "").lower(),
         "target_node_id": target_node_id,
     }
+
+
+async def cdp_get_document_root(cdp) -> int:
+    response = await cdp.send("DOM.getDocument", {"depth": -1, "pierce": True})
+    return response["root"]["nodeId"]
+
+
+async def cdp_query_selector(cdp, root_node_id: int, selector: str) -> int | None:
+    response = await cdp.send("DOM.querySelector", {"nodeId": root_node_id, "selector": selector})
+    return response.get("nodeId") or None
+
+
+async def cdp_shadow_root_node(cdp, widget_node_id: int) -> tuple[int | None, str | None]:
+    node = await cdp_describe_node(cdp, widget_node_id)
+    shadow_roots = node.get("shadowRoots") or []
+    if not shadow_roots:
+        return None, None
+    shadow = shadow_roots[0]
+    mode = shadow.get("shadowRootType")
+    backend_node_id = shadow.get("backendNodeId")
+    if backend_node_id is None:
+        return None, mode
+    response = await cdp.send("DOM.pushNodesByBackendIdsToFrontend", {"backendNodeIds": [backend_node_id]})
+    node_ids = response.get("nodeIds") or []
+    return (node_ids[0] if node_ids else None), mode
+
+
+async def cdp_describe_node(cdp, node_id: int) -> dict:
+    response = await cdp.send("DOM.describeNode", {"nodeId": node_id, "depth": 1, "pierce": True})
+    return response.get("node", {})

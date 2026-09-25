@@ -11,7 +11,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 
 ## Modules
 
-### 01_discovery.py (162 LOC)
+### 01_discovery.py (176 LOC)
 
 **Purpose:** BFS crawl of one or all seed domains with domain filtering, reporting discovery metrics.
 **Reads:** `domains.txt` or a CLI URL.
@@ -19,7 +19,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 02_url_filters.py (156 LOC)
+### 02_url_filters.py (170 LOC)
 
 **Purpose:** Compares a baseline crawl against a filtered crawl and lists the URLs removed by the filters.
 **Reads:** CLI URL and exclude patterns.
@@ -27,7 +27,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 03_strategies.py (175 LOC)
+### 03_strategies.py (184 LOC)
 
 **Purpose:** Benchmarks crawl strategies (baseline versus prefetch variants) on time, pages discovered, and speedup.
 **Reads:** Optional CLI URL.
@@ -35,7 +35,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 04_render_recall.py (292 LOC)
+### 04_render_recall.py (305 LOC)
 
 **Purpose:** Measures HTTP-BFS discovery recall against the gold standard across three strategies to isolate the JS-rendering effect.
 **Reads:** `goldstandard/docs_github_rest.txt`.
@@ -43,7 +43,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 05_playwright_bfs.py (378 LOC)
+### 05_playwright_bfs.py (386 LOC)
 
 **Purpose:** Manual per-page browser BFS with pattern-matched link following, measuring recall against the gold standard.
 **Reads:** `goldstandard/docs_github_rest.txt`.
@@ -51,7 +51,7 @@ Seed URL or `domains.txt` (or a gold-standard URL list) -> BFS or nav-tree disco
 **Called by:** CLI only.
 **Calls out:** `crawl4ai`.
 
-### 06_nextdata_probe.py (343 LOC)
+### 06_nextdata_probe.py (352 LOC)
 
 **Purpose:** Agentic discovery via nav-tree extraction from Next.js SSR data over plain HTTP, scored against the gold standard.
 **Reads:** `goldstandard/docs_github_rest.txt`.

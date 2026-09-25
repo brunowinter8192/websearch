@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import time
 
 import pytest
@@ -5,6 +6,8 @@ import pytest
 from src.config import TOTAL_SCRAPE_BUDGET_S
 from src.scraper import chromium_process, chromium_scrape
 
+
+# FUNCTIONS
 
 def test_wait_for_devtools_port_reads_real_port_file(tmp_path):
     port_file = tmp_path / "DevToolsActivePort"
@@ -169,14 +172,6 @@ def test_live_scrape_profile_dirs_skips_already_dead_pid(monkeypatch):
     assert chromium_process._live_scrape_profile_dirs() == set()
 
 
-def _osascript_result(returncode, stdout="", stderr=""):
-    class _R:
-        pass
-    r = _R()
-    r.returncode, r.stdout, r.stderr = returncode, stdout, stderr
-    return r
-
-
 def test_get_frontmost_app_warns_once_on_empty_output(monkeypatch, caplog):
     import logging
     monkeypatch.setattr(chromium_process, "_osascript_warned", set())
@@ -213,3 +208,11 @@ def test_activate_app_warns_once_on_nonzero_exit(monkeypatch, caplog):
         chromium_process._activate_app("Ghostty")
         chromium_process._activate_app("Ghostty")
     assert len(caplog.messages) == 1
+
+
+def _osascript_result(returncode, stdout="", stderr=""):
+    class _R:
+        pass
+    r = _R()
+    r.returncode, r.stdout, r.stderr = returncode, stdout, stderr
+    return r

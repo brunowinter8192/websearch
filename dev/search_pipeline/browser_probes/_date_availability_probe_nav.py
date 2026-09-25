@@ -31,6 +31,14 @@ CONTAINER_SELECTOR = {
 
 # FUNCTIONS
 
+def nav_funcs() -> dict:
+    return {
+        "google": nav_google, "duckduckgo": nav_duckduckgo, "mojeek": nav_mojeek,
+        "startpage": nav_startpage, "brave": nav_brave, "bing": nav_bing,
+        "yandex": nav_yandex, "lobsters": nav_lobsters,
+    }
+
+
 async def nav_google(tab, query: str):
     await tab._execute_command(NetworkCommands.set_cookie(
         name=SOCS_NAME, value=SOCS_VALUE, domain=SOCS_DOMAIN, path="/",
@@ -140,10 +148,3 @@ async def nav_lobsters(tab, query: str):
     if not await _wait_for(tab, CONTAINER_SELECTOR["lobsters"], 3, 0.2):
         return False, await _generic_diagnose(tab)
     return True, None
-
-
-NAV_FUNCS = {
-    "google": nav_google, "duckduckgo": nav_duckduckgo, "mojeek": nav_mojeek,
-    "startpage": nav_startpage, "brave": nav_brave, "bing": nav_bing,
-    "yandex": nav_yandex, "lobsters": nav_lobsters,
-}

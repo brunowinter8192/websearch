@@ -1,22 +1,15 @@
 # INFRASTRUCTURE
-
 import random
 import subprocess
 from pathlib import Path
+import json
+from collections import Counter
 
-
-def _repo_root() -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True, text=True,
-        cwd=Path(__file__).parent,
-        check=True,
-    )
-    git_common_dir = (Path(__file__).parent / result.stdout.strip()).resolve()
-    return git_common_dir.parent
-
-
-INVENTORY_DIR = _repo_root() / "data" / "news" / "coindesk" / "inventory"
+INVENTORY_DIR = (
+    (Path(__file__).parent / subprocess.run(
+        ["git", "rev-parse", "--git-common-dir"], capture_output=True, text=True, cwd=Path(__file__).parent, check=True,
+    ).stdout.strip()).resolve().parent / "data" / "news" / "coindesk" / "inventory"
+)
 
 SAMPLE_YEARS = list(range(2017, 2027))
 
@@ -27,13 +20,55 @@ MIN_PER_YEAR = 5
 
 # ORCHESTRATOR
 
+def main() -> None:
+
+    urls = sample_urls(500)
+    _print_sampled_urls(urls)
+
+    year_dist: Counter = Counter()
+    _count_years(urls, year_dist)
+
+    print("Year distribution:")
+    _print_year_distribution(year_dist)
+
+    out = _compute_out()
+    out.write_text(json.dumps(urls, indent=2))
+    _print_written_to(out)
+
+
+# FUNCTIONS
+
 def sample_urls(n_total: int = 500, seed: int = 42) -> list[str]:
     year_lines = _load_year_lines()
     counts     = _compute_counts(year_lines, n_total)
     return _draw_sample(year_lines, counts, seed)
 
 
-# FUNCTIONS
+def _print_sampled_urls(urls):
+    print(f"Sampled {len(urls)} URLs")
+
+
+def _count_years(urls, year_dist):
+    for u in urls:
+        for part in u.split("/"):
+            if part.isdigit() and 2015 <= int(part) <= 2027:
+                year_dist[int(part)] += 1
+                break
+
+
+def _print_year_distribution(year_dist):
+    for y in sorted(year_dist):
+        print(f"  {y}: {year_dist[y]}")
+
+
+def _compute_out():
+    out = Path(__file__).parent / "sample_500.json"
+    return out
+
+
+def _print_written_to(out):
+    print(f"Written to {out}")
+
 
 def _load_year_lines() -> dict[int, list[str]]:
     year_lines: dict[int, list[str]] = {}
@@ -93,23 +128,4 @@ def _draw_sample(
 
 
 if __name__ == "__main__":
-    import json
-    from collections import Counter
-
-    urls = sample_urls(500)
-    print(f"Sampled {len(urls)} URLs")
-
-    year_dist: Counter = Counter()
-    for u in urls:
-        for part in u.split("/"):
-            if part.isdigit() and 2015 <= int(part) <= 2027:
-                year_dist[int(part)] += 1
-                break
-
-    print("Year distribution:")
-    for y in sorted(year_dist):
-        print(f"  {y}: {year_dist[y]}")
-
-    out = Path(__file__).parent / "sample_500.json"
-    out.write_text(json.dumps(urls, indent=2))
-    print(f"Written to {out}")
+    main()

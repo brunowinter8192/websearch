@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import asyncio
 import base64
@@ -17,8 +16,6 @@ from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
 
 from _bing_probe_report import write_report
-
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
 SCRIPT_DIR = Path(__file__).parent.parent
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -86,7 +83,24 @@ _browser = None
 # ORCHESTRATOR
 
 async def run_probe() -> None:
+    _configure_logging()
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    records = await _run_queries()
+
+    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+    ok_count = _compute_ok_count(records)
+    block_count = _compute_block_count(records)
+    under_gate = _compute_under_gate(records)
+    _print_report(report_path, ok_count, records, block_count, under_gate)
+
+
+# FUNCTIONS
+
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+
+
+async def _run_queries():
     records = []
     try:
         for qi, (query, axis) in enumerate(QUERIES):
@@ -101,11 +115,25 @@ async def run_probe() -> None:
             )
     finally:
         await close_browser()
+    return records
 
-    report_path = write_report(records, REPORT_DIR, LATENCY_GATE_S)
+
+def _compute_ok_count(records):
     ok_count = sum(1 for r in records if r["status"] == "OK")
+    return ok_count
+
+
+def _compute_block_count(records):
     block_count = sum(1 for r in records if r["status"] == "BLOCKED")
+    return block_count
+
+
+def _compute_under_gate(records):
     under_gate = sum(1 for r in records if r["elapsed_ms"] <= LATENCY_GATE_S * 1000)
+    return under_gate
+
+
+def _print_report(report_path, ok_count, records, block_count, under_gate):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(
         f"Result: {ok_count}/{len(records)} OK, {block_count}/{len(records)} BLOCKED, "
@@ -114,47 +142,32 @@ async def run_probe() -> None:
     )
 
 
-# FUNCTIONS
-
-def _kill_stale_chrome() -> None:
-    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
-
-
-def _build_options() -> ChromiumOptions:
-    options = ChromiumOptions()
-    options.headless = not os.environ.get("SEARXNG_HEADED")
-    options.add_argument(f"--user-data-dir={SESSION_DIR}")
-    options.block_popups = True
-    options.block_notifications = True
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.webrtc_leak_protection = True
-    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
-    options.add_argument("--window-size=1920,1080")
-    return options
-
-
-async def _new_tab():
-    global _browser
-    if _browser is None:
-        _kill_stale_chrome()
-        _browser = Chrome(_build_options())
-        await _browser.start()
-    return await _browser.new_tab()
-
-
-async def _kill_tab(tab) -> None:
-    global _browser
-    target_id = getattr(tab, "_target_id", None)
-    if _browser is None or target_id is None:
-        return
+async def run_query(query: str, axis: str) -> dict:
+    record: dict = {
+        "query": query, "axis": axis, "count": 0, "status": "EMPTY",
+        "samples": [], "diag": None,
+    }
+    tab = await _new_tab()
     try:
-        await asyncio.wait_for(
-            _browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0
-        )
+        await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
+        if await _wait_for_results(tab):
+            results = await _parse_results(tab, max_results=10)
+            record["count"] = len(results)
+            record["status"] = "OK" if results else "EMPTY"
+            record["samples"] = [
+                {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("snippet", "")[:160]}
+                for r in results[:5]
+            ]
+        else:
+            diag = await _diagnose(tab)
+            record["diag"] = diag
+            record["status"] = "BLOCKED" if diag["marker"] else "EMPTY"
     except Exception as e:
-        logging.warning("kill_tab failed (target_id=%s): %s", target_id, e)
+        record["status"] = "ERROR"
+        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
     finally:
-        _browser._tabs_opened.pop(target_id, None)
+        await _kill_tab(tab)
+    return record
 
 
 async def close_browser() -> None:
@@ -164,24 +177,13 @@ async def close_browser() -> None:
         _browser = None
 
 
-def _extract_value(result):
-    try:
-        return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    qs = parse_qs(parsed.query)
-    u = qs.get("u", [None])[0]
-    if not u:
-        return href
-    payload = u[2:] if len(u) > 2 else u
-    padded = payload + "=" * (-len(payload) % 4)
-    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+async def _new_tab():
+    global _browser
+    if _browser is None:
+        _kill_stale_chrome()
+        _browser = Chrome(_build_options())
+        await _browser.start()
+    return await _browser.new_tab()
 
 
 async def _wait_for_results(tab) -> bool:
@@ -218,32 +220,56 @@ async def _diagnose(tab) -> dict:
     return diag
 
 
-async def run_query(query: str, axis: str) -> dict:
-    record: dict = {
-        "query": query, "axis": axis, "count": 0, "status": "EMPTY",
-        "samples": [], "diag": None,
-    }
-    tab = await _new_tab()
+async def _kill_tab(tab) -> None:
+    global _browser
+    target_id = getattr(tab, "_target_id", None)
+    if _browser is None or target_id is None:
+        return
     try:
-        await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-        if await _wait_for_results(tab):
-            results = await _parse_results(tab, max_results=10)
-            record["count"] = len(results)
-            record["status"] = "OK" if results else "EMPTY"
-            record["samples"] = [
-                {"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("snippet", "")[:160]}
-                for r in results[:5]
-            ]
-        else:
-            diag = await _diagnose(tab)
-            record["diag"] = diag
-            record["status"] = "BLOCKED" if diag["marker"] else "EMPTY"
+        await asyncio.wait_for(
+            _browser._execute_command(TargetCommands.close_target(target_id)), timeout=5.0
+        )
     except Exception as e:
-        record["status"] = "ERROR"
-        record["error"] = f"{type(e).__name__}: {str(e)[:120]}"
+        logging.warning("kill_tab failed (target_id=%s): %s", target_id, e)
     finally:
-        await _kill_tab(tab)
-    return record
+        _browser._tabs_opened.pop(target_id, None)
+
+
+def _kill_stale_chrome() -> None:
+    subprocess.run(["pkill", "-f", f"user-data-dir={SESSION_DIR}"], capture_output=True)
+
+
+def _build_options() -> ChromiumOptions:
+    options = ChromiumOptions()
+    options.headless = not os.environ.get("SEARXNG_HEADED")
+    options.add_argument(f"--user-data-dir={SESSION_DIR}")
+    options.block_popups = True
+    options.block_notifications = True
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.webrtc_leak_protection = True
+    options.add_argument(f"--user-agent={REAL_USER_AGENT}")
+    options.add_argument("--window-size=1920,1080")
+    return options
+
+
+def _extract_value(result):
+    try:
+        return result["result"]["result"]["value"]
+    except (KeyError, TypeError):
+        return None
+
+
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    parsed = urlparse(href)
+    qs = parse_qs(parsed.query)
+    u = qs.get("u", [None])[0]
+    if not u:
+        return href
+    payload = u[2:] if len(u) > 2 else u
+    padded = payload + "=" * (-len(payload) % 4)
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
 if __name__ == "__main__":

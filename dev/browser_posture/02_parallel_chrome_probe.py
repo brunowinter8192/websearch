@@ -26,6 +26,15 @@ SIMULATED_USER_PROFILE = profile_dir("simulated-user-chrome")
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    record = await _run_parallel_check()
+
+    report_path = write_report(record)
+    _print_report(report_path)
+
+
+# FUNCTIONS
+
+async def _run_parallel_check():
     record = {}
     try:
         record["baseline_chrome_running"] = any_chrome_running()
@@ -47,12 +56,35 @@ async def run_probe() -> None:
         await asyncio.sleep(0.5)
         record["session_dir_processes_after_teardown"] = count_processes_for(SESSION_DIR)
         record["sim_user_processes_after_teardown"] = count_processes_for(SIMULATED_USER_PROFILE)
+    return record
 
-    report_path = write_report(record)
+
+def write_report(record: dict) -> Path:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = REPORT_DIR / f"02_parallel_chrome_probe_{ts}.md"
+
+    focus_stolen, sim_focus_stolen, launch_focus_stolen = _compute_focus_steal(record)
+
+    lines = [
+        f"# Parallel-Chrome Collision Probe — {ts}",
+        "",
+        "Simulated already-running user Chrome (throwaway profile, `-g` backgrounded, never "
+        "foregrounded) + a production-shape headed-backgrounded launch attempt against the REAL "
+        "production SESSION_DIR (`~/.websearch/browser-session`), while the simulated user Chrome is "
+        "running.",
+        "",
+    ]
+    lines += _build_result_section(record, focus_stolen)
+    lines += _build_teardown_section(record)
+    lines += _build_reading_section(record, focus_stolen, sim_focus_stolen, launch_focus_stolen)
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def _print_report(report_path):
     print(f"\nReport: {report_path}", file=sys.stderr)
 
-
-# FUNCTIONS
 
 def any_chrome_running() -> bool:
     result = subprocess.run(
@@ -165,29 +197,6 @@ def _build_reading_section(record: dict, focus_stolen: bool, sim_focus_stolen: b
             f"(sim-spawn steal={sim_focus_stolen}, our-launch steal={launch_focus_stolen})."
         )
     return lines
-
-
-def write_report(record: dict) -> Path:
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = REPORT_DIR / f"02_parallel_chrome_probe_{ts}.md"
-
-    focus_stolen, sim_focus_stolen, launch_focus_stolen = _compute_focus_steal(record)
-
-    lines = [
-        f"# Parallel-Chrome Collision Probe — {ts}",
-        "",
-        "Simulated already-running user Chrome (throwaway profile, `-g` backgrounded, never "
-        "foregrounded) + a production-shape headed-backgrounded launch attempt against the REAL "
-        "production SESSION_DIR (`~/.websearch/browser-session`), while the simulated user Chrome is "
-        "running.",
-        "",
-    ]
-    lines += _build_result_section(record, focus_stolen)
-    lines += _build_teardown_section(record)
-    lines += _build_reading_section(record, focus_stolen, sim_focus_stolen, launch_focus_stolen)
-
-    path.write_text("\n".join(lines), encoding="utf-8")
-    return path
 
 
 if __name__ == "__main__":

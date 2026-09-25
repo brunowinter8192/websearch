@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # INFRASTRUCTURE
 import argparse
 import asyncio
@@ -10,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from _cdp_starvation_probe_instrument import _cdp_ts, SLOW_CB_THRESHOLD_S, _install_asyncio_log_capture
+from _cdp_starvation_probe_instrument import _cdp_ts, SLOW_CB_THRESHOLD_S, _install_asyncio_log_capture, install_process_msg_patch
 
 _browser_mod = importlib.import_module("src.search.browser")
 _search_mod = importlib.import_module("src.search.search_web")
@@ -29,6 +28,19 @@ FINDINGS_DIR = SCRIPT_DIR / "md"
 
 # ORCHESTRATOR
 
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="CDP starvation probe: Pattern A + B + CDP event counter (20 queries)."
+    )
+    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
+                        help="Limit to first N queries (default: all from queries.txt)")
+    args = parser.parse_args()
+    install_process_msg_patch()
+    asyncio.run(run_cdp_probe(args.max_queries))
+
+
+# FUNCTIONS
+
 async def run_cdp_probe(max_queries: int | None) -> None:
     _start_probe_clock()
     _enable_pattern_a()
@@ -36,8 +48,6 @@ async def run_cdp_probe(max_queries: int | None) -> None:
     query_records = await _execute_queries(queries)
     _write_outputs(query_records)
 
-
-# FUNCTIONS
 
 def _enable_pattern_a() -> None:
     loop = asyncio.get_running_loop()
@@ -65,6 +75,15 @@ async def _execute_queries(queries: list[str]) -> list[dict]:
         await _stop_canary_monitor(stop_canary, canary_task)
         await close_browser()
     return query_records
+
+
+def _write_outputs(query_records: list[dict]) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    report_path = _write_report(query_records, REPORT_DIR)
+    findings_path = _write_findings(query_records, report_path, FINDINGS_DIR)
+    print(f"\nReport:   {report_path}", file=sys.stderr)
+    print(f"Findings: {findings_path}", file=sys.stderr)
 
 
 async def _run_single_query(qi: int, query: str, total: int) -> dict:
@@ -113,20 +132,5 @@ async def _run_single_query(qi: int, query: str, total: int) -> dict:
     return record
 
 
-def _write_outputs(query_records: list[dict]) -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    FINDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = _write_report(query_records, REPORT_DIR)
-    findings_path = _write_findings(query_records, report_path, FINDINGS_DIR)
-    print(f"\nReport:   {report_path}", file=sys.stderr)
-    print(f"Findings: {findings_path}", file=sys.stderr)
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="CDP starvation probe: Pattern A + B + CDP event counter (20 queries)."
-    )
-    parser.add_argument("--max-queries", dest="max_queries", type=int, default=None,
-                        help="Limit to first N queries (default: all from queries.txt)")
-    args = parser.parse_args()
-    asyncio.run(run_cdp_probe(args.max_queries))
+    main()

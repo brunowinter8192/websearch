@@ -28,7 +28,7 @@ def main() -> None:
     print(table_str)
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     report_path = write_report(table_str, REPORT_DIR, ts)
-    print(f"\nReport written → {report_path}")
+    _print_report_written(report_path)
 
 
 # FUNCTIONS
@@ -55,10 +55,6 @@ def load_records(log_path: Path, last_n: int, since: str | None, engine_filter: 
     if engine_filter:
         records = [r for r in records if engine_filter in r.get("engines", {})]
     return records
-
-
-def _parse_ts(ts: str) -> datetime:
-    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
 def aggregate_engine_stats(records: list[dict]) -> dict[str, dict]:
@@ -106,32 +102,6 @@ def aggregate_engine_stats(records: list[dict]) -> dict[str, dict]:
     return stats
 
 
-def classify_health(s: dict) -> tuple[str, str]:
-    if s["total"] < MIN_SAMPLES:
-        return "⚪", "INSUFFICIENT"
-    sc = s.get("status_counts", {})
-
-    timeout_total = s["timeout"]
-    if timeout_total >= 3:
-        noncoop = sc.get("TIMEOUT_NONCOOP", 0)
-        if noncoop / timeout_total > 0.10:
-            return "⚠️", "FLAG (PYDOLL-CANCEL-LEAK)"
-
-    if s["success_rate"] < SUCCESS_BROKEN:
-        return "🔴", "BROKEN"
-    if s["success_rate"] < SUCCESS_DEGRADED:
-        if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
-            return "🟡", "DEGRADED (⏱️ SLOW)"
-        if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
-            return "🟡", "DEGRADED (🚫 RATE_LIMITED)"
-        return "🟡", "DEGRADED"
-    if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
-        return "⏱️", "SLOW"
-    if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
-        return "🚫", "RATE_LIMITED"
-    return "✅", "OK"
-
-
 def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str | None, engine_filter: str | None) -> str:
     lines = []
     scope = f"last {n_records} records"
@@ -172,6 +142,40 @@ def write_report(table_str: str, report_dir: Path, timestamp: str) -> Path:
     path = report_dir / f"engine_health_{timestamp}.md"
     path.write_text(f"```\n{table_str}\n```\n", encoding="utf-8")
     return path
+
+
+def _print_report_written(report_path):
+    print(f"\nReport written → {report_path}")
+
+
+def _parse_ts(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def classify_health(s: dict) -> tuple[str, str]:
+    if s["total"] < MIN_SAMPLES:
+        return "⚪", "INSUFFICIENT"
+    sc = s.get("status_counts", {})
+
+    timeout_total = s["timeout"]
+    if timeout_total >= 3:
+        noncoop = sc.get("TIMEOUT_NONCOOP", 0)
+        if noncoop / timeout_total > 0.10:
+            return "⚠️", "FLAG (PYDOLL-CANCEL-LEAK)"
+
+    if s["success_rate"] < SUCCESS_BROKEN:
+        return "🔴", "BROKEN"
+    if s["success_rate"] < SUCCESS_DEGRADED:
+        if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
+            return "🟡", "DEGRADED (⏱️ SLOW)"
+        if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
+            return "🟡", "DEGRADED (🚫 RATE_LIMITED)"
+        return "🟡", "DEGRADED"
+    if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
+        return "⏱️", "SLOW"
+    if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
+        return "🚫", "RATE_LIMITED"
+    return "✅", "OK"
 
 
 if __name__ == "__main__":

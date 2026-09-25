@@ -36,13 +36,31 @@ async def run_probe() -> None:
     kill_survivors()
 
     bundle_path = resolve_and_verify_bundle(run_b["exe"])
-    plist_path = bundle_path / "Contents" / "Info.plist"
+    plist_path = _compute_plist_path(bundle_path)
     original_bytes = plist_path.read_bytes()
     original_lsuielement = read_lsuielement(plist_path)
     codesign_before = read_codesign_status(bundle_path)
 
-    run_c = None
+    codesign_after, run_c, plist_end_state, plist_format_restored = await _run_plist_variants(plist_path, original_bytes, bundle_path)
+
+    orphans = check_orphans()
+    report_path = write_report(
+        run_a, run_b, run_c, bundle_path, original_lsuielement, plist_end_state,
+        plist_format_restored, codesign_before, codesign_after, orphans, REPORT_DIR,
+    )
+    _print_report(report_path, orphans)
+
+
+# FUNCTIONS
+
+def _compute_plist_path(bundle_path):
+    plist_path = bundle_path / "Contents" / "Info.plist"
+    return plist_path
+
+
+async def _run_plist_variants(plist_path, original_bytes, bundle_path):
     codesign_after = None
+    run_c = None
     try:
         set_lsuielement(plist_path, True, original_bytes)
         codesign_after = read_codesign_status(bundle_path)
@@ -53,31 +71,41 @@ async def run_probe() -> None:
         kill_survivors()
         plist_end_state = read_lsuielement(plist_path)
         plist_format_restored = plist_path.read_bytes() == original_bytes
+    return codesign_after, run_c, plist_end_state, plist_format_restored
 
-    orphans = check_orphans()
-    report_path = write_report(
-        run_a, run_b, run_c, bundle_path, original_lsuielement, plist_end_state,
-        plist_format_restored, codesign_before, codesign_after, orphans, REPORT_DIR,
-    )
+
+def _print_report(report_path, orphans):
     print(f"\nReport: {report_path}", file=sys.stderr)
     print(f"Orphan chromium-family processes after run: {len(orphans)}", file=sys.stderr)
 
 
-# FUNCTIONS
+async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
+    server, thread, port = start_probe_server()
+    url = f"http://127.0.0.1:{port}/"
+    browser_info = {"pid": None, "exe": None, "cmdline": None}
+    focus_samples: list[str] = []
+    stop_event = asyncio.Event()
 
-def find_chrome_descendant() -> psutil.Process | None:
+    poll_task = asyncio.create_task(_poll_browser_and_focus(browser_info, focus_samples, poll_focus, stop_event))
+    launch_success = False
+    error_message = None
     try:
-        children = psutil.Process().children(recursive=True)
-    except psutil.Error:
-        return None
-    for proc in children:
-        try:
-            exe = proc.exe()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-        if "ms-playwright" in exe:
-            return proc
-    return None
+        launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
+    finally:
+        stop_event.set()
+        await poll_task
+        stop_probe_server(server, thread)
+
+    return {
+        "headless": headless,
+        "launch_success": launch_success,
+        "error_message": error_message,
+        "pid": browser_info["pid"],
+        "exe": browser_info["exe"],
+        "cmdline": browser_info["cmdline"],
+        "focus_samples": focus_samples,
+        "chrome_frontmost_count": sum(1 for s in focus_samples if "chrome" in s.lower()),
+    }
 
 
 async def _poll_browser_and_focus(browser_info: dict, focus_samples: list[str], poll_focus: bool, stop_event: asyncio.Event) -> None:
@@ -113,33 +141,19 @@ async def _run_crawl4ai_once(headless: bool, dwell_s: float, url: str) -> tuple[
         return False, f"{type(e).__name__}: {e}"
 
 
-async def observe_run(headless: bool, poll_focus: bool, dwell_s: float) -> dict:
-    server, thread, port = start_probe_server()
-    url = f"http://127.0.0.1:{port}/"
-    browser_info = {"pid": None, "exe": None, "cmdline": None}
-    focus_samples: list[str] = []
-    stop_event = asyncio.Event()
-
-    poll_task = asyncio.create_task(_poll_browser_and_focus(browser_info, focus_samples, poll_focus, stop_event))
-    launch_success = False
-    error_message = None
+def find_chrome_descendant() -> psutil.Process | None:
     try:
-        launch_success, error_message = await _run_crawl4ai_once(headless, dwell_s, url)
-    finally:
-        stop_event.set()
-        await poll_task
-        stop_probe_server(server, thread)
-
-    return {
-        "headless": headless,
-        "launch_success": launch_success,
-        "error_message": error_message,
-        "pid": browser_info["pid"],
-        "exe": browser_info["exe"],
-        "cmdline": browser_info["cmdline"],
-        "focus_samples": focus_samples,
-        "chrome_frontmost_count": sum(1 for s in focus_samples if "chrome" in s.lower()),
-    }
+        children = psutil.Process().children(recursive=True)
+    except psutil.Error:
+        return None
+    for proc in children:
+        try:
+            exe = proc.exe()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        if "ms-playwright" in exe:
+            return proc
+    return None
 
 
 if __name__ == "__main__":

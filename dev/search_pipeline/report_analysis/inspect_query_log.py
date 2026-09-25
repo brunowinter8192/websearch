@@ -1,3 +1,4 @@
+# INFRASTRUCTURE
 import argparse
 import json
 import os
@@ -6,6 +7,46 @@ from collections import Counter
 from pathlib import Path
 
 DEFAULT_LOG_PATH = Path("src/logs/query_log.jsonl")
+
+
+# ORCHESTRATOR
+
+def main() -> None:
+    args = _parse_args()
+
+    log_path = _resolve_log_path(args.log_path)
+    if not log_path.exists():
+        _print_no_log_file(log_path)
+        sys.exit(1)
+
+    all_records = _compute_all_records(log_path)
+
+    engine_run_records = _compute_engine_run_records(all_records)
+    workflow_records = _compute_workflow_records(all_records)
+
+    _print_log(log_path, all_records, engine_run_records, workflow_records)
+
+    records = _compute_records(all_records, args, workflow_records)
+    if args.tail:
+        records = _compute_tail_records(records, args)
+
+    if not records:
+        print("No records to display (try --all-types for a probe log).")
+        return
+
+    _print_timing_summary(records)
+    _print_status_hits(records)
+    _print_last_record(records)
+
+
+# FUNCTIONS
+
+def _parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="Inspect query_log.jsonl")
+    ap.add_argument("--tail", type=int, default=None, help="Only consider last N records (after type filter)")
+    ap.add_argument("--log-path", default=None, help="Path to JSONL log file (overrides env var and default)")
+    ap.add_argument("--all-types", action="store_true", help="Include engine_run records in output (default: skip)")
+    return ap.parse_args()
 
 
 def _resolve_log_path(arg: str | None) -> Path:
@@ -17,42 +58,39 @@ def _resolve_log_path(arg: str | None) -> Path:
     return DEFAULT_LOG_PATH
 
 
-def main() -> None:
-    args = _parse_args()
+def _print_no_log_file(log_path):
+    print(f"No log file at {log_path}", file=sys.stderr)
 
-    log_path = _resolve_log_path(args.log_path)
-    if not log_path.exists():
-        print(f"No log file at {log_path}", file=sys.stderr)
-        sys.exit(1)
 
+def _compute_all_records(log_path):
     all_records = [json.loads(l) for l in log_path.read_text().splitlines() if l.strip()]
+    return all_records
 
+
+def _compute_engine_run_records(all_records):
     engine_run_records    = [r for r in all_records if r.get("record_type") == "engine_run"]
-    workflow_records      = [r for r in all_records if r.get("record_type", "workflow_summary") != "engine_run"]
+    return engine_run_records
 
+
+def _compute_workflow_records(all_records):
+    workflow_records      = [r for r in all_records if r.get("record_type", "workflow_summary") != "engine_run"]
+    return workflow_records
+
+
+def _print_log(log_path, all_records, engine_run_records, workflow_records):
     print(f"Log          : {log_path}")
     print(f"Total lines  : {len(all_records)}  "
           f"(engine_run={len(engine_run_records)}, workflow_summary/old={len(workflow_records)})")
 
+
+def _compute_records(all_records, args, workflow_records):
     records = all_records if args.all_types else workflow_records
-    if args.tail:
-        records = records[-args.tail:]
-
-    if not records:
-        print("No records to display (try --all-types for a probe log).")
-        return
-
-    _print_timing_summary(records)
-    _print_status_hits(records)
-    _print_last_record(records)
+    return records
 
 
-def _parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="Inspect query_log.jsonl")
-    ap.add_argument("--tail", type=int, default=None, help="Only consider last N records (after type filter)")
-    ap.add_argument("--log-path", default=None, help="Path to JSONL log file (overrides env var and default)")
-    ap.add_argument("--all-types", action="store_true", help="Include engine_run records in output (default: skip)")
-    return ap.parse_args()
+def _compute_tail_records(records, args):
+    records = records[-args.tail:]
+    return records
 
 
 def _print_timing_summary(records: list[dict]) -> None:

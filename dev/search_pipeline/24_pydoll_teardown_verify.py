@@ -25,15 +25,15 @@ REPORT_DIR = Path(__file__).parent / "md"
 
 async def pydoll_teardown_verify_workflow() -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    report_path = REPORT_DIR / f"teardown_verify_{ts}.md"
+    report_path = _compute_report_path(ts)
     REPORT_DIR.mkdir(exist_ok=True)
 
-    lines = [f"# Pydoll Teardown Verification — {ts}", ""]
+    lines = _compute_lines(ts)
 
     lines.append("## Setup")
     await get_tab()
-    browser_state = "set" if _browser_mod._browser else "NONE"
-    lines.append(f"Browser started: `_browser` = {browser_state}")
+    browser_state = _compute_browser_state()
+    _append_browser_started(lines, browser_state)
     lines.append("")
 
     r1 = await _test_kill_tab_hung(lines)
@@ -44,39 +44,39 @@ async def pydoll_teardown_verify_workflow() -> None:
     lines.append("")
     lines.append("| Test | Result | Wall time | Registry clean | CDP targets Δ |")
     lines.append("|---|---|---|---|---|")
-    lines.append(f"| T1 single hung tab + kill_tab     | {'PASS' if r1['pass'] else 'FAIL'} | {r1['wall_ms']}ms | {'yes' if r1['registry_clean'] else 'no'} | n/a |")
-    lines.append(f"| T2 normal tab + kill_tab           | {'PASS' if r2['pass'] else 'FAIL'} | {r2['wall_ms']}ms | {'yes' if r2['registry_clean'] else 'no'} | n/a |")
-    lines.append(f"| T3 parallel batch {BATCH_N}x hung + gather | {'PASS' if r3['pass'] else 'FAIL'} | {r3['wall_ms']}ms | {'yes' if r3['registry_clean'] else 'no'} | {r3['cdp_targets_delta']:+d} |")
+    _append_result_table(lines, r1, r2, r3)
     lines.append("")
 
-    overall = r1['pass'] and r2['pass'] and r3['pass']
-    lines.append(f"**Overall: {'PASS' if overall else 'FAIL'}**")
+    overall = _compute_overall(r1, r2, r3)
+    _append_overall(lines, overall)
     lines.append("")
     lines.append("### Interpretation")
     lines.append("")
-    lines.append(f"- Old behavior (tab.close): each hung tab adds ~60s; batch of {BATCH_N} = up to {BATCH_N}×65s worst case")
-    lines.append(f"- New behavior (kill_tab): batch wall ~= watchdog ({WATCHDOG}s) — all {BATCH_N} tabs killed in parallel")
-    lines.append(f"- T3 CDP targets Δ = 0 → no orphaned targets after batch teardown")
+    _append_interpretation(lines)
 
     report_path.write_text("\n".join(lines))
-    print(f"\nReport: {report_path}")
-    print(f"T1 single hung:  wall={r1['wall_ms']}ms  registry_clean={r1['registry_clean']}  -> {'PASS' if r1['pass'] else 'FAIL'}")
-    print(f"T2 normal tab:   wall={r2['wall_ms']}ms  registry_clean={r2['registry_clean']}  -> {'PASS' if r2['pass'] else 'FAIL'}")
-    print(f"T3 batch {BATCH_N}x hung: wall={r3['wall_ms']}ms  registry_clean={r3['registry_clean']}  cdp_targets_delta={r3['cdp_targets_delta']:+d}  -> {'PASS' if r3['pass'] else 'FAIL'}")
-    print(f"Overall: {'PASS' if overall else 'FAIL'}")
+    _print_report(report_path, r1, r2, r3, overall)
 
 
 # FUNCTIONS
 
-def _count_renderers() -> int:
-    result = subprocess.run(
-        ["pgrep", "-c", "-f", "--type=renderer"],
-        capture_output=True, text=True
-    )
-    try:
-        return int(result.stdout.strip())
-    except ValueError:
-        return 0
+def _compute_report_path(ts):
+    report_path = REPORT_DIR / f"teardown_verify_{ts}.md"
+    return report_path
+
+
+def _compute_lines(ts):
+    lines = [f"# Pydoll Teardown Verification — {ts}", ""]
+    return lines
+
+
+def _compute_browser_state():
+    browser_state = "set" if _browser_mod._browser else "NONE"
+    return browser_state
+
+
+def _append_browser_started(lines, browser_state):
+    lines.append(f"Browser started: `_browser` = {browser_state}")
 
 
 async def _test_kill_tab_hung(lines: list) -> dict:
@@ -107,34 +107,6 @@ async def _test_kill_tab_hung(lines: list) -> dict:
     lines.append("")
 
     return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
-
-
-async def _run_hung_op(lines: list) -> tuple:
-    target_id_seen = None
-    timed_out = False
-
-    async def _hung_op():
-        nonlocal target_id_seen
-        tab = await new_tab()
-        target_id_seen = getattr(tab, '_target_id', None)
-        try:
-            await tab.go_to("about:blank", timeout=5)
-            await tab.execute_script(
-                "return new Promise(function() {})", await_promise=True
-            )
-        finally:
-            await kill_tab(tab)
-
-    t0 = time.perf_counter()
-    try:
-        await asyncio.wait_for(_hung_op(), timeout=WATCHDOG)
-    except asyncio.TimeoutError:
-        timed_out = True
-    except Exception as e:
-        lines.append(f"Unexpected exception: {type(e).__name__}: {e}")
-
-    wall_ms = round((time.perf_counter() - t0) * 1000)
-    return target_id_seen, timed_out, wall_ms
 
 
 async def _test_normal_tab_cleanup(lines: list) -> dict:
@@ -186,13 +158,6 @@ async def _test_normal_tab_cleanup(lines: list) -> dict:
     return {'pass': passed, 'wall_ms': wall_ms, 'registry_clean': registry_clean, 'renderers_delta': renderers_delta}
 
 
-async def _count_cdp_targets() -> int:
-    if not _browser_mod._browser:
-        return 0
-    targets = await _browser_mod._browser.get_targets()
-    return sum(1 for t in targets if t.get('type') == 'page')
-
-
 async def _test_batch_parallel_hung(lines: list) -> dict:
     lines.append(f"## Test 3 — parallel batch ({BATCH_N}x hung Promise) via asyncio.gather")
     lines.append("")
@@ -228,6 +193,81 @@ async def _test_batch_parallel_hung(lines: list) -> dict:
         'registry_clean': registry_clean,
         'cdp_targets_delta': cdp_targets_delta,
     }
+
+
+def _append_result_table(lines, r1, r2, r3):
+    lines.append(f"| T1 single hung tab + kill_tab     | {'PASS' if r1['pass'] else 'FAIL'} | {r1['wall_ms']}ms | {'yes' if r1['registry_clean'] else 'no'} | n/a |")
+    lines.append(f"| T2 normal tab + kill_tab           | {'PASS' if r2['pass'] else 'FAIL'} | {r2['wall_ms']}ms | {'yes' if r2['registry_clean'] else 'no'} | n/a |")
+    lines.append(f"| T3 parallel batch {BATCH_N}x hung + gather | {'PASS' if r3['pass'] else 'FAIL'} | {r3['wall_ms']}ms | {'yes' if r3['registry_clean'] else 'no'} | {r3['cdp_targets_delta']:+d} |")
+
+
+def _compute_overall(r1, r2, r3):
+    overall = r1['pass'] and r2['pass'] and r3['pass']
+    return overall
+
+
+def _append_overall(lines, overall):
+    lines.append(f"**Overall: {'PASS' if overall else 'FAIL'}**")
+
+
+def _append_interpretation(lines):
+    lines.append(f"- Old behavior (tab.close): each hung tab adds ~60s; batch of {BATCH_N} = up to {BATCH_N}×65s worst case")
+    lines.append(f"- New behavior (kill_tab): batch wall ~= watchdog ({WATCHDOG}s) — all {BATCH_N} tabs killed in parallel")
+    lines.append(f"- T3 CDP targets Δ = 0 → no orphaned targets after batch teardown")
+
+
+def _print_report(report_path, r1, r2, r3, overall):
+    print(f"\nReport: {report_path}")
+    print(f"T1 single hung:  wall={r1['wall_ms']}ms  registry_clean={r1['registry_clean']}  -> {'PASS' if r1['pass'] else 'FAIL'}")
+    print(f"T2 normal tab:   wall={r2['wall_ms']}ms  registry_clean={r2['registry_clean']}  -> {'PASS' if r2['pass'] else 'FAIL'}")
+    print(f"T3 batch {BATCH_N}x hung: wall={r3['wall_ms']}ms  registry_clean={r3['registry_clean']}  cdp_targets_delta={r3['cdp_targets_delta']:+d}  -> {'PASS' if r3['pass'] else 'FAIL'}")
+    print(f"Overall: {'PASS' if overall else 'FAIL'}")
+
+
+def _count_renderers() -> int:
+    result = subprocess.run(
+        ["pgrep", "-c", "-f", "--type=renderer"],
+        capture_output=True, text=True
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return 0
+
+
+async def _run_hung_op(lines: list) -> tuple:
+    target_id_seen = None
+    timed_out = False
+
+    async def _hung_op():
+        nonlocal target_id_seen
+        tab = await new_tab()
+        target_id_seen = getattr(tab, '_target_id', None)
+        try:
+            await tab.go_to("about:blank", timeout=5)
+            await tab.execute_script(
+                "return new Promise(function() {})", await_promise=True
+            )
+        finally:
+            await kill_tab(tab)
+
+    t0 = time.perf_counter()
+    try:
+        await asyncio.wait_for(_hung_op(), timeout=WATCHDOG)
+    except asyncio.TimeoutError:
+        timed_out = True
+    except Exception as e:
+        lines.append(f"Unexpected exception: {type(e).__name__}: {e}")
+
+    wall_ms = round((time.perf_counter() - t0) * 1000)
+    return target_id_seen, timed_out, wall_ms
+
+
+async def _count_cdp_targets() -> int:
+    if not _browser_mod._browser:
+        return 0
+    targets = await _browser_mod._browser.get_targets()
+    return sum(1 for t in targets if t.get('type') == 'page')
 
 
 async def _run_batch_hung(lines: list) -> tuple[list, bool, int]:
