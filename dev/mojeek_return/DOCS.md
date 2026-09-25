@@ -11,7 +11,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 
 ## Modules
 
-### mojeek_challenge_capture.py (169 LOC)
+### mojeek_challenge_capture.py (171 LOC)
 
 **Purpose:** Single-navigation capture of the challenge page as served, to settle which strings are real before an engine keys on one.
 **Reads:** One live navigation against mojeek.com.
@@ -35,7 +35,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
 **Calls out:** `pydoll`, `psutil`, macOS process tools.
 
-### _mojeek_pydoll_probe_query.py (227 LOC)
+### _mojeek_pydoll_probe_query.py (229 LOC)
 
 **Purpose:** Drives and times one query on one tab, plus the control-URL tripwire.
 **Reads:** Live DOM and browser cookie store via CDP.
@@ -43,7 +43,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** `mojeek_pydoll_probe.py`, `verify_mojeek_pydoll_core.py`.
 **Calls out:** `pydoll`.
 
-### _mojeek_pydoll_probe_core.py (202 LOC)
+### _mojeek_pydoll_probe_core.py (204 LOC)
 
 **Purpose:** Decidable core: page-state classifier, verdicts, cookie fingerprinting and diffing, payload and duration maths.
 **Reads:** nothing.

@@ -27,7 +27,7 @@ Launch Chrome on a dedicated profile -> control-URL tripwire -> per query naviga
 **Called by:** `brave_pydoll_probe.py`, `_brave_probe_query.py`, `verify_brave_pydoll_core.py`.
 **Calls out:** `patchright`, `pydoll`, `psutil`, macOS process tools.
 
-### _brave_probe_query.py (183 LOC)
+### _brave_probe_query.py (185 LOC)
 
 **Purpose:** Drives and times one query on one tab, plus the control-URL tripwire.
 **Reads:** Live DOM and browser cookie store via CDP.

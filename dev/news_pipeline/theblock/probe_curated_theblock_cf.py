@@ -16,6 +16,7 @@ from curl_cffi import requests as cffi
 THEBLOCK_URL = "https://www.theblock.co/sitemap_tbco_index.xml"
 XML_MARKERS = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 TIMEOUT = 15
+REJECTIONS = Counter()
 REPORT_DIR = Path(__file__).parent / "probe_curated_theblock_cf_reports"
 
 
@@ -38,6 +39,7 @@ def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
           f"socks4:{proto_counts['socks4']} socks5:{proto_counts['socks5']}")
 
     results = run_checks(proxies, concurrency)
+    _print_rejections()
     report_path = write_report(proxies, results, proto_counts, concurrency)
     print(f"Report: {report_path}")
 
@@ -62,6 +64,10 @@ def run_checks(proxies: list, concurrency: int) -> list:
                 print(f"  ... {done}/{total} checked, {passed} passed so far")
 
     return results
+
+
+def _print_rejections() -> None:
+    print(f"proxy check rejections: {dict(REJECTIONS)}", file=sys.stderr)
 
 
 def write_report(proxies: list, results: list, proto_counts: Counter, concurrency: int) -> Path:
@@ -89,7 +95,8 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=TIMEOUT)
         head = r.content[:500]
         return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
+    except cffi.exceptions.RequestException as exc:
+        REJECTIONS[type(exc).__name__] += 1
         return False
 
 

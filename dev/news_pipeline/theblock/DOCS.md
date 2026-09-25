@@ -59,7 +59,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only; `probe_repo_cf_survey.py`, `probe_liveness.py`.
 **Calls out:** `httpx`.
 
-### probe_repo_cf_survey.py (324 LOC)
+### probe_repo_cf_survey.py (331 LOC)
 
 **Purpose:** Ranks source repos by CF-pass rate against theblock.co on a sample per repo; its ranking decided the backfill repo set.
 **Reads:** Proxy lists from `probe_pool_size.py`.
@@ -115,7 +115,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `pipe_theblock.py`.
 **Calls out:** `curl_cffi`.
 
-### probe_curated_theblock_cf.py (168 LOC)
+### probe_curated_theblock_cf.py (175 LOC)
 
 **Purpose:** Standalone direct CF-pass probe on the curated list without an alive pre-filter.
 **Reads:** The curated proxy list.

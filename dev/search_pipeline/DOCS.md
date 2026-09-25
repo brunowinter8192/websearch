@@ -91,7 +91,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 24_pydoll_teardown_verify.py (308 LOC)
+### 24_pydoll_teardown_verify.py (309 LOC)
 
 **Purpose:** Integration test for tab teardown: hung, normal, and parallel-batch tab cases against real Chrome.
 **Reads:** none (self-contained hang simulation).
@@ -99,7 +99,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** pydoll CDP.
 
-### _capture_sorry.py (236 LOC)
+### _capture_sorry.py (233 LOC)
 
 **Purpose:** Helper script capturing Google's block page as HTML, screenshot, and markdown summary.
 **Reads:** `config.yml`.
@@ -139,7 +139,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `httpx`, `pydoll.exceptions`, `websockets.exceptions`.
 
-### pydoll_fingerprint_probe.py (193 LOC)
+### pydoll_fingerprint_probe.py (194 LOC)
 
 **Purpose:** Measures the production Chrome fingerprint against bot.sannysoft.com and prints pass/fail vectors.
 **Reads:** live page load.

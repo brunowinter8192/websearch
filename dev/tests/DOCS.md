@@ -291,6 +291,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Death-pipe intervention-log write failure raises; removed-dir reflects the real outcome.
 
+### test_dev_drop_reporting.py (175 LOC)
+
+**Purpose:** Dev-script handlers that drop a value report it or abort; engine health levels are words.
+
 ### test_cli_bootstrap.py (68 LOC)
 
 **Purpose:** `cli.py` import has no side effects; main configures logging and the exit hook before parsing.

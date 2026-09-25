@@ -123,3 +123,39 @@ Integration at 8835d8c (wssrc merged: engine classes became modules, private nam
 ## Follow-up: dead loop removed (2026-09-25)
 
 After wssrc's lazy `get_limiter`, `_limiters` is empty when `install_instrument()` runs, so the loop that wrapped existing limiters and the per-limiter `_lock` check never executed. Both removed from `_acquire_probe_instrument.py`; `_require_limiter_internals()` keeps only the `_limiters` check (`_get_name` reads it). `09_instrument_check.py` output for the acquire probe is identical to the integration tree (lock type `_WatchedLock`, five events for one bing acquire): limiters created after the install get the wrapped lock through the patched `__init__`.
+
+## Silent handlers and emojis in dev (2026-09-25)
+
+Follow-up task on the merged integration (d225306). Decisions from Main: narrow handlers that drop information get a stderr trace line; teardown races and cancellation/timeout cleanup stay and are listed; tracked generated reports stay as historical artifacts, only the producing scripts are fixed; replacement words for glyphs as proposed.
+
+### Silent handlers
+
+Definition used by `dev/refactor_sweep/11_silent_handler_scan.py`: an `except` whose body is only `pass`, `continue`, `break` or a `return` of nothing, a constant or an empty container. Re-measured 51 (ws6 counted 50): 9 broad, 42 narrow. Result now: 0 findings, 23 intended, `jhao104/patches/helper/validator.py` exempt (vendored overlay, 3 broad handlers).
+
+- **Broad handlers (6 changed).**
+  - `check_proxy` in `probe_curated_theblock_cf.py` and `probe_repo_cf_survey.py`: `except Exception: return False` became `except cffi.exceptions.RequestException` with a module `REJECTIONS` Counter (exception class name) printed once per run (`proxy check rejections: {...}`); any other exception aborts (same rule as src `fetch_url`). Result stays a bool.
+  - `_decode_altcha_payload` (mojeek core): `except ValueError`, trace line with class and message (base64 and JSON decode errors are ValueError subclasses).
+  - `extract_json_sample` (`_04_replay.py`): `except ValueError`, trace line with body size.
+  - `stop_browser` (`_capture_sorry.py`) and `_close_browser_quietly` (`20_docs_probe.py`, helper deleted): no observation of a failing stop or close exists in the process-docs, so the handler is gone and the exception propagates (tripwire). In the docs probe the report is still written first, the failure then aborts.
+- **Narrow, dropping a value (traced).** `_extract_value` / `extract_value` in 13 files (identical copy, `KeyError`/`TypeError` to None): `extract_value: dropped KeyError for result {...}` on stderr. `_extract_section` (2 files) and `parse_url_date` (3 files) and `_count_renderers`: one trace line each with the offending input. `import sys` added where missing.
+- **Intended, left as is (23, listed in `md/11_silent_handler_scan.md`).** `psutil` teardown races (NoSuchProcess, AccessDenied, ZombieProcess, Error), `asyncio.CancelledError` around a cancelled watchdog task, `asyncio.TimeoutError` as the expected end of a wait (`p2_browser_rider`, `altcha_trigger_probe`, `24_pydoll_teardown_verify`), `asyncio.QueueEmpty` ending a drain loop. The scan treats exactly these exception types as intended; a broad or other narrow silent handler is a finding.
+- **Own scan found its own handler.** `12_emoji_scan.py` first skipped undecodable files with `except (UnicodeDecodeError, OSError): return []`; now it reads with `errors="replace"` and lets OSError abort.
+
+Proof: `dev/tests/test_dev_drop_reporting.py`, 28 tests, each runs the dev function in a child interpreter (module loaded by path, its own directory on `sys.path`, so sibling names do not clash). Against a copy of integration (`DEV_TREE` env var) all 28 fail (old code swallows: `RESULT swallowed`, empty stderr, no `REJECTIONS`); against the branch all 28 pass. Provoked inputs: `{}` for `extract_value`, `/2024/13/45/` for `parse_url_date`, a URL without the host for `_extract_section`, a faked `subprocess.run` with non-numeric output, `'!!not-base64-json'`, `b'<html>'`, a faked `cffi.Session` raising `ConnectionError` (counted, returns False) and `KeyError` (aborts).
+
+### Emojis
+
+`12_emoji_scan.py`: 20 scripts had glyphs in output (more than the 13 named in P4-09: `05_playwright_bfs`, `download`, `06_cloudflare_md_adoption`, `_pipe_scrape_eval_phase1/2`, `09_garbage_fix_prototype`, `with_google_decoupling_smoke` and others). Glyph ranges: U+1F000-1FAFF, U+2600-27BF, U+2B50, U+2B55, U+FE0F, U+231A-231B, U+23E9-23FF, U+2B1B-2B1C; plain arrows are not emoji and stay. Now 0 findings in scripts and docs. Exempt and untouched: tracked generated reports under `md/` and `*_output/`, `runs/`, and scraped third-party data (`01_dual_mode_data`, `sweep_data`, `02_raw_data`, `cleaned_data`); about 200 tracked files.
+
+- Words: check mark to `ok` (table cells) or removed where the neighbouring word already says it (`FOUND`, `MISSING`, `YES`, `NO`); cross to `fail`; `✅`/`❌` to `OK`/`FAIL`, or removed after `**...**` markdown or `SUCCESS`; warning sign to `WARN` or removed; lightning and no-entry signs in the bee-probe flags to `EMPTY` and `ZERO`; `⭐` to `[winner]`. `engine_health_audit.py` used emoji as level tokens and sort keys: now `RED`, `GREY`, `YELLOW`, `TIMER`, `BLOCK`, `GREEN`, `WARN` (the sort order dict uses the same words, so ordering is unchanged), and the labels `DEGRADED (SLOW)` / `DEGRADED (RATE_LIMITED)`.
+- Proof: `13_glyph_diff_check.py` parses each cleaned script at the merge base and now, strips glyphs and the replacement words from every string constant (whitespace removed) and compares the ASTs: 20 of 20 identical, two files carry the trace line change as a second, separately verified edit. Behaviour test `test_engine_health_levels_are_words`. The module-level import snapshot differs from integration only by the new `REJECTIONS` constants and the removed `_close_browser_quietly`.
+
+### Whole proof set (against integration d225306)
+
+Layout scan 0 findings on 335 files; collect-only ids identical except the 28 new tests (default 706, browser 12 unchanged, all 718); `run_strands.sh` `strands=71 skipped=1 failed=0`, 687 passes (659 plus 28); pyflakes 166 lines in both trees, nothing new; 47 of 48 sandbox runs identical (same `--help` path wrap); `docs-drift-check` 0. `07_inline_equivalence.py` was not used for this task: it compares function bodies with the merge base and would flag every edited handler and glyph string; the top-level node comparison lists 41 changed files, all in the two groups above.
+
+### Pitfalls
+
+- The tool harness turns `\uXXXX` escapes typed in a heredoc into real characters, so a scan script written that way contained glyphs and flagged itself; build the ranges from code points (`chr`).
+- The glyph check first stripped only the glyph from the old side and only the replacement words from the new side; legitimate strings such as `"ok"` differed. Both sides get the same normalisation now.
+- A test that runs a repo scanner writes the scanner's report into the working tree; the two scanner tests were dropped from the suite (the scans are run by hand, reports are committed).

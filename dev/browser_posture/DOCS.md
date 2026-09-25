@@ -12,7 +12,7 @@ Crawl4ai lane (04, 05): real crawl4ai launch or self-launch plus CDP connect on 
 
 ## Modules
 
-### _lib.py (252 LOC)
+### _lib.py (254 LOC)
 
 **Purpose:** Shared launch, teardown, and measurement primitives for the pydoll-lane probes.
 **Reads:** nothing.

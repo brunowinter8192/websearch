@@ -1,4 +1,5 @@
 # INFRASTRUCTURE
+import sys
 import asyncio
 import json
 import logging
@@ -179,5 +180,6 @@ async def _dispatch_cdp_click(tab, rect: dict) -> None:
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None

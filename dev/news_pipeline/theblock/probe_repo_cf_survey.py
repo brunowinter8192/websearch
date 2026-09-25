@@ -17,6 +17,7 @@ from probe_pool_size import HTTP_SOURCES, SOCKS4_SOURCES, SOCKS5_SOURCES
 THEBLOCK_URL  = "https://www.theblock.co/sitemap_tbco_index.xml"
 XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 CHECK_TIMEOUT = 15
+REJECTIONS = Counter()
 SAMPLE_SIZE   = 1250
 CONCURRENCY   = 50
 FETCH_TIMEOUT = 15.0
@@ -49,6 +50,7 @@ def probe_repo_cf_survey_workflow() -> None:
 
     _print_check_header()
     repo_results = _check_repos(repo_proxies, report_path)
+    _print_rejections()
 
     print("\n[3/3] Finalising report...")
     finalize_report(report_path, repo_results, repo_proxies)
@@ -166,6 +168,10 @@ def _check_repos(repo_proxies, report_path):
         rate = passed / total * 100 if total else 0
         print(f"    → {passed}/{total} passed ({rate:.2f}%)", flush=True)
     return repo_results
+
+
+def _print_rejections() -> None:
+    print(f"proxy check rejections: {dict(REJECTIONS)}", file=sys.stderr)
 
 
 def finalize_report(path: Path, repo_results: dict, repo_proxies: dict) -> None:
@@ -316,7 +322,8 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
         head = r.content[:500]
         return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
+    except cffi.exceptions.RequestException as exc:
+        REJECTIONS[type(exc).__name__] += 1
         return False
 
 

@@ -24,7 +24,8 @@ def filter_replay_headers(raw: dict[str, str]) -> dict[str, str]:
 def extract_json_sample(body: bytes) -> dict | None:
     try:
         data = json.loads(body)
-    except Exception:
+    except ValueError as exc:
+        print(f"extract_json_sample: dropped {type(exc).__name__} for body of {len(body)} bytes", file=sys.stderr)
         return None
 
     articles = data if isinstance(data, list) else None

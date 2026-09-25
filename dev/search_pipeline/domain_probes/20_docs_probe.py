@@ -63,7 +63,7 @@ async def _run_docs_queries(engines, run_stats):
             all_runs[base_query] = await _run_query(qi, base_query, engines, run_stats)
     finally:
         _write_and_print_report(all_runs, run_stats)
-        await _close_browser_quietly()
+        await close_browser()
 
 
 async def _run_query(qi, base_query, engines, run_stats):
@@ -80,13 +80,6 @@ async def _run_query(qi, base_query, engines, run_stats):
 def _write_and_print_report(all_runs, run_stats) -> None:
     report_path = write_report(all_runs, run_stats, REPORT_DIR)
     print(f"\nReport: {report_path}", file=sys.stderr)
-
-
-async def _close_browser_quietly() -> None:
-    try:
-        await close_browser()
-    except Exception:
-        pass
 
 
 async def _query_engine(eng_name, engine, query, run_stats, run_results) -> None:

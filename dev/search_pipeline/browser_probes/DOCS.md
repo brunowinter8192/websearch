@@ -11,7 +11,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 
 ## Modules
 
-### 25_startpage_probe.py (280 LOC)
+### 25_startpage_probe.py (281 LOC)
 
 **Purpose:** Go/no-go probe for startpage.com scrapeability via the real homepage search form; ten queries, counts and block markers.
 **Reads:** none (live run).
@@ -27,7 +27,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `25_startpage_probe.py`.
 **Calls out:** stdlib only.
 
-### 26_brave_probe.py (260 LOC)
+### 26_brave_probe.py (261 LOC)
 
 **Purpose:** Three-condition gate probe for Brave Search (real rows, no PoW/CAPTCHA, latency at most five seconds); result DROP.
 **Reads:** none (live run).
@@ -43,7 +43,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `26_brave_probe.py`.
 **Calls out:** stdlib only.
 
-### 27_brave_headed_lane_probe.py (242 LOC)
+### 27_brave_headed_lane_probe.py (243 LOC)
 
 **Purpose:** Headed-background Chrome lane probe (macOS `open -g`) against Brave PoW; result DROP, launch mechanism validated.
 **Reads:** none (live run).
@@ -59,7 +59,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `27_brave_headed_lane_probe.py`.
 **Calls out:** stdlib only.
 
-### 28_bing_probe.py (276 LOC)
+### 28_bing_probe.py (277 LOC)
 
 **Purpose:** Go/no-go probe for bing.com as a second Bing-index path, including unwrapping of `ck/a` tracking redirects; result CANDIDATE.
 **Reads:** none (live run).
@@ -75,7 +75,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** `28_bing_probe.py`.
 **Calls out:** stdlib only.
 
-### 29_yandex_probe.py (256 LOC)
+### 29_yandex_probe.py (257 LOC)
 
 **Purpose:** Go/no-go probe for yandex.com as an independent-index candidate under a relaxed criterion; result CANDIDATE.
 **Reads:** none (live run).
@@ -99,7 +99,7 @@ Each entry drives a live browser session against one engine (or the ALTCHA widge
 **Called by:** CLI only.
 **Calls out:** `pydoll`.
 
-### _date_availability_probe_browser.py (147 LOC)
+### _date_availability_probe_browser.py (149 LOC)
 
 **Purpose:** Inline pydoll session shape for the date probe: options, fingerprint patches, tab lifecycle, generic block diagnosis.
 **Reads:** none.

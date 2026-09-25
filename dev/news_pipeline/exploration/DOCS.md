@@ -11,7 +11,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 
 ## Modules
 
-### 01_coindesk_ui_probe.py (224 LOC)
+### 01_coindesk_ui_probe.py (225 LOC)
 
 **Purpose:** Pydoll playthrough of the latest-news page to learn the load-more button, click mechanics, and article URL pattern.
 **Reads:** Live CoinDesk site.
@@ -67,7 +67,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `_02_quick.py`, `_02_depth.py`.
 **Calls out:** none.
 
-### 03_coindesk_backfill_traversal.py (346 LOC)
+### 03_coindesk_backfill_traversal.py (348 LOC)
 
 **Purpose:** Uncapped browser-driven backfill of the latest-news page reusing production discovery Chrome machinery, with stop rules for button gone, disabled, or plateau.
 **Reads:** Live CoinDesk site.
@@ -115,7 +115,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `04_coindesk_timeline_replay_probe.py`.
 **Calls out:** `pydoll`.
 
-### _04_replay.py (325 LOC)
+### _04_replay.py (326 LOC)
 
 **Purpose:** Dual-client HTTP replay of the captured timeline URL with cursor-chained pagination and 403 diagnostics.
 **Reads:** Live timeline API.

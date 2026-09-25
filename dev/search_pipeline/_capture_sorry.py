@@ -156,10 +156,7 @@ async def navigate_and_capture(browser: Chrome, cfg: dict, ts: str):
 
 
 async def stop_browser(browser: Chrome) -> None:
-    try:
-        await browser.stop()
-    except Exception:
-        pass
+    await browser.stop()
 
 
 def _build_js_patches(cfg: dict) -> str:

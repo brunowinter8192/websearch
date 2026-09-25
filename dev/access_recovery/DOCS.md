@@ -22,7 +22,7 @@ WML path: `queries.json` -> curl_cffi fetch -> lxml parse -> markdown report; ra
 
 ---
 
-### _dom.py (178 LOC)
+### _dom.py (180 LOC)
 
 **Purpose:** Google results-page interaction: consent handling, result wait and parse, block check, structural diagnostic pass.
 **Reads:** nothing; executes JS on the tab passed by the caller.
