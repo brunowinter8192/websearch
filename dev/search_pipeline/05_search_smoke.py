@@ -11,10 +11,10 @@ import os
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.search.browser import close_browser
-from src.search.engines.google import GoogleEngine
-from src.search.engines.duckduckgo import DuckDuckGoEngine
-from src.search.engines.scholar import ScholarEngine
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import google as google_engine
+from src.search.engines import duckduckgo as duckduckgo_engine
+from src.search.engines import scholar as scholar_engine
+from src.search.engines import openalex as openalex_engine
 from src.search.result import SearchResult
 
 SCRIPT_DIR = Path(__file__).parent
@@ -22,10 +22,10 @@ QUERIES_FILE = SCRIPT_DIR / "queries.txt"
 REPORT_DIR = SCRIPT_DIR / "md"
 
 AVAILABLE_ENGINES = {
-    "google": GoogleEngine,
-    "duckduckgo": DuckDuckGoEngine,
-    "google scholar": ScholarEngine,
-    "openalex": OpenAlexEngine,
+    "google": google_engine,
+    "duckduckgo": duckduckgo_engine,
+    "google scholar": scholar_engine,
+    "openalex": openalex_engine,
 }
 
 
@@ -33,7 +33,7 @@ AVAILABLE_ENGINES = {
 
 async def run_smoke(engine_names: list[str], max_queries: int | None) -> None:
     queries = _load_queries(QUERIES_FILE, max_queries)
-    engines = {name: AVAILABLE_ENGINES[name]() for name in engine_names}
+    engines = {name: AVAILABLE_ENGINES[name] for name in engine_names}
     print(f"Engines: {', '.join(engine_names)} | Queries: {len(queries)}", file=sys.stderr)
 
     records = []
@@ -66,14 +66,14 @@ def _load_queries(path: Path, max_queries: int | None) -> list[str]:
 
 
 async def _run_query(query: str, engines: dict) -> dict:
-    tasks = [engine.search(query, "en", 10) for engine in engines.values()]
+    tasks = [engine.search_with_reason(query, "en", 10) for engine in engines.values()]
     per_engine = await asyncio.gather(*tasks, return_exceptions=True)
 
     merged: dict[str, dict] = {}
     for engine_name, results in zip(engines.keys(), per_engine):
         if isinstance(results, Exception):
             continue
-        for r in results:
+        for r in results[0]:
             if r.url not in merged:
                 merged[r.url] = {"title": r.title, "snippets": {}, "preview": None}
             merged[r.url]["snippets"][engine_name] = r.snippet

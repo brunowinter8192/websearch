@@ -12,10 +12,10 @@ from statistics import median
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.google import GoogleEngine
-from src.search.engines.scholar import ScholarEngine
-from src.search.engines.duckduckgo import DuckDuckGoEngine
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import google as google_engine
+from src.search.engines import scholar as scholar_engine
+from src.search.engines import duckduckgo as duckduckgo_engine
+from src.search.engines import openalex as openalex_engine
 from src.search.browser import close_browser
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
@@ -53,10 +53,10 @@ async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     engines = [
-        ("google",         GoogleEngine()),
-        ("google_scholar", ScholarEngine()),
-        ("duckduckgo",     DuckDuckGoEngine()),
-        ("openalex",       OpenAlexEngine()),
+        ("google",         google_engine),
+        ("google_scholar", scholar_engine),
+        ("duckduckgo",     duckduckgo_engine),
+        ("openalex",       openalex_engine),
     ]
 
     records = []
@@ -95,7 +95,7 @@ async def probe_single(engine, engine_name: str, query: str, max_results: int) -
     }
     t0 = time.monotonic()
     try:
-        results = await engine.search(query, "en", max_results)
+        results = (await engine.search_with_reason(query, "en", max_results))[0]
         record["latency_ms"] = round((time.monotonic() - t0) * 1000)
         record["returned"] = len(results)
         record["status"] = "OK" if results else "EMPTY"

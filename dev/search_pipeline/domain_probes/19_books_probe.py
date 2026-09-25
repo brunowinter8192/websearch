@@ -13,8 +13,8 @@ from urllib.parse import urlparse
 SCRIPT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.google import GoogleEngine
-from src.search.engines.duckduckgo import DuckDuckGoEngine
+from src.search.engines import google as google_engine
+from src.search.engines import duckduckgo as duckduckgo_engine
 from src.search.browser import close_browser
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
@@ -39,8 +39,8 @@ QUERIES = [
 SUFFIX = " book"
 
 ENGINE_ORDER = [
-    ("google",     GoogleEngine),
-    ("duckduckgo", DuckDuckGoEngine),
+    ("google",     google_engine),
+    ("duckduckgo", duckduckgo_engine),
 ]
 
 ENGINE_MAX = {
@@ -60,7 +60,7 @@ MAX_PATH_LEN = 80
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
 
     all_runs: dict[str, list[dict]] = {}
     run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
@@ -77,7 +77,7 @@ async def run_probe() -> None:
 
                 t0 = time.monotonic()
                 try:
-                    results = await engine.search(query, "en", max_r)
+                    results = (await engine.search_with_reason(query, "en", max_r))[0]
                     ms = round((time.monotonic() - t0) * 1000)
                     print(f" {len(results)} ({ms}ms)", file=sys.stderr)
                     run_stats[eng_name]["total"] += len(results)

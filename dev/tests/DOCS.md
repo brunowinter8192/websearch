@@ -35,11 +35,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Riding abort on interrupt: exit codes 130 and 143 and report writes.
 
-### test_riding_tail_race.py (281 LOC)
+### test_riding_tail_race.py (287 LOC)
 
 **Purpose:** Riding slot tail-race cases with the per-URL fetch and proxy selection mocked.
 
-### test_riding_watchdog.py (91 LOC)
+### test_riding_watchdog.py (93 LOC)
 
 **Purpose:** Riding watchdog: wedge after all URLs resolved, and pool refresh.
 
@@ -51,7 +51,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Shared fake Chrome and state-reset helper for the browser lifecycle tests. Not collected by pytest.
 
-### test_browser.py (363 LOC)
+### test_browser.py (303 LOC)
 
 **Purpose:** `src/search/browser.py`: PID snapshot and kill mechanics, session-dir cleanup, watchdog cancellation, own-Chrome teardown, focus-steal watchdog branches.
 
@@ -75,7 +75,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/search/engines/bing.py`: redirect unwrapping, result building, and parse-error propagation.
 
-### test_brave_engine.py (392 LOC)
+### test_brave_engine.py (391 LOC)
 
 **Purpose:** `src/search/engines/brave.py`: fixture-driven regressions (marker reflection, challenge solving, partial facts on cancellation) against a real headless Chrome on loopback.
 
@@ -87,9 +87,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/search/engines/mojeek.py`: ALTCHA plumbing, parse-readiness rule, scripted-tab result waiting, diagnosis contract.
 
-### test_openalex_engine.py (233 LOC)
+### test_openalex_engine.py (223 LOC)
 
-**Purpose:** `src/search/engines/openalex.py`: PDF URL extraction and threading, HTTP-status diagnosis branches, request params, base-engine delegation.
+**Purpose:** `src/search/engines/openalex.py`: PDF URL extraction and threading, HTTP-status diagnosis branches, request params, exception propagation.
 
 ### test_startpage_engine.py (30 LOC)
 
@@ -195,7 +195,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/crawler/seed_feeders_navtree.py`: payload detection, tree finding tiers, version union, feeder workflow.
 
-### test_seed_feeders.py (55 LOC)
+### test_seed_feeders.py (57 LOC)
 
 **Purpose:** Fixture-backed checks of the three seed feeders against the local fixture site.
 
@@ -291,6 +291,22 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Death-pipe intervention-log write failure raises; removed-dir reflects the real outcome.
 
+### test_cli_bootstrap.py (65 LOC)
+
+**Purpose:** `cli.py` import has no side effects; main configures logging and the exit hook before parsing.
+
+### test_coindesk_browser_feed.py (119 LOC)
+
+**Purpose:** `src/news/platforms/coindesk/browser.py`: feed load result triples and session cleanup with fakes.
+
+### test_news_entrypoints.py (118 LOC)
+
+**Purpose:** Platform registry lookup, timeframe and date-filter argument handling, discover-only and scrape-only early exits.
+
+### test_rate_limiter_limits.py (32 LOC)
+
+**Purpose:** Per-engine limiter limits table and default limits for unlisted engines.
+
 ### test_coindesk_stop_date.py (41 LOC)
 
 **Purpose:** `src/news/platforms/coindesk/discover.py` stop-date parsing: full, explicit delta, integer days, unparseable raises.
@@ -299,9 +315,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/log_janitor.py` retention days: default and malformed-value behavior.
 
-### test_search_control_flow_removals.py (116 LOC)
+### test_search_control_flow_removals.py (115 LOC)
 
-**Purpose:** Removed swallow handlers: engine extraction, diagnosis, brave polling and cache read raise on corrupt input; parse failures surface as a parse-error status.
+**Purpose:** Removed swallow handlers: shared CDP value extraction, diagnosis, brave polling and cache read raise on corrupt input; parse failures surface as a parse-error status.
 
 ### test_platform_optional_attributes.py (58 LOC)
 

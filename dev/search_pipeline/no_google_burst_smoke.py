@@ -20,10 +20,10 @@ from src.search import status as S
 from src.search import status_timeout as ST
 from src.search import status_error as SE
 from src.search.browser import close_browser
-from src.search.engines.duckduckgo import DuckDuckGoEngine
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import duckduckgo as duckduckgo_engine
+from src.search.engines import openalex as openalex_engine
 
-from src.search.engines.scholar import ScholarEngine
+from src.search.engines import scholar as scholar_engine
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
@@ -58,9 +58,9 @@ async def run_smoke() -> None:
     report_path = REPORT_DIR / f"no_google_burst_{ts}.jsonl"
 
     engines = {
-        "google_scholar": ScholarEngine(),
-        "duckduckgo": DuckDuckGoEngine(),
-        "openalex": OpenAlexEngine(),
+        "google_scholar": scholar_engine,
+        "duckduckgo": duckduckgo_engine,
+        "openalex": openalex_engine,
     }
 
     print(f"Smoke: 9 engines (no Google), {len(QUERIES)} queries", file=sys.stderr)

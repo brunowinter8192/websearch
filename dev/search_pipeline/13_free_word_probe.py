@@ -13,10 +13,10 @@ from urllib.parse import urlparse
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.google import GoogleEngine
-from src.search.engines.scholar import ScholarEngine
-from src.search.engines.duckduckgo import DuckDuckGoEngine
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import google as google_engine
+from src.search.engines import scholar as scholar_engine
+from src.search.engines import duckduckgo as duckduckgo_engine
+from src.search.engines import openalex as openalex_engine
 from src.search.browser import close_browser
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
@@ -36,10 +36,10 @@ VARIANTS = [
 ]
 
 ENGINE_ORDER = [
-    ("google",         GoogleEngine),
-    ("google_scholar", ScholarEngine),
-    ("duckduckgo",     DuckDuckGoEngine),
-    ("openalex",       OpenAlexEngine),
+    ("google",         google_engine),
+    ("google_scholar", scholar_engine),
+    ("duckduckgo",     duckduckgo_engine),
+    ("openalex",       openalex_engine),
 ]
 
 ENGINE_MAX = {
@@ -63,7 +63,7 @@ BOOK_HOSTS = frozenset({"thalia.de", "openlibrary.org", "books.google.com", "goo
 
 async def run_probe() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
     all_runs: dict[tuple[str, str], list[dict]] = {}
     run_stats: dict[str, dict] = {name: {"total": 0, "errors": 0} for name, _ in ENGINE_ORDER}
 
@@ -81,7 +81,7 @@ async def run_probe() -> None:
 
                     t0 = time.monotonic()
                     try:
-                        results = await engine.search(query, "en", max_r)
+                        results = (await engine.search_with_reason(query, "en", max_r))[0]
                         ms = round((time.monotonic() - t0) * 1000)
                         print(f" {len(results)} ({ms}ms)", file=sys.stderr)
                         run_stats[eng_name]["total"] += len(results)

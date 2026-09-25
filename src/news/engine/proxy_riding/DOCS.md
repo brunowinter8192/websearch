@@ -64,7 +64,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Purpose:** Report orchestrator and job-summary markdown rendering from a completed rider state.
 **Reads:** the rider state and job start time.
 **Writes:** the job summary in the job directory; plots via plots.py.
-**Called by:** src/news/pipeline.py, abort.py.
+**Called by:** src/news/scrape_only.py, abort.py.
 **Calls out:** none.
 
 ### metrics.py (168 LOC)
@@ -88,7 +88,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Purpose:** Pipeline entry and manifest adapter: loads and shuffles the pool, runs the pool runner and maps job records to the pipeline manifest.
 **Reads:** the entry list, the riding configuration and the proxy pool (network).
 **Writes:** nothing directly; the runner writes raw HTML.
-**Called by:** src/news/pipeline.py.
+**Called by:** src/news/scrape_only.py.
 **Calls out:** none.
 
 ## State
