@@ -1,6 +1,5 @@
 # INFRASTRUCTURE
 from src.news.platform import Platform, ScrapeConfig
-from src.news.registry import register
 from src.news.platforms.theblock.config import PROXY_SCRAPE_CONFIG
 from src.news.platforms.theblock.discover import discover as _discover
 from src.news.platforms.theblock.cleanup import cleanup as _cleanup
@@ -25,6 +24,3 @@ class TheBlockPlatform(Platform):
 
     def cleanup(self, raw_html: str, entry: dict) -> str:
         return _cleanup(raw_html, entry)
-
-
-register(TheBlockPlatform())

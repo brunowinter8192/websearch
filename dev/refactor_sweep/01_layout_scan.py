@@ -137,14 +137,6 @@ def placement_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list
     return found
 
 
-def is_declaration(node: ast.stmt) -> bool:
-    if isinstance(node, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
-        return True
-    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-        return ast.unparse(node.value.func) in ("sys.path.insert", "sys.path.append")
-    return False
-
-
 def entry_findings(tree: ast.Module, markers: list[tuple[int, str]], kind: str) -> list[str]:
     defs = {n.name: n for n in tree.body if isinstance(n, DEF_TYPES)}
     orchestrators = [
@@ -174,6 +166,14 @@ def stepdown_findings(tree: ast.Module, markers: list[tuple[int, str]]) -> list[
                 continue
             found.append(f"STEPDOWN {name} defined above all callers {sorted(users)}")
     return found
+
+
+def is_declaration(node: ast.stmt) -> bool:
+    if isinstance(node, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+        return True
+    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+        return ast.unparse(node.value.func) in ("sys.path.insert", "sys.path.append")
+    return False
 
 
 def script_entry_findings(tree: ast.Module, defs: dict, orchestrators: list) -> list[str]:

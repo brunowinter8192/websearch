@@ -4,12 +4,12 @@ import re
 
 import httpx
 
-from src.news.engine.proxy_pool.monosans_loader import load_monosans_proxies, MONOSANS_URL
+from src.config import MONOSANS_URL, PROXY_LIST_FETCH_TIMEOUT
+from src.news.engine.proxy_pool.monosans_loader import load_monosans_proxies
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 from src.news.engine.proxy_pool.proxy_key import proxy_key
 
 PROXIFLY_URL = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.json"
-FETCH_TIMEOUT = 15.0
 
 THESPEEDX_SOURCES: list[tuple[str, str]] = [
     ("http",   "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"),
@@ -94,74 +94,38 @@ _IP_PORT_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}:\d+")
 # ORCHESTRATOR
 
 def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
-    entries: list[tuple[str, str]] = []
-    sources: list[dict]            = []
-
-    _try_source(MONOSANS_URL, load_monosans_proxies, entries, sources)
-
-    for proto, url in ROOSTERKID_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in THESPEEDX_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
-    for proto, url in THEMIRALAY_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in R00TEE_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in IPLOCATE_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in SUNNY9577_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ALIILAPRO_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in DPANGESTUW_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ZAEEM20_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in ZLOI_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in HOOKZOF_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-
-    _try_source(PROXIFLY_URL, _fetch_proxifly, entries, sources)
-    for proto, url in JETKAI_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
-    for proto, url in PRXCHK_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in SHIFTYTR_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in VAKHOV_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-    for proto, url in MURONGPIG_SOURCES:
-        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
-
+    entries, sources = _collect_sources()
     return _merge_dedup(entries), sources
 
 
 # FUNCTIONS
 
-def _fetch_proxifly() -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
-    return fetch_with_retry(_do)
+def _collect_sources() -> tuple[list[tuple[str, str]], list[dict]]:
+    entries: list[tuple[str, str]] = []
+    sources: list[dict]            = []
 
+    _try_source(MONOSANS_URL, load_monosans_proxies, entries, sources)
 
-def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, line.strip()) for line in resp.text.splitlines() if line.strip()]
-    return fetch_with_retry(_do)
+    _try_roosterkid_sources(ROOSTERKID_SOURCES, entries, sources)
+    _try_bare_txt_sources(THESPEEDX_SOURCES, entries, sources)
+    _try_roosterkid_sources(THEMIRALAY_SOURCES, entries, sources)
+    _try_roosterkid_sources(R00TEE_SOURCES, entries, sources)
+    _try_roosterkid_sources(IPLOCATE_SOURCES, entries, sources)
+    _try_roosterkid_sources(SUNNY9577_SOURCES, entries, sources)
+    _try_roosterkid_sources(ALIILAPRO_SOURCES, entries, sources)
+    _try_roosterkid_sources(DPANGESTUW_SOURCES, entries, sources)
+    _try_roosterkid_sources(ZAEEM20_SOURCES, entries, sources)
+    _try_roosterkid_sources(ZLOI_SOURCES, entries, sources)
+    _try_roosterkid_sources(HOOKZOF_SOURCES, entries, sources)
 
+    _try_source(PROXIFLY_URL, _fetch_proxifly, entries, sources)
+    _try_bare_txt_sources(JETKAI_SOURCES, entries, sources)
+    _try_roosterkid_sources(PRXCHK_SOURCES, entries, sources)
+    _try_roosterkid_sources(SHIFTYTR_SOURCES, entries, sources)
+    _try_roosterkid_sources(VAKHOV_SOURCES, entries, sources)
+    _try_roosterkid_sources(MURONGPIG_SOURCES, entries, sources)
 
-def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
-    def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
-        resp.raise_for_status()
-        return [(proto, m.group()) for line in resp.text.splitlines()
-                for m in (_IP_PORT_RE.search(line),) if m]
-    return fetch_with_retry(_do)
+    return entries, sources
 
 
 def _try_source(url: str, fn, entries: list, sources: list) -> None:
@@ -171,6 +135,41 @@ def _try_source(url: str, fn, entries: list, sources: list) -> None:
         sources.append({"url": url, "ok": True, "count": len(result)})
     except Exception as exc:
         sources.append({"url": url, "ok": False, "count": 0, "error": type(exc).__name__})
+
+
+def _try_roosterkid_sources(source_list: list[tuple[str, str]], entries: list, sources: list) -> None:
+    for proto, url in source_list:
+        _try_source(url, lambda p=proto, u=url: _fetch_roosterkid(p, u), entries, sources)
+
+
+def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=PROXY_LIST_FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, m.group()) for line in resp.text.splitlines()
+                for m in (_IP_PORT_RE.search(line),) if m]
+    return fetch_with_retry(_do)
+
+
+def _try_bare_txt_sources(source_list: list[tuple[str, str]], entries: list, sources: list) -> None:
+    for proto, url in source_list:
+        _try_source(url, lambda p=proto, u=url: _fetch_bare_txt(p, u), entries, sources)
+
+
+def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(url, timeout=PROXY_LIST_FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(proto, line.strip()) for line in resp.text.splitlines() if line.strip()]
+    return fetch_with_retry(_do)
+
+
+def _fetch_proxifly() -> list[tuple[str, str]]:
+    def _do():
+        resp = httpx.get(PROXIFLY_URL, timeout=PROXY_LIST_FETCH_TIMEOUT)
+        resp.raise_for_status()
+        return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
+    return fetch_with_retry(_do)
 
 
 def _merge_dedup(entries: list[tuple[str, str]]) -> list[tuple[str, str]]:

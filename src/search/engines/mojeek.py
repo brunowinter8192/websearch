@@ -6,12 +6,13 @@ import time
 from urllib.parse import quote_plus
 
 from src.search.browser import new_tab, kill_tab
+from src.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "mojeek"
 
 SEARCH_URL = "https://www.mojeek.com/search?q={}&safe=1"
 
@@ -70,54 +71,49 @@ return JSON.stringify({
 });
 """
 
-_limiters["mojeek"] = RateLimiter(max_requests=4, window_seconds=60)
-
 
 # ORCHESTRATOR
 
-class MojeekEngine(BaseEngine):
-    name = "mojeek"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        deadline = _budget_deadline()
-        logger.info("Mojeek search: %s", query)
-        tab = await new_tab()
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await tab.go_to(_build_url(query), timeout=NAV_TIMEOUT_S)
-            trace = await _await_results(tab, deadline, _parse_target(max_results), status_chain, t0, partial)
-            if not trace["ready"]:
-                diag = await _diagnose(tab, trace)
-                diag["containers_found"] = False
-                logger.debug("Mojeek empty for: %s", query)
-                return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
-            if results:
-                return results, None, attach_document_status({}, status_chain)
-            diag = await _diagnose(tab, trace)
-            diag["containers_found"] = True
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    deadline = _budget_deadline()
+    logger.info("Mojeek search: %s", query)
+    tab = await new_tab()
+    return await _search_and_close(tab, query, max_results, partial, t0, deadline)
 
 
 # FUNCTIONS
-
-def _extract_value(result):
-    return result["result"]["result"]["value"]
-
 
 def _budget_deadline() -> float:
     return time.monotonic() + MOJEEK_BUDGET_S
 
 
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, deadline: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0, deadline)
+    finally:
+        await kill_tab(tab)
+
+
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float, deadline: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await tab.go_to(_build_url(query), timeout=NAV_TIMEOUT_S)
+    trace = await _await_results(tab, deadline, _parse_target(max_results), status_chain, t0, partial)
+    if not trace["ready"]:
+        diag = await _diagnose(tab, trace)
+        diag["containers_found"] = False
+        logger.debug("Mojeek empty for: %s", query)
+        return [], None, attach_document_status(diag, status_chain)
+    results = await _parse_results(tab, max_results)
+    if results:
+        return results, None, attach_document_status({}, status_chain)
+    diag = await _diagnose(tab, trace)
+    diag["containers_found"] = True
+    return results, None, attach_document_status(diag, status_chain)
+
+
 def _build_url(query: str) -> str:
     return SEARCH_URL.format(quote_plus(query))
-
-
-def _parse_target(max_results: int) -> int:
-    return min(max_results, PAGE_RESULT_COUNT)
 
 
 async def _await_results(tab, deadline: float, target: int, status_chain: list[int], t0: float, partial: dict | None) -> dict:
@@ -145,7 +141,7 @@ async def _await_results(tab, deadline: float, target: int, status_chain: list[i
 
 async def _poll_facts(tab) -> dict:
     raw = await tab.execute_script(_JS_POLL)
-    value = _extract_value(raw)
+    value = extract_value(raw)
     if not value:
         return {}
     return json.loads(value)
@@ -169,6 +165,32 @@ async def _fire_verify(tab) -> None:
     await tab.execute_script(_JS_VERIFY)
 
 
+def _parse_target(max_results: int) -> int:
+    return min(max_results, PAGE_RESULT_COUNT)
+
+
+async def _diagnose(tab, trace: dict) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {
+        "marker": None, "title": "", "url": "", "ready_state": "",
+        "challenge_widget": False, "challenge_state": None, "captcha_note": None,
+    }
+    if val:
+        diag.update(json.loads(val))
+    diag["challenge_triggered"] = trace.get("challenge_triggered", False)
+    return diag
+
+
+async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return _build_results(items, max_results)
+
+
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     results = []
     for item in items[:max_results]:
@@ -180,25 +202,3 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
             engine="mojeek", position=len(results) + 1,
         ))
     return results
-
-
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return _build_results(items, max_results)
-
-
-async def _diagnose(tab, trace: dict) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {
-        "marker": None, "title": "", "url": "", "ready_state": "",
-        "challenge_widget": False, "challenge_state": None, "captcha_note": None,
-    }
-    if val:
-        diag.update(json.loads(val))
-    diag["challenge_triggered"] = trace.get("challenge_triggered", False)
-    return diag

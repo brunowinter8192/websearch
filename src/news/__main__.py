@@ -2,11 +2,10 @@
 import argparse
 import asyncio
 
-import src.news.platforms.coindesk
-import src.news.platforms.theblock
-
+from src.news.discover_only import discover_only_workflow
+from src.news.pipeline import run_pipeline
 from src.news.registry import get
-from src.news.pipeline import run_pipeline, run_discover_only, run_scrape_only
+from src.news.scrape_only import scrape_only_workflow
 
 
 # ORCHESTRATOR
@@ -15,17 +14,11 @@ def main() -> None:
     args = parser.parse_args()
 
     platform = get(args.source)
-    skip_index = args.skip_index
-    platform.timeframe = args.timeframe
-    if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
-        skip_index = True
-        print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
-        print(f"After review, run: rag-cli index --collection {platform.collection}")
+    skip_index = _apply_timeframe(platform, args)
 
     if args.scrape_only:
-        if args.year and (args.from_date or args.to_date):
-            parser.error("--year and --from/--to are mutually exclusive")
-        asyncio.run(run_scrape_only(
+        _require_exclusive_date_filters(parser, args)
+        asyncio.run(scrape_only_workflow(
             platform,
             year=args.year,
             from_date=args.from_date,
@@ -38,7 +31,7 @@ def main() -> None:
             page_timeout_ms=args.page_timeout,
         ))
     elif args.discover_only:
-        asyncio.run(run_discover_only(platform))
+        asyncio.run(discover_only_workflow(platform))
     else:
         asyncio.run(run_pipeline(platform, skip_index=skip_index))
 
@@ -148,6 +141,21 @@ def _add_scrape_only_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Per-fetch page navigation timeout in ms for proxy_riding scrape-only (default 8000 from RidingScrapeConfig).",
     )
+
+
+def _apply_timeframe(platform, args: argparse.Namespace) -> bool:
+    skip_index = args.skip_index
+    platform.timeframe = args.timeframe
+    if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
+        skip_index = True
+        print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
+        print(f"After review, run: rag-cli index --collection {platform.collection}")
+    return skip_index
+
+
+def _require_exclusive_date_filters(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.year and (args.from_date or args.to_date):
+        parser.error("--year and --from/--to are mutually exclusive")
 
 
 if __name__ == "__main__":

@@ -11,8 +11,9 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
 from src.search.browser import new_tab, close_browser
+from src.cdp_value import extract_value
 from src.search.engines.google import (
-    _inject_socs_cookie, _build_url, _wait_for_results, _extract_value,
+    _inject_socs_cookie, _build_url, _wait_for_results,
 )
 
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -159,7 +160,7 @@ def _print_report(report_path):
 
 async def read_counts(tab) -> dict:
     raw = await tab.execute_script(_JS_COUNTS)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     if not val:
         return {}
     return json.loads(val)
@@ -167,7 +168,7 @@ async def read_counts(tab) -> dict:
 
 async def read_structure(tab) -> list:
     raw = await tab.execute_script(_JS_STRUCTURE)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     if not val:
         return []
     return json.loads(val)

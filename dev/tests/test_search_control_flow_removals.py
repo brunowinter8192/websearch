@@ -15,6 +15,7 @@ import src.search.engines.startpage as startpage_mod
 import src.search.engines.yandex as yandex_mod
 import src.search.search_web as search_web
 from src.search import status_error as SE
+from src.cdp_value import extract_value
 
 ENGINE_MODULES = [google_mod, bing_mod, brave_mod, duckduckgo_mod, mojeek_mod, startpage_mod, yandex_mod]
 ENGINE_IDS = [m.__name__.rsplit(".", 1)[-1] for m in ENGINE_MODULES]
@@ -32,16 +33,14 @@ DIAGNOSE_CALLS = [
 
 # FUNCTIONS
 
-@pytest.mark.parametrize("module", ENGINE_MODULES, ids=ENGINE_IDS)
-def test_extract_value_raises_when_the_cdp_result_has_no_value(module):
+def test_extract_value_raises_when_the_cdp_result_has_no_value():
     with pytest.raises(KeyError):
-        module._extract_value({"result": {"result": {}}})
+        extract_value({"result": {"result": {}}})
 
 
-@pytest.mark.parametrize("module", ENGINE_MODULES, ids=ENGINE_IDS)
-def test_extract_value_raises_on_a_non_dict_result(module):
+def test_extract_value_raises_on_a_non_dict_result():
     with pytest.raises(TypeError):
-        module._extract_value(None)
+        extract_value(None)
 
 
 @pytest.mark.parametrize("module,call", DIAGNOSE_CALLS, ids=ENGINE_IDS)

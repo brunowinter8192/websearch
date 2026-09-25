@@ -10,7 +10,7 @@ from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
 
 from src.search.engines import yandex as yandex_mod
-from src.search.engines.yandex import YandexEngine, _build_results, _is_block_url, _is_self_referential
+from src.search.engines.yandex import _build_results, _is_block_url, _is_self_referential
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ async def test_marker_word_in_own_query_no_longer_discards_real_results(monkeypa
     try:
         _patch_yandex_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(yandex_mod, "SEARCH_URL", f"{base_url}/search/?text={{}}")
-        results, reason, diagnosis = await YandexEngine().search_with_reason(_OWN_QUERY)
+        results, reason, diagnosis = await yandex_mod.search_with_reason(_OWN_QUERY)
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -150,7 +150,7 @@ async def test_genuine_showcaptcha_redirect_still_yields_no_results(monkeypatch)
     try:
         _patch_yandex_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(yandex_mod, "SEARCH_URL", f"{base_url}/showcaptcha?text={{}}")
-        results, reason, diagnosis = await YandexEngine().search_with_reason("any query at all")
+        results, reason, diagnosis = await yandex_mod.search_with_reason("any query at all")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)

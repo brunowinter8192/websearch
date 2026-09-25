@@ -9,7 +9,7 @@ from src.crawler.seed_feeders_navtree import (
     extract_payloads, find_navigation_tree, _build_version_urls, canonicalize_version_url,
     resolve_navigation_tree,
 )
-from src.crawler import seed_feeders
+from src.crawler import navtree_feeder
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _next_data_html, _rsc_html
 
 
@@ -177,9 +177,9 @@ async def test_resolve_navigation_tree_unfetchable_seed_raises_not_empty():
 async def test_navtree_feeder_workflow_next_data_shape_end_to_end(monkeypatch):
     payload = {"tree": {"url": "/docs", "children": [{"url": "/docs/a"}, {"url": "/docs/b"}]}}
     routes = {"https://docs.example.com/": _FakeResponse(200, text=_next_data_html(payload))}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.source == "navtree_tree"
     assert sorted(result.urls) == [
@@ -195,9 +195,9 @@ async def test_navtree_feeder_workflow_rsc_tree_shape_does_not_fall_through(monk
         '{"type":"page","name":"B","url":"/docs/b"}]}}'
     ]
     routes = {"https://docs.example.com/": _FakeResponse(200, text=_rsc_html(rows))}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.source == "navtree_tree"
     assert sorted(result.urls) == ["https://docs.example.com/docs/a", "https://docs.example.com/docs/b"]
@@ -207,9 +207,9 @@ async def test_navtree_feeder_workflow_rsc_tree_shape_does_not_fall_through(monk
 async def test_navtree_feeder_workflow_rsc_dom_only_shape_falls_back_to_flat_tier(monkeypatch):
     rows = ['1:["$","a",null,{"href":"/docs/only-link","children":"Link text"}]']
     routes = {"https://docs.example.com/": _FakeResponse(200, text=_rsc_html(rows))}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.source == "navtree_flat"
     assert result.urls == ["https://docs.example.com/docs/only-link"]
@@ -218,17 +218,17 @@ async def test_navtree_feeder_workflow_rsc_dom_only_shape_falls_back_to_flat_tie
 @pytest.mark.asyncio
 async def test_navtree_feeder_workflow_neither_shape_is_ok_empty(monkeypatch):
     routes = {"https://docs.example.com/": _FakeResponse(200, text="<html>plain page</html>")}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result == FeederResult(urls=[], ok=True, source="navtree_flat")
 
 
 @pytest.mark.asyncio
 async def test_navtree_feeder_workflow_unreachable_seed_is_failed_not_ok_empty(monkeypatch):
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient({}))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient({}))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.urls == []
     assert result.source is None
@@ -237,7 +237,7 @@ async def test_navtree_feeder_workflow_unreachable_seed_is_failed_not_ok_empty(m
 
 @pytest.mark.asyncio
 async def test_navtree_feeder_workflow_invalid_seed_url_is_failed_not_empty():
-    result = await seed_feeders.navtree_feeder_workflow("not-a-url-at-all")
+    result = await navtree_feeder.navtree_feeder_workflow("not-a-url-at-all")
     assert result.ok is False
     assert result.urls == []
     assert result.error is not None
@@ -259,9 +259,9 @@ async def test_resolve_navigation_tree_network_error_on_seed_propagates():
 @pytest.mark.asyncio
 async def test_navtree_feeder_workflow_network_error_is_failed_with_error(monkeypatch):
     client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: client)
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: client)
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.urls == []
     assert "connection refused" in result.error
@@ -271,9 +271,9 @@ async def test_navtree_feeder_workflow_network_error_is_failed_with_error(monkey
 async def test_navtree_feeder_workflow_malformed_next_data_is_failed_with_error(monkeypatch):
     html = '<html><script id="__NEXT_DATA__" type="application/json">{not json</script></html>'
     routes = {"https://docs.example.com/": _FakeResponse(200, text=html)}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(navtree_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.navtree_feeder_workflow("https://docs.example.com/")
+    result = await navtree_feeder.navtree_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.error
 

@@ -81,11 +81,11 @@ async def test_scrape_all_threads_headed_into_build_configs(tmp_path, monkeypatc
     monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
 
     captured = []
-    real_build_configs = pipe_scraper_config._build_configs
+    real_build_configs = pipe_scraper_config.build_configs
     def _capturing_build_configs(headed=False):
         captured.append(headed)
         return real_build_configs(headed=headed)
-    monkeypatch.setattr(pipe_scraper, "_build_configs", _capturing_build_configs)
+    monkeypatch.setattr(pipe_scraper, "build_configs", _capturing_build_configs)
 
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -102,11 +102,11 @@ async def test_scrape_all_default_headed_is_false(tmp_path, monkeypatch):
     monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler", _FakeCrawler)
 
     captured = []
-    real_build_configs = pipe_scraper_config._build_configs
+    real_build_configs = pipe_scraper_config.build_configs
     def _capturing_build_configs(headed=False):
         captured.append(headed)
         return real_build_configs(headed=headed)
-    monkeypatch.setattr(pipe_scraper, "_build_configs", _capturing_build_configs)
+    monkeypatch.setattr(pipe_scraper, "build_configs", _capturing_build_configs)
 
     output_dir = tmp_path / "out"
     output_dir.mkdir()
@@ -132,7 +132,7 @@ async def test_scrape_one_exception_becomes_tripwire_record(tmp_path, monkeypatc
     assert by_url_result["https://x.test/fail"]["bytes"] == 0
     assert by_url_result["https://x.test/a"]["status_code"] == 200
 
-    assert not (output_dir / pipe_scraper_acquisition._url_to_filename("https://x.test/fail")).exists()
+    assert not (output_dir / pipe_scraper_acquisition.url_to_filename("https://x.test/fail")).exists()
 
     records = [json.loads(l) for l in log_file.read_text(encoding="utf-8").splitlines()]
     by_url_record = {r["url"]: r for r in records}

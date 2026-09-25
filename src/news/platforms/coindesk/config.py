@@ -1,15 +1,6 @@
 # INFRASTRUCTURE
-from pathlib import Path
-
+from src.config import PROJECT_ROOT
 from src.news.platform import ScrapeConfig
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.parent
-
-REGWALL_SIGNALS: list[str] = [
-    "from_regwall",
-    "Create a FREE account to continue reading",
-    "You've reached your monthly limit",
-]
 
 SCRAPE_CONFIG = ScrapeConfig()
 

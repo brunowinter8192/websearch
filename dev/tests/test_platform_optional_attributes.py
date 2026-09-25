@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from src.news import pipeline
+from src.news import pipeline_support, scrape_only
 from src.news.engine.proxy_riding.scrape import RidingScrapeConfig
 from src.news.platform import Platform
 from src.news.platforms.coindesk import CoinDeskPlatform
@@ -42,18 +42,18 @@ def test_theblock_values_match_previous_getattr_results():
 
 
 def test_scrape_only_preamble_exits_for_platform_without_support(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, "LOG_DIR", tmp_path)
-    monkeypatch.setattr(pipeline, "_setup_logging", lambda name: logging.getLogger("t"))
-    monkeypatch.setattr(pipeline, "_check_internet", lambda platform, log: True)
+    monkeypatch.setattr(scrape_only, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(scrape_only, "setup_logging", lambda name: logging.getLogger("t"))
+    monkeypatch.setattr(pipeline_support, "check_internet", lambda platform, log: True)
     with pytest.raises(SystemExit):
-        pipeline._scrape_only_preamble(TheBlockPlatform(), None, None, None)
+        scrape_only._scrape_only_preamble(TheBlockPlatform(), None, None, None)
 
 
 def test_scrape_only_preamble_passes_for_supporting_platform(tmp_path, monkeypatch):
-    monkeypatch.setattr(pipeline, "LOG_DIR", tmp_path)
-    monkeypatch.setattr(pipeline, "_setup_logging", lambda name: logging.getLogger("t"))
-    monkeypatch.setattr(pipeline, "_check_internet", lambda platform, log: True)
-    log, job_id, desc = pipeline._scrape_only_preamble(CoinDeskPlatform(), "2024", None, None)
+    monkeypatch.setattr(scrape_only, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(scrape_only, "setup_logging", lambda name: logging.getLogger("t"))
+    monkeypatch.setattr(pipeline_support, "check_internet", lambda platform, log: True)
+    log, job_id, desc = scrape_only._scrape_only_preamble(CoinDeskPlatform(), "2024", None, None)
     assert desc == "year=2024"
 
 

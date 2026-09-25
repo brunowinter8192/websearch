@@ -4,7 +4,7 @@ from src.search.degraded_notice import (
     BROWSER_REPAIR_COMMAND,
     _failing_engines,
     _format_degraded_notice,
-    _prepend_degraded_notice,
+    prepend_degraded_notice,
 )
 
 WATCHDOG = "asyncio.TimeoutError after 6.0s watchdog"
@@ -181,7 +181,7 @@ def test_hypothesis_fires_without_error_browser_omits_repair_hint():
 def test_prepend_puts_notice_before_breakdown_not_after():
     engine_stats = _record_2026_09_21_0841()
     breakdown_text = 'Engine breakdown for "q":\n  google               0'
-    combined = _prepend_degraded_notice(breakdown_text, engine_stats)
+    combined = prepend_degraded_notice(breakdown_text, engine_stats)
     assert combined.startswith("Engine failures:")
     assert combined.endswith(breakdown_text)
 
@@ -192,7 +192,7 @@ def test_prepend_is_byte_identical_to_breakdown_alone_on_healthy_run():
         ("startpage", "OK"), ("brave", "OK"), ("bing", "OK"), ("yandex", "EMPTY"),
     )
     breakdown_text = 'Engine breakdown for "q":\n  google               10\n\nUse ... drilldown.'
-    assert _prepend_degraded_notice(breakdown_text, engine_stats) == breakdown_text
+    assert prepend_degraded_notice(breakdown_text, engine_stats) == breakdown_text
 
 
 def _record_2026_09_21_0841():

@@ -19,10 +19,10 @@ from src.search import status as S
 from src.search import status_timeout as ST
 from src.search import status_error as SE
 from src.search.browser import close_browser
-from src.search.engines.duckduckgo import DuckDuckGoEngine
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import duckduckgo as duckduckgo_engine
+from src.search.engines import openalex as openalex_engine
 
-from src.search.engines.scholar import ScholarEngine
+from src.search.engines import scholar as scholar_engine
 
 REPORT_DIR = SCRIPT_DIR / "jsonl"
 
@@ -83,9 +83,9 @@ def _compute_report_path(ts):
 
 def _compute_engines():
     engines = {
-        "google_scholar": ScholarEngine(),
-        "duckduckgo": DuckDuckGoEngine(),
-        "openalex": OpenAlexEngine(),
+        "google_scholar": scholar_engine,
+        "duckduckgo": duckduckgo_engine,
+        "openalex": openalex_engine,
     }
     return engines
 

@@ -43,7 +43,7 @@ def _run_main(monkeypatch, tmp_path, pids_arg, cleanup_dir, rmtree):
     logged = []
     monkeypatch.setattr(death_pipe.sys, "argv", ["death_pipe.py", pids_arg, str(cleanup_dir)])
     monkeypatch.setattr(death_pipe.os, "read", lambda fd, n: b"")
-    monkeypatch.setattr(death_pipe, "_terminate_then_kill", lambda pids: [])
+    monkeypatch.setattr(death_pipe, "terminate_then_kill", lambda pids: [])
     monkeypatch.setattr(death_pipe.shutil, "rmtree", rmtree)
     monkeypatch.setattr(death_pipe, "_log_intervention", logged.append)
     death_pipe._watchdog_main()

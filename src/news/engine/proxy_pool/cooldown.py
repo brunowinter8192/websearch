@@ -7,7 +7,7 @@ from src.news.engine.proxy_pool.proxy_key import proxy_key
 COOLDOWN_S = 3600
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class PersistentCooldownManager:
     def __init__(self, cooldown_s: int = COOLDOWN_S):

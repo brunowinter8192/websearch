@@ -9,13 +9,7 @@ from pathlib import Path
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, ProxyConfig
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-from src.news.engine.proxy_riding.state import DELAY_BEFORE_HTML, RAW_SUBDIR
-
-REGWALL_SIGNALS: list[str] = [
-    "from_regwall",
-    "Create a FREE account to continue reading",
-    "You've reached your monthly limit",
-]
+from src.config import DELAY_BEFORE_HTML, RAW_SUBDIR, REGWALL_SIGNALS
 
 _PROXY_ERR = ("timeout", "proxy", "err_proxy", "tunnel", "socks",
               "err_empty", "connection refused", "connection failed", "net::err")
@@ -23,7 +17,7 @@ _PROXY_ERR = ("timeout", "proxy", "err_proxy", "tunnel", "socks",
 
 # FUNCTIONS
 
-async def _fetch_one_url(
+async def fetch_one_url(
     crawler:         AsyncWebCrawler,
     url:              str,
     proxy_str:        str,
@@ -78,7 +72,7 @@ def _is_regwall(markdown: str) -> bool:
     return any(sig in markdown for sig in REGWALL_SIGNALS)
 
 
-def _classify_connect_fail(err: str | None) -> str:
+def classify_connect_fail(err: str | None) -> str:
     if not err:
         return "other"
     emsg = err.lower()
@@ -91,11 +85,11 @@ def _classify_connect_fail(err: str | None) -> str:
     return "other"
 
 
-def _write_raw(url_hash: str, html: str, output_dir: Path) -> Path:
+def write_raw(url_hash: str, html: str, output_dir: Path) -> Path:
     path = output_dir / RAW_SUBDIR / f"{url_hash}.html"
     path.write_text(html, encoding="utf-8")
     return path
 
 
-def _url_hash(url: str) -> str:
+def url_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:12]

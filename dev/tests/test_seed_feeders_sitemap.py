@@ -7,7 +7,7 @@ import pytest
 
 from src.crawler.seed_feeders_scope import FeederResult
 from src.crawler.seed_feeders_sitemap import fetch_sitemap, parse_sitemap_xml, resolve_sitemap_urls
-from src.crawler import seed_feeders
+from src.crawler import sitemap_feeder
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient, _xml
 
 
@@ -134,9 +134,9 @@ async def test_sitemap_feeder_workflow_prefers_robots_declared_sitemap(monkeypat
         "https://docs.example.com/robots.txt": _FakeResponse(200, text=robots_text),
         "https://docs.example.com/declared.xml": _FakeResponse(200, content=urlset),
     }
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.urls == ["https://docs.example.com/a"]
 
@@ -151,9 +151,9 @@ async def test_sitemap_feeder_workflow_falls_back_to_conventional_paths(monkeypa
     routes = {
         "https://docs.example.com/sitemap.xml": _FakeResponse(200, content=urlset),
     }
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.urls == ["https://docs.example.com/a"]
 
@@ -163,9 +163,9 @@ async def test_sitemap_feeder_workflow_all_404_is_ok_empty_docs_github_shape(mon
     routes = {
         "https://docs.example.com/robots.txt": _FakeResponse(200, text="User-agent: *\nDisallow: /a\n"),
     }
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result == FeederResult(urls=[], ok=True, source="sitemap_conventional")
 
 
@@ -178,9 +178,9 @@ async def test_sitemap_feeder_workflow_drops_foreign_host_urls(monkeypatch):
         "</urlset>"
     )
     routes = {"https://docs.example.com/sitemap.xml": _FakeResponse(200, content=urlset)}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.urls == ["https://docs.example.com/a"]
 
 
@@ -211,9 +211,9 @@ async def test_sitemap_feeder_workflow_non_xml_sitemap_is_failed_with_error(monk
         "https://docs.example.com/robots.txt": _FakeResponse(404),
         "https://docs.example.com/sitemap.xml": _FakeResponse(200, content=b"<html><body>app shell</body>"),
     }
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.urls == []
     assert result.error
@@ -226,8 +226,8 @@ async def test_sitemap_feeder_workflow_declared_route_is_named_in_source(monkeyp
         "https://docs.example.com/robots.txt": _FakeResponse(200, text="Sitemap: https://docs.example.com/declared.xml\n"),
         "https://docs.example.com/declared.xml": _FakeResponse(200, content=urlset),
     }
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.source == "sitemap_declared"
 
 
@@ -235,8 +235,8 @@ async def test_sitemap_feeder_workflow_declared_route_is_named_in_source(monkeyp
 async def test_sitemap_feeder_workflow_conventional_route_is_named_in_source(monkeypatch):
     urlset = _xml('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://docs.example.com/a</loc></url></urlset>')
     routes = {"https://docs.example.com/sitemap.xml": _FakeResponse(200, content=urlset)}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.source == "sitemap_conventional"
 
 
@@ -258,7 +258,7 @@ async def test_fetch_sitemap_other_non_200_raises(status):
 @pytest.mark.asyncio
 async def test_sitemap_feeder_workflow_server_error_is_failed_not_empty(monkeypatch):
     routes = {"https://docs.example.com/robots.txt": _FakeResponse(503)}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
-    result = await seed_feeders.sitemap_feeder_workflow("https://docs.example.com/")
+    monkeypatch.setattr(sitemap_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    result = await sitemap_feeder.sitemap_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert "503" in result.error

@@ -3,7 +3,7 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
-_BACKFILL_TOTAL = 61_000
+from src.config import BACKFILL_TOTAL
 
 
 # ORCHESTRATOR
@@ -37,7 +37,7 @@ def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
 
     wall_s = (datetime.now(timezone.utc) - t_job_start).total_seconds()
     urls_per_min = (n_scraped / wall_s * 60) if wall_s > 0 else None
-    backfill_h   = (_BACKFILL_TOTAL / urls_per_min / 60) if urls_per_min else None
+    backfill_h   = (BACKFILL_TOTAL / urls_per_min / 60) if urls_per_min else None
 
     ok_chars = sorted(
         r["char_count"] for r in job_records
@@ -67,10 +67,6 @@ def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
         "urls_per_min": urls_per_min, "backfill_h": backfill_h,
         "char_pct": char_pct, "ok_completion_s": ok_completion_s,
     }
-
-
-def _fmt(v, spec="", unit="") -> str:
-    return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
 def _write_plot(job_dir: Path, stats: dict) -> None:
@@ -147,6 +143,10 @@ def _md_header(job_id: str, filter_desc: str, n_target: int, stats: dict, rw_cel
         f"| Backfill projection (61 k) | {_fmt(stats['backfill_h'], '.1f', 'h')} |",
         "",
     ]
+
+
+def _fmt(v, spec="", unit="") -> str:
+    return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
 def _md_char_distribution(stats: dict) -> list[str]:

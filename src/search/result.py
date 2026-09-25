@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field
 
 
+# FUNCTIONS
+
 @dataclass
 class SearchResult:
     url: str

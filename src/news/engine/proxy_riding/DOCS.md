@@ -11,7 +11,7 @@ Third scrape engine: browser plus rotating proxies, built to get past CoinDesk's
 - scrape.py: the engine entry and its configuration dataclass, used by the news pipeline in scrape-only mode.
 - reporter.py: the job report writer, used after normal completion and by the abort paths.
 - rider.py: the pool runner entry, a stable import path.
-- state.py: the shared state and record dataclasses and calibrated constants.
+- state.py: the shared state and record dataclasses.
 
 ## Flow
 
@@ -19,7 +19,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 
 ## Modules
 
-### cooldown.py (83 LOC)
+### cooldown.py (80 LOC)
 
 **Purpose:** Riding-specific proxy cooldown manager with two per-run policies, isolated from the shared pool cooldown.
 **Reads:** in-memory burn and eligibility maps.
@@ -27,15 +27,15 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, scrape.py, state.py.
 **Calls out:** none.
 
-### state.py (87 LOC)
+### state.py (82 LOC)
 
-**Purpose:** Shared riding dataclasses and calibrated constants; the one canonical import source for all riding modules and dev tests.
+**Purpose:** Shared riding dataclasses (job, ride and runner state); the import source for all riding modules and dev tests.
 **Reads:** none.
 **Writes:** none.
 **Called by:** rider.py, fetch.py, abort.py, reporter.py, metrics.py, scrape.py; dev tests.
 **Calls out:** none.
 
-### fetch.py (101 LOC)
+### fetch.py (95 LOC)
 
 **Purpose:** Per-URL fetch and outcome classification: the crawl4ai call, regwall detection, connect-failure subtypes and raw HTML persistence.
 **Reads:** none (per-call).
@@ -51,7 +51,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py.
 **Calls out:** none.
 
-### rider.py (349 LOC)
+### rider.py (381 LOC)
 
 **Purpose:** Runner: orchestrates browsers, slot coroutines, per-URL proxy contexts, burn and fail rotation, pool refresh, the watchdog and signal handlers.
 **Reads:** the URL queue, proxy pool and shared cooldown state.
@@ -64,10 +64,10 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Purpose:** Report orchestrator and job-summary markdown rendering from a completed rider state.
 **Reads:** the rider state and job start time.
 **Writes:** the job summary in the job directory; plots via plots.py.
-**Called by:** src/news/pipeline.py, abort.py.
+**Called by:** src/news/scrape_only.py, abort.py.
 **Calls out:** none.
 
-### metrics.py (152 LOC)
+### metrics.py (168 LOC)
 
 **Purpose:** Derives job statistics from the rider state for the report and plots.
 **Reads:** the rider state and job start time.
@@ -83,12 +83,12 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** reporter.py.
 **Calls out:** matplotlib.
 
-### scrape.py (107 LOC)
+### scrape.py (120 LOC)
 
 **Purpose:** Pipeline entry and manifest adapter: loads and shuffles the pool, runs the pool runner and maps job records to the pipeline manifest.
 **Reads:** the entry list, the riding configuration and the proxy pool (network).
 **Writes:** nothing directly; the runner writes raw HTML.
-**Called by:** src/news/pipeline.py.
+**Called by:** src/news/scrape_only.py.
 **Calls out:** none.
 
 ## State

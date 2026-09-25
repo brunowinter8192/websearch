@@ -123,7 +123,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** `httpx`.
 
-### google_selector_probe.py (269 LOC)
+### google_selector_probe.py (270 LOC)
 
 **Purpose:** Google DOM-selector diagnostic comparing the main heading selector with alternatives on a 100-result page.
 **Reads:** Live DOM fetch with a hardcoded query.

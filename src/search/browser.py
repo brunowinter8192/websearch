@@ -8,7 +8,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import psutil
 from patchright.async_api import async_playwright
 from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
@@ -17,7 +16,8 @@ from pydoll.commands import TargetCommands
 from pydoll.connection import ConnectionHandler
 
 from src.search import browser_lock
-from src import death_pipe
+from src import death_pipe, watchdog_spawn
+from src.config import CDP_PORT_WAIT_TIMEOUT_S, FOCUS_STEAL_POLL_INTERVAL_S
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,6 @@ SESSION_DIR_PREFIX = "websearch-browser-session-"
 LOCK_PATH = Path.home() / ".websearch" / "browser-session.lock"
 
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
-
-FOCUS_STEAL_POLL_INTERVAL_S = 0.25
-CDP_PORT_WAIT_TIMEOUT_S = 10.0
 
 BACKGROUNDING_FLAGS = [
     "--disable-background-timer-throttling",
@@ -46,11 +43,50 @@ _osascript_warned: set[str] = set()
 
 # FUNCTIONS
 
-def _find_app_bundle(executable_path: str) -> Path | None:
-    for parent in Path(executable_path).parents:
-        if parent.suffix == ".app":
-            return parent
-    return None
+async def new_tab():
+    await get_tab()
+    tab = await _browser.new_tab()
+    return tab
+
+
+async def get_tab():
+    global _browser, _lock_handle, _session_dir
+    async with _init_lock:
+        if _browser is None:
+            bundle_path = await _resolve_chromium_bundle_path()
+            logger.info("Acquiring cross-process browser-session lock")
+            _lock_handle = await asyncio.to_thread(
+                browser_lock.acquire, LOCK_PATH, LOCK_HARD_BUDGET_S, _reap_session_profile
+            )
+            try:
+                logger.info("Starting Chrome session")
+                _reap_session_profile()
+                _session_dir = tempfile.mkdtemp(prefix=SESSION_DIR_PREFIX)
+                anchor_pid = _get_frontmost_pid()
+                options = build_options(_session_dir)
+                _browser = Chrome(options)
+                _browser._browser_process_manager = BrowserProcessManager(
+                    process_creator=functools.partial(_open_background_process_creator, bundle_path)
+                )
+                _browser._setup_user_dir()
+                binary_location = _browser.options.binary_location or _browser._get_default_binary_location()
+                _browser._browser_process_manager.start_browser_process(
+                    binary_location, 0, _browser.options.arguments
+                )
+                port = await asyncio.to_thread(_wait_for_devtools_port, _session_dir, CDP_PORT_WAIT_TIMEOUT_S)
+                _browser._connection_port = port
+                _browser._connection_handler = ConnectionHandler(port)
+                _record_own_pids(_session_dir)
+                watchdog_spawn.spawn_watchdog(_owned_pids, cleanup_dir=_session_dir)
+                _spawn_focus_watchdog(_owned_pids, anchor_pid)
+            except Exception:
+                _browser = None
+                if _session_dir is not None:
+                    shutil.rmtree(_session_dir, ignore_errors=True)
+                    _session_dir = None
+                _lock_handle.release()
+                _lock_handle = None
+                raise
 
 
 async def _resolve_chromium_bundle_path() -> Path:
@@ -65,10 +101,52 @@ async def _resolve_chromium_bundle_path() -> Path:
     return bundle
 
 
-def _open_background_process_creator(bundle_path: Path, command: list[str]) -> subprocess.Popen:
-    args = command[1:]
-    open_cmd = ["open", "-g", "-n", "-a", str(bundle_path), "--args", *args]
-    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
+def _reap_session_profile() -> None:
+    pids = _pids_matching_session_profiles()
+    if pids:
+        logger.info("Reaping orphaned Chrome on session profiles: pids=%s", pids)
+        death_pipe.terminate_then_kill(pids)
+    _remove_orphaned_session_dirs()
+
+
+def _pids_matching_session_profiles() -> list[int]:
+    result = subprocess.run(
+        ["pgrep", "-f", f"user-data-dir=.*{SESSION_DIR_PREFIX}"], capture_output=True, text=True
+    )
+    return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
+
+
+def _remove_orphaned_session_dirs() -> None:
+    for entry in Path(tempfile.gettempdir()).glob(f"{SESSION_DIR_PREFIX}*"):
+        shutil.rmtree(entry, ignore_errors=True)
+
+
+def _get_frontmost_pid() -> int | None:
+    result = subprocess.run(
+        [
+            "osascript", "-e",
+            'tell application "System Events" to get unix id of first application process whose frontmost is true',
+        ],
+        capture_output=True, text=True,
+    )
+    pid = result.stdout.strip()
+    if result.returncode != 0 or not pid.isdigit():
+        _warn_osascript_once("get_frontmost", f"returncode={result.returncode} stdout={pid!r} stderr={result.stderr.strip()!r}")
+    return int(pid) if pid.isdigit() else None
+
+
+def _warn_osascript_once(what: str, detail: str) -> None:
+    if what in _osascript_warned:
+        return
+    _osascript_warned.add(what)
+    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
 
 
 def build_options(session_dir: str) -> ChromiumOptions:
@@ -100,33 +178,10 @@ def build_options(session_dir: str) -> ChromiumOptions:
     return options
 
 
-def _pids_matching_session_profiles() -> list[int]:
-    result = subprocess.run(
-        ["pgrep", "-f", f"user-data-dir=.*{SESSION_DIR_PREFIX}"], capture_output=True, text=True
-    )
-    return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
-
-
-def _remove_orphaned_session_dirs() -> None:
-    for entry in Path(tempfile.gettempdir()).glob(f"{SESSION_DIR_PREFIX}*"):
-        shutil.rmtree(entry, ignore_errors=True)
-
-
-def _reap_session_profile() -> None:
-    pids = _pids_matching_session_profiles()
-    if pids:
-        logger.info("Reaping orphaned Chrome on session profiles: pids=%s", pids)
-        _terminate_then_kill(pids)
-    _remove_orphaned_session_dirs()
-
-
-def _record_own_pids(session_dir: str) -> None:
-    global _owned_pids
-    result = subprocess.run(
-        ["pgrep", "-f", f"user-data-dir={session_dir}"], capture_output=True, text=True
-    )
-    _owned_pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
-    logger.info("Own Chrome pids: %s", _owned_pids)
+def _open_background_process_creator(bundle_path: Path, command: list[str]) -> subprocess.Popen:
+    args = command[1:]
+    open_cmd = ["open", "-g", "-n", "-a", str(bundle_path), "--args", *args]
+    return subprocess.Popen(open_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
@@ -141,82 +196,29 @@ def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
     raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
 
 
-def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
-    procs = []
-    for pid in pids:
-        try:
-            proc = psutil.Process(pid)
-            proc.terminate()
-            procs.append(proc)
-        except psutil.NoSuchProcess:
-            pass
-    gone, alive = psutil.wait_procs(procs, timeout=timeout_s)
-    for proc in alive:
-        try:
-            proc.kill()
-        except psutil.NoSuchProcess:
-            pass
-
-
-async def get_tab():
-    global _browser, _lock_handle, _session_dir
-    async with _init_lock:
-        if _browser is None:
-            bundle_path = await _resolve_chromium_bundle_path()
-            logger.info("Acquiring cross-process browser-session lock")
-            _lock_handle = await asyncio.to_thread(
-                browser_lock.acquire, LOCK_PATH, LOCK_HARD_BUDGET_S, _reap_session_profile
-            )
-            try:
-                logger.info("Starting Chrome session")
-                _reap_session_profile()
-                _session_dir = tempfile.mkdtemp(prefix=SESSION_DIR_PREFIX)
-                anchor_pid = _get_frontmost_pid()
-                options = build_options(_session_dir)
-                _browser = Chrome(options)
-                _browser._browser_process_manager = BrowserProcessManager(
-                    process_creator=functools.partial(_open_background_process_creator, bundle_path)
-                )
-                _browser._setup_user_dir()
-                binary_location = _browser.options.binary_location or _browser._get_default_binary_location()
-                _browser._browser_process_manager.start_browser_process(
-                    binary_location, 0, _browser.options.arguments
-                )
-                port = await asyncio.to_thread(_wait_for_devtools_port, _session_dir, CDP_PORT_WAIT_TIMEOUT_S)
-                _browser._connection_port = port
-                _browser._connection_handler = ConnectionHandler(port)
-                _record_own_pids(_session_dir)
-                death_pipe.spawn_watchdog(_owned_pids, cleanup_dir=_session_dir)
-                _spawn_focus_watchdog(_owned_pids, anchor_pid)
-            except Exception:
-                _browser = None
-                if _session_dir is not None:
-                    shutil.rmtree(_session_dir, ignore_errors=True)
-                    _session_dir = None
-                _lock_handle.release()
-                _lock_handle = None
-                raise
-
-
-def _warn_osascript_once(what: str, detail: str) -> None:
-    if what in _osascript_warned:
-        return
-    _osascript_warned.add(what)
-    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
-
-
-def _get_frontmost_pid() -> int | None:
+def _record_own_pids(session_dir: str) -> None:
+    global _owned_pids
     result = subprocess.run(
-        [
-            "osascript", "-e",
-            'tell application "System Events" to get unix id of first application process whose frontmost is true',
-        ],
-        capture_output=True, text=True,
+        ["pgrep", "-f", f"user-data-dir={session_dir}"], capture_output=True, text=True
     )
-    pid = result.stdout.strip()
-    if result.returncode != 0 or not pid.isdigit():
-        _warn_osascript_once("get_frontmost", f"returncode={result.returncode} stdout={pid!r} stderr={result.stderr.strip()!r}")
-    return int(pid) if pid.isdigit() else None
+    _owned_pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
+    logger.info("Own Chrome pids: %s", _owned_pids)
+
+
+def _spawn_focus_watchdog(pids: list[int], anchor_pid: int | None) -> None:
+    global _focus_watchdog_task
+    _focus_watchdog_task = asyncio.create_task(_focus_steal_watchdog_by_pid(set(pids), anchor_pid))
+
+
+async def _focus_steal_watchdog_by_pid(owned_pids: set[int], last_other_pid: int | None) -> None:
+    while True:
+        current_pid = await asyncio.to_thread(_get_frontmost_pid)
+        if current_pid in owned_pids:
+            if last_other_pid is not None and last_other_pid not in owned_pids:
+                await asyncio.to_thread(_activate_pid, last_other_pid)
+        else:
+            last_other_pid = current_pid
+        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
 
 
 def _activate_pid(pid: int) -> None:
@@ -231,41 +233,7 @@ def _activate_pid(pid: int) -> None:
         _warn_osascript_once("activate", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
 
 
-async def _focus_steal_watchdog_by_pid(owned_pids: set[int], last_other_pid: int | None) -> None:
-    while True:
-        current_pid = await asyncio.to_thread(_get_frontmost_pid)
-        if current_pid in owned_pids:
-            if last_other_pid is not None and last_other_pid not in owned_pids:
-                await asyncio.to_thread(_activate_pid, last_other_pid)
-        else:
-            last_other_pid = current_pid
-        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
-
-
-def _spawn_focus_watchdog(pids: list[int], anchor_pid: int | None) -> None:
-    global _focus_watchdog_task
-    _focus_watchdog_task = asyncio.create_task(_focus_steal_watchdog_by_pid(set(pids), anchor_pid))
-
-
-async def _cancel_focus_watchdog() -> None:
-    global _focus_watchdog_task
-    if _focus_watchdog_task is not None:
-        _focus_watchdog_task.cancel()
-        try:
-            await _focus_watchdog_task
-        except asyncio.CancelledError:
-            pass
-        _focus_watchdog_task = None
-
-
-async def new_tab():
-    await get_tab()
-    tab = await _browser.new_tab()
-    return tab
-
-
 async def kill_tab(tab) -> None:
-    global _browser
     target_id = getattr(tab, '_target_id', None)
     if _browser is None or target_id is None:
         return
@@ -281,12 +249,8 @@ async def kill_tab(tab) -> None:
             _browser._tabs_opened.pop(target_id, None)
 
 
-async def close_browser():
-    global _browser
-    await _cancel_focus_watchdog()
-    if _browser is not None:
-        await _browser.stop()
-        _browser = None
+def kill_own_chrome_atexit() -> None:
+    asyncio.run(kill_own_chrome())
 
 
 async def kill_own_chrome() -> None:
@@ -299,7 +263,7 @@ async def kill_own_chrome() -> None:
             _browser = None
     if _owned_pids:
         logger.info("Killing own Chrome (safety net): pids=%s", _owned_pids)
-        _terminate_then_kill(_owned_pids, timeout_s=10.0)
+        death_pipe.terminate_then_kill(_owned_pids, timeout_s=10.0)
         _owned_pids = []
     if _session_dir is not None:
         shutil.rmtree(_session_dir, ignore_errors=True)
@@ -309,5 +273,20 @@ async def kill_own_chrome() -> None:
         _lock_handle = None
 
 
-def kill_own_chrome_atexit() -> None:
-    asyncio.run(kill_own_chrome())
+async def close_browser():
+    global _browser
+    await _cancel_focus_watchdog()
+    if _browser is not None:
+        await _browser.stop()
+        _browser = None
+
+
+async def _cancel_focus_watchdog() -> None:
+    global _focus_watchdog_task
+    if _focus_watchdog_task is not None:
+        _focus_watchdog_task.cancel()
+        try:
+            await _focus_watchdog_task
+        except asyncio.CancelledError:
+            pass
+        _focus_watchdog_task = None

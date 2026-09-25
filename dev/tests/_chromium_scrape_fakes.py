@@ -4,17 +4,17 @@ def _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process):
     async def _fake_resolve_bundle():
         return chromium_process.Path("/fake/chromium-1228/Google Chrome for Testing.app")
 
-    monkeypatch.setattr(chromium_scrape, "_resolve_chromium_bundle_path", _fake_resolve_bundle)
+    monkeypatch.setattr(chromium_scrape, "resolve_chromium_bundle_path", _fake_resolve_bundle)
     async def _fake_focus_steal_watchdog(app_name):
         return None
 
-    monkeypatch.setattr(chromium_scrape, "_focus_steal_watchdog", _fake_focus_steal_watchdog)
-    monkeypatch.setattr(chromium_scrape, "_self_launch_chrome", lambda *a, **kw: None)
-    monkeypatch.setattr(chromium_scrape, "_wait_for_devtools_port", lambda *a, **kw: 9999)
-    monkeypatch.setattr(chromium_scrape, "_kill_by_profile", lambda *a, **kw: None)
-    monkeypatch.setattr(chromium_scrape, "_pids_on_profile", lambda *a, **kw: [])
-    monkeypatch.setattr(chromium_scrape, "_reap_orphaned_scrapes", lambda: None)
-    monkeypatch.setattr(chromium_scrape.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "focus_steal_watchdog", _fake_focus_steal_watchdog)
+    monkeypatch.setattr(chromium_scrape, "self_launch_chrome", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "wait_for_devtools_port", lambda *a, **kw: 9999)
+    monkeypatch.setattr(chromium_scrape, "kill_by_profile", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "pids_on_profile", lambda *a, **kw: [])
+    monkeypatch.setattr(chromium_scrape, "reap_orphaned_scrapes", lambda: None)
+    monkeypatch.setattr(chromium_scrape.watchdog_spawn, "spawn_watchdog", lambda *a, **kw: None)
 
 
 class _FakeResult:

@@ -35,13 +35,7 @@ async def scrape_entries(
     )
 
     domain_states: dict = {}
-    raw_results = await asyncio.gather(
-        *[
-            _fetch_one(domain_states, entries[i], i, len(entries),
-                       regwall_signals, scrape_cfg, output_dir, run_cfg)
-            for i in range(len(entries))
-        ],
-    )
+    raw_results = await _fetch_all(domain_states, entries, regwall_signals, scrape_cfg, output_dir, run_cfg)
 
     manifest = list(raw_results)
     _check_regwall_guard(manifest, regwall_signals)
@@ -50,28 +44,21 @@ async def scrape_entries(
 
 # FUNCTIONS
 
-def _is_regwall(markdown: str, signals: list[str]) -> bool:
-    return any(sig in markdown for sig in signals)
-
-
-def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
-    if domain not in domain_states:
-        domain_states[domain] = {
-            "lastseen": 0.0,
-            "lock": asyncio.Lock(),
-            "sem": asyncio.Semaphore(concurrency_per_domain),
-        }
-    return domain_states[domain]
-
-
-async def _gate_domain(state: dict, download_delay: float) -> None:
-    async with state["lock"]:
-        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
-        now = time.time()
-        gap = now - state["lastseen"]
-        if gap < jitter:
-            await asyncio.sleep(jitter - gap)
-        state["lastseen"] = time.time()
+async def _fetch_all(
+    domain_states: dict,
+    entries: list[dict],
+    regwall_signals: list[str],
+    scrape_cfg: ScrapeConfig,
+    output_dir: Path,
+    run_cfg: CrawlerRunConfig,
+) -> list[dict]:
+    return await asyncio.gather(
+        *[
+            _fetch_one(domain_states, entries[i], i, len(entries),
+                       regwall_signals, scrape_cfg, output_dir, run_cfg)
+            for i in range(len(entries))
+        ],
+    )
 
 
 async def _fetch_one(
@@ -108,6 +95,26 @@ async def _fetch_one(
     return result_entry
 
 
+def _ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:
+    if domain not in domain_states:
+        domain_states[domain] = {
+            "lastseen": 0.0,
+            "lock": asyncio.Lock(),
+            "sem": asyncio.Semaphore(concurrency_per_domain),
+        }
+    return domain_states[domain]
+
+
+async def _gate_domain(state: dict, download_delay: float) -> None:
+    async with state["lock"]:
+        jitter = random.uniform(0.5 * download_delay, 1.5 * download_delay)
+        now = time.time()
+        gap = now - state["lastseen"]
+        if gap < jitter:
+            await asyncio.sleep(jitter - gap)
+        state["lastseen"] = time.time()
+
+
 def _classify_fetch(
     url: str, url_hash: str, raw_md: str, elapsed: float,
     regwall_signals: list[str], output_dir: Path,
@@ -132,16 +139,14 @@ def _classify_fetch(
     }
 
 
+def _is_regwall(markdown: str, signals: list[str]) -> bool:
+    return any(sig in markdown for sig in signals)
+
+
 def _write_body(url_hash: str, content: str, output_dir: Path) -> Path:
     file_path = output_dir / f"{url_hash}.md"
     file_path.write_text(content, encoding="utf-8")
     return file_path
-
-
-class RegwallGuardError(Exception):
-    def __init__(self, msg: str, manifest: list[dict] | None = None):
-        super().__init__(msg)
-        self.manifest: list[dict] = manifest or []
 
 
 def _check_regwall_guard(manifest: list[dict], regwall_signals: list[str]) -> None:
@@ -161,3 +166,9 @@ def _check_regwall_guard(manifest: list[dict], regwall_signals: list[str]) -> No
         )
         print(f"ERROR: {msg}", file=sys.stderr)
         raise RegwallGuardError(msg, manifest=manifest)
+
+
+class RegwallGuardError(Exception):
+    def __init__(self, msg: str, manifest: list[dict] | None = None):
+        super().__init__(msg)
+        self.manifest: list[dict] = manifest or []

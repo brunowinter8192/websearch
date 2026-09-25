@@ -4,7 +4,7 @@ from pathlib import Path
 
 # FUNCTIONS
 
-def _append_to_shard(entry: dict, year_files: dict, discover_dir: Path) -> None:
+def append_to_shard(entry: dict, year_files: dict, discover_dir: Path) -> None:
     date_str = entry["publication_date"][:10]
     year = date_str[:4]
     if year not in year_files:

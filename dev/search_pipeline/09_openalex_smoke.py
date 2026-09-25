@@ -10,7 +10,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.openalex import OpenAlexEngine
+from src.search.engines import openalex as openalex_engine
 
 QUERIES_FILE = SCRIPT_DIR / "queries.txt"
 REPORT_DIR = SCRIPT_DIR / "md"
@@ -23,7 +23,7 @@ async def run_smoke_test() -> None:
     queries = load_queries(QUERIES_FILE)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    engine = OpenAlexEngine()
+    engine = openalex_engine
 
     records = await _run_queries(queries, engine)
 
@@ -116,10 +116,10 @@ def _print_report(report_path, ok_count, records):
     )
 
 
-async def run_query(engine: OpenAlexEngine, query: str) -> dict:
+async def run_query(engine, query: str) -> dict:
     record: dict = {"query": query, "count": 0, "sample_urls": [], "status": "EMPTY", "elapsed_ms": 0}
     try:
-        results = await engine.search(query)
+        results = (await engine.search_with_reason(query))[0]
         record["count"] = len(results)
         record["sample_urls"] = [r.url for r in results[:3]]
         record["status"] = "OK" if results else "EMPTY"

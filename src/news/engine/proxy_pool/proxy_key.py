@@ -1,6 +1,3 @@
-# INFRASTRUCTURE
-
-
 # FUNCTIONS
 
 def proxy_key(proto: str, host_port: str) -> str:

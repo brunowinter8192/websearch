@@ -2,16 +2,17 @@
 from pathlib import Path
 from urllib.parse import urlparse
 
-from src.crawler.pipe_scraper_acquisition import _onward_link_identity
+from src.crawler.pipe_scraper_acquisition import onward_link_identity
+
 
 # FUNCTIONS
 
-def _domain_from_urls(urls: list[str]) -> str:
+def domain_from_urls(urls: list[str]) -> str:
     if not urls:
         return 'unknown'
     return urlparse(urls[0]).netloc.replace('.', '_')
 
-def _write_tmp_report(domain: str, results: list[dict]) -> None:
+def write_tmp_report(domain: str, results: list[dict]) -> None:
     path = Path(f"/tmp/{domain}_scrape_report.md")
     lines = [
         f"# Scrape Report — {domain}",
@@ -27,10 +28,10 @@ def _write_tmp_report(domain: str, results: list[dict]) -> None:
         )
     path.write_text('\n'.join(lines), encoding='utf-8')
 
-def _collect_onward_links(urls: list[str], results: list[dict], engine: str) -> list[str] | None:
+def collect_onward_links(urls: list[str], results: list[dict], engine: str) -> list[str] | None:
     if engine == "camoufox":
         return None
-    already_known = {_onward_link_identity(u) for u in urls}
+    already_known = {onward_link_identity(u) for u in urls}
     already_known.discard(None)
     seen = set(already_known)
     onward = []
@@ -42,13 +43,13 @@ def _collect_onward_links(urls: list[str], results: list[dict], engine: str) -> 
             onward.append(link)
     return onward
 
-def _write_onward_links_file(domain: str, onward_links: list[str] | None) -> None:
+def write_onward_links_file(domain: str, onward_links: list[str] | None) -> None:
     if onward_links is None:
         return
     path = Path(f"/tmp/{domain}_scrape_links.txt")
     path.write_text(("\n".join(onward_links) + "\n") if onward_links else "", encoding='utf-8')
 
-def _print_summary(results: list[dict], wall_s: float, onward_links: list[str] | None) -> None:
+def print_summary(results: list[dict], wall_s: float, onward_links: list[str] | None) -> None:
     total = len(results)
     status_counts: dict = {}
     for r in results:

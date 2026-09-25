@@ -17,7 +17,7 @@ _FAILURE_STATUSES: frozenset[str] = frozenset({
 
 # FUNCTIONS
 
-def _prepend_degraded_notice(breakdown_text: str, engine_stats: dict) -> str:
+def prepend_degraded_notice(breakdown_text: str, engine_stats: dict) -> str:
     notice = _format_degraded_notice(engine_stats)
     if notice is None:
         return breakdown_text

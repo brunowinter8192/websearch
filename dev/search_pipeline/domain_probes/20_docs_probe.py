@@ -9,8 +9,8 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.google import GoogleEngine
-from src.search.engines.duckduckgo import DuckDuckGoEngine
+from src.search.engines import google as google_engine
+from src.search.engines import duckduckgo as duckduckgo_engine
 from src.search.browser import close_browser
 
 from _docs_probe_config import ENGINE_NAMES, QUERIES, SUFFIX
@@ -18,7 +18,7 @@ from _docs_probe_report import write_report
 
 REPORT_DIR = SCRIPT_DIR / "md"
 
-ENGINE_ORDER = list(zip(ENGINE_NAMES, [GoogleEngine, DuckDuckGoEngine]))
+ENGINE_ORDER = list(zip(ENGINE_NAMES, [google_engine, duckduckgo_engine]))
 
 ENGINE_MAX = {
     "google":     100,
@@ -47,7 +47,7 @@ def _configure_logging() -> None:
 
 
 def _compute_engines():
-    engines = [(name, cls()) for name, cls in ENGINE_ORDER]
+    engines = [(name, engine_module) for name, engine_module in ENGINE_ORDER]
     return engines
 
 
@@ -95,7 +95,7 @@ async def _query_engine(eng_name, engine, query, run_stats, run_results) -> None
 
     t0 = time.monotonic()
     try:
-        results = await engine.search(query, "en", max_r)
+        results = (await engine.search_with_reason(query, "en", max_r))[0]
         ms = round((time.monotonic() - t0) * 1000)
         print(f" {len(results)} ({ms}ms)", file=sys.stderr)
         run_stats[eng_name]["total"] += len(results)

@@ -4,28 +4,24 @@ from datetime import datetime
 from pathlib import Path
 
 from src.news.engine.proxy_riding.state import RiderState
-from src.news.engine.proxy_riding.metrics import _compute_stats
-from src.news.engine.proxy_riding.plots import _write_cumulative_plot, _write_load_hist, _write_cf_hist
+from src.news.engine.proxy_riding.metrics import compute_stats
+from src.news.engine.proxy_riding.plots import write_cumulative_plot, write_load_hist, write_cf_hist
 
 
 # ORCHESTRATOR
 
 def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime) -> None:
     job_dir.mkdir(parents=True, exist_ok=True)
-    stats = _compute_stats(state, t_job_start)
-    _write_cumulative_plot(job_dir, stats)
+    stats = compute_stats(state, t_job_start)
+    write_cumulative_plot(job_dir, stats)
     if stats["load_perc"] is not None:
-        _write_load_hist(job_dir, stats)
+        write_load_hist(job_dir, stats)
     if stats["cf_perc"] is not None:
-        _write_cf_hist(job_dir, stats)
+        write_cf_hist(job_dir, stats)
     _write_md(job_dir, state, stats, t_job_start)
 
 
 # FUNCTIONS
-
-def _fmt(v, spec="", unit="") -> str:
-    return f"{format(v, spec)}{unit}" if v is not None else "—"
-
 
 def _write_md(
     job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
@@ -74,6 +70,10 @@ def _md_header_counts(state: RiderState, stats: dict, job_id: str) -> list[str]:
         f"| OK URLs/min | {_fmt(stats['urls_per_min'], '.1f')} |",
         "",
     ]
+
+
+def _fmt(v, spec="", unit="") -> str:
+    return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
 def _md_proxy_riding(stats: dict) -> list[str]:

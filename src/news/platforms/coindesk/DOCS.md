@@ -2,27 +2,27 @@
 
 ## Role
 
-CoinDesk platform implementation using the proxy-riding scrape engine and raw HTML output. Imported for its registration side effect by src/news/__main__.py; nothing else imports from here directly. Touch it to change CoinDesk discovery, regwall signals or cleanup.
+CoinDesk platform implementation using the proxy-riding scrape engine and raw HTML output. Instantiated by src/news/registry.py; nothing else imports from here directly. Touch it to change CoinDesk discovery, regwall signals or cleanup.
 
 ## Public Interface
 
-`__init__.py` exports the CoinDesk platform class and registers an instance at import.
+`__init__.py` exports the CoinDesk platform class.
 
 ## Flow
 
-Discovery warms a real Chrome session under HAR capture to obtain the timeline API request, then pages backwards through the timeline by cursor, writing per-year shard files crash-safely. Scrape-only mode reloads the shards filtered by year, date range and limit and hands them to the riding engine. The package `__init__.py` composes config, discover, shards and cleanup and registers with `src/news/registry.py`.
+Discovery warms a real Chrome session under HAR capture to obtain the timeline API request, then pages backwards through the timeline by cursor, writing per-year shard files crash-safely. Scrape-only mode reloads the shards filtered by year, date range and limit and hands them to the riding engine. The package `__init__.py` composes config, discover, shards and cleanup.
 
 ## Modules
 
-### config.py (34 LOC)
+### config.py (25 LOC)
 
-**Purpose:** Platform constants: regwall signal strings, scrape configuration and timeline-API discovery parameters.
+**Purpose:** Platform constants: scrape configuration and timeline-API discovery parameters.
 **Reads:** none.
 **Writes:** none.
 **Called by:** browser.py, discover.py, timeline.py, __init__.py.
 **Calls out:** none.
 
-### browser.py (158 LOC)
+### browser.py (174 LOC)
 
 **Purpose:** Launches Chrome and captures the first timeline API request and response during the feed warmup.
 **Reads:** the CoinDesk feed page (network).
@@ -30,7 +30,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** discover.py, timeline.py.
 **Calls out:** pydoll, httpx.
 
-### discover.py (279 LOC)
+### discover.py (301 LOC)
 
 **Purpose:** Discovery orchestration and cursor paging with per-article shard writes and incremental discover output.
 **Reads:** the timeline API (network); existing shards for the dedup seed.
@@ -54,7 +54,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** discover.py, __init__.py.
 **Calls out:** none (stdlib only).
 
-### cleanup.py (120 LOC)
+### cleanup.py (135 LOC)
 
 **Purpose:** Strips CoinDesk page chrome from raw markdown to leave the article body.
 **Reads:** raw markdown text handed in.
@@ -62,12 +62,12 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** `__init__.py`, which wraps it as the platform's cleanup method. The only call site, src/news/clean_pass.py, runs on the proxy-pool path only, so no coindesk run reaches it.
 **Calls out:** none (stdlib only).
 
-### __init__.py (41 LOC)
+### __init__.py (38 LOC)
 
-**Purpose:** The CoinDesk platform class wrapping config, discovery, cleanup and scrape-entry loading; registers itself on import.
+**Purpose:** The CoinDesk platform class wrapping config, discovery, cleanup and scrape-entry loading.
 **Reads:** none of its own.
-**Writes:** the registry entry.
-**Called by:** src/news/__main__.py (side-effect import), src/news/pipeline.py.
+**Writes:** none.
+**Called by:** src/news/registry.py.
 **Calls out:** none.
 
 ## State

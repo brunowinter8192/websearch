@@ -106,7 +106,7 @@ async def test_search_with_reason_attaches_goto_resolution_to_diagnosis(monkeypa
     monkeypatch.setattr(google_mod, "_parse_results", parse)
     monkeypatch.setattr(google_mod, "_resolve_urls", resolve)
     monkeypatch.setattr(google_mod, "_diagnose", diagnose)
-    results, reason, diag = await google_mod.GoogleEngine().search_with_reason("x")
+    results, reason, diag = await google_mod.search_with_reason("x")
     assert results == []
     assert diag["goto_resolution"] == {"found": 2, "resolved": 0, "dropped": 2, "reasons": {"timeout": 2}}
     assert diag["containers_found"] is True

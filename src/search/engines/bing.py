@@ -8,13 +8,14 @@ import time
 from urllib.parse import urlparse, parse_qs
 
 from src.search.browser import new_tab, kill_tab
+from src.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
 from src.search.selector_hits import collect_selector_hits
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "bing"
 
 SEARCH_URL = "https://www.bing.com/search?q={}"
 MAX_WAIT_CYCLES = 20
@@ -61,64 +62,79 @@ for (var _i = 0; _i < markers.length; _i++) {
 return JSON.stringify({marker: hit, url: window.location.href, ready_state: document.readyState, title: document.title});
 """
 
-_limiters["bing"] = RateLimiter(max_requests=4, window_seconds=60)
+_DE_MONTHS = {
+    "januar": 1, "februar": 2, "märz": 3, "april": 4, "mai": 5, "juni": 6,
+    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+}
+_EN_MONTHS = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+}
+_DE_DATE_RE = re.compile(r'^(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)\s+(\d{4})$')
+_EN_DATE_RE = re.compile(r'^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$')
 
 
 # ORCHESTRATOR
 
-class BingEngine(BaseEngine):
-    name = "bing"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        logger.info("Bing search: %s", query)
-        tab = await new_tab()
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            if not await _wait_for_results(tab, status_chain, t0, partial):
-                diag = await _diagnose(tab)
-                diag["containers_found"] = False
-                logger.debug("Bing empty for: %s", query)
-                return [], None, attach_document_status(diag, status_chain)
-            results, selector_hits = await _parse_results(tab, max_results)
-            if results:
-                return results, None, attach_document_status({"selector_hits": selector_hits}, status_chain)
-            diag = await _diagnose(tab)
-            diag["containers_found"] = True
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    logger.info("Bing search: %s", query)
+    tab = await new_tab()
+    return await _search_and_close(tab, query, max_results, partial, t0)
 
 
 # FUNCTIONS
 
-def _extract_value(result):
-    return result["result"]["result"]["value"]
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0)
+    finally:
+        await kill_tab(tab)
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    qs = parse_qs(parsed.query)
-    u = qs.get("u", [None])[0]
-    if not u:
-        return href
-    payload = u[2:] if len(u) > 2 else u
-    padded = payload + "=" * (-len(payload) % 4)
-    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
+    if not await _wait_for_results(tab, status_chain, t0, partial):
+        diag = await _diagnose(tab)
+        diag["containers_found"] = False
+        logger.debug("Bing empty for: %s", query)
+        return [], None, attach_document_status(diag, status_chain)
+    results, selector_hits = await _parse_results(tab, max_results)
+    if results:
+        return results, None, attach_document_status({"selector_hits": selector_hits}, status_chain)
+    diag = await _diagnose(tab)
+    diag["containers_found"] = True
+    return results, None, attach_document_status(diag, status_chain)
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
+        count = extract_value(raw)
         update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
         await asyncio.sleep(WAIT_INTERVAL)
     return False
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = extract_value(raw)
+    if not value:
+        return [], {}
+    items = json.loads(value)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
@@ -135,16 +151,17 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     return results
 
 
-_DE_MONTHS = {
-    "januar": 1, "februar": 2, "märz": 3, "april": 4, "mai": 5, "juni": 6,
-    "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
-}
-_EN_MONTHS = {
-    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
-    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
-}
-_DE_DATE_RE = re.compile(r'^(\d{1,2})\.\s*([A-Za-zÄÖÜäöü]+)\s+(\d{4})$')
-_EN_DATE_RE = re.compile(r'^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$')
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    parsed = urlparse(href)
+    qs = parse_qs(parsed.query)
+    u = qs.get("u", [None])[0]
+    if not u:
+        return href
+    payload = u[2:] if len(u) > 2 else u
+    padded = payload + "=" * (-len(payload) % 4)
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
 def _extract_date(news_dt_text: str) -> str | None:
@@ -162,21 +179,3 @@ def _extract_date(news_dt_text: str) -> str | None:
         month = _EN_MONTHS.get(month_name.lower())
         return f"{int(year):04d}-{month:02d}-{int(day):02d}" if month else None
     return None
-
-
-async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
-    if not value:
-        return [], {}
-    items = json.loads(value)
-    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
