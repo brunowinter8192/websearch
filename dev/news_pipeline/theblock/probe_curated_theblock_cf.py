@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from curated_sources import load_curated_proxies
+from proxy_rejections import print_rejections, record_rejection
 
 from curl_cffi import requests as cffi
 
@@ -38,6 +39,7 @@ def probe_curated_theblock_cf_workflow(concurrency: int) -> None:
           f"socks4:{proto_counts['socks4']} socks5:{proto_counts['socks5']}")
 
     results = run_checks(proxies, concurrency)
+    print_rejections()
     report_path = write_report(proxies, results, proto_counts, concurrency)
     print(f"Report: {report_path}")
 
@@ -89,7 +91,8 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=TIMEOUT)
         head = r.content[:500]
         return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
+    except cffi.exceptions.RequestException as exc:
+        record_rejection(exc)
         return False
 
 

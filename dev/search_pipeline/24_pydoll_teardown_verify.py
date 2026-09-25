@@ -231,7 +231,8 @@ def _count_renderers() -> int:
     )
     try:
         return int(result.stdout.strip())
-    except ValueError:
+    except ValueError as exc:
+        print(f"count_renderers: dropped {exc} for pgrep output {result.stdout!r}", file=sys.stderr)
         return 0
 
 

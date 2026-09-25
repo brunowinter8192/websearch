@@ -103,9 +103,9 @@ def build_fix1_section(results: dict) -> str:
         triggers = status is not None and status >= 400
 
         if category == "padded_404":
-            correct = "YES ✅" if triggers else "NO ❌"
+            correct = "YES" if triggers else "NO"
         else:
-            correct = "YES ✅" if not triggers else "FALSE POSITIVE ❌"
+            correct = "YES" if not triggers else "FALSE POSITIVE"
 
         short_url = url.replace("https://", "")[:65]
         lines.append(f"| {short_url} | {status} | {'YES' if triggers else 'NO'} | {correct} |")
@@ -127,15 +127,15 @@ def build_fix2_section(results: dict) -> str:
 
         if category == "baseline":
             if chars_removed == 0:
-                assessment = "nothing removed ✅"
+                assessment = "nothing removed"
             else:
-                assessment = f"PROBLEM: removed {chars_removed} chars ❌"
+                assessment = f"PROBLEM: removed {chars_removed} chars"
         elif chars_removed > 200:
-            assessment = f"effective — removed {chars_removed} chars ✅"
+            assessment = f"effective — removed {chars_removed} chars"
         elif chars_removed > 0:
-            assessment = f"partial — removed only {chars_removed} chars ⚠️"
+            assessment = f"partial — removed only {chars_removed} chars"
         else:
-            assessment = "not effective — nothing removed ❌"
+            assessment = "not effective — nothing removed"
 
         short_label = url.replace("https://www.", "").replace("https://", "")[:50]
         lines.append(f"### {short_label}\n")

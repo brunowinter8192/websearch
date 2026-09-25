@@ -50,7 +50,7 @@ def _render_ladder_section(intervals: list, ladder_results: list) -> list:
     )
 
     if first_403 is None:
-        lines.append(f"\n✅ **No 403 in {intervals[-1]}s** — warmth lasts at least {intervals[-1]}s.\n")
+        lines.append(f"\n**No 403 in {intervals[-1]}s** — warmth lasts at least {intervals[-1]}s.\n")
     else:
         last_200_t = ladder_results[last_200_idx]["t_seconds"] if last_200_idx >= 0 else "?"
         lines.append(
@@ -74,10 +74,10 @@ def _render_feedpage_section(target_url: str, feedpage_result: dict | None) -> l
     api_after = feedpage_result["api_after_feedpage"]
     lines.append(f"- API call immediately after → **{api_after}**\n")
     if api_after == 200:
-        lines.append("✅ **httpx feedpage GET IS sufficient to re-warm the IP.**\n")
+        lines.append("**httpx feedpage GET IS sufficient to re-warm the IP.**\n")
     else:
         snip = feedpage_result.get("api_after_feedpage_snippet") or ""
-        lines.append(f"❌ **httpx feedpage GET does NOT re-warm** — browser required.")
+        lines.append(f"**httpx feedpage GET does NOT re-warm** — browser required.")
         if snip:
             lines.append(f"\nAPI body snippet: `{snip[:100]}`\n")
     return lines

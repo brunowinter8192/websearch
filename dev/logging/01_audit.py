@@ -98,10 +98,7 @@ def _extract_calls(tree: ast.AST, src_text: str, filepath: Path) -> list[dict]:
         msg_template = ""
         if node.args:
             first_arg = node.args[0]
-            try:
-                msg_template = ast.unparse(first_arg)
-            except Exception:
-                msg_template = "<unparseable>"
+            msg_template = ast.unparse(first_arg)
 
         if len(msg_template) > MSG_LIMIT:
             msg_template = msg_template[: MSG_LIMIT - 3] + "..."

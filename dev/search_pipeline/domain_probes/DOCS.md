@@ -19,7 +19,7 @@ Twelve broad queries plus `book` or `documentation` run against Google and DuckD
 **Called by:** CLI only.
 **Calls out:** none.
 
-### 20_docs_probe.py (119 LOC)
+### 20_docs_probe.py (112 LOC)
 
 **Purpose:** Docs-domain probe: appends `documentation` to twelve tech queries and evaluates heuristics H1-H13 against the URL pool.
 **Reads:** hardcoded query set via the config sibling.

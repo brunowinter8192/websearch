@@ -210,7 +210,8 @@ def build_report(
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None
 
 
@@ -252,7 +253,7 @@ def _render_h1(engine_name: str, query: str, url: str, wait_s: float, ts: str, h
     ]
     for role, sel in cfg["current_selectors"].items():
         count = h1.get(role, 0)
-        flag = "✅ PRESENT" if count > 0 else "❌ BROKEN"
+        flag = "PRESENT" if count > 0 else "BROKEN"
         L.append(f"| {role} | `{sel}` | {count} | {flag} |")
     return L
 

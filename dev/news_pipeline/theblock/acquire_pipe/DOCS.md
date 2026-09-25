@@ -11,7 +11,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 
 ## Modules
 
-### p1_fetch.py (44 LOC)
+### p1_fetch.py (51 LOC)
 
 **Purpose:** Browser-impersonating fetch primitive with XML and HTML content validators and a three-way status.
 **Reads:** Remote URLs.
@@ -83,7 +83,7 @@ Job orchestrator loads the backfill proxy pool and builds the sitemap target -> 
 **Called by:** `acquire_pipe.py`.
 **Calls out:** `matplotlib` (lazy).
 
-### acquire_pipe.py (149 LOC)
+### acquire_pipe.py (151 LOC)
 
 **Purpose:** Job orchestrator wiring pool load, target build, lock, cooldown, sustained loop, content persistence, and janitor.
 **Reads:** The backfill pool and the theblock sitemap index.

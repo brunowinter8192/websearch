@@ -53,7 +53,7 @@ def download_workflow(urls: list[tuple[str, str]], overwrite: bool) -> None:
     for i, (q_label, url) in enumerate(urls, 1):
         status, detail = download_one(url, overwrite)
         rows.append((i, q_label, url, detail, status))
-        indicator = "✓" if status == "ok" else "✗"
+        indicator = "ok" if status == "ok" else "fail"
         print(f"  [{i:02d}/{len(urls)}] {indicator} {url[:80]}", file=sys.stderr)
 
     print_report(rows)

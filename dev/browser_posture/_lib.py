@@ -4,6 +4,7 @@ import http.server
 import json
 import logging
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -248,5 +249,6 @@ def open_background_process_creator(command: list[str]) -> subprocess.Popen:
 def extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None

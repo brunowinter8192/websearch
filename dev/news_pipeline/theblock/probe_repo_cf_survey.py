@@ -13,6 +13,7 @@ from curl_cffi import requests as cffi
 
 sys.path.insert(0, str(Path(__file__).parent))
 from probe_pool_size import HTTP_SOURCES, SOCKS4_SOURCES, SOCKS5_SOURCES
+from proxy_rejections import print_rejections, record_rejection
 
 THEBLOCK_URL  = "https://www.theblock.co/sitemap_tbco_index.xml"
 XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
@@ -49,6 +50,7 @@ def probe_repo_cf_survey_workflow() -> None:
 
     _print_check_header()
     repo_results = _check_repos(repo_proxies, report_path)
+    print_rejections()
 
     print("\n[3/3] Finalising report...")
     finalize_report(report_path, repo_results, repo_proxies)
@@ -316,7 +318,8 @@ def check_proxy(protocol: str, host_port: str) -> bool:
         r = s.get(THEBLOCK_URL, proxies={"http": purl, "https": purl}, timeout=CHECK_TIMEOUT)
         head = r.content[:500]
         return r.status_code == 200 and any(m in head for m in XML_MARKERS)
-    except Exception:
+    except cffi.exceptions.RequestException as exc:
+        record_rejection(exc)
         return False
 
 

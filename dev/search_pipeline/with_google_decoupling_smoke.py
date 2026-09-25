@@ -121,10 +121,10 @@ def _write_report(records: list[dict], path: Path, log_lines_written: int) -> No
 
     for i, r in enumerate(records, 1):
         q = r["query"][:50].replace("|", "\\|")
-        p = "✓" if r["pass"] else "✗"
-        sa = "✓" if not r["scholar_in_requested"] else "✗"
-        gp = "✓" if r["google_in_requested"] else "✗"
-        ec = "✓" if r["excluded_correct"] else "✗"
+        p = "ok" if r["pass"] else "fail"
+        sa = "ok" if not r["scholar_in_requested"] else "fail"
+        gp = "ok" if r["google_in_requested"] else "fail"
+        ec = "ok" if r["excluded_correct"] else "fail"
         n = r["engines_requested_count"]
         lines.append(f"| {i} | {q} | {p} | {sa} | {gp} | {ec} | {n} |")
 

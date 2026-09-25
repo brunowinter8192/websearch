@@ -59,7 +59,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only; `probe_repo_cf_survey.py`, `probe_liveness.py`.
 **Calls out:** `httpx`.
 
-### probe_repo_cf_survey.py (324 LOC)
+### probe_repo_cf_survey.py (327 LOC)
 
 **Purpose:** Ranks source repos by CF-pass rate against theblock.co on a sample per repo; its ranking decided the backfill repo set.
 **Reads:** Proxy lists from `probe_pool_size.py`.
@@ -99,7 +99,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `pipe_theblock.py`.
 **Calls out:** none.
 
-### pipe_theblock.py (335 LOC)
+### pipe_theblock.py (338 LOC)
 
 **Purpose:** Full proxy pipeline: neutral liveness, CF-pass check, and sitemap sub-URL discovery with sequential proxy exhaustion.
 **Reads:** The curated fresh source pool.
@@ -107,7 +107,7 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _pipe_theblock_cf.py (54 LOC)
+### _pipe_theblock_cf.py (57 LOC)
 
 **Purpose:** CF-pass primitives: chrome-impersonating GET through a proxy, XML marker check, threaded check.
 **Reads:** The CF check target through each proxy.
@@ -115,7 +115,15 @@ Public proxy sources -> pool size, liveness, and CF-pass measurements -> full pi
 **Called by:** `pipe_theblock.py`.
 **Calls out:** `curl_cffi`.
 
-### probe_curated_theblock_cf.py (168 LOC)
+### proxy_rejections.py (15 LOC)
+
+**Purpose:** Shared counter and printer for proxy checks that fail with a request error.
+**Reads:** none.
+**Writes:** counter summary to stderr.
+**Called by:** probe_curated_theblock_cf.py, probe_repo_cf_survey.py, _pipe_theblock_cf.py, pipe_theblock.py, acquire_pipe/p1_fetch.py, acquire_pipe/acquire_pipe.py.
+**Calls out:** none.
+
+### probe_curated_theblock_cf.py (171 LOC)
 
 **Purpose:** Standalone direct CF-pass probe on the curated list without an alive pre-filter.
 **Reads:** The curated proxy list.

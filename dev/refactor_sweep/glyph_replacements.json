@@ -1,0 +1,274 @@
+{
+ "dev/explore_pipeline/05_playwright_bfs.py": [
+  [
+   "'FOUND \u2713' if agent_hit else 'MISSING \u2717'",
+   "'FOUND' if agent_hit else 'MISSING'"
+  ]
+ ],
+ "dev/news_pipeline/exploration/06_coindesk_full_discovery.py": [
+  [
+   "re-warm SUCCESS \u2705",
+   "re-warm SUCCESS"
+  ]
+ ],
+ "dev/news_pipeline/exploration/_05_report.py": [
+  [
+   "\"\u2705 **FOUND**\\n\"",
+   "\"**FOUND**\\n\""
+  ],
+  [
+   "\"\u26a0\ufe0f TARGET NOT ENCOUNTERED",
+   "\"WARN TARGET NOT ENCOUNTERED"
+  ],
+  [
+   "\"\u2705 **TARGET**\"",
+   "\"**TARGET**\""
+  ],
+  [
+   "fix_flag = \"\u2705\"",
+   "fix_flag = \"OK\""
+  ]
+ ],
+ "dev/news_pipeline/exploration/_05b_report.py": [
+  [
+   "f\"\\n\u2705 **No 403",
+   "f\"\\n**No 403"
+  ],
+  [
+   "\"\u2705 **httpx feedpage GET IS",
+   "\"**httpx feedpage GET IS"
+  ],
+  [
+   "f\"\u274c **httpx feedpage GET does NOT",
+   "f\"**httpx feedpage GET does NOT"
+  ]
+ ],
+ "dev/news_pipeline/exploration/_06_report.py": [
+  [
+   "\"httpx feedpage GET \u2705\"",
+   "\"httpx feedpage GET OK\""
+  ],
+  [
+   "\"browser required \u274c (httpx insufficient)\"",
+   "\"browser required FAIL (httpx insufficient)\""
+  ]
+ ],
+ "dev/scrape_pipeline/05_paper_mode/download.py": [
+  [
+   "indicator = \"\u2713\" if status == \"ok\" else \"\u2717\"",
+   "indicator = \"ok\" if status == \"ok\" else \"fail\""
+  ]
+ ],
+ "dev/scrape_pipeline/06_cloudflare_md_adoption.py": [
+  [
+   "cf = \"\u2713\" if r[\"cf_fronted\"] else \"\u2717\"",
+   "cf = \"ok\" if r[\"cf_fronted\"] else \"fail\""
+  ],
+  [
+   "md = \"\u2713\" if r[\"md_served\"] else \"\u2717\"",
+   "md = \"ok\" if r[\"md_served\"] else \"fail\""
+  ]
+ ],
+ "dev/scrape_pipeline/_pipe_scrape_eval_phase1.py": [
+  [
+   "print(f\"  \u2717 WAF triggered",
+   "print(f\"  WAF triggered"
+  ],
+  [
+   "\"\u2713\" if m['waf_429'] == 0 else \"\u2717\"",
+   "\"ok\" if m['waf_429'] == 0 else \"fail\""
+  ]
+ ],
+ "dev/scrape_pipeline/_pipe_scrape_eval_phase2.py": [
+  [
+   "\"\u2713\" if m['waf_429'] == 0 else \"\u2717 (ban)\"",
+   "\"ok\" if m['waf_429'] == 0 else \"fail (ban)\""
+  ]
+ ],
+ "dev/scrape_pipeline/garbage_eval/09_garbage_fix_prototype.py": [
+  [
+   "\"YES \u2705\" if triggers else \"NO \u274c\"",
+   "\"YES\" if triggers else \"NO\""
+  ],
+  [
+   "\"YES \u2705\" if not triggers else \"FALSE POSITIVE \u274c\"",
+   "\"YES\" if not triggers else \"FALSE POSITIVE\""
+  ],
+  [
+   "\"nothing removed \u2705\"",
+   "\"nothing removed\""
+  ],
+  [
+   "chars \u274c\"",
+   "chars\""
+  ],
+  [
+   "chars \u2705\"",
+   "chars\""
+  ],
+  [
+   "chars \u26a0\ufe0f\"",
+   "chars\""
+  ],
+  [
+   "\"not effective \u2014 nothing removed \u274c\"",
+   "\"not effective \u2014 nothing removed\""
+  ]
+ ],
+ "dev/search_pipeline/bee_probes/acquire_probe.py": [
+  [
+   "{\"empty\": \"\u26a1\", \"zero_cascade\": \"\ud83d\udeab\", \"normal\": \"\"}",
+   "{\"empty\": \"EMPTY\", \"zero_cascade\": \"ZERO\", \"normal\": \"\"}"
+  ]
+ ],
+ "dev/search_pipeline/bee_probes/branch_probe.py": [
+  [
+   "\"\\n\ud83d\uded1 STOP: cascade",
+   "\"\\nSTOP: cascade"
+  ],
+  [
+   "{\"empty\": \"\u26a1\", \"zero_cascade\": \"\ud83d\udeab\", \"normal\": \"\"}",
+   "{\"empty\": \"EMPTY\", \"zero_cascade\": \"ZERO\", \"normal\": \"\"}"
+  ]
+ ],
+ "dev/search_pipeline/bee_probes/cdp_starvation_probe.py": [
+  [
+   "\"\u26a1EMPTY\"",
+   "\"EMPTY\""
+  ],
+  [
+   "\"\ud83d\udeabZERO\"",
+   "\"ZERO\""
+  ]
+ ],
+ "dev/search_pipeline/inspections/inspect_engine_dom.py": [
+  [
+   "\"\u2705 PRESENT\" if count > 0 else \"\u274c BROKEN\"",
+   "\"PRESENT\" if count > 0 else \"BROKEN\""
+  ],
+  [
+   "    except (KeyError, TypeError):\n        return None\n",
+   "    except (KeyError, TypeError) as exc:\n        print(f\"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}\", file=sys.stderr)\n        return None\n"
+  ]
+ ],
+ "dev/search_pipeline/pdf_probes/_download_classify_probe_report.py": [
+  [
+   "has_transform = \"\u2713\" if",
+   "has_transform = \"yes\" if"
+  ]
+ ],
+ "dev/search_pipeline/pydoll_fingerprint_probe.py": [
+  [
+   "marker = \"\u2705\" if r['status'] == 'PASS' else (\"\u274c\" if r['status'] == 'FAIL' else \"\u2753\")",
+   "marker = \"PASS\" if r['status'] == 'PASS' else (\"FAIL\" if r['status'] == 'FAIL' else \"UNKNOWN\")"
+  ],
+  [
+   "'\u2705 undefined/false' if not webdriver_val else '\u274c TRUE \u2014 bot flagged'",
+   "'OK undefined/false' if not webdriver_val else 'FAIL TRUE \u2014 bot flagged'"
+  ],
+  [
+   "'\u2705' if nav_props.get('plugins_length', 0) > 0 else '\u274c 0 \u2014 headless tell'",
+   "'OK' if nav_props.get('plugins_length', 0) > 0 else 'FAIL 0 \u2014 headless tell'"
+  ],
+  [
+   "'\u274c SwiftShader \u2014 headless GPU' if swiftshader else '\u2705'",
+   "'FAIL SwiftShader \u2014 headless GPU' if swiftshader else 'OK'"
+  ],
+  [
+   "'\u2705' if perm_ok else '\u274c not default \u2014 headless tell'",
+   "'OK' if perm_ok else 'FAIL not default \u2014 headless tell'"
+  ],
+  [
+   "    except (KeyError, TypeError):\n        return None\n",
+   "    except (KeyError, TypeError) as exc:\n        print(f\"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}\", file=sys.stderr)\n        return None\n"
+  ]
+ ],
+ "dev/search_pipeline/report_analysis/engine_health_audit.py": [
+  [
+   "order = {\"\ud83d\udd34\": 0, \"\u26aa\": 1, \"\ud83d\udfe1\": 2, \"\u23f1\ufe0f\": 3, \"\ud83d\udeab\": 4, \"\u2705\": 5}",
+   "order = {\"RED\": 0, \"GREY\": 1, \"YELLOW\": 2, \"TIMER\": 3, \"BLOCK\": 4, \"GREEN\": 5}"
+  ],
+  [
+   "return \"\u26aa\", \"INSUFFICIENT\"",
+   "return \"GREY\", \"INSUFFICIENT\""
+  ],
+  [
+   "return \"\u26a0\ufe0f\", \"FLAG",
+   "return \"WARN\", \"FLAG"
+  ],
+  [
+   "return \"\ud83d\udd34\", \"BROKEN\"",
+   "return \"RED\", \"BROKEN\""
+  ],
+  [
+   "return \"\ud83d\udfe1\", \"DEGRADED (\u23f1\ufe0f SLOW)\"",
+   "return \"YELLOW\", \"DEGRADED (SLOW)\""
+  ],
+  [
+   "return \"\ud83d\udfe1\", \"DEGRADED (\ud83d\udeab RATE_LIMITED)\"",
+   "return \"YELLOW\", \"DEGRADED (RATE_LIMITED)\""
+  ],
+  [
+   "return \"\ud83d\udfe1\", \"DEGRADED\"",
+   "return \"YELLOW\", \"DEGRADED\""
+  ],
+  [
+   "return \"\u23f1\ufe0f\", \"SLOW\"",
+   "return \"TIMER\", \"SLOW\""
+  ],
+  [
+   "return \"\ud83d\udeab\", \"RATE_LIMITED\"",
+   "return \"BLOCK\", \"RATE_LIMITED\""
+  ],
+  [
+   "return \"\u2705\", \"OK\"",
+   "return \"GREEN\", \"OK\""
+  ],
+  [
+   "emoji, label = classify_health(s)",
+   "level, label = classify_health(s)"
+  ],
+  [
+   "order.get(emoji, 9)",
+   "order.get(level, 9)"
+  ],
+  [
+   "flag_col = f\"{emoji} {label}\"",
+   "flag_col = f\"{level} {label}\""
+  ]
+ ],
+ "dev/search_pipeline/report_analysis/snippet_quality_analysis.py": [
+  [
+   "\"One block per URL. \u2b50 = winner",
+   "\"One block per URL. [winner] = winner"
+  ],
+  [
+   "star = \" \u2b50\" if",
+   "star = \" [winner]\" if"
+  ]
+ ],
+ "dev/search_pipeline/report_analysis/snippet_selection_simulator.py": [
+  [
+   "\"  \u26a0 floor-trigger\"",
+   "\"  WARN floor-trigger\""
+  ]
+ ],
+ "dev/search_pipeline/with_google_decoupling_smoke.py": [
+  [
+   "p = \"\u2713\" if r[\"pass\"] else \"\u2717\"",
+   "p = \"ok\" if r[\"pass\"] else \"fail\""
+  ],
+  [
+   "sa = \"\u2713\" if not r[\"scholar_in_requested\"] else \"\u2717\"",
+   "sa = \"ok\" if not r[\"scholar_in_requested\"] else \"fail\""
+  ],
+  [
+   "gp = \"\u2713\" if r[\"google_in_requested\"] else \"\u2717\"",
+   "gp = \"ok\" if r[\"google_in_requested\"] else \"fail\""
+  ],
+  [
+   "ec = \"\u2713\" if r[\"excluded_correct\"] else \"\u2717\"",
+   "ec = \"ok\" if r[\"excluded_correct\"] else \"fail\""
+  ]
+ ]
+}

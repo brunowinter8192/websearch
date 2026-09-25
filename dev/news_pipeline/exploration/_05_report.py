@@ -50,12 +50,12 @@ def _render_target_section(results: dict) -> list:
     lines = ["\n## Target Article (cc8f264d)\n"]
     target = results.get("target_article")
     if target:
-        lines.append("✅ **FOUND**\n")
+        lines.append("**FOUND**\n")
         lines.append("```json")
         lines.append(json.dumps(target, indent=2, ensure_ascii=False))
         lines.append("```\n")
     else:
-        lines.append("⚠️ TARGET NOT ENCOUNTERED in walk responses.\n")
+        lines.append("WARN TARGET NOT ENCOUNTERED in walk responses.\n")
     return lines
 
 
@@ -109,7 +109,7 @@ def _render_walk_call_row(r: dict) -> list:
         lines.append(f"| {r['call']} | ERROR | — | — | — | {r['error']} | — |")
         return lines
     if r.get("status", 200) != 200:
-        flag = "✅ **TARGET**" if r.get("target_in_call") else "—"
+        flag = "**TARGET**" if r.get("target_in_call") else "—"
         lines.append(
             f"| {r['call']} | **{r['status']}** | — | — |"
             f" {r.get('oldest','')[:10]} | {flag} | {r.get('elapsed','?')}s |"
@@ -126,7 +126,7 @@ def _render_walk_call_row(r: dict) -> list:
         if snip:
             lines.append(f"\n**403 body snippet:**\n```\n{snip}\n```\n")
     else:
-        flag = "✅ **TARGET**" if r.get("target_in_call") else "—"
+        flag = "**TARGET**" if r.get("target_in_call") else "—"
         lines.append(
             f"| {r['call']} | 200 | {r.get('count','—')} |"
             f" {r.get('newest','')[:10]} | {r.get('oldest','')[:10]} |"
@@ -137,7 +137,7 @@ def _render_walk_call_row(r: dict) -> list:
 
 def _render_fixed_call_row(r: dict) -> list:
     lines = []
-    fix_flag = "✅" if r.get("cursor_fixed") else "—"
+    fix_flag = "OK" if r.get("cursor_fixed") else "—"
     skipped = r.get("skipped_storyType") or "—"
     if r.get("status") != 200:
         lines.append(

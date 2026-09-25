@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -223,5 +224,6 @@ def _event_rel_ms(measurement: QueryMeasurement, record: dict, poll_ms: float) -
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None

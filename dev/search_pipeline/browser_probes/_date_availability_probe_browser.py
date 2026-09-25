@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from pydoll.browser import Chrome
@@ -143,5 +144,6 @@ async def _apply_fingerprint_patches(tab):
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None

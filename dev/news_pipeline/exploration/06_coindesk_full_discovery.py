@@ -347,7 +347,7 @@ def try_rewarm(failing_url: str, headers: dict, log_fh) -> tuple:
 
     resp = httpx.get(failing_url, headers=headers, follow_redirects=True, timeout=30)
     if resp.status_code == 200:
-        log(log_fh, "[rewarm] httpx feedpage re-warm SUCCESS ✅")
+        log(log_fh, "[rewarm] httpx feedpage re-warm SUCCESS")
         return headers, resp.content, "httpx"
 
     log(log_fh, f"[rewarm] httpx re-warm failed ({resp.status_code}) → browser re-warm …")
@@ -358,7 +358,7 @@ def try_rewarm(failing_url: str, headers: dict, log_fh) -> tuple:
 
     resp2 = httpx.get(failing_url, headers=new_headers, follow_redirects=True, timeout=30)
     if resp2.status_code == 200:
-        log(log_fh, "[rewarm] browser re-warm SUCCESS ✅ (httpx feedpage was insufficient)")
+        log(log_fh, "[rewarm] browser re-warm SUCCESS (httpx feedpage was insufficient)")
         return new_headers, resp2.content, "browser"
 
     log(log_fh, f"[rewarm] browser re-warm also failed ({resp2.status_code}) — fatal")

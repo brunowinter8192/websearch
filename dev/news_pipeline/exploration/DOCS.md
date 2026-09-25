@@ -11,7 +11,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 
 ## Modules
 
-### 01_coindesk_ui_probe.py (224 LOC)
+### 01_coindesk_ui_probe.py (225 LOC)
 
 **Purpose:** Pydoll playthrough of the latest-news page to learn the load-more button, click mechanics, and article URL pattern.
 **Reads:** Live CoinDesk site.
@@ -67,7 +67,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `_02_quick.py`, `_02_depth.py`.
 **Calls out:** none.
 
-### 03_coindesk_backfill_traversal.py (346 LOC)
+### 03_coindesk_backfill_traversal.py (348 LOC)
 
 **Purpose:** Uncapped browser-driven backfill of the latest-news page reusing production discovery Chrome machinery, with stop rules for button gone, disabled, or plateau.
 **Reads:** Live CoinDesk site.
@@ -75,7 +75,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _03_capture.py (216 LOC)
+### _03_capture.py (218 LOC)
 
 **Purpose:** Pydoll and CDP browser launch plus click, extract, and button-state helpers with disabled-button retry.
 **Reads:** nothing; takes a tab handle.
@@ -107,7 +107,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _04_capture.py (118 LOC)
+### _04_capture.py (120 LOC)
 
 **Purpose:** Captures timeline API requests through background Chrome and a HAR recorder to establish the minimum replay header set.
 **Reads:** Live CoinDesk site.
@@ -115,7 +115,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `04_coindesk_timeline_replay_probe.py`.
 **Calls out:** `pydoll`.
 
-### _04_replay.py (325 LOC)
+### _04_replay.py (327 LOC)
 
 **Purpose:** Dual-client HTTP replay of the captured timeline URL with cursor-chained pagination and 403 diagnostics.
 **Reads:** Live timeline API.
@@ -139,7 +139,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _05_capture.py (122 LOC)
+### _05_capture.py (124 LOC)
 
 **Purpose:** Pydoll and CDP browser launch plus timeline-request capture for probe 05.
 **Reads:** nothing; takes a tab handle.
@@ -171,7 +171,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** `05_coindesk_cursor_probe.py`.
 **Calls out:** none.
 
-### 05b_coindesk_warmth_probe.py (345 LOC)
+### 05b_coindesk_warmth_probe.py (347 LOC)
 
 **Purpose:** Measures IP warmth duration after a browser session closes by replaying the captured URL at growing intervals.
 **Reads:** Live CoinDesk site and timeline API.
@@ -195,7 +195,7 @@ Numbered probe drives a live CoinDesk session (pydoll or Playwright) or replays 
 **Called by:** CLI only.
 **Calls out:** none.
 
-### _06_capture.py (167 LOC)
+### _06_capture.py (169 LOC)
 
 **Purpose:** Pydoll and CDP browser launch plus timeline-request capture for probe 06, reused for warmup and rewarm cycles.
 **Reads:** nothing.

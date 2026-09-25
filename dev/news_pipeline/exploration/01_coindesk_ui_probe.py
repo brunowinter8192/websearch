@@ -216,7 +216,8 @@ def parse_url_date(url: str) -> datetime | None:
         return None
     try:
         return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), tzinfo=timezone.utc)
-    except ValueError:
+    except ValueError as exc:
+        print(f"parse_url_date: dropped {exc} for url {url}", file=sys.stderr)
         return None
 
 

@@ -131,5 +131,35 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
+### 11_silent_handler_scan.py (122 LOC)
+
+**Purpose:** Lists dev exception handlers that swallow an exception without a trace, apart from intended control-flow types.
+**Reads:** tracked `dev/**/*.py`.
+**Writes:** `md/11_silent_handler_scan.md`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 12_emoji_scan.py (84 LOC)
+
+**Purpose:** Lists emoji and symbol glyphs in tracked dev scripts and docs, excluding generated reports and scraped fixture data.
+**Reads:** tracked `dev/` files.
+**Writes:** `md/12_emoji_scan.md`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
+### 13_glyph_diff_check.py (93 LOC)
+
+**Purpose:** Checks that each glyph-cleaned script equals its merge-base text with exactly the recorded replacement pairs applied.
+**Reads:** git objects, working tree and `glyph_replacements.json`.
+**Writes:** `md/13_glyph_diff_check.md`.
+**Called by:** CLI only.
+**Calls out:** none.
+
+---
+
 ## State
 None.

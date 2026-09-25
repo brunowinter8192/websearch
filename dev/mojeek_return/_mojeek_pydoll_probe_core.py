@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import statistics
+import sys
 
 RESULT_LINK_SELECTOR = "ul.results-standard > li > a.ob"
 BLOCK_MARKER_TEXT = "Verification required"
@@ -191,7 +192,8 @@ def _decode_altcha_payload(payload: str) -> dict | None:
     try:
         raw = base64.b64decode(padded)
         return json.loads(raw)
-    except Exception:
+    except ValueError as exc:
+        print(f"decode_altcha_payload: dropped {type(exc).__name__}: {exc}", file=sys.stderr)
         return None
 
 

@@ -136,7 +136,7 @@ def _print_results_table(table_results: list) -> tuple[list, list, list]:
     unknown = [r for r in table_results if r['status'] == 'UNKNOWN']
     print(f"  PASS: {len(passed)} | FAIL: {len(failed)} | UNKNOWN: {len(unknown)}\n")
     for r in table_results:
-        marker = "✅" if r['status'] == 'PASS' else ("❌" if r['status'] == 'FAIL' else "❓")
+        marker = "PASS" if r['status'] == 'PASS' else ("FAIL" if r['status'] == 'FAIL' else "UNKNOWN")
         print(f"  {marker} {r['label']}: {r['value']}")
     return passed, failed, unknown
 
@@ -155,13 +155,13 @@ def _print_key_signals(nav_props: dict, perm_state: str, failed: list) -> None:
     print("KEY SIGNALS (SUMMARY)")
     print("="*60)
     webdriver_val = nav_props.get('webdriver')
-    print(f"  navigator.webdriver   = {webdriver_val!r}  {'✅ undefined/false' if not webdriver_val else '❌ TRUE — bot flagged'}")
-    print(f"  navigator.plugins     = {nav_props.get('plugins_length')} entries  {'✅' if nav_props.get('plugins_length', 0) > 0 else '❌ 0 — headless tell'}")
+    print(f"  navigator.webdriver   = {webdriver_val!r}  {'OK undefined/false' if not webdriver_val else 'FAIL TRUE — bot flagged'}")
+    print(f"  navigator.plugins     = {nav_props.get('plugins_length')} entries  {'OK' if nav_props.get('plugins_length', 0) > 0 else 'FAIL 0 — headless tell'}")
     wgl = nav_props.get('webgl_renderer', '')
     swiftshader = 'SwiftShader' in str(wgl) or 'llvmpipe' in str(wgl).lower()
-    print(f"  webgl_renderer        = {wgl!r}  {'❌ SwiftShader — headless GPU' if swiftshader else '✅'}")
+    print(f"  webgl_renderer        = {wgl!r}  {'FAIL SwiftShader — headless GPU' if swiftshader else 'OK'}")
     perm_ok = 'default' in str(perm_state)
-    print(f"  notifications perm    = {perm_state!r}  {'✅' if perm_ok else '❌ not default — headless tell'}")
+    print(f"  notifications perm    = {perm_state!r}  {'OK' if perm_ok else 'FAIL not default — headless tell'}")
     print(f"  navigator.languages   = {nav_props.get('languages')}")
     fail_labels = [r['label'] for r in failed]
     print(f"\n  FAILED CHECKS: {fail_labels}")
@@ -185,7 +185,8 @@ def _print_json_summary(passed: list, failed: list, unknown: list, table_results
 def _extract_value(result):
     try:
         return result["result"]["result"]["value"]
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as exc:
+        print(f"extract_value: dropped {type(exc).__name__} for result {str(result)[:200]}", file=sys.stderr)
         return None
 
 

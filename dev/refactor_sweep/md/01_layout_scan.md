@@ -1,6 +1,6 @@
 # 01_layout_scan report
 
-files scanned: 332 (EXEMPT=1, LIB=125, SCRIPT=127, TEST=79)
+files scanned: 337 (EXEMPT=1, LIB=126, SCRIPT=130, TEST=80)
 files with findings: 0
 findings total: 0
 
