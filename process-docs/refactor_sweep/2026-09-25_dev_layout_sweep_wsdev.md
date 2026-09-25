@@ -103,3 +103,9 @@ Worker wssrc changes `src/` and `cli.py` and will fix dev callers of the engine 
 ## Files touched
 
 `git diff integration --name-only -- dev process-docs`: 340 files under `dev/` at the second commit. Among them 291 existing `.py` files (172 only reordered, 119 with extraction helpers), the new `dev/refactor_sweep/` scripts and `md/` reports, dev DOCS.md files (LOC headings, `dev/DOCS.md` area list, an exemption sentence in `jhao104/patches/helper/DOCS.md`), and this file.
+
+## Recap (2026-09-25)
+
+Round 2 of the four-eyes review reported no defects and no violations. Final state of the branch: scan 0 findings on 328 files, `docs-drift-check` 0 findings, LOC headings match `wc -l`, integration unchanged at 7bb68ff (merge is a no-op). 345 files differ from integration: dev modules, `dev/refactor_sweep/` (12 scripts, 6 reports), dev DOCS.md files, this file.
+
+Order that worked for a successor: relayout (markers, constants, stepdown) first, then orchestrator extraction, then literal sinking, then hand edits for blocks with early returns, then the INFRASTRUCTURE statements; after every step run scan, inline check, pyflakes and the collection comparison. Open for a later task: browser and network scripts have no runtime proof, 39 hand-edited files have no inline-equivalence proof.
