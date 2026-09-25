@@ -111,7 +111,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 09_instrument_check.py (69 LOC)
+### 09_instrument_check.py (70 LOC)
 
 **Purpose:** Prints lock types, patched method and recorded events of a bee-probe instrument module for comparison between two trees.
 **Reads:** a tree copy given by `--tree`.

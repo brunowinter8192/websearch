@@ -50,9 +50,10 @@ def check_rate_limiter(probe: str) -> dict:
     importlib.import_module("src.search.search_web")
     install_if_present(instrument, "install_instrument")
     limiters = instrument._rl_mod._limiters
+    bing = instrument._rl_mod.get_limiter("bing")
     kinds = {name: type(lim._lock).__name__ for name, lim in sorted(limiters.items())}
-    events = asyncio.run(acquire_once(limiters["bing"], instrument))
-    return {"lock_types": kinds, "acquire_patched": limiters["bing"].acquire.__func__.__name__, "events": events}
+    events = asyncio.run(acquire_once(bing, instrument))
+    return {"lock_types": kinds, "acquire_patched": bing.acquire.__func__.__name__, "events": events}
 
 
 def install_if_present(module, name: str) -> None:
