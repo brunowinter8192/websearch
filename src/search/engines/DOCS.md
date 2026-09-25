@@ -2,25 +2,17 @@
 
 ## Role
 
-Per-engine search implementations. Each module except base.py holds one engine subclass, either a pydoll Chrome-tab scraper or a direct httpx API client. Touch it to add or change an engine's parsing or rate-limit registration; the default engine set is chosen in src/search.
+Per-engine search implementations. Each module is one engine (a `name` constant and one `search_with_reason` workflow function), either a pydoll Chrome-tab scraper or a direct httpx API client. Touch it to add or change an engine's parsing; the default engine set is chosen in src/search.
 
 ## Public Interface
 
-`__init__.py` is empty. Consumers import engine classes by module path.
+`__init__.py` is empty. search_web.py maps engine names to the modules themselves; there are no engine classes.
 
 ## Flow
 
-Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. Each module registers a rate limiter at import; the fan-out in src/search acquires a token before calling the engine. Engines use `src/search/browser.py`, `document_status.py` and `selector_hits.py`, and return `src/search/result.py` types.
+Query in, engine-specific fetch (browser tab navigation with injected parse script, or HTTP call), parse, and a triple out: results, no verdict, and a diagnosis of observed facts. The fan-out in src/search acquires a rate-limiter token (limits live in `src/search/rate_limiter.py`) before calling the engine. Engines use `src/search/browser.py`, `cdp_value.py`, `document_status.py` and `selector_hits.py`, and return `src/search/result.py` types.
 
 ## Modules
-
-### base.py (16 LOC)
-
-**Purpose:** Abstract engine parent; the uniform triple-returning method is abstract and the plain search method only delegates.
-**Reads:** none.
-**Writes:** none.
-**Called by:** every engine module (subclassed).
-**Calls out:** none.
 
 ### google.py (284 LOC)
 
@@ -54,7 +46,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Called by:** src/search/search_web.py.
 **Calls out:** none.
 
-### bing.py (182 LOC)
+### bing.py (181 LOC)
 
 **Purpose:** Bing search via a headed Chrome tab, unwrapping Bing's tracking redirect links and scanning for block markers.
 **Reads:** none (network only).
@@ -78,7 +70,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Called by:** src/search/search_web.py.
 **Calls out:** none.
 
-### openalex.py (123 LOC)
+### openalex.py (122 LOC)
 
 **Purpose:** OpenAlex academic search via HTTP API with dates and open-access PDF links.
 **Reads:** the optional OpenAlex API key environment variable.
@@ -86,7 +78,7 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 **Called by:** src/search/search_web.py.
 **Calls out:** httpx.
 
-### scholar.py (99 LOC)
+### scholar.py (100 LOC)
 
 **Purpose:** Google Scholar search via HTTP; fully implemented but decoupled from the default engine pool.
 **Reads:** none (network only).
@@ -96,6 +88,6 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 
 ## State
 
-None. Engines are stateless per call; the only shared state is the limiter registry owned by src/search/rate_limiter.py.
+None. Engines are stateless per call; the only shared state is the limiter registry owned by src/search/rate_limiter.py (created lazily on first use).
 
 Details, decisions and observed evidence: process-docs/search_pipeline, process-docs/marker_reflection, process-docs/mojeek_return, process-docs/engine_reduction and process-docs/refactor_sweep.

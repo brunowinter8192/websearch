@@ -12,7 +12,6 @@ from pydoll.browser.options import ChromiumOptions
 from pydoll.commands import TargetCommands
 
 from src.search.engines import brave as brave_mod
-from src.search.engines.brave import BraveEngine
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +159,7 @@ async def test_marker_word_from_own_query_no_longer_discards_real_results(monkey
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/marker_in_own_query.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason(_OWN_QUERY)
+        results, reason, diagnosis = await brave_mod.search_with_reason(_OWN_QUERY)
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -182,7 +181,7 @@ async def test_marker_word_in_unrelated_organic_snippet_no_longer_discards_real_
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/marker_in_unrelated_snippet.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason(_UNRELATED_QUERY)
+        results, reason, diagnosis = await brave_mod.search_with_reason(_UNRELATED_QUERY)
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -207,7 +206,7 @@ async def test_genuine_pow_link_block_still_yields_no_results(monkeypatch):
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/genuine_block.html?q={{}}")
         t0 = time.perf_counter()
         results, reason, diagnosis = await asyncio.wait_for(
-            BraveEngine().search_with_reason("any query at all"), timeout=6.0
+            brave_mod.search_with_reason("any query at all"), timeout=6.0
         )
         elapsed = time.perf_counter() - t0
     finally:
@@ -232,7 +231,7 @@ async def test_unrelated_button_before_containers_never_leaks_into_success_diagn
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/staggered_load.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -265,7 +264,7 @@ async def test_light_dom_challenge_button_is_solved_and_returns_real_results(mon
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_success.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -289,7 +288,7 @@ async def test_shadow_dom_challenge_button_is_solved_and_returns_real_results(mo
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_success_shadow.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -310,7 +309,7 @@ async def test_stuck_challenge_gives_up_within_budget_and_records_it_was_attempt
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_stuck.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -329,7 +328,7 @@ async def test_pow_link_with_clickable_button_solves_challenge_instead_of_giving
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/pow_link_with_button.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -351,7 +350,7 @@ async def test_real_no_challenge_fixture_never_attempts_a_click(monkeypatch):
     try:
         _patch_brave_tab_lifecycle(monkeypatch, browser)
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/results_no_challenge.html?q={{}}")
-        results, reason, diagnosis = await BraveEngine().search_with_reason("fixture query")
+        results, reason, diagnosis = await brave_mod.search_with_reason("fixture query")
     finally:
         await _stop_headless_browser(browser)
         _stop_fixture_server(server)
@@ -376,7 +375,7 @@ async def test_stuck_challenge_cancelled_mid_loop_leaves_partial_facts_behind(mo
         monkeypatch.setattr(brave_mod, "SEARCH_URL", f"{base_url}/button_challenge_stuck.html?q={{}}")
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(
-                BraveEngine().search_with_reason("fixture query", partial=partial), timeout=0.3
+                brave_mod.search_with_reason("fixture query", partial=partial), timeout=0.3
             )
     finally:
         await _stop_headless_browser(browser)

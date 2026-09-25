@@ -19,13 +19,21 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 
 ## Modules
 
-### search_web.py (334 LOC)
+### search_web.py (351 LOC)
 
 **Purpose:** Search orchestrator: engine selection, concurrent fan-out with status classification, pool building, breakdown formatting, cache write and query logging.
 **Reads:** the query and parameters; engine registry data.
 **Writes:** the disk cache via cache.py; query log via query_logger.py.
 **Called by:** cli.py; dev scripts.
 **Calls out:** httpx, pydoll and websocket exceptions, mcp types.
+
+### cdp_value.py (3 LOC)
+
+**Purpose:** Unwraps the value field of a CDP script-evaluation result; the one shared copy for all engines and the CoinDesk browser module.
+**Reads:** the CDP result handed in.
+**Writes:** none.
+**Called by:** src/search/engines/ modules, src/news/platforms/coindesk/browser.py.
+**Calls out:** none.
 
 ### degraded_notice.py (61 LOC)
 
@@ -67,7 +75,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** search_web.py, cli.py.
 **Calls out:** none.
 
-### browser.py (311 LOC)
+### browser.py (293 LOC)
 
 **Purpose:** Chrome lifecycle for the browser engines: one shared headed, backgrounded Chrome with a fresh profile per run and one tab per engine.
 **Reads:** nothing until first access.
@@ -83,9 +91,9 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** browser.py.
 **Calls out:** none (stdlib only).
 
-### rate_limiter.py (41 LOC)
+### rate_limiter.py (55 LOC)
 
-**Purpose:** Per-engine token-bucket limiter registry, populated when engine modules are imported.
+**Purpose:** Per-engine token-bucket limiter registry, created lazily from a per-engine limits table.
 **Reads:** in-memory registry.
 **Writes:** in-memory registry.
 **Called by:** search_web.py, engines/.

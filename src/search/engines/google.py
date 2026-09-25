@@ -11,13 +11,14 @@ from pydoll.commands.network_commands import NetworkCommands
 from pydoll.protocol.network.types import CookieSameSite
 
 from src.search.browser import new_tab, kill_tab
+from src.search.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
 from src.search.selector_hits import collect_selector_hits
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "google"
 
 SEARCH_URL = "https://www.google.com/search?q={}&hl={}&num={}"
 CAPTCHA_PATH = "/sorry/"
@@ -98,51 +99,50 @@ return JSON.stringify({
 });
 """
 
-_limiters["google"] = RateLimiter(max_requests=4, window_seconds=60)
-
 
 # ORCHESTRATOR
 
-class GoogleEngine(BaseEngine):
-    name = "google"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        logger.info("Google search: %s", query)
-        tab = await new_tab()
-        await _inject_socs_cookie(tab)
-        search_url = _build_url(query, language, max_results)
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await tab.go_to(search_url, timeout=3.0)
-            current = await tab.current_url
-            if CAPTCHA_PATH in current:
-                logger.warning("Google CAPTCHA detected for: %s", query)
-                diag = await _diagnose(tab)
-                diag["containers_found"] = None
-                return [], None, attach_document_status(diag, status_chain)
-            if not await _wait_for_results(tab, status_chain, t0, partial):
-                diag = await _diagnose(tab)
-                diag["containers_found"] = False
-                logger.debug("Google empty for: %s", query)
-                return [], None, attach_document_status(diag, status_chain)
-            results, selector_hits = await _parse_results(tab, max_results)
-            results, resolution = await _resolve_urls(results)
-            _log_drops(resolution)
-            if results:
-                return results, None, attach_document_status({"goto_resolution": resolution, "selector_hits": selector_hits}, status_chain)
-            diag = await _diagnose(tab)
-            diag["containers_found"] = True
-            diag["goto_resolution"] = resolution
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    logger.info("Google search: %s", query)
+    tab = await new_tab()
+    await _inject_socs_cookie(tab)
+    search_url = _build_url(query, language, max_results)
+    return await _search_and_close(tab, query, max_results, partial, t0, search_url)
 
 
 # FUNCTIONS
 
-def _extract_value(result):
-    return result["result"]["result"]["value"]
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0, search_url)
+    finally:
+        await kill_tab(tab)
+
+
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await tab.go_to(search_url, timeout=3.0)
+    current = await tab.current_url
+    if CAPTCHA_PATH in current:
+        logger.warning("Google CAPTCHA detected for: %s", query)
+        diag = await _diagnose(tab)
+        diag["containers_found"] = None
+        return [], None, attach_document_status(diag, status_chain)
+    if not await _wait_for_results(tab, status_chain, t0, partial):
+        diag = await _diagnose(tab)
+        diag["containers_found"] = False
+        logger.debug("Google empty for: %s", query)
+        return [], None, attach_document_status(diag, status_chain)
+    results, selector_hits = await _parse_results(tab, max_results)
+    results, resolution = await _resolve_urls(results)
+    _log_drops(resolution)
+    if results:
+        return results, None, attach_document_status({"goto_resolution": resolution, "selector_hits": selector_hits}, status_chain)
+    diag = await _diagnose(tab)
+    diag["containers_found"] = True
+    diag["goto_resolution"] = resolution
+    return results, None, attach_document_status(diag, status_chain)
 
 
 def _build_url(query: str, language: str, max_results: int) -> str:
@@ -163,7 +163,7 @@ async def _inject_socs_cookie(tab) -> None:
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
+        count = extract_value(raw)
         update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
@@ -173,7 +173,7 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
 
 async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
+    value = extract_value(raw)
     if not value:
         return [], {}
     items = json.loads(value)
@@ -276,7 +276,7 @@ def _is_absolute_http_url(location: str) -> bool:
 
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     diag = {"title": "", "url": "", "ready_state": ""}
     if val:
         diag.update(json.loads(val))

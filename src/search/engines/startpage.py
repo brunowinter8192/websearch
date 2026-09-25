@@ -5,12 +5,13 @@ import logging
 import time
 
 from src.search.browser import new_tab, kill_tab
+from src.search.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "startpage"
 
 HOME_URL = "https://www.startpage.com/"
 EXPECTED_RESULT_PATH = "/sp/search"
@@ -57,40 +58,39 @@ return JSON.stringify({
 });
 """
 
-_limiters["startpage"] = RateLimiter(max_requests=4, window_seconds=60)
-
 
 # ORCHESTRATOR
 
-class StartpageEngine(BaseEngine):
-    name = "startpage"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        logger.info("Startpage search: %s", query)
-        tab = await new_tab()
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await _submit_search(tab, query)
-            if not await _wait_for_results(tab, status_chain, t0, partial):
-                diag = await _diagnose(tab)
-                diag["containers_found"] = False
-                logger.debug("Startpage empty for: %s", query)
-                return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
-            if results:
-                return results, None, attach_document_status({}, status_chain)
-            diag = await _diagnose(tab)
-            diag["containers_found"] = True
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    logger.info("Startpage search: %s", query)
+    tab = await new_tab()
+    return await _search_and_close(tab, query, max_results, partial, t0)
 
 
 # FUNCTIONS
 
-def _extract_value(result):
-    return result["result"]["result"]["value"]
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0)
+    finally:
+        await kill_tab(tab)
+
+
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await _submit_search(tab, query)
+    if not await _wait_for_results(tab, status_chain, t0, partial):
+        diag = await _diagnose(tab)
+        diag["containers_found"] = False
+        logger.debug("Startpage empty for: %s", query)
+        return [], None, attach_document_status(diag, status_chain)
+    results = await _parse_results(tab, max_results)
+    if results:
+        return results, None, attach_document_status({}, status_chain)
+    diag = await _diagnose(tab)
+    diag["containers_found"] = True
+    return results, None, attach_document_status(diag, status_chain)
 
 
 def _js_set_query(query: str) -> str:
@@ -113,7 +113,7 @@ async def _submit_search(tab, query: str) -> None:
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
+        count = extract_value(raw)
         update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
@@ -136,7 +136,7 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
 
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
+    value = extract_value(raw)
     if not value:
         return []
     items = json.loads(value)
@@ -145,7 +145,7 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
 
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     diag = {"marker": None, "iframe_challenge": False, "url": "", "ready_state": "", "title": ""}
     if val:
         diag.update(json.loads(val))

@@ -76,7 +76,7 @@ def test_pids_on_profile_empty_when_no_match(monkeypatch):
 def test_kill_by_profile_delegates_to_death_pipe_terminate_then_kill(monkeypatch):
     monkeypatch.setattr(chromium_process, "_pids_on_profile", lambda d: [42])
     calls = []
-    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids, timeout_s=5.0: calls.append((pids, timeout_s)))
+    monkeypatch.setattr(chromium_process.death_pipe, "terminate_then_kill", lambda pids, timeout_s=5.0: calls.append((pids, timeout_s)))
     chromium_process._kill_by_profile("/tmp/some-dir")
     assert calls == [([42], 3.0)]
 
@@ -84,7 +84,7 @@ def test_kill_by_profile_delegates_to_death_pipe_terminate_then_kill(monkeypatch
 def test_kill_by_profile_noop_when_no_pids(monkeypatch):
     monkeypatch.setattr(chromium_process, "_pids_on_profile", lambda d: [])
     calls = []
-    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda *a, **kw: calls.append(1))
+    monkeypatch.setattr(chromium_process.death_pipe, "terminate_then_kill", lambda *a, **kw: calls.append(1))
     chromium_process._kill_by_profile("/tmp/some-dir")
     assert calls == []
 
@@ -104,7 +104,7 @@ def test_reap_orphaned_scrapes_kills_only_pids_older_than_budget(monkeypatch, tm
     monkeypatch.setattr(chromium_process.psutil, "Process", _FakeProc)
     monkeypatch.setattr(chromium_process, "_live_scrape_profile_dirs", lambda: set())
     killed = []
-    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
+    monkeypatch.setattr(chromium_process.death_pipe, "terminate_then_kill", lambda pids: killed.append(pids))
     monkeypatch.setattr(chromium_process, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
 
     chromium_process._reap_orphaned_scrapes()
@@ -123,7 +123,7 @@ def test_reap_orphaned_scrapes_never_kills_pid_under_budget_even_if_only_candida
     monkeypatch.setattr(chromium_process.psutil, "Process", lambda pid: _FakeProc())
     monkeypatch.setattr(chromium_process, "_live_scrape_profile_dirs", lambda: {"/tmp/scrape-url-cdp-live"})
     killed = []
-    monkeypatch.setattr(chromium_process.death_pipe, "_terminate_then_kill", lambda pids: killed.append(pids))
+    monkeypatch.setattr(chromium_process.death_pipe, "terminate_then_kill", lambda pids: killed.append(pids))
     monkeypatch.setattr(chromium_process, "tempfile", type("T", (), {"gettempdir": staticmethod(lambda: str(tmp_path))}))
 
     chromium_process._reap_orphaned_scrapes()

@@ -5,11 +5,11 @@ from urllib.parse import quote_plus
 import httpx
 from lxml import html as lhtml
 
-from src.search.engines.base import BaseEngine
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "google_scholar"
 
 SEARCH_URL = "https://scholar.google.com/scholar?q={}&hl={}&num={}&as_sdt=2007&as_vis=0"
 
@@ -28,30 +28,31 @@ _COOKIES = {"CONSENT": "YES+"}
 
 _TIMEOUT = 6.0
 
+
 # ORCHESTRATOR
 
-class ScholarEngine(BaseEngine):
-    name = "google_scholar"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        logger.info("Scholar search: %s", query)
-        url = _build_url(query, language, max_results)
-        r = await _fetch(url)
-
-        if r.status_code in (301, 302, 303, 307, 308):
-            location = r.headers.get("Location", "")
-            logger.warning("Scholar redirect → %s", location)
-            return [], None, {"http_status": r.status_code}
-
-        r.raise_for_status()
-
-        results, captcha_form = _parse_response(r.text, max_results)
-        if results:
-            return results, None, None
-        return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    logger.info("Scholar search: %s", query)
+    url = _build_url(query, language, max_results)
+    r = await _fetch(url)
+    return _reason_from_response(r, max_results)
 
 
 # FUNCTIONS
+
+def _reason_from_response(r: httpx.Response, max_results: int) -> tuple[list[SearchResult], str | None, dict | None]:
+    if r.status_code in (301, 302, 303, 307, 308):
+        location = r.headers.get("Location", "")
+        logger.warning("Scholar redirect → %s", location)
+        return [], None, {"http_status": r.status_code}
+
+    r.raise_for_status()
+
+    results, captcha_form = _parse_response(r.text, max_results)
+    if results:
+        return results, None, None
+    return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
+
 
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)

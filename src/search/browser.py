@@ -8,7 +8,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import psutil
 from patchright.async_api import async_playwright
 from pydoll.browser import Chrome
 from pydoll.browser.options import ChromiumOptions
@@ -114,7 +113,7 @@ def _reap_session_profile() -> None:
     pids = _pids_matching_session_profiles()
     if pids:
         logger.info("Reaping orphaned Chrome on session profiles: pids=%s", pids)
-        _terminate_then_kill(pids)
+        death_pipe.terminate_then_kill(pids)
     _remove_orphaned_session_dirs()
 
 
@@ -137,23 +136,6 @@ def _wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
                 return int(lines[0].strip())
         time.sleep(0.1)
     raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
-
-
-def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> None:
-    procs = []
-    for pid in pids:
-        try:
-            proc = psutil.Process(pid)
-            proc.terminate()
-            procs.append(proc)
-        except psutil.NoSuchProcess:
-            pass
-    gone, alive = psutil.wait_procs(procs, timeout=timeout_s)
-    for proc in alive:
-        try:
-            proc.kill()
-        except psutil.NoSuchProcess:
-            pass
 
 
 async def get_tab():
@@ -297,7 +279,7 @@ async def kill_own_chrome() -> None:
             _browser = None
     if _owned_pids:
         logger.info("Killing own Chrome (safety net): pids=%s", _owned_pids)
-        _terminate_then_kill(_owned_pids, timeout_s=10.0)
+        death_pipe.terminate_then_kill(_owned_pids, timeout_s=10.0)
         _owned_pids = []
     if _session_dir is not None:
         shutil.rmtree(_session_dir, ignore_errors=True)

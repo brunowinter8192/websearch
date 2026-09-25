@@ -127,7 +127,7 @@ def _pids_on_profile(user_data_dir: str) -> list[int]:
 def _kill_by_profile(user_data_dir: str) -> None:
     pids = _pids_on_profile(user_data_dir)
     if pids:
-        death_pipe._terminate_then_kill(pids, timeout_s=3.0)
+        death_pipe.terminate_then_kill(pids, timeout_s=3.0)
 
 
 def _reap_orphaned_scrapes() -> None:
@@ -145,7 +145,7 @@ def _reap_orphaned_scrapes() -> None:
         logger.warning(
             "Reaping orphaned scrape-cdp Chrome (age > %.1fs): pids=%s", TOTAL_SCRAPE_BUDGET_S, orphaned_pids
         )
-        death_pipe._terminate_then_kill(orphaned_pids)
+        death_pipe.terminate_then_kill(orphaned_pids)
 
     live_dirs = _live_scrape_profile_dirs()
     for entry in Path(tempfile.gettempdir()).glob("scrape-url-cdp-*"):

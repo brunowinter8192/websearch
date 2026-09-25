@@ -32,7 +32,7 @@ def spawn_watchdog(pids: list[int], cleanup_dir: str | None = None) -> int | Non
     return write_fd
 
 
-def _terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
+def terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
     procs = []
     for pid in pids:
         try:
@@ -65,7 +65,7 @@ def _watchdog_main() -> None:
 
     os.read(0, 1)
 
-    killed = _terminate_then_kill(pids)
+    killed = terminate_then_kill(pids)
     dir_removed = False
     if cleanup_dir and Path(cleanup_dir).exists():
         shutil.rmtree(cleanup_dir, ignore_errors=True)

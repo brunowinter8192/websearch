@@ -107,7 +107,7 @@ def test_terminate_then_kill_returns_pids_that_died_gracefully(monkeypatch):
 
     monkeypatch.setattr(death_pipe.psutil, "Process", FakeProc)
     monkeypatch.setattr(death_pipe.psutil, "wait_procs", lambda procs, timeout: (procs, []))
-    result = death_pipe._terminate_then_kill([11, 22])
+    result = death_pipe.terminate_then_kill([11, 22])
     assert sorted(result) == [11, 22]
 
 
@@ -124,7 +124,7 @@ def test_terminate_then_kill_force_kills_survivors(monkeypatch):
 
     monkeypatch.setattr(death_pipe.psutil, "Process", FakeProc)
     monkeypatch.setattr(death_pipe.psutil, "wait_procs", lambda procs, timeout: ([], procs))
-    result = death_pipe._terminate_then_kill([33])
+    result = death_pipe.terminate_then_kill([33])
     assert killed == [33]
     assert result == [33]
 
@@ -136,6 +136,6 @@ def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
     monkeypatch.setattr(death_pipe.psutil, "Process", raise_no_such_process)
     waited = []
     monkeypatch.setattr(death_pipe.psutil, "wait_procs", lambda procs, timeout: waited.append(procs) or ([], []))
-    result = death_pipe._terminate_then_kill([404])
+    result = death_pipe.terminate_then_kill([404])
     assert waited == [[]]
     assert result == []

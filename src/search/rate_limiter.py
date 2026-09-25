@@ -8,7 +8,27 @@ logger = logging.getLogger(__name__)
 MAX_REQUESTS = 10
 WINDOW_SECONDS = 60.0
 
+ENGINE_LIMITS: dict[str, tuple[int, float]] = {
+    "google": (4, 60),
+    "duckduckgo": (4, 60),
+    "mojeek": (4, 60),
+    "openalex": (4, 60),
+    "startpage": (4, 60),
+    "brave": (4, 60),
+    "bing": (4, 60),
+    "yandex": (4, 60),
+}
+
 _limiters: dict[str, "RateLimiter"] = {}
+
+
+# FUNCTIONS
+
+def get_limiter(engine_name: str) -> "RateLimiter":
+    if engine_name not in _limiters:
+        max_requests, window_seconds = ENGINE_LIMITS.get(engine_name, (MAX_REQUESTS, WINDOW_SECONDS))
+        _limiters[engine_name] = RateLimiter(max_requests, window_seconds)
+    return _limiters[engine_name]
 
 
 class RateLimiter:
@@ -33,9 +53,3 @@ class RateLimiter:
                     self._tokens = [t for t in self._tokens if now - t < self._window_seconds]
 
             self._tokens.append(time.monotonic())
-
-
-def get_limiter(engine_name: str, max_requests: int = MAX_REQUESTS, window_seconds: float = WINDOW_SECONDS) -> RateLimiter:
-    if engine_name not in _limiters:
-        _limiters[engine_name] = RateLimiter(max_requests, window_seconds)
-    return _limiters[engine_name]

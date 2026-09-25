@@ -5,38 +5,37 @@ import os
 
 import httpx
 
-from src.search.engines.base import BaseEngine
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
 
+name = "openalex"
+
 API_URL = "https://api.openalex.org/works"
 MAX_PER_PAGE = 100
-
-_limiters["openalex"] = RateLimiter(max_requests=4, window_seconds=60)
 
 
 # ORCHESTRATOR
 
-class OpenAlexEngine(BaseEngine):
-    name = "openalex"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        logger.info("OpenAlex search: %s", query)
-        status_code, works = await _fetch_results(query, max_results)
-        if status_code == 429:
-            logger.warning("OpenAlex rate limited: 429")
-            return [], None, {"http_status": status_code}
-        if works is None:
-            return [], None, {"http_status": status_code}
-        results = _parse_results(works)
-        if results:
-            return results, None, None
-        return results, None, {"http_status": status_code}
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    logger.info("OpenAlex search: %s", query)
+    status_code, works = await _fetch_results(query, max_results)
+    return _reason_from_works(status_code, works)
 
 
 # FUNCTIONS
+
+def _reason_from_works(status_code: int, works: list[dict] | None) -> tuple[list[SearchResult], str | None, dict | None]:
+    if status_code == 429:
+        logger.warning("OpenAlex rate limited: 429")
+        return [], None, {"http_status": status_code}
+    if works is None:
+        return [], None, {"http_status": status_code}
+    results = _parse_results(works)
+    if results:
+        return results, None, None
+    return results, None, {"http_status": status_code}
+
 
 def _deep_unescape(s: str) -> str:
     while True:

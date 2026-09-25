@@ -22,7 +22,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** browser.py, discover.py, timeline.py, __init__.py.
 **Calls out:** none.
 
-### browser.py (158 LOC)
+### browser.py (175 LOC)
 
 **Purpose:** Launches Chrome and captures the first timeline API request and response during the feed warmup.
 **Reads:** the CoinDesk feed page (network).

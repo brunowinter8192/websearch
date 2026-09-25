@@ -12,6 +12,7 @@ import urllib.request
 import httpx
 from pydoll.browser import Chrome
 
+from src.search.cdp_value import extract_value
 from src.news.platforms.coindesk.config import (
     TARGET_URL,
     CLICKS_REWARM,
@@ -55,50 +56,70 @@ _JS_CLICK_BTN = """
 async def browser_load_feed(n_clicks: int) -> tuple[dict, str, bytes | None]:
     port = get_free_port()
     session_dir = tempfile.mkdtemp(prefix="coindesk_disc_")
-    chrome = None
-    tab = None
-    try:
-        launch_background_chrome(port, session_dir)
-        ws_url = wait_for_ws_url(port)
-        chrome = Chrome()
-        tab = await chrome.connect(ws_url)
-
-        await tab.go_to(TARGET_URL, timeout=60)
-        await asyncio.sleep(3.0)
-        await tab.execute_script(_JS_DISMISS_COOKIE)
-        await asyncio.sleep(0.5)
-
-        entry = await capture_timeline_request(tab, n_clicks)
-        if entry is None:
-            return {}, "", None
-
-        api_url = entry["request"]["url"]
-        raw_hdrs = {h["name"]: h["value"] for h in entry["request"]["headers"]}
-        headers = filter_headers(raw_hdrs)
-
-        resp = httpx.get(api_url, headers=headers, follow_redirects=True, timeout=30)
-        if resp.status_code != 200:
-            print(f"[coindesk] browser_load_feed: first replay → {resp.status_code}", file=sys.stderr)
-            return headers, api_url, None
-
-        return headers, api_url, resp.content
-
-    finally:
-        if tab is not None:
-            try:
-                await tab.close()
-            except Exception as e:
-                print(f"tab.close (non-fatal): {e}", file=sys.stderr)
-        if chrome is not None:
-            try:
-                await chrome.close()
-            except Exception as e:
-                print(f"chrome.close (non-fatal): {e}", file=sys.stderr)
-        kill_chrome_on_port(port)
-        shutil.rmtree(session_dir, ignore_errors=True)
+    return await _load_feed_and_cleanup(port, session_dir, n_clicks)
 
 
 # FUNCTIONS
+
+async def _load_feed_and_cleanup(port: int, session_dir: str, n_clicks: int) -> tuple[dict, str, bytes | None]:
+    handles = {"chrome": None, "tab": None}
+    try:
+        return await _load_feed(port, session_dir, n_clicks, handles)
+    finally:
+        await _cleanup_session(handles, port, session_dir)
+
+
+async def _load_feed(port: int, session_dir: str, n_clicks: int, handles: dict) -> tuple[dict, str, bytes | None]:
+    launch_background_chrome(port, session_dir)
+    ws_url = wait_for_ws_url(port)
+    handles["chrome"] = Chrome()
+    handles["tab"] = await handles["chrome"].connect(ws_url)
+    tab = handles["tab"]
+
+    await _open_feed_page(tab)
+
+    entry = await capture_timeline_request(tab, n_clicks)
+    return _replay_timeline_request(entry)
+
+
+async def _open_feed_page(tab) -> None:
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+    await tab.execute_script(_JS_DISMISS_COOKIE)
+    await asyncio.sleep(0.5)
+
+
+def _replay_timeline_request(entry: dict | None) -> tuple[dict, str, bytes | None]:
+    if entry is None:
+        return {}, "", None
+
+    api_url = entry["request"]["url"]
+    raw_hdrs = {h["name"]: h["value"] for h in entry["request"]["headers"]}
+    headers = filter_headers(raw_hdrs)
+
+    resp = httpx.get(api_url, headers=headers, follow_redirects=True, timeout=30)
+    if resp.status_code != 200:
+        print(f"[coindesk] browser_load_feed: first replay → {resp.status_code}", file=sys.stderr)
+        return headers, api_url, None
+
+    return headers, api_url, resp.content
+
+
+async def _cleanup_session(handles: dict, port: int, session_dir: str) -> None:
+    if handles["tab"] is not None:
+        await _close_non_fatal("tab.close", handles["tab"])
+    if handles["chrome"] is not None:
+        await _close_non_fatal("chrome.close", handles["chrome"])
+    kill_chrome_on_port(port)
+    shutil.rmtree(session_dir, ignore_errors=True)
+
+
+async def _close_non_fatal(label: str, target) -> None:
+    try:
+        await target.close()
+    except Exception as e:
+        print(f"{label} (non-fatal): {e}", file=sys.stderr)
+
 
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -138,15 +159,11 @@ def kill_chrome_on_port(port: int) -> None:
     subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
 
 
-def _extract_value(raw):
-    return raw["result"]["result"]["value"]
-
-
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     async with tab.request.record() as capture:
         for i in range(n_clicks):
             raw = await tab.execute_script(_JS_CLICK_BTN)
-            print(f"  click {i + 1}/{n_clicks}: {'OK' if _extract_value(raw) else 'miss'}", flush=True)
+            print(f"  click {i + 1}/{n_clicks}: {'OK' if extract_value(raw) else 'miss'}", flush=True)
             await asyncio.sleep(2.5)
     for entry in capture.entries:
         if "/api/v1/articles/timeline" in entry["request"]["url"]:
