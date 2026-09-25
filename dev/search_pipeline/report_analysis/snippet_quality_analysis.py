@@ -351,7 +351,7 @@ def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
         "",
         "## 5. All URLs — Side-by-Side Snippet Scores",
         "",
-        "One block per URL. ⭐ = winner (highest clean_len × lex_density).  ",
+        "One block per URL. [winner] = winner (highest clean_len × lex_density).  ",
         "Only non-empty sources shown. Sorted by usefulness descending within each block.",
         "",
     ]
@@ -389,7 +389,7 @@ def _render_url_details(records: list[dict], best_per_url: dict) -> list[str]:
                 "|--------|-----------|-----|--------|",
             ]
             for src, (useful, cl, ld) in sorted(candidates.items(), key=lambda x: -x[1][0]):
-                star = " ⭐" if src == winner else ""
+                star = " [winner]" if src == winner else ""
                 L.append(f"| **{src}**{star} | {cl} | {ld:.2f} | {useful:.0f} |")
         else:
             L.append("*no content*")

@@ -19,8 +19,8 @@ def write_report(path: Path, results: dict, ts: str, stop_date: str) -> None:
     lines.append(f"| Re-warm events | {results['rewarm_count']} |")
     lines.append(f"| Fallback-cursor activations | {results['fallback_count']} |")
     rewarm_method = (
-        "httpx feedpage GET ✅" if results.get("httpx_rewarm_confirmed") is True
-        else "browser required ❌ (httpx insufficient)" if results.get("httpx_rewarm_confirmed") is False
+        "httpx feedpage GET OK" if results.get("httpx_rewarm_confirmed") is True
+        else "browser required FAIL (httpx insufficient)" if results.get("httpx_rewarm_confirmed") is False
         else "not triggered (no warmth-related 403 encountered)"
     )
     lines.append(f"| Re-warm method determination | {rewarm_method} |\n")

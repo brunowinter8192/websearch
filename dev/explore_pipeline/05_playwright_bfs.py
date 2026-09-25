@@ -311,7 +311,7 @@ def _format_key_url_and_baseline(recall: dict, concurrency: int, delay_s: float)
         "",
         "## Key URL Check",
         "",
-        f"- `agent-tasks/agent-tasks`: **{'FOUND ✓' if agent_hit else 'MISSING ✗'}**",
+        f"- `agent-tasks/agent-tasks`: **{'FOUND' if agent_hit else 'MISSING'}**",
         "",
         "## Baseline Comparison",
         "",

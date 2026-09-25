@@ -120,7 +120,7 @@ def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str
     def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
         eng, s = item
         emoji, label = classify_health(s)
-        order = {"🔴": 0, "⚪": 1, "🟡": 2, "⏱️": 3, "🚫": 4, "✅": 5}
+        order = {"RED": 0, "GREY": 1, "YELLOW": 2, "TIMER": 3, "BLOCK": 4, "GREEN": 5}
         return order.get(emoji, 9), eng
 
     for eng, s in sorted(stats.items(), key=sort_key):
@@ -154,28 +154,28 @@ def _parse_ts(ts: str) -> datetime:
 
 def classify_health(s: dict) -> tuple[str, str]:
     if s["total"] < MIN_SAMPLES:
-        return "⚪", "INSUFFICIENT"
+        return "GREY", "INSUFFICIENT"
     sc = s.get("status_counts", {})
 
     timeout_total = s["timeout"]
     if timeout_total >= 3:
         noncoop = sc.get("TIMEOUT_NONCOOP", 0)
         if noncoop / timeout_total > 0.10:
-            return "⚠️", "FLAG (PYDOLL-CANCEL-LEAK)"
+            return "WARN", "FLAG (PYDOLL-CANCEL-LEAK)"
 
     if s["success_rate"] < SUCCESS_BROKEN:
-        return "🔴", "BROKEN"
+        return "RED", "BROKEN"
     if s["success_rate"] < SUCCESS_DEGRADED:
         if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
-            return "🟡", "DEGRADED (⏱️ SLOW)"
+            return "YELLOW", "DEGRADED (SLOW)"
         if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
-            return "🟡", "DEGRADED (🚫 RATE_LIMITED)"
-        return "🟡", "DEGRADED"
+            return "YELLOW", "DEGRADED (RATE_LIMITED)"
+        return "YELLOW", "DEGRADED"
     if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "TIMEOUT":
-        return "⏱️", "SLOW"
+        return "TIMER", "SLOW"
     if s["silent_fail_rate"] > SFAIL_SLOW and s["dom_fail"] == "RATE_SKIP":
-        return "🚫", "RATE_LIMITED"
-    return "✅", "OK"
+        return "BLOCK", "RATE_LIMITED"
+    return "GREEN", "OK"
 
 
 if __name__ == "__main__":

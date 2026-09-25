@@ -122,7 +122,7 @@ async def _run_single_query(qi: int, query: str, total: int) -> dict:
         "cdp_rate": cdp_in_query / dur_s,
     }
 
-    flag = "⚡EMPTY" if category == "empty" else ("🚫ZERO" if category == "zero_cascade" else "")
+    flag = "EMPTY" if category == "empty" else ("ZERO" if category == "zero_cascade" else "")
     print(
         f"[{qi}/{total}] {query!r} -> "
         f"google={google_status} cdp={cdp_in_query}({record['cdp_rate']:.0f}/s) "

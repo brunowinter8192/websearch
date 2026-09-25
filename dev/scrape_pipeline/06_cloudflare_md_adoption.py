@@ -196,8 +196,8 @@ def format_table(results: list[dict]) -> str:
     ]
     for i, r in enumerate(results, 1):
         url_s = r["url"][:52] + ("…" if len(r["url"]) > 52 else "")
-        cf = "✓" if r["cf_fronted"] else "✗"
-        md = "✓" if r["md_served"] else "✗"
+        cf = "ok" if r["cf_fronted"] else "fail"
+        md = "ok" if r["md_served"] else "fail"
         ct_s = r["content_type"].split(";")[0].strip() if r["content_type"] else "—"
         tokens = r["x_md_tokens"] or "—"
         status_s = str(r["status"]) if r["status"] is not None else "ERR"

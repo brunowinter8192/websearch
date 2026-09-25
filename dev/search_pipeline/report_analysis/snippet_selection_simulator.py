@@ -167,7 +167,7 @@ def _render_per_query_picks(records: list[dict], results: list) -> list[str]:
             continue
         new_src, new_text, new_score, new_cl, floor_trig = res
         title_s   = (rec.get("title") or "")[:70]
-        floor_tag = "  ⚠ floor-trigger" if floor_trig else ""
+        floor_tag = "  WARN floor-trigger" if floor_trig else ""
         L += [
             f"**[Pos {rec['_pos']} · {rec['class']}]** {title_s}",
             f"URL: {rec['url']}",

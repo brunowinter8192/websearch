@@ -137,7 +137,7 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
         "eng_summary": eng_summary, "disc": disc,
     }
 
-    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
+    flag = {"empty": "EMPTY", "zero_cascade": "ZERO", "normal": ""}[category]
     print(
         f"[{qi:2}/{total}] {query[:48]!r:50} "
         f"cat={category:<12} disc={disc:<8} ev={len(new_events)} {flag}",

@@ -28,7 +28,7 @@ async def phase1_concurrency_sweep(urls: list[str], sample_n: int = 30) -> int:
               f"p50={m['lat_p50']}ms p95={m['lat_p95']}ms wall={wall_s:.0f}s")
 
         if m['waf_429'] > 0:
-            print(f"  ✗ WAF triggered at concurrency={concurrency} — stopping sweep early")
+            print(f"  WAF triggered at concurrency={concurrency} — stopping sweep early")
             break
 
     report_path, best = write_phase1_report(sweep_rows, len(sample))
@@ -83,7 +83,7 @@ def write_phase1_report(sweep_rows: list[tuple], sample_n: int) -> tuple[Path, i
 
 
 def fmt_sweep_row(concurrency: int, m: dict, wall_s: float) -> str:
-    waf_safe = "✓" if m['waf_429'] == 0 else "✗"
+    waf_safe = "ok" if m['waf_429'] == 0 else "fail"
     return (
         f"| {concurrency} | {m['ok']}/{m['total']} | {m['empty']} | "
         f"{m['http_error']} | {m['waf_429']} | "

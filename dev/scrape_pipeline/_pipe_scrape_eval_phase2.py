@@ -56,7 +56,7 @@ def write_phase2_report(sweep_rows: list[tuple], sample_n: int, concurrency: int
     ]
     for delay_s, m, wall_s in sweep_rows:
         marker = " ← chosen" if delay_s == best_delay else ""
-        valid = "✓" if m['waf_429'] == 0 else "✗ (ban)"
+        valid = "ok" if m['waf_429'] == 0 else "fail (ban)"
         lines.append(
             f"| {delay_s} | {m['ok']}/{m['total']} | {m['empty']} | {m['waf_429']} | "
             f"{m['bytes_p50']:,} | {m['bytes_p95']:,} | {m['lat_p50']} | {wall_s:.0f}s | {valid}{marker} |"

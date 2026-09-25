@@ -218,7 +218,7 @@ def _section_per_url_detail(results: list[dict]) -> list[str]:
         d = _base_domain(r["original_url"])
         tier = r["tier"]
         orig = r["original_url"][:70].replace("|", "%7C")
-        has_transform = "✓" if r["transformed_url"] else "—"
+        has_transform = "yes" if r["transformed_url"] else "—"
         outcome = r["outcome"] or "?"
 
         notes_parts = []

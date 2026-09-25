@@ -100,7 +100,7 @@ def _report_smoke_ok() -> None:
 
 def _write_stop_note(query_records: list[dict], zero_n: int, min_expected: int) -> None:
     print(
-        "\n🛑 STOP: cascade did not reproduce "
+        "\nSTOP: cascade did not reproduce "
         f"({zero_n}/{len(query_records)} zero_cascade < min {min_expected}). "
         "Instrumentation may be interfering. Data INVALID — do not proceed.",
         file=sys.stderr,
@@ -157,7 +157,7 @@ async def _run_single_query(qi: int, query: str, total: int, smoke: bool) -> dic
         "eng_detail": eng_detail, "disc": disc, "snap": snap,
     }
 
-    flag = {"empty": "⚡", "zero_cascade": "🚫", "normal": ""}[category]
+    flag = {"empty": "EMPTY", "zero_cascade": "ZERO", "normal": ""}[category]
     print(
         f"[{qi:2}/{total}] {query[:48]!r:50} "
         f"cat={category:<12} disc={disc:<24} ev={len(new_events)} {flag}",
