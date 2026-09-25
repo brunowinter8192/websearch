@@ -80,6 +80,17 @@ def _compute_fetch_counts(jobs: list, state: RiderState, t_job_start: datetime) 
     }
 
 
+def _distribution_stats(values: list) -> dict:
+    if not values:
+        return {"mean": None, "median": None, "min": None, "max": None}
+    return {
+        "mean":   round(statistics.mean(values),   2),
+        "median": round(statistics.median(values), 2),
+        "min":    min(values),
+        "max":    max(values),
+    }
+
+
 def _compute_retry_outcome(jobs: list) -> tuple[int, int, int]:
     url_final: dict[str, str] = {}
     url_rw:    set[str]       = set()
@@ -138,14 +149,3 @@ def _compute_connect_fail_stats(state: RiderState) -> tuple[list[float], dict | 
     for st in cf_subtypes:
         cf_subtype_counts[st] = cf_subtype_counts.get(st, 0) + 1
     return cf_times, cf_perc, cf_subtype_counts
-
-
-def _distribution_stats(values: list) -> dict:
-    if not values:
-        return {"mean": None, "median": None, "min": None, "max": None}
-    return {
-        "mean":   round(statistics.mean(values),   2),
-        "median": round(statistics.median(values), 2),
-        "min":    min(values),
-        "max":    max(values),
-    }

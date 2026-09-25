@@ -16,6 +16,7 @@ from src.crawler.pipe_scraper_report import (
     write_onward_links_file,
 )
 
+
 # ORCHESTRATOR
 
 async def scrape_urls_workflow(
@@ -31,7 +32,7 @@ async def scrape_urls_workflow(
     t0 = time.time()
     results = await _scrape_all(urls, output_dir, download_delay, concurrency_per_domain,
                                  engine, block_images, headed)
-    wall_s = time.time() - t0
+    wall_s = _elapsed_since(t0)
     domain = domain_from_urls(urls)
     onward_links = collect_onward_links(urls, results, engine)
     print_summary(results, wall_s, onward_links)
@@ -80,7 +81,20 @@ async def _scrape_all(
     return list(raw)
 
 
-if __name__ == '__main__':
+def _elapsed_since(t0: float) -> float:
+    return time.time() - t0
+
+
+def run_cli() -> None:
+    args = _parse_args()
+    urls = _read_url_file(args.url_file)
+    asyncio.run(scrape_urls_workflow(
+        urls, Path(args.output_dir), args.download_delay, args.concurrency_per_domain,
+        args.engine, args.block_images, args.headed,
+    ))
+
+
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Pipe scraper — crawl URL list to markdown with Scrapy-style per-domain pacing')
     parser.add_argument('--url-file', required=True, help='Text file with URLs (one per line)')
     parser.add_argument('--output-dir', required=True, help='Directory to write per-URL markdown files')
@@ -102,11 +116,13 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--headed', action='store_true', default=False,
                          help='chromium engine only: run the browser visible instead of headless '
                               '(default: headless, unchanged)')
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    urls = [ln.strip() for ln in Path(args.url_file).read_text(encoding='utf-8').splitlines()
+
+def _read_url_file(url_file: str) -> list[str]:
+    return [ln.strip() for ln in Path(url_file).read_text(encoding='utf-8').splitlines()
             if ln.strip()]
-    asyncio.run(scrape_urls_workflow(
-        urls, Path(args.output_dir), args.download_delay, args.concurrency_per_domain,
-        args.engine, args.block_images, args.headed,
-    ))
+
+
+if __name__ == '__main__':
+    run_cli()

@@ -12,7 +12,7 @@ MONOSANS_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxi
 
 def load_monosans_proxies() -> list[tuple[str, str]]:
     raw = _fetch_json(MONOSANS_URL)
-    return [_build_entry(e) for e in raw]
+    return _build_entries(raw)
 
 
 # FUNCTIONS
@@ -23,6 +23,10 @@ def _fetch_json(url: str) -> list[dict]:
         resp.raise_for_status()
         return resp.json()
     return fetch_with_retry(_do)
+
+
+def _build_entries(raw: list[dict]) -> list[tuple[str, str]]:
+    return [_build_entry(e) for e in raw]
 
 
 def _build_entry(entry: dict) -> tuple[str, str]:

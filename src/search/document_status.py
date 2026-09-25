@@ -26,14 +26,6 @@ async def start_document_status_capture(tab) -> list[int]:
     return status_chain
 
 
-def attach_document_status(diag: dict, status_chain: list[int]) -> dict:
-    return {
-        **diag,
-        "document_status_chain": list(status_chain),
-        "http_status": status_chain[-1] if status_chain else None,
-    }
-
-
 def update_partial(partial: dict | None, status_chain: list[int], t0: float, facts: dict) -> None:
     if partial is None:
         return
@@ -41,3 +33,11 @@ def update_partial(partial: dict | None, status_chain: list[int], t0: float, fac
     snapshot["elapsed_ms"] = round((time.perf_counter() - t0) * 1000)
     partial.clear()
     partial.update(snapshot)
+
+
+def attach_document_status(diag: dict, status_chain: list[int]) -> dict:
+    return {
+        **diag,
+        "document_status_chain": list(status_chain),
+        "http_status": status_chain[-1] if status_chain else None,
+    }

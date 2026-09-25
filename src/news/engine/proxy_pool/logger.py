@@ -7,7 +7,7 @@ from pathlib import Path
 from src.news.engine.proxy_pool.proxy_key import proxy_key
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class AcquireLogger:
     def __init__(self, total_urls: int, log_dir: Path):

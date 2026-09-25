@@ -3,6 +3,7 @@ import asyncio
 import random
 import time
 
+
 # FUNCTIONS
 
 def ensure_domain_state(domain_states: dict, domain: str, concurrency_per_domain: int) -> dict:

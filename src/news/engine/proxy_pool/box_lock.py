@@ -16,27 +16,7 @@ logger = logging.getLogger(__name__)
 LOCK_DIR = Path.home() / ".websearch-locks"
 
 
-class LockBusyError(RuntimeError):
-    pass
-
-
 # FUNCTIONS
-
-def cleanup_stale(sidecar: Path) -> None:
-    if not sidecar.exists():
-        return
-    data = json.loads(sidecar.read_text(encoding="utf-8"))
-    pid  = data.get("pid")
-    if pid is None:
-        sidecar.unlink(missing_ok=True)
-        return
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        sidecar.unlink(missing_ok=True)
-    except PermissionError:
-        logger.warning("proxy_pool lock holder pid=%s is owned by another user, sidecar kept", pid)
-
 
 @contextmanager
 def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
@@ -65,6 +45,26 @@ def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
         sidecar.unlink(missing_ok=True)
         fcntl.flock(fd, fcntl.LOCK_UN)
         fd.close()
+
+
+def cleanup_stale(sidecar: Path) -> None:
+    if not sidecar.exists():
+        return
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    pid  = data.get("pid")
+    if pid is None:
+        sidecar.unlink(missing_ok=True)
+        return
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        sidecar.unlink(missing_ok=True)
+    except PermissionError:
+        logger.warning("proxy_pool lock holder pid=%s is owned by another user, sidecar kept", pid)
+
+
+class LockBusyError(RuntimeError):
+    pass
 
 
 def _busy_message(sidecar: Path) -> str:

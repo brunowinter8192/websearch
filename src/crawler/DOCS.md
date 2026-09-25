@@ -19,7 +19,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 
 ## Modules
 
-### pipe_scraper.py (112 LOC)
+### pipe_scraper.py (128 LOC)
 
 **Purpose:** Entry point of the batch scrape step; dispatches a URL list per run to the chromium or camoufox engine and prints the summary.
 **Reads:** URL list from a file or the caller.
@@ -35,7 +35,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper.py, pipe_scraper_config.py.
 **Calls out:** none.
 
-### pipe_scraper_pacing.py (24 LOC)
+### pipe_scraper_pacing.py (25 LOC)
 
 **Purpose:** Engine-agnostic per-domain pacing gate: delay, jitter and concurrency cap.
 **Reads:** none.
@@ -43,7 +43,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper_acquisition.py.
 **Calls out:** none (stdlib only).
 
-### pipe_scraper_config.py (48 LOC)
+### pipe_scraper_config.py (49 LOC)
 
 **Purpose:** Builds the fixed anti-bot browser and run configuration of the chromium engine, optimized for reachability.
 **Reads:** none.
@@ -51,7 +51,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper.py.
 **Calls out:** crawl4ai.
 
-### pipe_scraper_acquisition.py (133 LOC)
+### pipe_scraper_acquisition.py (138 LOC)
 
 **Purpose:** Per-URL executors for both engines; collects onward links on the chromium engine; classifies nothing.
 **Reads:** the URL list from pipe_scraper.py.
@@ -59,7 +59,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper.py, pipe_scraper_report.py, src/scraper/index_scrapes.py.
 **Calls out:** crawl4ai.
 
-### pipe_scraper_records.py (39 LOC)
+### pipe_scraper_records.py (40 LOC)
 
 **Purpose:** Assembles the per-URL JSONL record for each engine and hands it to the logger.
 **Reads:** engine results.
@@ -67,7 +67,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper_acquisition.py.
 **Calls out:** none.
 
-### pipe_scraper_report.py (62 LOC)
+### pipe_scraper_report.py (63 LOC)
 
 **Purpose:** Writes the per-URL status table and the onward-links file to /tmp and prints a factual console summary.
 **Reads:** per-URL results of the run.
@@ -121,7 +121,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** seed_feeders_robots.py, seed_feeders_sitemap.py, seed_feeders_navtree.py, sitemap_feeder.py.
 **Calls out:** none.
 
-### seed_feeders_scope.py (84 LOC)
+### seed_feeders_scope.py (86 LOC)
 
 **Purpose:** Feeder result type, URL normalization, host-only scoping with order-preserving dedup, seed validation, base URL and the guard that turns a feeder failure into a not-ok result.
 **Reads:** none.
@@ -153,7 +153,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** navtree_feeder.py.
 **Calls out:** httpx.
 
-### discovery.py (72 LOC)
+### discovery.py (87 LOC)
 
 **Purpose:** Discovery entry point: runs all three feeders concurrently and merges their output with the seed into one source-tagged URL set.
 **Reads:** feeder output only; fetches nothing itself.

@@ -113,6 +113,21 @@ async def search_with_reason(query: str, language: str = "en", max_results: int 
 
 # FUNCTIONS
 
+async def _inject_socs_cookie(tab) -> None:
+    await tab._execute_command(NetworkCommands.set_cookie(
+        name=SOCS_NAME,
+        value=SOCS_VALUE,
+        domain=SOCS_DOMAIN,
+        path="/",
+        secure=True,
+        same_site=CookieSameSite.LAX,
+    ))
+
+
+def _build_url(query: str, language: str, max_results: int) -> str:
+    return SEARCH_URL.format(quote_plus(query), language, max_results)
+
+
 async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
     try:
         return await _search_in_tab(tab, query, max_results, partial, t0, search_url)
@@ -145,19 +160,14 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     return results, None, attach_document_status(diag, status_chain)
 
 
-def _build_url(query: str, language: str, max_results: int) -> str:
-    return SEARCH_URL.format(quote_plus(query), language, max_results)
-
-
-async def _inject_socs_cookie(tab) -> None:
-    await tab._execute_command(NetworkCommands.set_cookie(
-        name=SOCS_NAME,
-        value=SOCS_VALUE,
-        domain=SOCS_DOMAIN,
-        path="/",
-        secure=True,
-        same_site=CookieSameSite.LAX,
-    ))
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {"title": "", "url": "", "ready_state": ""}
+    if val:
+        diag.update(json.loads(val))
+    diag["marker"] = None
+    return diag
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
@@ -216,35 +226,6 @@ async def _resolve_urls(results: list[SearchResult]) -> tuple[list[SearchResult]
     return deduped, _build_resolution_stats(len(results), len(deduped), reasons)
 
 
-def _dedupe_resolved(resolved: list[SearchResult]) -> tuple[list[SearchResult], int]:
-    seen: set[str] = set()
-    deduped = []
-    for r in resolved:
-        if r.url in seen:
-            continue
-        seen.add(r.url)
-        deduped.append(r)
-    for i, r in enumerate(deduped):
-        r.position = i + 1
-    return deduped, len(resolved) - len(deduped)
-
-
-def _build_resolution_stats(found: int, resolved: int, reasons: list[str]) -> dict:
-    counts: dict[str, int] = {}
-    for reason in reasons:
-        counts[reason] = counts.get(reason, 0) + 1
-    return {"found": found, "resolved": resolved, "dropped": found - resolved, "reasons": counts}
-
-
-def _log_drops(resolution: dict) -> None:
-    if not resolution["dropped"]:
-        return
-    logger.warning(
-        "Google goto resolution dropped %d of %d results: %s",
-        resolution["dropped"], resolution["found"], resolution["reasons"],
-    )
-
-
 async def _resolve_one(session: AsyncSession, result: SearchResult) -> tuple[SearchResult | None, str | None]:
     try:
         resp = await session.get(
@@ -274,11 +255,30 @@ def _is_absolute_http_url(location: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = extract_value(raw)
-    diag = {"title": "", "url": "", "ready_state": ""}
-    if val:
-        diag.update(json.loads(val))
-    diag["marker"] = None
-    return diag
+def _dedupe_resolved(resolved: list[SearchResult]) -> tuple[list[SearchResult], int]:
+    seen: set[str] = set()
+    deduped = []
+    for r in resolved:
+        if r.url in seen:
+            continue
+        seen.add(r.url)
+        deduped.append(r)
+    for i, r in enumerate(deduped):
+        r.position = i + 1
+    return deduped, len(resolved) - len(deduped)
+
+
+def _build_resolution_stats(found: int, resolved: int, reasons: list[str]) -> dict:
+    counts: dict[str, int] = {}
+    for reason in reasons:
+        counts[reason] = counts.get(reason, 0) + 1
+    return {"found": found, "resolved": resolved, "dropped": found - resolved, "reasons": counts}
+
+
+def _log_drops(resolution: dict) -> None:
+    if not resolution["dropped"]:
+        return
+    logger.warning(
+        "Google goto resolution dropped %d of %d results: %s",
+        resolution["dropped"], resolution["found"], resolution["reasons"],
+    )

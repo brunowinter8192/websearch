@@ -84,6 +84,10 @@ async def search_with_reason(query: str, language: str = "en", max_results: int 
 
 # FUNCTIONS
 
+def _budget_deadline() -> float:
+    return time.monotonic() + MOJEEK_BUDGET_S
+
+
 async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, deadline: float) -> tuple[list[SearchResult], str | None, dict | None]:
     try:
         return await _search_in_tab(tab, query, max_results, partial, t0, deadline)
@@ -108,16 +112,8 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     return results, None, attach_document_status(diag, status_chain)
 
 
-def _budget_deadline() -> float:
-    return time.monotonic() + MOJEEK_BUDGET_S
-
-
 def _build_url(query: str) -> str:
     return SEARCH_URL.format(quote_plus(query))
-
-
-def _parse_target(max_results: int) -> int:
-    return min(max_results, PAGE_RESULT_COUNT)
 
 
 async def _await_results(tab, deadline: float, target: int, status_chain: list[int], t0: float, partial: dict | None) -> dict:
@@ -169,26 +165,8 @@ async def _fire_verify(tab) -> None:
     await tab.execute_script(_JS_VERIFY)
 
 
-def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
-    results = []
-    for item in items[:max_results]:
-        url = item.get("url", "")
-        if not url:
-            continue
-        results.append(SearchResult(
-            url=url, title=item.get("title", ""), snippet=item.get("snippet", ""),
-            engine="mojeek", position=len(results) + 1,
-        ))
-    return results
-
-
-async def _parse_results(tab, max_results: int) -> list[SearchResult]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = extract_value(raw)
-    if not value:
-        return []
-    items = json.loads(value)
-    return _build_results(items, max_results)
+def _parse_target(max_results: int) -> int:
+    return min(max_results, PAGE_RESULT_COUNT)
 
 
 async def _diagnose(tab, trace: dict) -> dict:
@@ -202,3 +180,25 @@ async def _diagnose(tab, trace: dict) -> dict:
         diag.update(json.loads(val))
     diag["challenge_triggered"] = trace.get("challenge_triggered", False)
     return diag
+
+
+async def _parse_results(tab, max_results: int) -> list[SearchResult]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = extract_value(raw)
+    if not value:
+        return []
+    items = json.loads(value)
+    return _build_results(items, max_results)
+
+
+def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
+    results = []
+    for item in items[:max_results]:
+        url = item.get("url", "")
+        if not url:
+            continue
+        results.append(SearchResult(
+            url=url, title=item.get("title", ""), snippet=item.get("snippet", ""),
+            engine="mojeek", position=len(results) + 1,
+        ))
+    return results

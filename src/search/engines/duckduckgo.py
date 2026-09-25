@@ -64,6 +64,10 @@ async def search_with_reason(query: str, language: str = "en", max_results: int 
 
 # FUNCTIONS
 
+def _build_url(query: str) -> str:
+    return SEARCH_URL.format(quote_plus(query))
+
+
 async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
     try:
         return await _search_in_tab(tab, query, max_results, partial, t0, search_url)
@@ -92,8 +96,19 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     return results, None, attach_document_status(diag, status_chain)
 
 
-def _build_url(query: str) -> str:
-    return SEARCH_URL.format(quote_plus(query))
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    parsed = {"challenge_form_count": 0, "title": "", "url": "", "ready_state": ""}
+    if val:
+        parsed.update(json.loads(val))
+    return {
+        "marker": None,
+        "challenge_form": bool(parsed.get("challenge_form_count", 0)),
+        "title": parsed["title"],
+        "url": parsed["url"],
+        "ready_state": parsed["ready_state"],
+    }
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
@@ -105,17 +120,6 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
             return True
         await asyncio.sleep(WAIT_INTERVAL)
     return False
-
-
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    qs = parse_qs(parsed.query)
-    uddg = qs.get("uddg", [None])[0]
-    if uddg:
-        return uddg
-    return href
 
 
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
@@ -140,24 +144,20 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return results
 
 
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    parsed = urlparse(href)
+    qs = parse_qs(parsed.query)
+    uddg = qs.get("uddg", [None])[0]
+    if uddg:
+        return uddg
+    return href
+
+
 def _extract_date(date_raw: str) -> str | None:
     text = (date_raw or "").replace("\xa0", " ").strip()
     date_part = text[:10]
     if re.match(r'^\d{4}-\d{2}-\d{2}$', date_part):
         return date_part
     return None
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = extract_value(raw)
-    parsed = {"challenge_form_count": 0, "title": "", "url": "", "ready_state": ""}
-    if val:
-        parsed.update(json.loads(val))
-    return {
-        "marker": None,
-        "challenge_form": bool(parsed.get("challenge_form_count", 0)),
-        "title": parsed["title"],
-        "url": parsed["url"],
-        "ready_state": parsed["ready_state"],
-    }

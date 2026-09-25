@@ -105,16 +105,20 @@ def _is_block_url(url: str) -> bool:
     return any(marker in path for marker in BLOCK_URL_MARKERS)
 
 
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
 def _log_empty_result(query: str, current_url: str) -> None:
     if _is_block_url(current_url):
         logger.warning("Yandex CAPTCHA redirect detected for: %s", query)
     else:
         logger.debug("Yandex empty for: %s", query)
-
-
-def _is_self_referential(url: str) -> bool:
-    host = urlparse(url).hostname or ""
-    return SELF_DOMAIN_LABEL in host.split(".")
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
@@ -126,6 +130,15 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
             return True
         await asyncio.sleep(WAIT_INTERVAL)
     return False
+
+
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = extract_value(raw)
+    if not value:
+        return [], {}
+    items = json.loads(value)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
@@ -143,19 +156,6 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
     return results
 
 
-async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = extract_value(raw)
-    if not value:
-        return [], {}
-    items = json.loads(value)
-    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = extract_value(raw)
-    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
+def _is_self_referential(url: str) -> bool:
+    host = urlparse(url).hostname or ""
+    return SELF_DOMAIN_LABEL in host.split(".")

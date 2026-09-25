@@ -2,7 +2,10 @@
 import json
 import os
 import re
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 from src.log_janitor import maybe_prune_jsonl, maybe_prune_sidecars
 
@@ -11,15 +14,16 @@ DEFAULT_LOG_PATH = Path(__file__).parent.parent.parent / "src" / "logs" / "scrap
 
 # FUNCTIONS
 
-def _sanitize_ts(ts: str) -> str:
-    return ts.replace(":", "-")
+def utc_timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
-def url_slug(url: str) -> str:
-    slug = re.sub(r'^https?://', '', url)
-    slug = re.sub(r'[^a-zA-Z0-9]', '-', slug)
-    slug = re.sub(r'-+', '-', slug)
-    return slug.strip('-')[:80]
+def domain_of(url: str) -> str:
+    return (urlparse(url).hostname or "").removeprefix("www.")
+
+
+def elapsed_ms(t0: float) -> int:
+    return round((time.perf_counter() - t0) * 1000)
 
 
 def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> str | None:
@@ -40,6 +44,17 @@ def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> st
     (sidecar_dir / filename).write_text(header + "\n" + content, encoding="utf-8")
     maybe_prune_sidecars(sidecar_dir)
     return f"scrape_content/{filename}"
+
+
+def _sanitize_ts(ts: str) -> str:
+    return ts.replace(":", "-")
+
+
+def url_slug(url: str) -> str:
+    slug = re.sub(r'^https?://', '', url)
+    slug = re.sub(r'[^a-zA-Z0-9]', '-', slug)
+    slug = re.sub(r'-+', '-', slug)
+    return slug.strip('-')[:80]
 
 
 def log_scrape(record: dict) -> None:

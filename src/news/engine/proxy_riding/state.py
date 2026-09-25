@@ -13,6 +13,8 @@ STALL_TIMEOUT_S         = 3_600.0
 POOL_REFRESH_INTERVAL_S = 1_800.0
 
 
+# FUNCTIONS
+
 @dataclass
 class RideRecord:
     proxy_str:        str

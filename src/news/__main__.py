@@ -38,21 +38,6 @@ def main() -> None:
 
 # FUNCTIONS
 
-def _apply_timeframe(platform, args: argparse.Namespace) -> bool:
-    skip_index = args.skip_index
-    platform.timeframe = args.timeframe
-    if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
-        skip_index = True
-        print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
-        print(f"After review, run: rag-cli index --collection {platform.collection}")
-    return skip_index
-
-
-def _require_exclusive_date_filters(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    if args.year and (args.from_date or args.to_date):
-        parser.error("--year and --from/--to are mutually exclusive")
-
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.news",
@@ -156,6 +141,21 @@ def _add_scrape_only_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Per-fetch page navigation timeout in ms for proxy_riding scrape-only (default 8000 from RidingScrapeConfig).",
     )
+
+
+def _apply_timeframe(platform, args: argparse.Namespace) -> bool:
+    skip_index = args.skip_index
+    platform.timeframe = args.timeframe
+    if args.timeframe != "delta" and not args.discover_only and not args.scrape_only:
+        skip_index = True
+        print(f"Non-delta timeframe ({args.timeframe!r}) — RAG index auto-skipped.")
+        print(f"After review, run: rag-cli index --collection {platform.collection}")
+    return skip_index
+
+
+def _require_exclusive_date_filters(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.year and (args.from_date or args.to_date):
+        parser.error("--year and --from/--to are mutually exclusive")
 
 
 if __name__ == "__main__":

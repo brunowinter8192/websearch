@@ -112,10 +112,6 @@ def _dedup_against_raw(
     return new_entries
 
 
-def _log_scrape_only_complete(log: logging.Logger, platform: Platform, job_id: str) -> None:
-    log.info(f"=== {platform.name} scrape-only complete job_id={job_id} ===")
-
-
 async def _run_scrape_only_riding(
     platform:        Platform,
     new_entries:     list[dict],
@@ -176,3 +172,7 @@ async def _run_scrape_only_browser(
     job_dir = NEWS_DATA_ROOT / platform.name / "scrape_jobs" / job_id
     write_scrape_report(job_dir, job_records, t_job_start, len(new_entries), filter_desc, regwall_abort)
     log.info(f"Job report written to {job_dir}")
+
+
+def _log_scrape_only_complete(log: logging.Logger, platform: Platform, job_id: str) -> None:
+    log.info(f"=== {platform.name} scrape-only complete job_id={job_id} ===")

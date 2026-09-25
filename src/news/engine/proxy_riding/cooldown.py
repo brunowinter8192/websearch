@@ -10,7 +10,7 @@ _EXP_BASE_S        = 300
 _EXP_CAP_S         = 3600
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class RidingCooldownManager:
     def __init__(self, policy: str = "fixed"):
@@ -24,9 +24,6 @@ class RidingCooldownManager:
     @property
     def policy(self) -> str:
         return self._policy
-
-
-# FUNCTIONS
 
     def mark_burned(self, proto: str, host_port: str, ride_ok: int = 0) -> None:
         key = proxy_key(proto, host_port)

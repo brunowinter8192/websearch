@@ -24,4 +24,3 @@ class TheBlockPlatform(Platform):
 
     def cleanup(self, raw_html: str, entry: dict) -> str:
         return _cleanup(raw_html, entry)
-

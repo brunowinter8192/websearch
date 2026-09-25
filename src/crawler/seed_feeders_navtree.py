@@ -24,6 +24,60 @@ _PATH_WITHOUT_LANGUAGE_KEY_HINT = "pathwithoutlanguage"
 
 # FUNCTIONS
 
+async def resolve_navigation_tree(client: httpx.AsyncClient, seed_url: str) -> tuple:
+    html = await _fetch_html(client, seed_url)
+    if html is None:
+        raise RuntimeError(f"could not fetch seed_url: {seed_url!r}")
+
+    payloads = extract_payloads(html)
+    hrefs, tier, source_payload = find_navigation_tree(payloads)
+    absolute = [urljoin(seed_url, href) for href in hrefs]
+
+    if source_payload is None:
+        return absolute, tier, None
+
+    all_versions = _find_version_list(source_payload)
+    current_version = _find_current_version(source_payload)
+    path_without_language = _find_path_without_language(source_payload)
+    version_urls = _build_version_urls(seed_url, all_versions, current_version, path_without_language)
+    all_version_keys = list(all_versions.keys()) if all_versions else None
+    if not version_urls:
+        return absolute, tier, all_version_keys
+
+    canonical_default = [canonicalize_version_url(url, all_version_keys) for url in absolute]
+
+    semaphore = asyncio.Semaphore(NAVTREE_FETCH_CONCURRENCY)
+
+    async def _bounded(version_url: str) -> list:
+        async with semaphore:
+            return await _resolve_one_version(client, version_url, all_version_keys)
+
+    per_version_results = await asyncio.gather(*[_bounded(u) for u in version_urls.values()])
+
+    union = list(canonical_default)
+    for urls in per_version_results:
+        union.extend(urls)
+    return union, tier, all_version_keys
+
+
+async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
+    response = await client.get(url, timeout=HTTP_TIMEOUT_S,
+                                headers={"User-Agent": USER_AGENT}, follow_redirects=True)
+    if response.status_code in ABSENT_STATUSES:
+        return None
+    if response.status_code != 200:
+        raise RuntimeError(f"unexpected status {response.status_code} for {url}")
+    return response.text
+
+
+def extract_payloads(html: str) -> list:
+    for extractor in (_extract_next_data_payloads, _extract_rsc_stream_payloads):
+        payloads = extractor(html)
+        if payloads:
+            return payloads
+    return []
+
+
 def _extract_next_data_payloads(html: str) -> list:
     match = _NEXT_DATA_RE.search(html)
     if not match:
@@ -52,12 +106,37 @@ def _extract_rsc_stream_payloads(html: str) -> list:
     return payloads
 
 
-def extract_payloads(html: str) -> list:
-    for extractor in (_extract_next_data_payloads, _extract_rsc_stream_payloads):
-        payloads = extractor(html)
-        if payloads:
-            return payloads
-    return []
+def find_navigation_tree(payloads: list) -> tuple:
+    best_hrefs = []
+    best_source = None
+    for payload in payloads:
+        for candidate in _find_tree_candidates(payload):
+            hrefs = _collect_tree_hrefs(candidate)
+            if len(hrefs) > len(best_hrefs):
+                best_hrefs = hrefs
+                best_source = payload
+    if best_hrefs:
+        return best_hrefs, "tree", best_source
+
+    flat_hrefs = []
+    for payload in payloads:
+        _collect_flat_hrefs(payload, flat_hrefs)
+    flat_hrefs = [h for h in flat_hrefs if h and not h.startswith("#") and "/_next/" not in h]
+    return flat_hrefs, "flat", None
+
+
+def _find_tree_candidates(payload, out: list | None = None) -> list:
+    if out is None:
+        out = []
+    if isinstance(payload, dict):
+        if _child_key_of(payload):
+            out.append(payload)
+        for value in payload.values():
+            _find_tree_candidates(value, out)
+    elif isinstance(payload, list):
+        for item in payload:
+            _find_tree_candidates(item, out)
+    return out
 
 
 def _child_key_of(obj) -> str | None:
@@ -86,20 +165,6 @@ def _collect_tree_hrefs(node) -> list:
     return hrefs
 
 
-def _find_tree_candidates(payload, out: list | None = None) -> list:
-    if out is None:
-        out = []
-    if isinstance(payload, dict):
-        if _child_key_of(payload):
-            out.append(payload)
-        for value in payload.values():
-            _find_tree_candidates(value, out)
-    elif isinstance(payload, list):
-        for item in payload:
-            _find_tree_candidates(item, out)
-    return out
-
-
 def _collect_flat_hrefs(payload, out: list) -> None:
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -112,23 +177,12 @@ def _collect_flat_hrefs(payload, out: list) -> None:
             _collect_flat_hrefs(item, out)
 
 
-def find_navigation_tree(payloads: list) -> tuple:
-    best_hrefs = []
-    best_source = None
-    for payload in payloads:
-        for candidate in _find_tree_candidates(payload):
-            hrefs = _collect_tree_hrefs(candidate)
-            if len(hrefs) > len(best_hrefs):
-                best_hrefs = hrefs
-                best_source = payload
-    if best_hrefs:
-        return best_hrefs, "tree", best_source
-
-    flat_hrefs = []
-    for payload in payloads:
-        _collect_flat_hrefs(payload, flat_hrefs)
-    flat_hrefs = [h for h in flat_hrefs if h and not h.startswith("#") and "/_next/" not in h]
-    return flat_hrefs, "flat", None
+def _find_version_list(payload) -> dict | None:
+    return _find_field(
+        payload,
+        lambda k: _VERSION_LIST_KEY_HINT in k.lower(),
+        lambda v: isinstance(v, dict) and len(v) >= 2 and all(isinstance(x, dict) for x in v.values()),
+    )
 
 
 def _find_field(payload, key_predicate, value_predicate):
@@ -146,14 +200,6 @@ def _find_field(payload, key_predicate, value_predicate):
             if found is not None:
                 return found
     return None
-
-
-def _find_version_list(payload) -> dict | None:
-    return _find_field(
-        payload,
-        lambda k: _VERSION_LIST_KEY_HINT in k.lower(),
-        lambda v: isinstance(v, dict) and len(v) >= 2 and all(isinstance(x, dict) for x in v.values()),
-    )
 
 
 def _find_current_version(payload) -> str | None:
@@ -211,16 +257,6 @@ def canonicalize_version_url(url: str, version_keys) -> str:
     return url
 
 
-async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
-    response = await client.get(url, timeout=HTTP_TIMEOUT_S,
-                                headers={"User-Agent": USER_AGENT}, follow_redirects=True)
-    if response.status_code in ABSENT_STATUSES:
-        return None
-    if response.status_code != 200:
-        raise RuntimeError(f"unexpected status {response.status_code} for {url}")
-    return response.text
-
-
 async def _resolve_one_version(client: httpx.AsyncClient, version_url: str, all_version_keys: list) -> list:
     html = await _fetch_html(client, version_url)
     if html is None:
@@ -229,39 +265,3 @@ async def _resolve_one_version(client: httpx.AsyncClient, version_url: str, all_
     hrefs, _tier, _source = find_navigation_tree(extract_payloads(html))
     absolute = (urljoin(version_url, href) for href in hrefs)
     return [canonicalize_version_url(url, all_version_keys) for url in absolute]
-
-
-async def resolve_navigation_tree(client: httpx.AsyncClient, seed_url: str) -> tuple:
-    html = await _fetch_html(client, seed_url)
-    if html is None:
-        raise RuntimeError(f"could not fetch seed_url: {seed_url!r}")
-
-    payloads = extract_payloads(html)
-    hrefs, tier, source_payload = find_navigation_tree(payloads)
-    absolute = [urljoin(seed_url, href) for href in hrefs]
-
-    if source_payload is None:
-        return absolute, tier, None
-
-    all_versions = _find_version_list(source_payload)
-    current_version = _find_current_version(source_payload)
-    path_without_language = _find_path_without_language(source_payload)
-    version_urls = _build_version_urls(seed_url, all_versions, current_version, path_without_language)
-    all_version_keys = list(all_versions.keys()) if all_versions else None
-    if not version_urls:
-        return absolute, tier, all_version_keys
-
-    canonical_default = [canonicalize_version_url(url, all_version_keys) for url in absolute]
-
-    semaphore = asyncio.Semaphore(NAVTREE_FETCH_CONCURRENCY)
-
-    async def _bounded(version_url: str) -> list:
-        async with semaphore:
-            return await _resolve_one_version(client, version_url, all_version_keys)
-
-    per_version_results = await asyncio.gather(*[_bounded(u) for u in version_urls.values()])
-
-    union = list(canonical_default)
-    for urls in per_version_results:
-        union.extend(urls)
-    return union, tier, all_version_keys

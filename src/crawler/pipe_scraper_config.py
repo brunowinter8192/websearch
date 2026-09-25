@@ -4,6 +4,7 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.crawler.pipe_scraper_constants import PAGE_TIMEOUT_MS, DELAY_BEFORE_RETURN_HTML
 
+
 # FUNCTIONS
 
 def build_configs(headed: bool = False) -> tuple[BrowserConfig, CrawlerRunConfig]:

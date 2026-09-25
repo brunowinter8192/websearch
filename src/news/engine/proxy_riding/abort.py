@@ -19,6 +19,20 @@ def abort_done(state: RiderState) -> None:
     _abort_write_report_and_exit(state, log_prefix="[watchdog]", exit_code=0)
 
 
+def _abort_write_report_and_exit(state: RiderState, log_prefix: str, exit_code: int) -> None:
+    state.job_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from src.news.engine.proxy_riding.reporter import write_riding_report
+        write_riding_report(state, state.job_dir, state.t_job_start)
+        print(f"{log_prefix} job.md → {state.job_dir / 'job.md'}", file=sys.stderr)
+    except Exception as exc:
+        print(f"{log_prefix} write_riding_report WARN: {exc}", file=sys.stderr)
+
+    sys.stderr.flush()
+    os._exit(exit_code)
+
+
 def abort_interrupted(state: RiderState, signum: int) -> None:
     name      = "SIGINT" if signum == signal.SIGINT else "SIGTERM"
     exit_code = 130      if signum == signal.SIGINT else 143
@@ -38,17 +52,3 @@ def abort_stall(state: RiderState, idle_s: float) -> None:
     )
     state.termination = "stall"
     _abort_write_report_and_exit(state, log_prefix="[watchdog]", exit_code=1)
-
-
-def _abort_write_report_and_exit(state: RiderState, log_prefix: str, exit_code: int) -> None:
-    state.job_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        from src.news.engine.proxy_riding.reporter import write_riding_report
-        write_riding_report(state, state.job_dir, state.t_job_start)
-        print(f"{log_prefix} job.md → {state.job_dir / 'job.md'}", file=sys.stderr)
-    except Exception as exc:
-        print(f"{log_prefix} write_riding_report WARN: {exc}", file=sys.stderr)
-
-    sys.stderr.flush()
-    os._exit(exit_code)

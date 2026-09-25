@@ -1,4 +1,6 @@
 # INFRASTRUCTURE
+from __future__ import annotations
+
 import os
 import subprocess
 from dataclasses import dataclass
@@ -12,13 +14,18 @@ RAG_CLI_COLLECTIONS_ROOT = Path(
 )
 
 
-@dataclass
-class IndexOutcome:
-    url: str
-    status: str
-    detail: str
-    byte_count: int | None = None
+# ORCHESTRATOR
 
+def index_scrapes_workflow(collection: str, urls: list[str]) -> IndexScrapesResult:
+    collection_dir = _resolve_collection_dir(collection)
+    if not collection_dir.is_dir():
+        return _missing_collection_result(collection_dir)
+    sidecar_dir = _resolve_sidecar_dir()
+    outcomes = _index_all(urls, sidecar_dir, collection, collection_dir)
+    return IndexScrapesResult(True, None, outcomes)
+
+
+# FUNCTIONS
 
 @dataclass
 class IndexScrapesResult:
@@ -27,27 +34,30 @@ class IndexScrapesResult:
     outcomes: list[IndexOutcome]
 
 
-# ORCHESTRATOR
+@dataclass
+class IndexOutcome:
+    url: str
+    status: str
+    detail: str
+    byte_count: int | None = None
 
-def index_scrapes_workflow(collection: str, urls: list[str]) -> IndexScrapesResult:
-    collection_dir = _resolve_collection_dir(collection)
-    if not collection_dir.is_dir():
-        return IndexScrapesResult(False, f"collection directory not found: {collection_dir}", [])
-    sidecar_dir = _resolve_sidecar_dir()
-    outcomes = [_index_one(url, sidecar_dir, collection, collection_dir) for url in urls]
-    return IndexScrapesResult(True, None, outcomes)
-
-
-# FUNCTIONS
 
 def _resolve_collection_dir(collection: str) -> Path:
     return RAG_CLI_COLLECTIONS_ROOT / collection
+
+
+def _missing_collection_result(collection_dir: Path) -> IndexScrapesResult:
+    return IndexScrapesResult(False, f"collection directory not found: {collection_dir}", [])
 
 
 def _resolve_sidecar_dir() -> Path:
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
     log_path = Path(env) if env else DEFAULT_LOG_PATH
     return log_path.parent / "scrape_content"
+
+
+def _index_all(urls: list[str], sidecar_dir: Path, collection: str, collection_dir: Path) -> list[IndexOutcome]:
+    return [_index_one(url, sidecar_dir, collection, collection_dir) for url in urls]
 
 
 def _index_one(url: str, sidecar_dir: Path, collection: str, collection_dir: Path) -> IndexOutcome:

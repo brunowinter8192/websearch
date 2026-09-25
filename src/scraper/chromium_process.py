@@ -13,7 +13,7 @@ import psutil
 from patchright.async_api import async_playwright
 
 from src import death_pipe
-from src.config import CDP_PORT_WAIT_TIMEOUT_S, FOCUS_STEAL_POLL_INTERVAL_S
+from src.config import FOCUS_STEAL_POLL_INTERVAL_S
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +23,6 @@ _osascript_warned: set[str] = set()
 
 
 # FUNCTIONS
-
-def _find_app_bundle(executable_path: str) -> Path | None:
-    for parent in Path(executable_path).parents:
-        if parent.suffix == ".app":
-            return parent
-    return None
-
 
 async def resolve_chromium_bundle_path() -> Path:
     pw = await async_playwright().start()
@@ -43,6 +36,13 @@ async def resolve_chromium_bundle_path() -> Path:
     return bundle
 
 
+def _find_app_bundle(executable_path: str) -> Path | None:
+    for parent in Path(executable_path).parents:
+        if parent.suffix == ".app":
+            return parent
+    return None
+
+
 def build_self_launch_flags(browser_config: BrowserConfig) -> list[str]:
     flags = list(ManagedBrowser.build_browser_flags(browser_config))
     if browser_config.viewport_width and browser_config.viewport_height:
@@ -50,11 +50,16 @@ def build_self_launch_flags(browser_config: BrowserConfig) -> list[str]:
     return flags
 
 
-def _warn_osascript_once(what: str, detail: str) -> None:
-    if what in _osascript_warned:
-        return
-    _osascript_warned.add(what)
-    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
+async def focus_steal_watchdog(app_name: str) -> None:
+    last_other_app = await asyncio.to_thread(_get_frontmost_app)
+    while True:
+        current = await asyncio.to_thread(_get_frontmost_app)
+        if current == app_name:
+            if last_other_app and last_other_app != app_name:
+                await asyncio.to_thread(_activate_app, last_other_app)
+        else:
+            last_other_app = current
+        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
 
 
 def _get_frontmost_app() -> str:
@@ -71,6 +76,13 @@ def _get_frontmost_app() -> str:
     return name
 
 
+def _warn_osascript_once(what: str, detail: str) -> None:
+    if what in _osascript_warned:
+        return
+    _osascript_warned.add(what)
+    logger.warning("osascript %s failed (focus-steal reclaim ineffective): %s", what, detail)
+
+
 def _activate_app(app_name: str) -> None:
     result = subprocess.run(
         [
@@ -81,18 +93,6 @@ def _activate_app(app_name: str) -> None:
     )
     if result.returncode != 0:
         _warn_osascript_once("activate", f"returncode={result.returncode} stderr={result.stderr.strip()!r}")
-
-
-async def focus_steal_watchdog(app_name: str) -> None:
-    last_other_app = await asyncio.to_thread(_get_frontmost_app)
-    while True:
-        current = await asyncio.to_thread(_get_frontmost_app)
-        if current == app_name:
-            if last_other_app and last_other_app != app_name:
-                await asyncio.to_thread(_activate_app, last_other_app)
-        else:
-            last_other_app = current
-        await asyncio.sleep(FOCUS_STEAL_POLL_INTERVAL_S)
 
 
 def self_launch_chrome(bundle_path: Path, user_data_dir: str, flags: list[str]) -> None:
@@ -117,17 +117,17 @@ def wait_for_devtools_port(user_data_dir: str, timeout_s: float) -> int:
     raise TimeoutError(f"DevToolsActivePort did not appear under {user_data_dir} within {timeout_s}s")
 
 
+def kill_by_profile(user_data_dir: str) -> None:
+    pids = pids_on_profile(user_data_dir)
+    if pids:
+        death_pipe.terminate_then_kill(pids, timeout_s=3.0)
+
+
 def pids_on_profile(user_data_dir: str) -> list[int]:
     result = subprocess.run(
         ["pgrep", "-f", f"user-data-dir={user_data_dir}"], capture_output=True, text=True
     )
     return [int(p) for p in result.stdout.split() if p.strip().isdigit()]
-
-
-def kill_by_profile(user_data_dir: str) -> None:
-    pids = pids_on_profile(user_data_dir)
-    if pids:
-        death_pipe.terminate_then_kill(pids, timeout_s=3.0)
 
 
 def reap_orphaned_scrapes() -> None:

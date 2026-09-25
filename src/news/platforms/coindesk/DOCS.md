@@ -30,7 +30,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** discover.py, timeline.py.
 **Calls out:** pydoll, httpx.
 
-### discover.py (279 LOC)
+### discover.py (301 LOC)
 
 **Purpose:** Discovery orchestration and cursor paging with per-article shard writes and incremental discover output.
 **Reads:** the timeline API (network); existing shards for the dedup seed.
@@ -62,7 +62,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** `__init__.py`, which wraps it as the platform's cleanup method. The only call site, src/news/clean_pass.py, runs on the proxy-pool path only, so no coindesk run reaches it.
 **Calls out:** none (stdlib only).
 
-### __init__.py (39 LOC)
+### __init__.py (38 LOC)
 
 **Purpose:** The CoinDesk platform class wrapping config, discovery, cleanup and scrape-entry loading.
 **Reads:** none of its own.

@@ -14,7 +14,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 
 ## Modules
 
-### scrape.py (163 LOC)
+### scrape.py (174 LOC)
 
 **Purpose:** Browser-engine scraper with a fresh crawler per URL, per-domain pacing and a regwall guard.
 **Reads:** the entry list and scrape configuration.
@@ -30,7 +30,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 **Called by:** src/news/pipeline.py, src/news/clean_pass.py.
 **Calls out:** none (stdlib only).
 
-### scrape_job.py (106 LOC)
+### scrape_job.py (105 LOC)
 
 **Purpose:** Chunked raw-only scrape orchestration for scrape-only mode, plus shared raw-persist helpers.
 **Reads:** entry chunks and platform configuration.

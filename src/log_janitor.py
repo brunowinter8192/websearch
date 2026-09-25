@@ -13,10 +13,6 @@ _MARKER_MAX_AGE_SECS = 3600
 
 # FUNCTIONS
 
-def get_retention_days() -> int:
-    return int(os.environ.get("WEBSEARCH_LOG_RETENTION_DAYS", 90))
-
-
 def maybe_prune_jsonl(log_path: Path) -> None:
     marker = Path(str(log_path) + ".lastprune")
     if _is_recent(marker):
@@ -25,16 +21,6 @@ def maybe_prune_jsonl(log_path: Path) -> None:
         _prune_jsonl(log_path, marker)
     except Exception as e:
         logger.warning("log_janitor: prune_jsonl failed for %s: %s", log_path, e)
-
-
-def maybe_prune_sidecars(sidecar_dir: Path) -> None:
-    marker = sidecar_dir / ".lastprune"
-    if _is_recent(marker):
-        return
-    try:
-        _prune_sidecars(sidecar_dir, marker)
-    except Exception as e:
-        logger.warning("log_janitor: prune_sidecars failed for %s: %s", sidecar_dir, e)
 
 
 def _is_recent(marker: Path) -> bool:
@@ -64,6 +50,20 @@ def _prune_jsonl(log_path: Path, marker: Path) -> None:
     tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
     os.replace(tmp, log_path)
     marker.touch()
+
+
+def get_retention_days() -> int:
+    return int(os.environ.get("WEBSEARCH_LOG_RETENTION_DAYS", 90))
+
+
+def maybe_prune_sidecars(sidecar_dir: Path) -> None:
+    marker = sidecar_dir / ".lastprune"
+    if _is_recent(marker):
+        return
+    try:
+        _prune_sidecars(sidecar_dir, marker)
+    except Exception as e:
+        logger.warning("log_janitor: prune_sidecars failed for %s: %s", sidecar_dir, e)
 
 
 def _prune_sidecars(sidecar_dir: Path, marker: Path) -> None:

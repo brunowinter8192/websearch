@@ -69,10 +69,6 @@ def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
     }
 
 
-def _fmt(v, spec="", unit="") -> str:
-    return f"{format(v, spec)}{unit}" if v is not None else "—"
-
-
 def _write_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
@@ -147,6 +143,10 @@ def _md_header(job_id: str, filter_desc: str, n_target: int, stats: dict, rw_cel
         f"| Backfill projection (61 k) | {_fmt(stats['backfill_h'], '.1f', 'h')} |",
         "",
     ]
+
+
+def _fmt(v, spec="", unit="") -> str:
+    return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
 def _md_char_distribution(stats: dict) -> list[str]:

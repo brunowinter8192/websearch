@@ -1,6 +1,7 @@
 # INFRASTRUCTURE
 from src.crawler.pipe_scrape_logger import log_pipe_scrape
 
+
 # FUNCTIONS
 
 def log_pipe_record(

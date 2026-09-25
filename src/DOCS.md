@@ -42,7 +42,7 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 **Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py, cli.py.
 **Calls out:** none (stdlib only).
 
-### death_pipe.py (82 LOC)
+### death_pipe.py (99 LOC)
 
 **Purpose:** Crash backstop for browser lanes: a detached helper kills leftover PIDs and removes a throwaway directory once the parent process ends for any reason.
 **Reads:** the log-path environment variable, only when it must log an intervention.

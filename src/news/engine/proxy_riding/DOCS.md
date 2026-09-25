@@ -19,7 +19,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 
 ## Modules
 
-### cooldown.py (83 LOC)
+### cooldown.py (80 LOC)
 
 **Purpose:** Riding-specific proxy cooldown manager with two per-run policies, isolated from the shared pool cooldown.
 **Reads:** in-memory burn and eligibility maps.
@@ -27,7 +27,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, scrape.py, state.py.
 **Calls out:** none.
 
-### state.py (83 LOC)
+### state.py (85 LOC)
 
 **Purpose:** Shared riding dataclasses and calibrated constants; the one canonical import source for all riding modules and dev tests.
 **Reads:** none.
@@ -51,7 +51,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py.
 **Calls out:** none.
 
-### rider.py (349 LOC)
+### rider.py (380 LOC)
 
 **Purpose:** Runner: orchestrates browsers, slot coroutines, per-URL proxy contexts, burn and fail rotation, pool refresh, the watchdog and signal handlers.
 **Reads:** the URL queue, proxy pool and shared cooldown state.
@@ -83,7 +83,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** reporter.py.
 **Calls out:** matplotlib.
 
-### scrape.py (107 LOC)
+### scrape.py (120 LOC)
 
 **Purpose:** Pipeline entry and manifest adapter: loads and shuffles the pool, runs the pool runner and maps job records to the pipeline manifest.
 **Reads:** the entry list, the riding configuration and the proxy pool (network).

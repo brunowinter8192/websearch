@@ -30,13 +30,48 @@ def run_loop(
     content_handler: Callable[[str, bytes], None] | None = None,
     refresh_interval_s: float = REFRESH_INTERVAL_S,
 ) -> tuple[list[str], list[str], list[str]]:
+    pool, buf = _refresh_pool(pool_provider, logger, cm, buffer_size)
+    return _drain_queue(
+        pool, buf, pool_provider, target_urls, content_type, logger, cm,
+        concurrency, buffer_size, content_handler, refresh_interval_s,
+    )
+
+
+# FUNCTIONS
+
+def _refresh_pool(
+    pool_provider: Callable[[], tuple[list[tuple[str, str]], list[dict]]],
+    logger:        AcquireLogger,
+    cm:            PersistentCooldownManager,
+    buffer_size:   int,
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    pool, sources = pool_provider()
+    logger.record_pool_refresh(len(pool))
+    for s in sources:
+        logger.record_pool_source(s["url"], s["ok"], s["count"], s.get("error"))
+    buf = build_active_buffer(pool, cm, buffer_size)
+    return pool, buf
+
+
+def _drain_queue(
+    pool: list[tuple[str, str]],
+    buf: list[tuple[str, str]],
+    pool_provider: Callable[[], tuple[list[tuple[str, str]], list[dict]]],
+    target_urls: list[str],
+    content_type: str,
+    logger: AcquireLogger,
+    cm: PersistentCooldownManager,
+    concurrency: int,
+    buffer_size: int,
+    content_handler: Callable[[str, bytes], None] | None,
+    refresh_interval_s: float,
+) -> tuple[list[str], list[str], list[str]]:
     queue         = deque(target_urls)
     done:         list[str]                  = []
     dead:         list[str]                  = []
     wset:         set[tuple[str, str]]       = set()
     _consec_fail: dict[tuple[str, str], int] = {}
 
-    pool, buf      = _refresh_pool(pool_provider, logger, cm, buffer_size)
     _last_refresh  = time.monotonic()
     _last_progress = time.monotonic()
 
@@ -65,8 +100,6 @@ def run_loop(
 
     return done, dead, list(queue)
 
-
-# FUNCTIONS
 
 def _check_stall(now: float, last_progress: float, queue: deque) -> bool:
     if now - last_progress < STALL_TIMEOUT_S:
@@ -98,37 +131,6 @@ def _maybe_refresh_and_refill(
         buf = refill_buffer(buf, pool, cm, buffer_size)
 
     return pool, buf, last_refresh
-
-
-def _refresh_pool(
-    pool_provider: Callable[[], tuple[list[tuple[str, str]], list[dict]]],
-    logger:        AcquireLogger,
-    cm:            PersistentCooldownManager,
-    buffer_size:   int,
-) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    pool, sources = pool_provider()
-    logger.record_pool_refresh(len(pool))
-    for s in sources:
-        logger.record_pool_source(s["url"], s["ok"], s["count"], s.get("error"))
-    buf = build_active_buffer(pool, cm, buffer_size)
-    return pool, buf
-
-
-def _compute_sleep(
-    cm: PersistentCooldownManager,
-    last_refresh_mono: float,
-    refresh_interval_s: float,
-) -> float:
-    now_mono        = time.monotonic()
-    secs_to_refresh = max(0.0, (last_refresh_mono + refresh_interval_s) - now_mono)
-
-    earliest = cm.earliest_eligible_at()
-    if earliest is None:
-        return secs_to_refresh
-
-    now_utc          = datetime.now(timezone.utc)
-    secs_to_eligible = max(0.0, (earliest - now_utc).total_seconds())
-    return min(secs_to_refresh, secs_to_eligible)
 
 
 def _build_batch(
@@ -177,6 +179,23 @@ def _assign_batch_slots(
             break
         batch.append((proto, hp, url))
         assigned_proxies.add((proto, hp))
+
+
+def _compute_sleep(
+    cm: PersistentCooldownManager,
+    last_refresh_mono: float,
+    refresh_interval_s: float,
+) -> float:
+    now_mono        = time.monotonic()
+    secs_to_refresh = max(0.0, (last_refresh_mono + refresh_interval_s) - now_mono)
+
+    earliest = cm.earliest_eligible_at()
+    if earliest is None:
+        return secs_to_refresh
+
+    now_utc          = datetime.now(timezone.utc)
+    secs_to_eligible = max(0.0, (earliest - now_utc).total_seconds())
+    return min(secs_to_refresh, secs_to_eligible)
 
 
 def _run_batch_cycle(

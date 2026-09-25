@@ -23,10 +23,6 @@ def write_riding_report(state: RiderState, job_dir: Path, t_job_start: datetime)
 
 # FUNCTIONS
 
-def _fmt(v, spec="", unit="") -> str:
-    return f"{format(v, spec)}{unit}" if v is not None else "—"
-
-
 def _write_md(
     job_dir: Path, state: RiderState, stats: dict, t_job_start: datetime,
 ) -> None:
@@ -74,6 +70,10 @@ def _md_header_counts(state: RiderState, stats: dict, job_id: str) -> list[str]:
         f"| OK URLs/min | {_fmt(stats['urls_per_min'], '.1f')} |",
         "",
     ]
+
+
+def _fmt(v, spec="", unit="") -> str:
+    return f"{format(v, spec)}{unit}" if v is not None else "—"
 
 
 def _md_proxy_riding(stats: dict) -> list[str]:

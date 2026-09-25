@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from src.crawler.pipe_scraper_acquisition import onward_link_identity
 
+
 # FUNCTIONS
 
 def domain_from_urls(urls: list[str]) -> str:

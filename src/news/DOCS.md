@@ -63,7 +63,7 @@ Arguments in; the chosen platform is looked up by name in registry.py. The pipel
 **Called by:** the `python -m src.news` entry.
 **Calls out:** none.
 
-### platform.py (52 LOC)
+### platform.py (54 LOC)
 
 **Purpose:** The extension seam: the platform protocol with declared defaults for its optional attributes, and the scrape-configuration dataclasses.
 **Reads:** none.

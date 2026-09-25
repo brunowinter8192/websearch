@@ -21,45 +21,8 @@ _NON_PAGE_EXTENSIONS = (
     ".woff", ".woff2", ".ttf", ".eot", ".pdf", ".zip", ".mp4", ".mp3",
 )
 
+
 # FUNCTIONS
-
-def url_to_filename(url: str) -> str:
-    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
-    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
-    return f"{slug}.md"
-
-def onward_link_identity(url: str) -> str | None:
-    try:
-        parsed = urlsplit(url)
-    except ValueError as e:
-        logger.warning("Onward link dropped, malformed URL %r: %s", url, e)
-        return None
-    if not parsed.hostname:
-        return None
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", "", ""))
-
-def _extract_onward_links(result, page_host: str) -> list[str]:
-    seed_key = host_key(page_host)
-    raw_links = getattr(result, "links", None) or {}
-    hrefs = [
-        item.get("href") for bucket in ("internal", "external")
-        for item in (raw_links.get(bucket) or []) if item.get("href")
-    ]
-    seen = set()
-    onward = []
-    for href in hrefs:
-        identity = onward_link_identity(href)
-        if identity is None:
-            continue
-        if host_key(urlsplit(identity).hostname or "") != seed_key:
-            continue
-        if identity.lower().endswith(_NON_PAGE_EXTENSIONS):
-            continue
-        if identity in seen:
-            continue
-        seen.add(identity)
-        onward.append(identity)
-    return onward
 
 async def scrape_one(
     crawler: AsyncWebCrawler,
@@ -102,6 +65,48 @@ async def scrape_one(
 
     return {'url': url, 'wall_ms': wall_ms, 'bytes': byte_count, 'status_code': status,
             'links': links}
+
+
+def url_to_filename(url: str) -> str:
+    slug = re.sub(r'[^a-zA-Z0-9]', '_', url.split('://')[-1])
+    slug = re.sub(r'_+', '_', slug).strip('_')[:100]
+    return f"{slug}.md"
+
+
+def _extract_onward_links(result, page_host: str) -> list[str]:
+    seed_key = host_key(page_host)
+    raw_links = getattr(result, "links", None) or {}
+    hrefs = [
+        item.get("href") for bucket in ("internal", "external")
+        for item in (raw_links.get(bucket) or []) if item.get("href")
+    ]
+    seen = set()
+    onward = []
+    for href in hrefs:
+        identity = onward_link_identity(href)
+        if identity is None:
+            continue
+        if host_key(urlsplit(identity).hostname or "") != seed_key:
+            continue
+        if identity.lower().endswith(_NON_PAGE_EXTENSIONS):
+            continue
+        if identity in seen:
+            continue
+        seen.add(identity)
+        onward.append(identity)
+    return onward
+
+
+def onward_link_identity(url: str) -> str | None:
+    try:
+        parsed = urlsplit(url)
+    except ValueError as e:
+        logger.warning("Onward link dropped, malformed URL %r: %s", url, e)
+        return None
+    if not parsed.hostname:
+        return None
+    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", "", ""))
+
 
 async def scrape_one_camoufox(
     url: str,

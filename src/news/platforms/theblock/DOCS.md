@@ -22,7 +22,7 @@ Sitemap index fetched directly, via the proxy pool when the direct fetch does no
 **Called by:** __init__.py, discover.py.
 **Calls out:** none.
 
-### discover.py (161 LOC)
+### discover.py (179 LOC)
 
 **Purpose:** Sitemap-based article discovery with direct-then-proxy fetching and mode-based sub-sitemap selection.
 **Reads:** the sitemap index and selected sub-sitemaps (network).
@@ -38,7 +38,7 @@ Sitemap index fetched directly, via the proxy pool when the direct fetch does no
 **Called by:** `__init__.py`, which exposes it as the platform's cleanup method that src/news/clean_pass.py invokes.
 **Calls out:** crawl4ai html2text.
 
-### __init__.py (27 LOC)
+### __init__.py (26 LOC)
 
 **Purpose:** The platform class wrapping config, discovery and cleanup.
 **Reads:** none of its own.

@@ -15,11 +15,22 @@ _FEEDER_WORKFLOWS = (
 )
 
 
-@dataclass
-class DiscoveredURL:
-    url: str
-    source: str
+# ORCHESTRATOR
 
+async def discover_urls_workflow(seed_url: str) -> DiscoveryResult:
+    t0 = time.time()
+    rejection = _reject_invalid_seed(seed_url, t0)
+    if rejection is not None:
+        return rejection
+
+    feeder_results = await _run_feeders(seed_url)
+    seeds, failed_feeders = _assemble_seeds(seed_url, feeder_results)
+    urls = _to_discovered_urls(seeds)
+    dropped = _total_dropped(feeder_results)
+    return _build_result(urls, t0, failed_feeders, dropped)
+
+
+# FUNCTIONS
 
 @dataclass
 class DiscoveryResult:
@@ -31,24 +42,13 @@ class DiscoveryResult:
     error: str | None = None
 
 
-# ORCHESTRATOR
-
-async def discover_urls_workflow(seed_url: str) -> DiscoveryResult:
-    t0 = time.time()
+def _reject_invalid_seed(seed_url: str, t0: float) -> DiscoveryResult | None:
     try:
         require_host(seed_url)
     except Exception as exc:
         return DiscoveryResult(ok=False, error=str(exc), wall_s=time.time() - t0)
+    return None
 
-    feeder_results = await _run_feeders(seed_url)
-    seeds, failed_feeders = _assemble_seeds(seed_url, feeder_results)
-    urls = [DiscoveredURL(url=url, source=source) for url, source in seeds.items()]
-    dropped = _total_dropped(feeder_results)
-    return DiscoveryResult(urls=urls, ok=True, wall_s=time.time() - t0,
-                           failed_feeders=failed_feeders, dropped=dropped)
-
-
-# FUNCTIONS
 
 async def _run_feeders(seed_url: str) -> dict:
     results = await asyncio.gather(*[workflow(seed_url) for _, workflow in _FEEDER_WORKFLOWS])
@@ -68,5 +68,20 @@ def _assemble_seeds(seed_url: str, feeder_results: dict) -> tuple:
     return seeds, failed_feeders
 
 
+def _to_discovered_urls(seeds: dict) -> list:
+    return [DiscoveredURL(url=url, source=source) for url, source in seeds.items()]
+
+
+@dataclass
+class DiscoveredURL:
+    url: str
+    source: str
+
+
 def _total_dropped(feeder_results: dict) -> int:
     return sum(result.dropped for result in feeder_results.values() if result.ok)
+
+
+def _build_result(urls: list, t0: float, failed_feeders: dict, dropped: int) -> DiscoveryResult:
+    return DiscoveryResult(urls=urls, ok=True, wall_s=time.time() - t0,
+                           failed_feeders=failed_feeders, dropped=dropped)

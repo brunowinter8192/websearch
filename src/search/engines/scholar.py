@@ -40,20 +40,6 @@ async def search_with_reason(query: str, language: str = "en", max_results: int 
 
 # FUNCTIONS
 
-def _reason_from_response(r: httpx.Response, max_results: int) -> tuple[list[SearchResult], str | None, dict | None]:
-    if r.status_code in (301, 302, 303, 307, 308):
-        location = r.headers.get("Location", "")
-        logger.warning("Scholar redirect → %s", location)
-        return [], None, {"http_status": r.status_code}
-
-    r.raise_for_status()
-
-    results, captcha_form = _parse_response(r.text, max_results)
-    if results:
-        return results, None, None
-    return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
-
-
 def _build_url(query: str, language: str, max_results: int) -> str:
     return SEARCH_URL.format(quote_plus(query), language, max_results)
 
@@ -66,6 +52,20 @@ async def _fetch(url: str) -> httpx.Response:
         timeout=_TIMEOUT,
     ) as client:
         return await client.get(url)
+
+
+def _reason_from_response(r: httpx.Response, max_results: int) -> tuple[list[SearchResult], str | None, dict | None]:
+    if r.status_code in (301, 302, 303, 307, 308):
+        location = r.headers.get("Location", "")
+        logger.warning("Scholar redirect → %s", location)
+        return [], None, {"http_status": r.status_code}
+
+    r.raise_for_status()
+
+    results, captcha_form = _parse_response(r.text, max_results)
+    if results:
+        return results, None, None
+    return results, None, {"http_status": r.status_code, "captcha_form": captcha_form}
 
 
 def _parse_response(body: str, max_results: int) -> tuple[list[SearchResult], bool]:

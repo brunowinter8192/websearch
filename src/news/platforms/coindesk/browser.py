@@ -61,6 +61,12 @@ async def browser_load_feed(n_clicks: int) -> tuple[dict, str, bytes | None]:
 
 # FUNCTIONS
 
+def get_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 async def _load_feed_and_cleanup(port: int, session_dir: str, n_clicks: int) -> tuple[dict, str, bytes | None]:
     handles = {"chrome": None, "tab": None}
     try:
@@ -80,51 +86,6 @@ async def _load_feed(port: int, session_dir: str, n_clicks: int, handles: dict) 
 
     entry = await capture_timeline_request(tab, n_clicks)
     return _replay_timeline_request(entry)
-
-
-async def _open_feed_page(tab) -> None:
-    await tab.go_to(TARGET_URL, timeout=60)
-    await asyncio.sleep(3.0)
-    await tab.execute_script(_JS_DISMISS_COOKIE)
-    await asyncio.sleep(0.5)
-
-
-def _replay_timeline_request(entry: dict | None) -> tuple[dict, str, bytes | None]:
-    if entry is None:
-        return {}, "", None
-
-    api_url = entry["request"]["url"]
-    raw_hdrs = {h["name"]: h["value"] for h in entry["request"]["headers"]}
-    headers = filter_headers(raw_hdrs)
-
-    resp = httpx.get(api_url, headers=headers, follow_redirects=True, timeout=30)
-    if resp.status_code != 200:
-        print(f"[coindesk] browser_load_feed: first replay → {resp.status_code}", file=sys.stderr)
-        return headers, api_url, None
-
-    return headers, api_url, resp.content
-
-
-async def _cleanup_session(handles: dict, port: int, session_dir: str) -> None:
-    if handles["tab"] is not None:
-        await _close_non_fatal("tab.close", handles["tab"])
-    if handles["chrome"] is not None:
-        await _close_non_fatal("chrome.close", handles["chrome"])
-    kill_chrome_on_port(port)
-    shutil.rmtree(session_dir, ignore_errors=True)
-
-
-async def _close_non_fatal(label: str, target) -> None:
-    try:
-        await target.close()
-    except Exception as e:
-        print(f"{label} (non-fatal): {e}", file=sys.stderr)
-
-
-def get_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 def launch_background_chrome(port: int, session_dir: str) -> None:
@@ -155,8 +116,11 @@ def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     raise TimeoutError(f"Chrome not ready on port {port} within {timeout}s")
 
 
-def kill_chrome_on_port(port: int) -> None:
-    subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)
+async def _open_feed_page(tab) -> None:
+    await tab.go_to(TARGET_URL, timeout=60)
+    await asyncio.sleep(3.0)
+    await tab.execute_script(_JS_DISMISS_COOKIE)
+    await asyncio.sleep(0.5)
 
 
 async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
@@ -171,5 +135,41 @@ async def capture_timeline_request(tab, n_clicks: int) -> dict | None:
     return None
 
 
+def _replay_timeline_request(entry: dict | None) -> tuple[dict, str, bytes | None]:
+    if entry is None:
+        return {}, "", None
+
+    api_url = entry["request"]["url"]
+    raw_hdrs = {h["name"]: h["value"] for h in entry["request"]["headers"]}
+    headers = filter_headers(raw_hdrs)
+
+    resp = httpx.get(api_url, headers=headers, follow_redirects=True, timeout=30)
+    if resp.status_code != 200:
+        print(f"[coindesk] browser_load_feed: first replay → {resp.status_code}", file=sys.stderr)
+        return headers, api_url, None
+
+    return headers, api_url, resp.content
+
+
 def filter_headers(raw: dict) -> dict:
     return {k: v for k, v in raw.items() if k.lower() not in SKIP_HEADERS}
+
+
+async def _cleanup_session(handles: dict, port: int, session_dir: str) -> None:
+    if handles["tab"] is not None:
+        await _close_non_fatal("tab.close", handles["tab"])
+    if handles["chrome"] is not None:
+        await _close_non_fatal("chrome.close", handles["chrome"])
+    kill_chrome_on_port(port)
+    shutil.rmtree(session_dir, ignore_errors=True)
+
+
+async def _close_non_fatal(label: str, target) -> None:
+    try:
+        await target.close()
+    except Exception as e:
+        print(f"{label} (non-fatal): {e}", file=sys.stderr)
+
+
+def kill_chrome_on_port(port: int) -> None:
+    subprocess.run(["pkill", "-f", f"remote-debugging-port={port}"], check=False)

@@ -9,7 +9,7 @@ Ad-hoc single-URL scraping behind the scrape and index subcommands of cli.py. Tu
 `__init__.py` is empty; modules are imported by path.
 
 - chromium_scrape.py: the scrape entry used by cli.py (content only, never truncated).
-- scrape_logger.py: log record and content sidecar writers, used by both acquisition lanes.
+- scrape_logger.py: log record and content sidecar writers plus timestamp, domain and elapsed helpers, used by both acquisition lanes.
 - index_scrapes.py: the indexing entry used by cli.py.
 - camoufox_scrape.py: the Camoufox lane; not wired to any CLI subcommand, still used by src/crawler.
 
@@ -19,7 +19,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 
 ## Modules
 
-### chromium_scrape.py (267 LOC)
+### chromium_scrape.py (283 LOC)
 
 **Purpose:** Scrape orchestrator: one crawl4ai call through the self-launched Chromium, returns fit markdown, logs facts, and runs three independent process-hygiene nets.
 **Reads:** the url argument.
@@ -35,15 +35,15 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** chromium_scrape.py.
 **Calls out:** crawl4ai browser manager, patchright, psutil, macOS open, pgrep and osascript.
 
-### scrape_logger.py (51 LOC)
+### scrape_logger.py (66 LOC)
 
-**Purpose:** Per-URL structured logging shared by both lanes: one JSONL record and one full-content sidecar per call.
+**Purpose:** Per-URL structured logging shared by both lanes: one JSONL record and one full-content sidecar per call, plus record-field helpers.
 **Reads:** the scrape-log path environment variable; the sidecar directory.
 **Writes:** the scrape JSONL log and per-call sidecar files under src/logs (gitignored).
 **Called by:** chromium_scrape.py, camoufox_scrape.py, index_scrapes.py.
 **Calls out:** none.
 
-### index_scrapes.py (92 LOC)
+### index_scrapes.py (102 LOC)
 
 **Purpose:** Bridge from ad-hoc scrapes to an external RAG collection: resolves each URL's sidecar, rewrites it in collection format and triggers indexing.
 **Reads:** the sidecar directory and the external collection directory.
@@ -51,7 +51,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** cli.py.
 **Calls out:** rag-cli (subprocess).
 
-### camoufox_scrape.py (219 LOC)
+### camoufox_scrape.py (231 LOC)
 
 **Purpose:** Calibrated Firefox/Camoufox acquisition lane with the same facts-only contract; reactivatable but currently without a CLI subcommand.
 **Reads:** the url and image-blocking arguments; the macOS system locale.

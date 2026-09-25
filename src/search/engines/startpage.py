@@ -93,6 +93,14 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     return results, None, attach_document_status(diag, status_chain)
 
 
+async def _submit_search(tab, query: str) -> None:
+    await tab.go_to(HOME_URL, timeout=10.0)
+    await asyncio.sleep(1.5)
+    await tab.execute_script(_js_set_query(query))
+    await asyncio.sleep(0.3)
+    await tab.execute_script("document.querySelector('button.search-btn').click();")
+
+
 def _js_set_query(query: str) -> str:
     return f"""
     var inp = document.querySelector('#q');
@@ -100,14 +108,6 @@ def _js_set_query(query: str) -> str:
     nativeSetter.call(inp, {json.dumps(query)});
     inp.dispatchEvent(new Event('input', {{bubbles: true}}));
     """
-
-
-async def _submit_search(tab, query: str) -> None:
-    await tab.go_to(HOME_URL, timeout=10.0)
-    await asyncio.sleep(1.5)
-    await tab.execute_script(_js_set_query(query))
-    await asyncio.sleep(0.3)
-    await tab.execute_script("document.querySelector('button.search-btn').click();")
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
@@ -121,17 +121,13 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
     return False
 
 
-def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
-    results = []
-    for i, item in enumerate(items[:max_results]):
-        url = item.get("url", "")
-        if not url:
-            continue
-        results.append(SearchResult(
-            url=url, title=item.get("title", ""), snippet=item.get("snippet", ""),
-            engine="startpage", position=i + 1,
-        ))
-    return results
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {"marker": None, "iframe_challenge": False, "url": "", "ready_state": "", "title": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
 
 
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
@@ -143,10 +139,14 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return _build_results(items, max_results)
 
 
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = extract_value(raw)
-    diag = {"marker": None, "iframe_challenge": False, "url": "", "ready_state": "", "title": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag
+def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
+    results = []
+    for i, item in enumerate(items[:max_results]):
+        url = item.get("url", "")
+        if not url:
+            continue
+        results.append(SearchResult(
+            url=url, title=item.get("title", ""), snippet=item.get("snippet", ""),
+            engine="startpage", position=i + 1,
+        ))
+    return results

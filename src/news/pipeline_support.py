@@ -23,16 +23,6 @@ def start_run(platform: Platform, label: str) -> logging.Logger:
     return log
 
 
-def log_run_complete(log: logging.Logger, platform: Platform, label: str) -> None:
-    log.info(f"=== {platform.name} {label} ===")
-
-
-def require_internet(platform: Platform, log: logging.Logger) -> None:
-    if not check_internet(platform, log):
-        log.error("Internet check failed — aborting.")
-        sys.exit(1)
-
-
 def setup_logging(name: str) -> logging.Logger:
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     log_file = LOG_DIR / f"news_{name}_{today}.log"
@@ -52,6 +42,12 @@ def setup_logging(name: str) -> logging.Logger:
     return log
 
 
+def require_internet(platform: Platform, log: logging.Logger) -> None:
+    if not check_internet(platform, log):
+        log.error("Internet check failed — aborting.")
+        sys.exit(1)
+
+
 def check_internet(platform: Platform, log: logging.Logger) -> bool:
     try:
         with urllib.request.urlopen(platform.precondition_url, timeout=PRECONDITION_TIMEOUT):
@@ -60,6 +56,10 @@ def check_internet(platform: Platform, log: logging.Logger) -> bool:
     except Exception as e:
         log.error(f"  [FAIL] Internet unreachable: {e}")
         return False
+
+
+def log_run_complete(log: logging.Logger, platform: Platform, label: str) -> None:
+    log.info(f"=== {platform.name} {label} ===")
 
 
 def master_list_path(platform: Platform) -> Path:

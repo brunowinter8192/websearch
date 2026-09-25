@@ -19,19 +19,10 @@ def scrape_entries_proxy(
 ) -> list[dict]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    target_urls = [e["url"] for e in entries]
-    url_to_hash = {
-        url: hashlib.sha256(url.encode()).hexdigest()[:12]
-        for url in target_urls
-    }
+    target_urls = _target_urls(entries)
+    url_to_hash = _hash_urls(target_urls)
     fetched: dict[str, dict] = {}
-
-    def content_handler(url: str, content: bytes) -> None:
-        url_hash  = url_to_hash[url]
-        text      = content.decode("utf-8", errors="replace")
-        file_path = output_dir / f"{url_hash}.md"
-        file_path.write_text(text, encoding="utf-8")
-        fetched[url] = {"file": str(file_path), "char_count": len(text)}
+    content_handler = _make_content_handler(output_dir, url_to_hash, fetched)
 
     cm = PersistentCooldownManager()
 
@@ -50,6 +41,27 @@ def scrape_entries_proxy(
 
 
 # FUNCTIONS
+
+def _target_urls(entries: list[dict]) -> list[str]:
+    return [e["url"] for e in entries]
+
+
+def _hash_urls(target_urls: list[str]) -> dict[str, str]:
+    return {
+        url: hashlib.sha256(url.encode()).hexdigest()[:12]
+        for url in target_urls
+    }
+
+
+def _make_content_handler(output_dir: Path, url_to_hash: dict[str, str], fetched: dict[str, dict]):
+    def content_handler(url: str, content: bytes) -> None:
+        url_hash  = url_to_hash[url]
+        text      = content.decode("utf-8", errors="replace")
+        file_path = output_dir / f"{url_hash}.md"
+        file_path.write_text(text, encoding="utf-8")
+        fetched[url] = {"file": str(file_path), "char_count": len(text)}
+    return content_handler
+
 
 def _build_manifest(
     entries: list[dict],

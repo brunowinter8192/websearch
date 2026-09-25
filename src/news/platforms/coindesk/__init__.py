@@ -36,4 +36,3 @@ class CoinDeskPlatform(Platform):
 
     def cleanup(self, raw_markdown: str, entry: dict) -> str:
         return _cleanup(raw_markdown, entry)
-

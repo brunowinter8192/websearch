@@ -25,26 +25,6 @@ async def search_with_reason(query: str, language: str = "en", max_results: int 
 
 # FUNCTIONS
 
-def _reason_from_works(status_code: int, works: list[dict] | None) -> tuple[list[SearchResult], str | None, dict | None]:
-    if status_code == 429:
-        logger.warning("OpenAlex rate limited: 429")
-        return [], None, {"http_status": status_code}
-    if works is None:
-        return [], None, {"http_status": status_code}
-    results = _parse_results(works)
-    if results:
-        return results, None, None
-    return results, None, {"http_status": status_code}
-
-
-def _deep_unescape(s: str) -> str:
-    while True:
-        new = html.unescape(s)
-        if new == s:
-            return new
-        s = new
-
-
 async def _fetch_results(query: str, max_results: int) -> tuple[int, list[dict] | None]:
     params: dict = {"search": query, "per_page": min(max_results, MAX_PER_PAGE)}
     api_key = os.environ.get("OPENALEX_API_KEY", "")
@@ -57,6 +37,18 @@ async def _fetch_results(query: str, max_results: int) -> tuple[int, list[dict] 
         return response.status_code, None
     response.raise_for_status()
     return response.status_code, response.json().get("results", [])
+
+
+def _reason_from_works(status_code: int, works: list[dict] | None) -> tuple[list[SearchResult], str | None, dict | None]:
+    if status_code == 429:
+        logger.warning("OpenAlex rate limited: 429")
+        return [], None, {"http_status": status_code}
+    if works is None:
+        return [], None, {"http_status": status_code}
+    results = _parse_results(works)
+    if results:
+        return results, None, None
+    return results, None, {"http_status": status_code}
 
 
 def _parse_results(works: list[dict]) -> list[SearchResult]:
@@ -84,21 +76,23 @@ def _parse_results(works: list[dict]) -> list[SearchResult]:
     return results
 
 
-def _extract_pdf_url(work: dict) -> str | None:
-    location = work.get("best_oa_location")
-    if not location:
-        return None
-    return location.get("pdf_url")
+def _deep_unescape(s: str) -> str:
+    while True:
+        new = html.unescape(s)
+        if new == s:
+            return new
+        s = new
 
 
-def _extract_date(work: dict) -> str | None:
-    pub_date = work.get("publication_date")
-    if pub_date:
-        return pub_date
-    pub_year = work.get("publication_year")
-    if pub_year:
-        return str(pub_year)
-    return None
+def _pick_url(work: dict) -> str:
+    ids = work.get("ids") or {}
+    arxiv = ids.get("arxiv")
+    if arxiv:
+        return arxiv
+    doi = work.get("doi")
+    if doi:
+        return doi
+    return work.get("id", "")
 
 
 def _reconstruct_abstract(aii: dict | None) -> str:
@@ -111,12 +105,18 @@ def _reconstruct_abstract(aii: dict | None) -> str:
     return html.unescape(" ".join(html.unescape(pos_word[p]) for p in sorted(pos_word)))
 
 
-def _pick_url(work: dict) -> str:
-    ids = work.get("ids") or {}
-    arxiv = ids.get("arxiv")
-    if arxiv:
-        return arxiv
-    doi = work.get("doi")
-    if doi:
-        return doi
-    return work.get("id", "")
+def _extract_date(work: dict) -> str | None:
+    pub_date = work.get("publication_date")
+    if pub_date:
+        return pub_date
+    pub_year = work.get("publication_year")
+    if pub_year:
+        return str(pub_year)
+    return None
+
+
+def _extract_pdf_url(work: dict) -> str | None:
+    location = work.get("best_oa_location")
+    if not location:
+        return None
+    return location.get("pdf_url")

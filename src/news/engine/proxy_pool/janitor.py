@@ -9,7 +9,7 @@ from pathlib import Path
 from src.config import PROXY_TS_FMT
 
 
-# ORCHESTRATOR
+# FUNCTIONS
 
 class Janitor:
     def __init__(self, jobs_dir: Path, log_dir: Path, report_dir: Path):
@@ -44,8 +44,6 @@ class Janitor:
         print(f"[janitor] end_job {job_id!r}: job.md + plot → {job_dir}  transient dirs wiped")
 
 
-# FUNCTIONS
-
 def _wipe_dir(path: Path) -> None:
     if not path.exists():
         return
@@ -63,10 +61,6 @@ def _read_events(jsonl_path: Path) -> list[dict]:
         if line:
             events.append(json.loads(line))
     return events
-
-
-def _parse_ts(ts_str: str) -> datetime:
-    return datetime.strptime(ts_str, PROXY_TS_FMT).replace(tzinfo=timezone.utc)
 
 
 def _compute_stats(events: list[dict]) -> dict:
@@ -102,6 +96,10 @@ def _compute_stats(events: list[dict]) -> dict:
         "windows":       windows,
         "source_batches": source_batches,
     }
+
+
+def _parse_ts(ts_str: str) -> datetime:
+    return datetime.strptime(ts_str, PROXY_TS_FMT).replace(tzinfo=timezone.utc)
 
 
 def _compute_window_stats(events: list[dict], t0: datetime) -> list[dict]:

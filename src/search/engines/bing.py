@@ -108,19 +108,6 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     return results, None, attach_document_status(diag, status_chain)
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    qs = parse_qs(parsed.query)
-    u = qs.get("u", [None])[0]
-    if not u:
-        return href
-    payload = u[2:] if len(u) > 2 else u
-    padded = payload + "=" * (-len(payload) % 4)
-    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
-
-
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
@@ -130,6 +117,24 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
             return True
         await asyncio.sleep(WAIT_INTERVAL)
     return False
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
+    if val:
+        diag.update(json.loads(val))
+    return diag
+
+
+async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
+    raw = await tab.execute_script(_JS_PARSE)
+    value = extract_value(raw)
+    if not value:
+        return [], {}
+    items = json.loads(value)
+    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
 
 
 def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
@@ -144,6 +149,19 @@ def _build_results(items: list[dict], max_results: int) -> list[SearchResult]:
             date=_extract_date(item.get("date_raw", "")),
         ))
     return results
+
+
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    parsed = urlparse(href)
+    qs = parse_qs(parsed.query)
+    u = qs.get("u", [None])[0]
+    if not u:
+        return href
+    payload = u[2:] if len(u) > 2 else u
+    padded = payload + "=" * (-len(payload) % 4)
+    return base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
 
 
 def _extract_date(news_dt_text: str) -> str | None:
@@ -161,21 +179,3 @@ def _extract_date(news_dt_text: str) -> str | None:
         month = _EN_MONTHS.get(month_name.lower())
         return f"{int(year):04d}-{month:02d}-{int(day):02d}" if month else None
     return None
-
-
-async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
-    raw = await tab.execute_script(_JS_PARSE)
-    value = extract_value(raw)
-    if not value:
-        return [], {}
-    items = json.loads(value)
-    return _build_results(items, max_results), collect_selector_hits(items[:max_results])
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = extract_value(raw)
-    diag = {"marker": None, "url": "", "ready_state": "", "title": ""}
-    if val:
-        diag.update(json.loads(val))
-    return diag

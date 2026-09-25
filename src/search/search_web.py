@@ -103,6 +103,16 @@ async def search_web_workflow(
 
 # FUNCTIONS
 
+def _select_engines(engines: str | None) -> dict:
+    if not engines:
+        return {k: v for k, v in ENGINES.items() if k in _DEFAULT_ENGINES}
+    names = [e.strip().lower() for e in engines.split(",")]
+    unknown = [n for n in names if n not in ENGINES]
+    if unknown:
+        raise ValueError(f"unknown engine(s): {', '.join(unknown)}; available: {', '.join(sorted(ENGINES))}")
+    return {k: v for k, v in ENGINES.items() if k in names}
+
+
 def _effective_timeout(engine_timeout: float | None) -> float:
     return engine_timeout if engine_timeout is not None else ENGINE_WATCHDOG_TIMEOUT
 
@@ -125,60 +135,11 @@ async def _fanout_with_browser(
         await kill_own_chrome()
 
 
-def _elapsed_ms(t0: float) -> int:
-    return round((time.perf_counter() - t0) * 1000)
-
-
-def _timed(fn: Callable, *args) -> tuple:
-    t0 = time.perf_counter()
-    result = fn(*args)
-    return result, _elapsed_ms(t0)
-
-
 async def _prewarm_browser() -> None:
     try:
         await get_tab()
     except Exception as e:
         logger.warning("Browser prewarm failed, browser engines are expected to fail individually, non-browser engines still run: %s", e)
-
-
-def _cap_pools(pools: dict) -> dict:
-    logger.info("Pool cap applied: %d", POOL_CAP)
-    return {eng: pool[:POOL_CAP] for eng, pool in pools.items()}
-
-
-def _build_search_result(
-    formatted_text: str,
-    with_timings: bool,
-    engine_fanout_ms: int,
-    engine_ms: dict,
-    engine_details: dict,
-    pool_build_ms: int,
-    cache_write_ms: int,
-    total_ms: int,
-) -> list[TextContent] | tuple[list[TextContent], dict]:
-    result = [TextContent(type="text", text=formatted_text)]
-    if not with_timings:
-        return result
-    timings = {
-        "engine_fanout_ms": engine_fanout_ms,
-        **engine_ms,
-        "engine_details": engine_details,
-        "pool_build_ms": pool_build_ms,
-        "cache_write_ms": cache_write_ms,
-        "total_ms": total_ms,
-    }
-    return result, timings
-
-
-def _select_engines(engines: str | None) -> dict:
-    if not engines:
-        return {k: v for k, v in ENGINES.items() if k in _DEFAULT_ENGINES}
-    names = [e.strip().lower() for e in engines.split(",")]
-    unknown = [n for n in names if n not in ENGINES]
-    if unknown:
-        raise ValueError(f"unknown engine(s): {', '.join(unknown)}; available: {', '.join(sorted(ENGINES))}")
-    return {k: v for k, v in ENGINES.items() if k in names}
 
 
 async def _run_engine_fanout(
@@ -223,63 +184,6 @@ async def _run_engine_fanout(
     return raw_results, engine_stats, engine_fanout_ms, engine_ms, engine_details
 
 
-async def _query_engines_concurrent(
-    query: str,
-    language: str,
-    max_results: int,
-    selected: dict,
-    timeout: float = ENGINE_WATCHDOG_TIMEOUT,
-    query_modifier_map: dict[str, Callable[[str], str]] | None = None,
-) -> tuple[list, dict[str, dict]]:
-    tasks = [
-        _engine_with_timing(engine, query, language, max_results, timeout, query_modifier_map=query_modifier_map)
-        for engine in selected.values()
-    ]
-    timed = await asyncio.gather(*tasks)
-    combined: list = []
-    engine_stats: dict[str, dict] = {}
-    for engine, (eng_results, rate_wait_ms, search_ms, status, drop_reason, diagnosis) in zip(selected.values(), timed):
-        combined.extend(eng_results)
-        engine_stats[engine.name] = {
-            "rate_wait_ms": rate_wait_ms,
-            "search_ms": search_ms,
-            "status": status,
-            "result_count": len(eng_results),
-            "drop_reason": drop_reason,
-            "diagnosis": diagnosis,
-        }
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-    log_query({
-        "record_type": "engine_run",
-        "ts": ts,
-        "query": query,
-        "language": language,
-        "engines_requested": list(selected.keys()),
-        "engines": engine_stats,
-    })
-    return combined, engine_stats
-
-
-def _classify_engine_exception(exc: Exception, timeout: float | None, search_ms: int) -> tuple[str, str]:
-    if isinstance(exc, asyncio.TimeoutError):
-        sub = ST.TIMEOUT_WATCHDOG if timeout is not None and search_ms < timeout * 1.2 * 1000 else ST.TIMEOUT_NONCOOP
-        return sub, f"asyncio.TimeoutError after {timeout}s watchdog"
-    if isinstance(exc, httpx.TimeoutException):
-        logger.warning("Engine httpx timeout: %s", exc)
-        return ST.TIMEOUT_HTTPX, str(exc)
-    if isinstance(exc, (_pydoll_exc.PydollException, _ws_exc.WebSocketException, ConnectionError)):
-        logger.warning("Engine browser error: %s", exc)
-        return SE.ERROR_BROWSER, str(exc)
-    if isinstance(exc, httpx.HTTPError):
-        logger.warning("Engine HTTP error: %s", exc)
-        return SE.ERROR_HTTP, str(exc)
-    if isinstance(exc, (json.JSONDecodeError, KeyError, ValueError, AttributeError)):
-        logger.warning("Engine parse error: %s", exc)
-        return SE.ERROR_PARSE, str(exc)
-    logger.warning("Engine error: %s", exc)
-    return SE.ERROR_OTHER, str(exc)
-
-
 async def _engine_with_timing(
     engine,
     query: str,
@@ -318,6 +222,78 @@ async def _engine_with_timing(
         return [], rate_wait_ms, search_ms, status, drop_reason, diagnosis
 
 
+def _classify_engine_exception(exc: Exception, timeout: float | None, search_ms: int) -> tuple[str, str]:
+    if isinstance(exc, asyncio.TimeoutError):
+        sub = ST.TIMEOUT_WATCHDOG if timeout is not None and search_ms < timeout * 1.2 * 1000 else ST.TIMEOUT_NONCOOP
+        return sub, f"asyncio.TimeoutError after {timeout}s watchdog"
+    if isinstance(exc, httpx.TimeoutException):
+        logger.warning("Engine httpx timeout: %s", exc)
+        return ST.TIMEOUT_HTTPX, str(exc)
+    if isinstance(exc, (_pydoll_exc.PydollException, _ws_exc.WebSocketException, ConnectionError)):
+        logger.warning("Engine browser error: %s", exc)
+        return SE.ERROR_BROWSER, str(exc)
+    if isinstance(exc, httpx.HTTPError):
+        logger.warning("Engine HTTP error: %s", exc)
+        return SE.ERROR_HTTP, str(exc)
+    if isinstance(exc, (json.JSONDecodeError, KeyError, ValueError, AttributeError)):
+        logger.warning("Engine parse error: %s", exc)
+        return SE.ERROR_PARSE, str(exc)
+    logger.warning("Engine error: %s", exc)
+    return SE.ERROR_OTHER, str(exc)
+
+
+async def _query_engines_concurrent(
+    query: str,
+    language: str,
+    max_results: int,
+    selected: dict,
+    timeout: float = ENGINE_WATCHDOG_TIMEOUT,
+    query_modifier_map: dict[str, Callable[[str], str]] | None = None,
+) -> tuple[list, dict[str, dict]]:
+    tasks = [
+        _engine_with_timing(engine, query, language, max_results, timeout, query_modifier_map=query_modifier_map)
+        for engine in selected.values()
+    ]
+    timed = await asyncio.gather(*tasks)
+    combined: list = []
+    engine_stats: dict[str, dict] = {}
+    for engine, (eng_results, rate_wait_ms, search_ms, status, drop_reason, diagnosis) in zip(selected.values(), timed):
+        combined.extend(eng_results)
+        engine_stats[engine.name] = {
+            "rate_wait_ms": rate_wait_ms,
+            "search_ms": search_ms,
+            "status": status,
+            "result_count": len(eng_results),
+            "drop_reason": drop_reason,
+            "diagnosis": diagnosis,
+        }
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    log_query({
+        "record_type": "engine_run",
+        "ts": ts,
+        "query": query,
+        "language": language,
+        "engines_requested": list(selected.keys()),
+        "engines": engine_stats,
+    })
+    return combined, engine_stats
+
+
+def _timed(fn: Callable, *args) -> tuple:
+    t0 = time.perf_counter()
+    result = fn(*args)
+    return result, _elapsed_ms(t0)
+
+
+def _elapsed_ms(t0: float) -> int:
+    return round((time.perf_counter() - t0) * 1000)
+
+
+def _cap_pools(pools: dict) -> dict:
+    logger.info("Pool cap applied: %d", POOL_CAP)
+    return {eng: pool[:POOL_CAP] for eng, pool in pools.items()}
+
+
 def _format_breakdown(query: str, pools: dict[str, list[SearchResult]], all_engine_names: list[str]) -> str:
     lines = [f'Engine breakdown for "{query}":']
     for engine in all_engine_names:
@@ -349,3 +325,27 @@ def _build_query_log_entry(
         "engines": engine_stats,
         "search_key": search_key,
     })
+
+
+def _build_search_result(
+    formatted_text: str,
+    with_timings: bool,
+    engine_fanout_ms: int,
+    engine_ms: dict,
+    engine_details: dict,
+    pool_build_ms: int,
+    cache_write_ms: int,
+    total_ms: int,
+) -> list[TextContent] | tuple[list[TextContent], dict]:
+    result = [TextContent(type="text", text=formatted_text)]
+    if not with_timings:
+        return result
+    timings = {
+        "engine_fanout_ms": engine_fanout_ms,
+        **engine_ms,
+        "engine_details": engine_details,
+        "pool_build_ms": pool_build_ms,
+        "cache_write_ms": cache_write_ms,
+        "total_ms": total_ms,
+    }
+    return result, timings

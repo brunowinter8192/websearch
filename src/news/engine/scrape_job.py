@@ -103,4 +103,3 @@ def update_blocked_urls(raw_dir: Path, manifest: list[dict], status_filenames: d
         existing = set(path.read_text(encoding="utf-8").splitlines()) if path.exists() else set()
         merged = (existing | new_urls) - {""}
         path.write_text("\n".join(sorted(merged)) + "\n", encoding="utf-8")
-

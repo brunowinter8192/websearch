@@ -28,10 +28,6 @@ def cache_key(
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-def cache_path(key: str) -> Path:
-    return CACHE_DIR / f"{key}.json"
-
-
 def cache_write(
     key: str,
     pools: dict[str, list[SearchResult]],
@@ -77,6 +73,10 @@ def cache_write(
         except OSError:
             logger.warning("Failed to remove temp file %s", tmp)
         raise
+
+
+def cache_path(key: str) -> Path:
+    return CACHE_DIR / f"{key}.json"
 
 
 def cache_read(key: str, ttl_seconds: int = DEFAULT_TTL) -> dict | None:
