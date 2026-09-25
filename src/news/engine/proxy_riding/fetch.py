@@ -9,13 +9,7 @@ from pathlib import Path
 from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, CacheMode, ProxyConfig
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
-from src.news.engine.proxy_riding.state import DELAY_BEFORE_HTML, RAW_SUBDIR
-
-REGWALL_SIGNALS: list[str] = [
-    "from_regwall",
-    "Create a FREE account to continue reading",
-    "You've reached your monthly limit",
-]
+from src.config import DELAY_BEFORE_HTML, RAW_SUBDIR, REGWALL_SIGNALS
 
 _PROXY_ERR = ("timeout", "proxy", "err_proxy", "tunnel", "socks",
               "err_empty", "connection refused", "connection failed", "net::err")

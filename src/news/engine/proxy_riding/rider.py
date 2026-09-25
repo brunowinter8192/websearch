@@ -11,11 +11,11 @@ from pathlib import Path
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
+from src.config import DELAY_BEFORE_HTML, FAIL_THRESHOLD, RAW_SUBDIR
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 from src.news.engine.proxy_riding.state import (
     RiderState, RideRecord, JobRecord,
-    PAGE_TIMEOUT_MS, DELAY_BEFORE_HTML, STALL_TIMEOUT_S, POOL_REFRESH_INTERVAL_S,
-    FAIL_THRESHOLD, RAW_SUBDIR,
+    PAGE_TIMEOUT_MS, STALL_TIMEOUT_S, POOL_REFRESH_INTERVAL_S,
 )
 from src.news.engine.proxy_riding.fetch import (
     _fetch_one_url, _classify_connect_fail, _write_raw, _url_hash,

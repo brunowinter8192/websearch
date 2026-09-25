@@ -19,7 +19,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 
 ## Modules
 
-### chromium_scrape.py (266 LOC)
+### chromium_scrape.py (267 LOC)
 
 **Purpose:** Scrape orchestrator: one crawl4ai call through the self-launched Chromium, returns fit markdown, logs facts, and runs three independent process-hygiene nets.
 **Reads:** the url argument.
@@ -27,7 +27,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** cli.py, camoufox_scrape.py, src/crawler/pipe_scraper.py, src/crawler/pipe_scraper_acquisition.py.
 **Calls out:** crawl4ai, mcp types.
 
-### chromium_process.py (175 LOC)
+### chromium_process.py (173 LOC)
 
 **Purpose:** Self-launched Chrome process lifecycle for the chromium lane: bundle resolution, launch, port wait, focus-steal watchdog, teardown and orphan reaping.
 **Reads:** nothing of its own; callers pass all inputs.

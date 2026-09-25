@@ -13,11 +13,9 @@ import psutil
 from patchright.async_api import async_playwright
 
 from src import death_pipe
+from src.config import CDP_PORT_WAIT_TIMEOUT_S, FOCUS_STEAL_POLL_INTERVAL_S
 
 logger = logging.getLogger(__name__)
-
-CDP_PORT_WAIT_TIMEOUT_S = 10.0
-FOCUS_STEAL_POLL_INTERVAL_S = 0.25
 
 TOTAL_SCRAPE_BUDGET_S = 242.8
 

@@ -11,7 +11,8 @@ def _url_hash(url: str) -> str:
 
 def test_1_surplus_slots_race_both_done() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     urls = ["https://cd.com/a", "https://cd.com/b"]
@@ -55,7 +56,8 @@ def test_1_surplus_slots_race_both_done() -> None:
 
 def test_2_write_exactly_once_per_url() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/x"
@@ -98,7 +100,8 @@ def test_2_write_exactly_once_per_url() -> None:
 
 def test_3a_stale_url_skipped() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/stale"
@@ -143,7 +146,8 @@ def test_3a_stale_url_skipped() -> None:
 
 def test_3b_raced_fail_not_requeued() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     async def fixed_proxy(state):
@@ -190,7 +194,8 @@ def test_3b_raced_fail_not_requeued() -> None:
 
 def test_4_normal_path_no_racing() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     urls = [f"https://cd.com/{i}" for i in range(4)]
@@ -235,7 +240,8 @@ def test_4_normal_path_no_racing() -> None:
 
 def test_5_fail_before_success_done_once() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/stubborn"

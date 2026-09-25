@@ -18,8 +18,9 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from mcp.types import TextContent
 from src.scraper.scrape_logger import log_scrape, write_sidecar
 from src import death_pipe
+from src.config import CDP_PORT_WAIT_TIMEOUT_S
 from src.scraper.chromium_process import (
-    CDP_PORT_WAIT_TIMEOUT_S, TOTAL_SCRAPE_BUDGET_S, _build_self_launch_flags,
+    TOTAL_SCRAPE_BUDGET_S, _build_self_launch_flags,
     _focus_steal_watchdog, _kill_by_profile, _pids_on_profile, _reap_orphaned_scrapes,
     _resolve_chromium_bundle_path, _self_launch_chrome, _wait_for_devtools_port,
 )

@@ -4,12 +4,12 @@ import re
 
 import httpx
 
+from src.config import PROXY_LIST_FETCH_TIMEOUT
 from src.news.engine.proxy_pool.monosans_loader import load_monosans_proxies, MONOSANS_URL
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 from src.news.engine.proxy_pool.proxy_key import proxy_key
 
 PROXIFLY_URL = "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.json"
-FETCH_TIMEOUT = 15.0
 
 THESPEEDX_SOURCES: list[tuple[str, str]] = [
     ("http",   "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"),
@@ -141,7 +141,7 @@ def load_backfill_pool() -> tuple[list[tuple[str, str]], list[dict]]:
 
 def _fetch_proxifly() -> list[tuple[str, str]]:
     def _do():
-        resp = httpx.get(PROXIFLY_URL, timeout=FETCH_TIMEOUT)
+        resp = httpx.get(PROXIFLY_URL, timeout=PROXY_LIST_FETCH_TIMEOUT)
         resp.raise_for_status()
         return [(e["protocol"], f"{e['ip']}:{e['port']}") for e in resp.json()]
     return fetch_with_retry(_do)
@@ -149,7 +149,7 @@ def _fetch_proxifly() -> list[tuple[str, str]]:
 
 def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
     def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp = httpx.get(url, timeout=PROXY_LIST_FETCH_TIMEOUT)
         resp.raise_for_status()
         return [(proto, line.strip()) for line in resp.text.splitlines() if line.strip()]
     return fetch_with_retry(_do)
@@ -157,7 +157,7 @@ def _fetch_bare_txt(proto: str, url: str) -> list[tuple[str, str]]:
 
 def _fetch_roosterkid(proto: str, url: str) -> list[tuple[str, str]]:
     def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp = httpx.get(url, timeout=PROXY_LIST_FETCH_TIMEOUT)
         resp.raise_for_status()
         return [(proto, m.group()) for line in resp.text.splitlines()
                 for m in (_IP_PORT_RE.search(line),) if m]

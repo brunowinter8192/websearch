@@ -14,7 +14,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 
 ## Modules
 
-### config.py (34 LOC)
+### config.py (25 LOC)
 
 **Purpose:** Platform constants: regwall signal strings, scrape configuration and timeline-API discovery parameters.
 **Reads:** none.
@@ -62,7 +62,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** `__init__.py`, which wraps it as the platform's cleanup method. The only call site, src/news/clean_pass.py, runs on the proxy-pool path only, so no coindesk run reaches it.
 **Calls out:** none (stdlib only).
 
-### __init__.py (41 LOC)
+### __init__.py (42 LOC)
 
 **Purpose:** The CoinDesk platform class wrapping config, discovery, cleanup and scrape-entry loading; registers itself on import.
 **Reads:** none of its own.

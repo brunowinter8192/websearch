@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from src.config import XML_MARKERS
 from src.news.engine.proxy_pool.fetch import fetch_url
 from src.news.engine.proxy_pool.pool_loaders import load_backfill_pool
 from src.news.platforms.theblock.config import SITEMAP_INDEX, DIRECT_TIMEOUT
@@ -17,7 +18,6 @@ _URL_BLOCK_RE = re.compile(rb"<url>(.*?)</url>", re.DOTALL)
 _LOC_RE       = re.compile(rb"<loc>(https?://[^<]+)</loc>")
 _MOD_RE       = re.compile(rb"<lastmod>([^<]+)</lastmod>")
 _NUM_RE       = re.compile(r"_(\d+)\.xml$")
-XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
 
 
 # ORCHESTRATOR

@@ -2,10 +2,10 @@
 
 import httpx
 
+from src.config import PROXY_LIST_FETCH_TIMEOUT
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 
-MONOSANS_URL  = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies.json"
-FETCH_TIMEOUT = 15.0
+MONOSANS_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies.json"
 
 
 # ORCHESTRATOR
@@ -19,7 +19,7 @@ def load_monosans_proxies() -> list[tuple[str, str]]:
 
 def _fetch_json(url: str) -> list[dict]:
     def _do():
-        resp = httpx.get(url, timeout=FETCH_TIMEOUT)
+        resp = httpx.get(url, timeout=PROXY_LIST_FETCH_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     return fetch_with_retry(_do)

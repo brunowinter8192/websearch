@@ -16,8 +16,8 @@ from src.news.engine.scrape_job import scrape_chunks_raw, _append_to_raw_manifes
 from src.news.engine.browser_reporter import write_scrape_report
 from src.news.engine.proxy_riding.scrape import scrape_entries_riding, RidingScrapeConfig
 from src.news.engine.proxy_riding.reporter import write_riding_report
+from src.config import LOG_DIR, PROJECT_ROOT
 from src.news.pipeline_support import (
-    PROJECT_ROOT, LOG_DIR,
     _setup_logging, _check_internet, _persist_master_list, _write_discover_snapshot, _write_marker,
 )
 from src.news.clean_pass import _run_clean_pass

@@ -7,10 +7,8 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.config import LOG_DIR
 from src.news.platform import Platform
-
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-LOG_DIR = PROJECT_ROOT / "src" / "logs"
 
 PRECONDITION_TIMEOUT = 10
 

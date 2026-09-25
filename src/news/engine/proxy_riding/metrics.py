@@ -3,9 +3,8 @@
 import statistics
 from datetime import datetime, timezone
 
-from src.news.engine.proxy_riding.state import RiderState, FAIL_THRESHOLD
-
-_BACKFILL_TOTAL = 61_000
+from src.config import BACKFILL_TOTAL, FAIL_THRESHOLD
+from src.news.engine.proxy_riding.state import RiderState
 
 
 # FUNCTIONS
@@ -20,7 +19,7 @@ def _compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     ride_ok_counts = [r.n_ok             for r in rides]
     ride_len_stats = _distribution_stats(ride_lengths)
     n_proxies_burned     = len(rides)
-    proxies_for_backfill = round(n_proxies_burned / max(fetch_counts["n_ok"], 1) * _BACKFILL_TOTAL)
+    proxies_for_backfill = round(n_proxies_burned / max(fetch_counts["n_ok"], 1) * BACKFILL_TOTAL)
     n_fail_rotations     = sum(1 for r in rides if r.n_failed >= FAIL_THRESHOLD)
 
     n_urls_with_regwall, retried_ok, retried_failed = _compute_retry_outcome(jobs)

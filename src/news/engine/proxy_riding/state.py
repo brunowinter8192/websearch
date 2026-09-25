@@ -9,12 +9,8 @@ from pathlib import Path
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 
 PAGE_TIMEOUT_MS         = 8_000
-DELAY_BEFORE_HTML       = 0.5
 STALL_TIMEOUT_S         = 3_600.0
 POOL_REFRESH_INTERVAL_S = 1_800.0
-FAIL_THRESHOLD          = 2
-
-RAW_SUBDIR = "raw"
 
 
 @dataclass

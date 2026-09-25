@@ -22,7 +22,7 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Called by:** __main__.py.
 **Calls out:** none.
 
-### pipeline_support.py (83 LOC)
+### pipeline_support.py (81 LOC)
 
 **Purpose:** Run bookkeeping shared by the orchestrators: logging setup, connectivity precondition and the master-list, snapshot and last-run marker writers.
 **Reads:** the platform's precondition URL; the existing master URL list.

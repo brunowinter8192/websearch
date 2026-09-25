@@ -6,7 +6,7 @@ import statistics
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-_TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
+from src.config import PROXY_TS_FMT
 
 
 # ORCHESTRATOR
@@ -66,7 +66,7 @@ def _read_events(jsonl_path: Path) -> list[dict]:
 
 
 def _parse_ts(ts_str: str) -> datetime:
-    return datetime.strptime(ts_str, _TS_FMT).replace(tzinfo=timezone.utc)
+    return datetime.strptime(ts_str, PROXY_TS_FMT).replace(tzinfo=timezone.utc)
 
 
 def _compute_stats(events: list[dict]) -> dict:

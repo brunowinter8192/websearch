@@ -27,7 +27,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, scrape.py, state.py.
 **Calls out:** none.
 
-### state.py (87 LOC)
+### state.py (83 LOC)
 
 **Purpose:** Shared riding dataclasses and calibrated constants; the one canonical import source for all riding modules and dev tests.
 **Reads:** none.
@@ -35,7 +35,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, fetch.py, abort.py, reporter.py, metrics.py, scrape.py; dev tests.
 **Calls out:** none.
 
-### fetch.py (101 LOC)
+### fetch.py (95 LOC)
 
 **Purpose:** Per-URL fetch and outcome classification: the crawl4ai call, regwall detection, connect-failure subtypes and raw HTML persistence.
 **Reads:** none (per-call).
@@ -67,7 +67,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** src/news/pipeline.py, abort.py.
 **Calls out:** none.
 
-### metrics.py (152 LOC)
+### metrics.py (151 LOC)
 
 **Purpose:** Derives job statistics from the rider state for the report and plots.
 **Reads:** the rider state and job start time.

@@ -18,6 +18,7 @@ from pydoll.connection import ConnectionHandler
 
 from src.search import browser_lock
 from src import death_pipe
+from src.config import CDP_PORT_WAIT_TIMEOUT_S, FOCUS_STEAL_POLL_INTERVAL_S
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,6 @@ SESSION_DIR_PREFIX = "websearch-browser-session-"
 LOCK_PATH = Path.home() / ".websearch" / "browser-session.lock"
 
 LOCK_HARD_BUDGET_S = 60.0 + 6.0 + 15.0
-
-FOCUS_STEAL_POLL_INTERVAL_S = 0.25
-CDP_PORT_WAIT_TIMEOUT_S = 10.0
 
 BACKGROUNDING_FLAGS = [
     "--disable-background-timer-throttling",

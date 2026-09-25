@@ -1,8 +1,9 @@
 # INFRASTRUCTURE
+from src.config import REGWALL_SIGNALS
 from src.news.platform import Platform, ScrapeConfig
 from src.news.registry import register
 from src.news.engine.proxy_riding.scrape import RidingScrapeConfig
-from src.news.platforms.coindesk.config import REGWALL_SIGNALS, SCRAPE_CONFIG, DISCOVER_DIR
+from src.news.platforms.coindesk.config import SCRAPE_CONFIG, DISCOVER_DIR
 from src.news.platforms.coindesk.discover import discover as _discover
 from src.news.platforms.coindesk.shards import load_discover_filtered as _load_filtered
 from src.news.platforms.coindesk.cleanup import cleanup as _cleanup

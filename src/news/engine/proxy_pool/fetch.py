@@ -3,7 +3,8 @@
 from curl_cffi import requests as cffi
 from curl_cffi.requests.exceptions import RequestException
 
-XML_MARKERS   = (b"<?xml", b"<sitemapindex", b"<urlset", b"<sitemap>")
+from src.config import XML_MARKERS
+
 HTML_MARKERS  = (b"<html", b"<!DOCTYPE", b"<!doctype")
 FETCH_TIMEOUT = 15
 

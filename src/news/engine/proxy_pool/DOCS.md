@@ -33,7 +33,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** scrape.py.
 **Calls out:** none.
 
-### fetch.py (37 LOC)
+### fetch.py (38 LOC)
 
 **Purpose:** Chrome-impersonating HTTP fetch through a proxy with a content-type gate; returns status, content and reason.
 **Reads:** the remote URL via curl_cffi.
@@ -73,7 +73,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py.
 **Calls out:** matplotlib.
 
-### box_lock.py (94 LOC)
+### box_lock.py (95 LOC)
 
 **Purpose:** System-wide single-job flock with a sidecar for busy messages and stale-lock recovery.
 **Reads:** the lock sidecar under the user lock directory.

@@ -67,7 +67,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** search_web.py, cli.py.
 **Calls out:** none.
 
-### browser.py (313 LOC)
+### browser.py (311 LOC)
 
 **Purpose:** Chrome lifecycle for the browser engines: one shared headed, backgrounded Chrome with a fresh profile per run and one tab per engine.
 **Reads:** nothing until first access.

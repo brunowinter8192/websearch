@@ -9,10 +9,11 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.config import PROXY_TS_FMT
+
 logger = logging.getLogger(__name__)
 
 LOCK_DIR = Path.home() / ".websearch-locks"
-_TS_FMT  = "%Y-%m-%dT%H:%M:%SZ"
 
 
 class LockBusyError(RuntimeError):
@@ -55,7 +56,7 @@ def acquire(job: str, target: str, lock_name: str = "proxy_pool"):
         "pid":        os.getpid(),
         "job":        job,
         "target":     target,
-        "started_at": datetime.now(timezone.utc).strftime(_TS_FMT),
+        "started_at": datetime.now(timezone.utc).strftime(PROXY_TS_FMT),
         "status":     "running",
     })
     try:
@@ -74,7 +75,7 @@ def _busy_message(sidecar: Path) -> str:
     started_at = data.get("started_at", "")
     elapsed    = ""
     if started_at:
-        t0      = datetime.strptime(started_at, _TS_FMT).replace(tzinfo=timezone.utc)
+        t0      = datetime.strptime(started_at, PROXY_TS_FMT).replace(tzinfo=timezone.utc)
         elapsed = f", running {int((datetime.now(timezone.utc) - t0).total_seconds())}s"
     return (
         f"proxy_pool already running: pid={pid}, job={job!r}, "

@@ -2,7 +2,7 @@
 
 ## Role
 
-Root of the source tree. log_janitor.py and death_pipe.py are the two modules directly at this level: shared, domain-agnostic utilities used by the packages below. All functional packages (search, scraper, crawler, news) live one level down, each with its own DOCS.md.
+Root of the source tree. config.py, log_janitor.py and death_pipe.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news) live one level down, each with its own DOCS.md.
 
 ## Public Interface
 
@@ -13,6 +13,16 @@ Root of the source tree. log_janitor.py and death_pipe.py are the two modules di
 log_janitor.py: a log writer calls it after appending; it prunes old records or files at most once per hour. death_pipe.py: a browser lane hands it PIDs; a detached helper waits on a pipe and cleans up when the caller dies.
 
 ## Modules
+
+### config.py (23 LOC)
+
+**Purpose:** Constants shared by two or more modules with identical meaning; single-module constants stay in their module.
+**Reads:** nothing.
+**Writes:** nothing.
+**Called by:** src/search/browser.py, src/scraper/chromium_process.py, src/scraper/chromium_scrape.py, src/news/pipeline.py, src/news/pipeline_support.py, src/news/engine and src/news/platforms modules.
+**Calls out:** none.
+
+---
 
 ### log_janitor.py (80 LOC)
 

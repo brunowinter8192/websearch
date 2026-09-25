@@ -6,7 +6,8 @@ from pathlib import Path
 
 def test_6_watchdog_wedge_after_all_resolved() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.rider import _watchdog
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
@@ -51,7 +52,8 @@ def test_6_watchdog_wedge_after_all_resolved() -> None:
 
 def test_7_watchdog_pool_refresh() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.rider import _watchdog
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 

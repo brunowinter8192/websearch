@@ -3,7 +3,7 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
-_BACKFILL_TOTAL = 61_000
+from src.config import BACKFILL_TOTAL
 
 
 # ORCHESTRATOR
@@ -37,7 +37,7 @@ def _compute_stats(job_records: list[dict], t_job_start: datetime) -> dict:
 
     wall_s = (datetime.now(timezone.utc) - t_job_start).total_seconds()
     urls_per_min = (n_scraped / wall_s * 60) if wall_s > 0 else None
-    backfill_h   = (_BACKFILL_TOTAL / urls_per_min / 60) if urls_per_min else None
+    backfill_h   = (BACKFILL_TOTAL / urls_per_min / 60) if urls_per_min else None
 
     ok_chars = sorted(
         r["char_count"] for r in job_records
