@@ -6,7 +6,7 @@ from pathlib import Path
 
 # FUNCTIONS
 
-def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
+def write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
     xs = stats["ok_completion_s"]
@@ -24,7 +24,7 @@ def _write_cumulative_plot(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-def _write_load_hist(job_dir: Path, stats: dict) -> None:
+def write_load_hist(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
     load_times     = stats["load_times"]
@@ -49,7 +49,7 @@ def _write_load_hist(job_dir: Path, stats: dict) -> None:
     plt.close(fig)
 
 
-def _write_cf_hist(job_dir: Path, stats: dict) -> None:
+def write_cf_hist(job_dir: Path, stats: dict) -> None:
     import matplotlib.pyplot as plt
 
     cf_times       = stats["cf_times"]

@@ -61,7 +61,7 @@ async def test_scrape_all_camoufox_engine_dispatches_to_try_scrape_camoufox(tmp_
 
     assert called == [("https://x.test/a", True)]
     assert results[0]["status_code"] == 200
-    assert (output_dir / pipe_scraper_acquisition._url_to_filename("https://x.test/a")).exists()
+    assert (output_dir / pipe_scraper_acquisition.url_to_filename("https://x.test/a")).exists()
 
 
 @pytest.mark.asyncio

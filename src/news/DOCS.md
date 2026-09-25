@@ -6,28 +6,45 @@ Multi-platform news ingestion pipeline, run as `python -m src.news --source <pla
 
 ## Public Interface
 
-`__init__.py` is empty. The package runs as a module through __main__.py; pipeline.py exposes the three async entries (full run, discover only, scrape only).
+`__init__.py` is empty. The package runs as a module through __main__.py; pipeline.py, discover_only.py and scrape_only.py each expose one async workflow (full run, discover only, scrape only).
 
 ## Flow
 
-Arguments in; the chosen platform module is imported (registering itself) and looked up by name. The pipeline then discovers, dedups, scrapes and persists raw files, dispatching the scrape step on the platform's engine attribute (browser, proxy pool or proxy riding), optionally followed by the clean pass. Scrape-only mode backfills from stored discover lists. `pipeline.py` composes `engine/`, `pipeline_support.py`, `clean_pass.py` and `platform.py`; `__main__.py` imports `platforms/` and `registry.py`.
+Arguments in; the chosen platform is looked up by name in registry.py. The pipeline then discovers, dedups, scrapes and persists raw files, dispatching the scrape step on the platform's engine attribute (browser, proxy pool or proxy riding), optionally followed by the clean pass. Scrape-only mode backfills from stored discover lists. The three workflow modules compose `engine/`, `pipeline_support.py`, `clean_pass.py` and `platform.py`; `registry.py` imports `platforms/`.
 
 ## Modules
 
-### pipeline.py (364 LOC)
+### pipeline.py (201 LOC)
 
-**Purpose:** Entry module: the three async orchestrators plus per-engine arm helpers, dispatching on the platform's scrape engine.
+**Purpose:** Full-run workflow: discover, dedup, scrape and persist, dispatching on the platform's scrape engine.
+
 **Reads:** the per-platform raw corpus and discover files under data/news.
 **Writes:** raw files, the raw manifest, discover block-lists and job reports; delegates bookkeeping and clean-pass writes to siblings.
 **Called by:** __main__.py.
 **Calls out:** none.
 
-### pipeline_support.py (83 LOC)
+### discover_only.py (23 LOC)
 
-**Purpose:** Run bookkeeping shared by the orchestrators: logging setup, connectivity precondition and the master-list, snapshot and last-run marker writers.
+**Purpose:** Discover-only workflow: discover, optional master-list persistence and last-run marker.
+**Reads:** the platform's discover output.
+**Writes:** master URL list and last-run marker via pipeline_support.py.
+**Called by:** __main__.py.
+**Calls out:** none.
+
+### scrape_only.py (178 LOC)
+
+**Purpose:** Scrape-only workflow: loads stored discover entries, dedups against raw and scrapes through the riding or browser engine.
+**Reads:** the platform's stored discover shards and the raw corpus.
+**Writes:** raw files, the raw manifest and job reports.
+**Called by:** __main__.py.
+**Calls out:** none.
+
+### pipeline_support.py (115 LOC)
+
+**Purpose:** Run bookkeeping shared by the three workflows: run start, logging setup, connectivity precondition and the master-list, snapshot, last-run marker and manifest-entry helpers.
 **Reads:** the platform's precondition URL; the existing master URL list.
 **Writes:** per-day log file, last-run marker, master URL list and discover snapshot.
-**Called by:** pipeline.py.
+**Called by:** pipeline.py, discover_only.py, scrape_only.py, engine/scrape_job.py.
 **Calls out:** none (stdlib only).
 
 ### clean_pass.py (48 LOC)
@@ -38,15 +55,15 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Called by:** pipeline.py.
 **Calls out:** none.
 
-### __main__.py (154 LOC)
+### __main__.py (162 LOC)
 
-**Purpose:** Argparse entry point: imports platform modules for registration, resolves the platform and dispatches to the matching pipeline entry.
+**Purpose:** Argparse entry point: resolves the platform and dispatches to the matching workflow.
 **Reads:** CLI arguments.
 **Writes:** stdout.
 **Called by:** the `python -m src.news` entry.
 **Calls out:** none.
 
-### platform.py (52 LOC)
+### platform.py (54 LOC)
 
 **Purpose:** The extension seam: the platform protocol with declared defaults for its optional attributes, and the scrape-configuration dataclasses.
 **Reads:** none.
@@ -54,16 +71,16 @@ Arguments in; the chosen platform module is imported (registering itself) and lo
 **Called by:** pipeline.py, registry.py, platforms/, engine/.
 **Calls out:** none (stdlib only).
 
-### registry.py (17 LOC)
+### registry.py (16 LOC)
 
-**Purpose:** In-memory name-to-platform registry filled at platform import time.
-**Reads:** in-memory registry.
-**Writes:** in-memory registry.
-**Called by:** __main__.py, platforms/.
+**Purpose:** Name-to-platform lookup over the fixed tuple of platform classes.
+**Reads:** the platform classes.
+**Writes:** none.
+**Called by:** __main__.py.
 **Calls out:** none.
 
 ## State
 
-The registry's in-memory map, filled as a side effect of platform imports. The durable state is the per-platform corpus under data/news (raw, discover, clean, scrape jobs); the raw manifest and discover block-lists drive dedup and make reruns resumable.
+No in-memory state. The durable state is the per-platform corpus under data/news (raw, discover, clean, scrape jobs); the raw manifest and discover block-lists drive dedup and make reruns resumable.
 
 Details, decisions and observed evidence: process-docs/news_pipeline, process-docs/pooling and process-docs/refactor_sweep.

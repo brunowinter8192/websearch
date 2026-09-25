@@ -17,7 +17,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 
 ## Modules
 
-### scrape.py (81 LOC)
+### scrape.py (93 LOC)
 
 **Purpose:** Engine entry: wires the loop with a caller-supplied logger and returns the pipeline manifest.
 **Reads:** the entry list and the pool provider.
@@ -25,7 +25,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py.
 **Calls out:** none.
 
-### loop.py (296 LOC)
+### loop.py (316 LOC)
 
 **Purpose:** Sustained concurrent rotation loop with pool refresh, strikes lifecycle, tail race, wait on exhaustion and stall termination.
 **Reads:** the pool provider callback and the target URL list.
@@ -33,7 +33,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** scrape.py.
 **Calls out:** none.
 
-### fetch.py (37 LOC)
+### fetch.py (46 LOC)
 
 **Purpose:** Chrome-impersonating HTTP fetch through a proxy with a content-type gate; returns status, content and reason.
 **Reads:** the remote URL via curl_cffi.
@@ -49,9 +49,9 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** buffer.py, loop.py, scrape.py.
 **Calls out:** none.
 
-### buffer.py (32 LOC)
+### buffer.py (30 LOC)
 
-**Purpose:** Pure helpers that build and refill the active (proxy, URL) buffer; holds the buffer and concurrency defaults.
+**Purpose:** Pure helpers that build and refill the active (proxy, URL) buffer.
 **Reads:** the proxy pool and cooldown eligibility.
 **Writes:** none; returns new lists.
 **Called by:** loop.py.
@@ -65,7 +65,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py, loop.py, scrape.py.
 **Calls out:** none.
 
-### janitor.py (264 LOC)
+### janitor.py (262 LOC)
 
 **Purpose:** Job lifecycle: wipes transient directories at start and derives the job report and cumulative plot from the JSONL at the end.
 **Reads:** the acquire-events JSONL.
@@ -73,7 +73,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py.
 **Calls out:** matplotlib.
 
-### box_lock.py (94 LOC)
+### box_lock.py (117 LOC)
 
 **Purpose:** System-wide single-job flock with a sidecar for busy messages and stale-lock recovery.
 **Reads:** the lock sidecar under the user lock directory.
@@ -81,7 +81,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/pipeline.py.
 **Calls out:** none (stdlib only).
 
-### proxy_key.py (14 LOC)
+### proxy_key.py (11 LOC)
 
 **Purpose:** Canonical proxy key with authentication stripped.
 **Reads:** none.
@@ -97,7 +97,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** monosans_loader.py, pool_loaders.py.
 **Calls out:** none (stdlib only).
 
-### pool_loaders.py (184 LOC)
+### pool_loaders.py (183 LOC)
 
 **Purpose:** Fetches all proxy-list sources with per-source failure isolation and returns the deduplicated pool plus per-source outcomes.
 **Reads:** public GitHub-hosted proxy lists over HTTP.
@@ -105,7 +105,7 @@ The pipeline takes the job lock, starts the janitor and opens the acquire logger
 **Called by:** src/news/platforms/theblock/config.py, src/news/platforms/theblock/discover.py, src/news/engine/proxy_riding/scrape.py.
 **Calls out:** httpx.
 
-### monosans_loader.py (38 LOC)
+### monosans_loader.py (40 LOC)
 
 **Purpose:** Loads the monosans JSON proxy list with retry.
 **Reads:** the monosans list over HTTP.

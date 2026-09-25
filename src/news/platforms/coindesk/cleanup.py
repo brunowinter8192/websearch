@@ -26,29 +26,38 @@ _RE_EMPTY_LINK   = re.compile(r'\[\]\(.*?\)')
 _RE_INLINE_LINK  = re.compile(r'\[([^\]]+)\]\([^)]+\)')
 
 
-# FUNCTIONS
+# ORCHESTRATOR
 
 def cleanup(raw_markdown: str, entry: dict) -> str:
     body_lines = raw_markdown.splitlines()
 
     start_idx = find_start_anchor(body_lines)
     if start_idx is None:
-        logger.warning("coindesk cleanup: no H1 start anchor, body-less: %s", entry.get("url"))
-        return ""
+        return _reject_without_start(entry)
 
-    end_idx, end_anchor = find_end_anchor(body_lines, start_idx)
-    if end_anchor == "NONE":
-        logger.warning("coindesk cleanup: no end anchor, kept tail to end of page: %s", entry.get("url"))
-    extracted = body_lines[start_idx:end_idx]
-    cleaned_lines, _, _, _ = clean_body(extracted)
-    return "\n".join(cleaned_lines)
+    end_idx = _resolve_end_index(body_lines, start_idx, entry)
+    return _clean_extracted(body_lines, start_idx, end_idx)
 
+
+# FUNCTIONS
 
 def find_start_anchor(body_lines: list[str]) -> int | None:
     for i, line in enumerate(body_lines):
         if line.startswith("# "):
             return i
     return None
+
+
+def _reject_without_start(entry: dict) -> str:
+    logger.warning("coindesk cleanup: no H1 start anchor, body-less: %s", entry.get("url"))
+    return ""
+
+
+def _resolve_end_index(body_lines: list[str], start_idx: int, entry: dict) -> int:
+    end_idx, end_anchor = find_end_anchor(body_lines, start_idx)
+    if end_anchor == "NONE":
+        logger.warning("coindesk cleanup: no end anchor, kept tail to end of page: %s", entry.get("url"))
+    return end_idx
 
 
 def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
@@ -58,6 +67,12 @@ def find_end_anchor(body_lines: list[str], start_idx: int) -> tuple[int, str]:
             if pattern.match(line):
                 return i, name
     return len(body_lines), "NONE"
+
+
+def _clean_extracted(body_lines: list[str], start_idx: int, end_idx: int) -> str:
+    extracted = body_lines[start_idx:end_idx]
+    cleaned_lines, _, _, _ = clean_body(extracted)
+    return "\n".join(cleaned_lines)
 
 
 def clean_body(lines: list[str]) -> tuple[list[str], int, int, int]:

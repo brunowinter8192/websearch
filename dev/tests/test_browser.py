@@ -71,7 +71,7 @@ def test_reap_session_profile_kills_parsed_pids_and_cleans_leftover_directories(
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("111\n222\n"))
     killed = []
-    monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
+    monkeypatch.setattr(browser.death_pipe, "terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
     leftover = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
     browser._reap_session_profile()
     assert killed == [[111, 222]]
@@ -82,7 +82,7 @@ def test_reap_session_profile_no_survivors_still_cleans_leftover_directories(mon
     _reset_state(monkeypatch, browser)
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess(""))
     killed = []
-    monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
+    monkeypatch.setattr(browser.death_pipe, "terminate_then_kill", lambda pids, timeout_s=5.0: killed.append(pids))
     leftover = tempfile.mkdtemp(prefix=browser.SESSION_DIR_PREFIX)
     browser._reap_session_profile()
     assert killed == []
@@ -94,66 +94,6 @@ def test_record_own_pids_sets_module_state(monkeypatch):
     monkeypatch.setattr(browser.subprocess, "run", lambda *a, **kw: FakeCompletedProcess("333\n444\n"))
     browser._record_own_pids("/fake/session/dir")
     assert browser._owned_pids == [333, 444]
-
-
-def test_terminate_then_kill_terminates_and_waits(monkeypatch):
-    _reset_state(monkeypatch, browser)
-    calls = {"terminated": [], "killed": [], "waited": None}
-
-    class FakeProc:
-        def __init__(self, pid):
-            self.pid = pid
-
-        def terminate(self):
-            calls["terminated"].append(self.pid)
-
-        def kill(self):
-            calls["killed"].append(self.pid)
-
-    monkeypatch.setattr(browser.psutil, "Process", FakeProc)
-
-    def fake_wait_procs(procs, timeout):
-        calls["waited"] = (list(procs), timeout)
-        return procs, []
-
-    monkeypatch.setattr(browser.psutil, "wait_procs", fake_wait_procs)
-    browser._terminate_then_kill([1, 2], timeout_s=7.0)
-    assert calls["terminated"] == [1, 2]
-    assert calls["waited"][1] == 7.0
-    assert calls["killed"] == []
-
-
-def test_terminate_then_kill_force_kills_survivors(monkeypatch):
-    _reset_state(monkeypatch, browser)
-    calls = {"killed": []}
-
-    class FakeProc:
-        def __init__(self, pid):
-            self.pid = pid
-
-        def terminate(self):
-            pass
-
-        def kill(self):
-            calls["killed"].append(self.pid)
-
-    monkeypatch.setattr(browser.psutil, "Process", FakeProc)
-    monkeypatch.setattr(browser.psutil, "wait_procs", lambda procs, timeout: ([], procs))
-    browser._terminate_then_kill([9], timeout_s=1.0)
-    assert calls["killed"] == [9]
-
-
-def test_terminate_then_kill_skips_already_dead_pid(monkeypatch):
-    _reset_state(monkeypatch, browser)
-
-    def raise_no_such_process(pid):
-        raise browser.psutil.NoSuchProcess(pid)
-
-    monkeypatch.setattr(browser.psutil, "Process", raise_no_such_process)
-    waited = []
-    monkeypatch.setattr(browser.psutil, "wait_procs", lambda procs, timeout: waited.append(procs) or ([], []))
-    browser._terminate_then_kill([404], timeout_s=1.0)
-    assert waited == [[]]
 
 
 def test_get_frontmost_pid_parses_stdout(monkeypatch):
@@ -291,7 +231,7 @@ async def test_kill_own_chrome_full_teardown_sequence(monkeypatch):
     close_called = []
     monkeypatch.setattr(browser, "close_browser", _make_async_recorder(close_called))
     kill_called = []
-    monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: kill_called.append((pids, timeout_s)))
+    monkeypatch.setattr(browser.death_pipe, "terminate_then_kill", lambda pids, timeout_s=5.0: kill_called.append((pids, timeout_s)))
 
     released = []
 
@@ -325,7 +265,7 @@ async def test_kill_own_chrome_runs_safety_net_and_release_when_close_browser_ra
 
     monkeypatch.setattr(browser, "close_browser", raising_close_browser)
     kill_called = []
-    monkeypatch.setattr(browser, "_terminate_then_kill", lambda pids, timeout_s=5.0: kill_called.append((pids, timeout_s)))
+    monkeypatch.setattr(browser.death_pipe, "terminate_then_kill", lambda pids, timeout_s=5.0: kill_called.append((pids, timeout_s)))
 
     released = []
 

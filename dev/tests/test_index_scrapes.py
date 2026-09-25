@@ -5,7 +5,7 @@ import src.scraper.index_scrapes as index_scrapes
 
 def _write_sidecar(sidecar_dir, ts, url, content):
     sidecar_dir.mkdir(parents=True, exist_ok=True)
-    slug = index_scrapes._url_slug(url)
+    slug = index_scrapes.url_slug(url)
     filename = f"{ts.replace(':', '-')}_{slug}.md"
     header = (
         f"<!-- url: {url} -->\n"
@@ -46,7 +46,7 @@ def test_write_collection_file_matches_convention(tmp_path):
     collection_dir = tmp_path / "some-collection"
     collection_dir.mkdir()
     url = "https://api.semanticscholar.org/graph/v1/swagger.json"
-    filename = index_scrapes._url_to_filename(url)
+    filename = index_scrapes.url_to_filename(url)
 
     byte_count = index_scrapes._write_collection_file(collection_dir, filename, url, "body text")
 
@@ -101,7 +101,7 @@ def test_index_one_success(tmp_path, monkeypatch):
     outcome = index_scrapes._index_one(url, sidecar_dir, "col", collection_dir)
 
     assert outcome.status == "indexed"
-    assert outcome.detail == index_scrapes._url_to_filename(url)
+    assert outcome.detail == index_scrapes.url_to_filename(url)
     assert outcome.byte_count == len((collection_dir / outcome.detail).read_bytes())
     assert calls == [["rag-cli", "index", "--collection", "col", "--document", outcome.detail]]
 

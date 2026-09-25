@@ -1,7 +1,7 @@
 import pytest
 
 from src.search.cache import format_engine_pool
-from src.search.engines.openalex import OpenAlexEngine, _extract_pdf_url, _parse_results
+from src.search.engines.openalex import _extract_pdf_url, _parse_results
 from src.search.merge import build_engine_pools
 from src.search.result import SearchResult
 import src.search.engines.openalex as openalex_mod
@@ -94,8 +94,7 @@ def test_parse_results_pdf_url_none_when_absent():
 @pytest.mark.asyncio
 async def test_429_carries_http_status_but_reason_stays_none(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(429))
-    engine = OpenAlexEngine()
-    results, reason, diagnosis = await engine.search_with_reason("noise sleep", max_results=10)
+    results, reason, diagnosis = await openalex_mod.search_with_reason("noise sleep", max_results=10)
     assert results == []
     assert reason is None
     assert diagnosis == {"http_status": 429}
@@ -104,8 +103,7 @@ async def test_429_carries_http_status_but_reason_stays_none(monkeypatch):
 @pytest.mark.asyncio
 async def test_403_stays_plain_empty_no_reason_but_carries_http_status(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(403))
-    engine = OpenAlexEngine()
-    results, reason, diagnosis = await engine.search_with_reason("noise sleep", max_results=10)
+    results, reason, diagnosis = await openalex_mod.search_with_reason("noise sleep", max_results=10)
     assert results == []
     assert reason is None
     assert diagnosis == {"http_status": 403}
@@ -114,8 +112,7 @@ async def test_403_stays_plain_empty_no_reason_but_carries_http_status(monkeypat
 @pytest.mark.asyncio
 async def test_success_with_results_has_no_diagnosis(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": [_work()]}))
-    engine = OpenAlexEngine()
-    results, reason, diagnosis = await engine.search_with_reason("query", max_results=10)
+    results, reason, diagnosis = await openalex_mod.search_with_reason("query", max_results=10)
     assert len(results) == 1
     assert reason is None
     assert diagnosis is None
@@ -124,8 +121,7 @@ async def test_success_with_results_has_no_diagnosis(monkeypatch):
 @pytest.mark.asyncio
 async def test_success_with_zero_results_carries_http_status(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
-    engine = OpenAlexEngine()
-    results, reason, diagnosis = await engine.search_with_reason("query", max_results=10)
+    results, reason, diagnosis = await openalex_mod.search_with_reason("query", max_results=10)
     assert results == []
     assert reason is None
     assert diagnosis == {"http_status": 200}
@@ -135,8 +131,7 @@ async def test_success_with_zero_results_carries_http_status(monkeypatch):
 async def test_api_key_sent_when_env_var_set(monkeypatch):
     monkeypatch.setenv("OPENALEX_API_KEY", "secretkey123")
     capture = _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
-    engine = OpenAlexEngine()
-    await engine.search_with_reason("query", max_results=10)
+    await openalex_mod.search_with_reason("query", max_results=10)
     assert capture["params"]["api_key"] == "secretkey123"
     assert "mailto" not in capture["params"]
 
@@ -145,8 +140,7 @@ async def test_api_key_sent_when_env_var_set(monkeypatch):
 async def test_api_key_absent_when_env_var_unset(monkeypatch):
     monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
     capture = _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
-    engine = OpenAlexEngine()
-    await engine.search_with_reason("query", max_results=10)
+    await openalex_mod.search_with_reason("query", max_results=10)
     assert "api_key" not in capture["params"]
     assert "mailto" not in capture["params"]
 
@@ -154,24 +148,21 @@ async def test_api_key_absent_when_env_var_unset(monkeypatch):
 @pytest.mark.asyncio
 async def test_per_page_clamped_to_100(monkeypatch):
     capture = _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
-    engine = OpenAlexEngine()
-    await engine.search_with_reason("query", max_results=200)
+    await openalex_mod.search_with_reason("query", max_results=200)
     assert capture["params"]["per_page"] == 100
 
 
 @pytest.mark.asyncio
 async def test_per_page_untouched_when_under_cap(monkeypatch):
     capture = _install_fake_client(monkeypatch, _FakeResponse(200, {"results": []}))
-    engine = OpenAlexEngine()
-    await engine.search_with_reason("query", max_results=10)
+    await openalex_mod.search_with_reason("query", max_results=10)
     assert capture["params"]["per_page"] == 10
 
 
 @pytest.mark.asyncio
-async def test_search_base_method_returns_plain_list(monkeypatch):
+async def test_search_with_reason_returns_results_with_pdf_url(monkeypatch):
     _install_fake_client(monkeypatch, _FakeResponse(200, {"results": [_work(pdf_url="https://x.com/p.pdf")]}))
-    engine = OpenAlexEngine()
-    results = await engine.search("query", max_results=10)
+    results, _, _ = await openalex_mod.search_with_reason("query", max_results=10)
     assert len(results) == 1
     assert results[0].pdf_url == "https://x.com/p.pdf"
 
@@ -191,11 +182,10 @@ class _RaisingAsyncClient:
 
 
 @pytest.mark.asyncio
-async def test_search_base_method_propagates_exception(monkeypatch):
+async def test_search_with_reason_propagates_exception(monkeypatch):
     monkeypatch.setattr(openalex_mod.httpx, "AsyncClient", lambda *a, **kw: _RaisingAsyncClient())
-    engine = OpenAlexEngine()
     with pytest.raises(RuntimeError):
-        await engine.search("query", max_results=10)
+        await openalex_mod.search_with_reason("query", max_results=10)
 
 
 def test_build_engine_pools_preserves_pdf_url_on_winner():

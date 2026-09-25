@@ -9,7 +9,7 @@ from src.news.platform import Platform
 
 # FUNCTIONS
 
-def _run_clean_pass(
+def run_clean_pass(
     platform:       Platform,
     ok_entries:     list[dict],
     raw_dir:        Path,

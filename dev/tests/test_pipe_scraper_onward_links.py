@@ -6,29 +6,29 @@ import pytest
 from src.crawler import pipe_scraper
 from src.crawler import pipe_scraper_acquisition
 from src.crawler import pipe_scraper_report
-from src.crawler.pipe_scraper_acquisition import _onward_link_identity, _extract_onward_links
-from src.crawler.pipe_scraper_report import _collect_onward_links, _write_onward_links_file, _print_summary
+from src.crawler.pipe_scraper_acquisition import onward_link_identity, _extract_onward_links
+from src.crawler.pipe_scraper_report import collect_onward_links, write_onward_links_file, print_summary
 from dev.tests._pipe_scraper_fakes import _FakeResult, _camoufox_meta
 
 
 def test_onward_link_identity_strips_query_and_fragment():
-    assert (_onward_link_identity("https://x.test/docs/guide?tab=2#section")
+    assert (onward_link_identity("https://x.test/docs/guide?tab=2#section")
             == "https://x.test/docs/guide")
 
 
 def test_onward_link_identity_lowercases_scheme_and_host():
-    assert _onward_link_identity("HTTPS://X.TEST/docs") == "https://x.test/docs"
+    assert onward_link_identity("HTTPS://X.TEST/docs") == "https://x.test/docs"
 
 
 def test_onward_link_identity_collapses_query_variants_to_one_key():
-    a = _onward_link_identity("https://platform.claude.com/login?returnTo=%2Fdocs%2Fen%2Fa")
-    b = _onward_link_identity("https://platform.claude.com/login?returnTo=%2Fdocs%2Fen%2Fb")
+    a = onward_link_identity("https://platform.claude.com/login?returnTo=%2Fdocs%2Fen%2Fa")
+    b = onward_link_identity("https://platform.claude.com/login?returnTo=%2Fdocs%2Fen%2Fb")
     assert a == b == "https://platform.claude.com/login"
 
 
 def test_onward_link_identity_none_for_hostless_url():
-    assert _onward_link_identity("mailto:someone@example.com") is None
-    assert _onward_link_identity("javascript:void(0)") is None
+    assert onward_link_identity("mailto:someone@example.com") is None
+    assert onward_link_identity("javascript:void(0)") is None
 
 
 class _FakeLinksResult:
@@ -80,13 +80,13 @@ def test_extract_onward_links_empty_when_result_has_no_links_attribute():
 def test_collect_onward_links_excludes_urls_already_in_the_input_list():
     urls = ["https://x.test/a"]
     results = [{"links": ["https://x.test/a", "https://x.test/new"]}]
-    assert _collect_onward_links(urls, results, "chromium") == ["https://x.test/new"]
+    assert collect_onward_links(urls, results, "chromium") == ["https://x.test/new"]
 
 
 def test_collect_onward_links_excludes_input_url_regardless_of_its_own_query_string():
     urls = ["https://x.test/docs/guide?utm_source=foo"]
     results = [{"links": ["https://x.test/docs/guide"]}]
-    assert _collect_onward_links(urls, results, "chromium") == []
+    assert collect_onward_links(urls, results, "chromium") == []
 
 
 def test_collect_onward_links_dedups_across_pages_order_preserving():
@@ -95,7 +95,7 @@ def test_collect_onward_links_dedups_across_pages_order_preserving():
         {"links": ["https://x.test/new1", "https://x.test/shared"]},
         {"links": ["https://x.test/shared", "https://x.test/new2"]},
     ]
-    assert _collect_onward_links(urls, results, "chromium") == [
+    assert collect_onward_links(urls, results, "chromium") == [
         "https://x.test/new1", "https://x.test/shared", "https://x.test/new2",
     ]
 
@@ -103,13 +103,13 @@ def test_collect_onward_links_dedups_across_pages_order_preserving():
 def test_collect_onward_links_ignores_results_with_no_links_key():
     urls = ["https://x.test/a"]
     results = [{"url": "https://x.test/b"}, {"links": ["https://x.test/new"]}]
-    assert _collect_onward_links(urls, results, "chromium") == ["https://x.test/new"]
+    assert collect_onward_links(urls, results, "chromium") == ["https://x.test/new"]
 
 
 def test_collect_onward_links_returns_none_for_camoufox_engine():
     urls = ["https://x.test/a"]
     results = [{"links": ["https://x.test/new"]}]
-    assert _collect_onward_links(urls, results, "camoufox") is None
+    assert collect_onward_links(urls, results, "camoufox") is None
 
 
 @pytest.fixture
@@ -119,18 +119,18 @@ def onward_links_scratch_path(tmp_path, monkeypatch):
 
 
 def test_write_onward_links_file_writes_one_url_per_line(onward_links_scratch_path):
-    _write_onward_links_file("pipe_scraper_test_onward_domain",
+    write_onward_links_file("pipe_scraper_test_onward_domain",
                               ["https://x.test/a", "https://x.test/b"])
     assert onward_links_scratch_path.read_text(encoding="utf-8") == "https://x.test/a\nhttps://x.test/b\n"
 
 
 def test_write_onward_links_file_writes_empty_file_for_empty_list(onward_links_scratch_path):
-    _write_onward_links_file("pipe_scraper_test_onward_domain", [])
+    write_onward_links_file("pipe_scraper_test_onward_domain", [])
     assert onward_links_scratch_path.read_text(encoding="utf-8") == ""
 
 
 def test_write_onward_links_file_writes_nothing_when_none(onward_links_scratch_path):
-    _write_onward_links_file("pipe_scraper_test_onward_domain", None)
+    write_onward_links_file("pipe_scraper_test_onward_domain", None)
     assert not onward_links_scratch_path.exists()
 
 
@@ -139,13 +139,13 @@ def _summary_result(status_code=200, byte_count=100):
 
 
 def test_print_summary_reports_onward_link_count(capsys):
-    _print_summary([_summary_result()], 1.0, ["https://x.test/a", "https://x.test/b"])
+    print_summary([_summary_result()], 1.0, ["https://x.test/a", "https://x.test/b"])
     out = capsys.readouterr().out
     assert "2 onward links collected" in out
 
 
 def test_print_summary_reports_camoufox_cannot_collect_not_a_bare_zero(capsys):
-    _print_summary([_summary_result()], 1.0, None)
+    print_summary([_summary_result()], 1.0, None)
     out = capsys.readouterr().out
     assert "onward links not collected (camoufox engine)" in out
     assert "0 onward links" not in out

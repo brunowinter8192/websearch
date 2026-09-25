@@ -34,25 +34,23 @@ _SPONSOR_BLOCK_RE   = re.compile(
 )
 
 
-# FUNCTIONS
+# ORCHESTRATOR
 
 def cleanup(raw_html: str, entry: dict) -> str:
     data = _find_news_article(raw_html, entry.get('url', '?'))
     if data is None:
-        print(f"[theblock] cleanup: no JSON-LD NewsArticle found — {entry.get('url','?')}", file=sys.stderr)
-        return ""
+        return _empty_cleanup("no JSON-LD NewsArticle found", entry)
 
     article_body = data.get("articleBody", "")
     if not article_body:
-        print(f"[theblock] cleanup: empty articleBody — {entry.get('url','?')}", file=sys.stderr)
-        return ""
+        return _empty_cleanup("empty articleBody", entry)
 
-    pub_date = data.get("datePublished", "")
-    if pub_date:
-        entry["publication_date"] = pub_date
+    _record_publication_date(data, entry)
 
     return _post_clean(_html_to_markdown(article_body))
 
+
+# FUNCTIONS
 
 def _find_news_article(html: str, url: str) -> dict | None:
     for raw in _LD_RE.findall(html):
@@ -86,6 +84,17 @@ def _is_news_article(data: dict) -> bool:
     if isinstance(t, list):
         return "NewsArticle" in t
     return t == "NewsArticle"
+
+
+def _empty_cleanup(reason: str, entry: dict) -> str:
+    print(f"[theblock] cleanup: {reason} — {entry.get('url','?')}", file=sys.stderr)
+    return ""
+
+
+def _record_publication_date(data: dict, entry: dict) -> None:
+    pub_date = data.get("datePublished", "")
+    if pub_date:
+        entry["publication_date"] = pub_date
 
 
 def _post_clean(md: str) -> str:

@@ -1,6 +1,3 @@
-# INFRASTRUCTURE
-
-
 # FUNCTIONS
 
 def collect_selector_hits(items: list[dict]) -> dict[str, dict[str, int]]:

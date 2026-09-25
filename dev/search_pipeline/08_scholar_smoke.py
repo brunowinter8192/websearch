@@ -11,7 +11,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
-from src.search.engines.scholar import ScholarEngine
+from src.search.engines import scholar as scholar_engine
 from src.search.browser import close_browser
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
@@ -26,7 +26,7 @@ async def run_smoke_test() -> None:
     queries = load_queries(QUERIES_FILE)
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    engine = ScholarEngine()
+    engine = scholar_engine
     records = []
 
     try:
@@ -59,10 +59,10 @@ def load_queries(path: Path) -> list[str]:
     return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-async def run_query(engine: ScholarEngine, query: str) -> dict:
+async def run_query(engine, query: str) -> dict:
     record: dict = {"query": query, "count": 0, "sample_urls": [], "status": "EMPTY", "elapsed_ms": 0}
     try:
-        results = await engine.search(query)
+        results = (await engine.search_with_reason(query))[0]
         record["count"] = len(results)
         record["sample_urls"] = [r.url for r in results[:3]]
         record["status"] = _derive_status(len(results))

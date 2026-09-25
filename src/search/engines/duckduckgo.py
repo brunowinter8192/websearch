@@ -7,12 +7,13 @@ import time
 from urllib.parse import quote_plus, urlparse, parse_qs
 
 from src.search.browser import new_tab, kill_tab
+from src.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "duckduckgo"
 
 SEARCH_URL = "https://html.duckduckgo.com/html/?q={}&kl=wt-wt"
 CAPTCHA_SELECTOR = "form#challenge-form"
@@ -50,56 +51,70 @@ for (var _i = 0; _i < _cs.length; _i++) {
 return JSON.stringify(_out);
 """
 
-_limiters["duckduckgo"] = RateLimiter(max_requests=4, window_seconds=60)
-
 
 # ORCHESTRATOR
 
-class DuckDuckGoEngine(BaseEngine):
-    name = "duckduckgo"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        logger.info("DuckDuckGo search: %s", query)
-        tab = await new_tab()
-        search_url = _build_url(query)
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await tab.go_to(search_url, timeout=3.0)
-            diag = await _diagnose(tab)
-            if diag["challenge_form"]:
-                logger.warning("DuckDuckGo CAPTCHA detected for: %s", query)
-                diag["containers_found"] = None
-                return [], None, attach_document_status(diag, status_chain)
-            if not await _wait_for_results(tab, status_chain, t0, partial):
-                diag = await _diagnose(tab)
-                diag["containers_found"] = False
-                logger.debug("DuckDuckGo empty for: %s", query)
-                return [], None, attach_document_status(diag, status_chain)
-            results = await _parse_results(tab, max_results)
-            if results:
-                return results, None, attach_document_status({}, status_chain)
-            diag = await _diagnose(tab)
-            diag["containers_found"] = True
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    logger.info("DuckDuckGo search: %s", query)
+    tab = await new_tab()
+    search_url = _build_url(query)
+    return await _search_and_close(tab, query, max_results, partial, t0, search_url)
 
 
 # FUNCTIONS
-
-def _extract_value(result):
-    return result["result"]["result"]["value"]
-
 
 def _build_url(query: str) -> str:
     return SEARCH_URL.format(quote_plus(query))
 
 
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0, search_url)
+    finally:
+        await kill_tab(tab)
+
+
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await tab.go_to(search_url, timeout=3.0)
+    diag = await _diagnose(tab)
+    if diag["challenge_form"]:
+        logger.warning("DuckDuckGo CAPTCHA detected for: %s", query)
+        diag["containers_found"] = None
+        return [], None, attach_document_status(diag, status_chain)
+    if not await _wait_for_results(tab, status_chain, t0, partial):
+        diag = await _diagnose(tab)
+        diag["containers_found"] = False
+        logger.debug("DuckDuckGo empty for: %s", query)
+        return [], None, attach_document_status(diag, status_chain)
+    results = await _parse_results(tab, max_results)
+    if results:
+        return results, None, attach_document_status({}, status_chain)
+    diag = await _diagnose(tab)
+    diag["containers_found"] = True
+    return results, None, attach_document_status(diag, status_chain)
+
+
+async def _diagnose(tab) -> dict:
+    raw = await tab.execute_script(_JS_DIAGNOSE)
+    val = extract_value(raw)
+    parsed = {"challenge_form_count": 0, "title": "", "url": "", "ready_state": ""}
+    if val:
+        parsed.update(json.loads(val))
+    return {
+        "marker": None,
+        "challenge_form": bool(parsed.get("challenge_form_count", 0)),
+        "title": parsed["title"],
+        "url": parsed["url"],
+        "ready_state": parsed["ready_state"],
+    }
+
+
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> bool:
     for _ in range(MAX_WAIT_CYCLES):
         raw = await tab.execute_script(_JS_WAIT)
-        count = _extract_value(raw)
+        count = extract_value(raw)
         update_partial(partial, status_chain, t0, {"containers_found": False})
         if count and int(count) > 0:
             return True
@@ -107,20 +122,9 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
     return False
 
 
-def _clean_url(href: str) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    qs = parse_qs(parsed.query)
-    uddg = qs.get("uddg", [None])[0]
-    if uddg:
-        return uddg
-    return href
-
-
 async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
+    value = extract_value(raw)
     if not value:
         return []
     items = json.loads(value)
@@ -140,24 +144,20 @@ async def _parse_results(tab, max_results: int) -> list[SearchResult]:
     return results
 
 
+def _clean_url(href: str) -> str:
+    if not href:
+        return ""
+    parsed = urlparse(href)
+    qs = parse_qs(parsed.query)
+    uddg = qs.get("uddg", [None])[0]
+    if uddg:
+        return uddg
+    return href
+
+
 def _extract_date(date_raw: str) -> str | None:
     text = (date_raw or "").replace("\xa0", " ").strip()
     date_part = text[:10]
     if re.match(r'^\d{4}-\d{2}-\d{2}$', date_part):
         return date_part
     return None
-
-
-async def _diagnose(tab) -> dict:
-    raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
-    parsed = {"challenge_form_count": 0, "title": "", "url": "", "ready_state": ""}
-    if val:
-        parsed.update(json.loads(val))
-    return {
-        "marker": None,
-        "challenge_form": bool(parsed.get("challenge_form_count", 0)),
-        "title": parsed["title"],
-        "url": parsed["url"],
-        "ready_state": parsed["ready_state"],
-    }

@@ -4,9 +4,10 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.crawler.pipe_scraper_constants import PAGE_TIMEOUT_MS, DELAY_BEFORE_RETURN_HTML
 
+
 # FUNCTIONS
 
-def _build_configs(headed: bool = False) -> tuple[BrowserConfig, CrawlerRunConfig]:
+def build_configs(headed: bool = False) -> tuple[BrowserConfig, CrawlerRunConfig]:
     browser_cfg = BrowserConfig(
         headless=not headed,
         verbose=False,
@@ -26,7 +27,7 @@ def _build_configs(headed: bool = False) -> tuple[BrowserConfig, CrawlerRunConfi
     )
     return browser_cfg, run_cfg
 
-def _extract_pipe_config_stamp(
+def extract_pipe_config_stamp(
     browser_cfg: BrowserConfig,
     run_cfg: CrawlerRunConfig,
     download_delay: float,

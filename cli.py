@@ -1,45 +1,27 @@
 #!/usr/bin/env python3
 
 # INFRASTRUCTURE
-import os
-import sys
-from pathlib import Path
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-import logging
-from logging.handlers import TimedRotatingFileHandler
-from src.log_janitor import get_retention_days
-
-_log_path = Path(__file__).parent / "src" / "logs" / "cli.log"
-_log_path.parent.mkdir(parents=True, exist_ok=True)
-_handler = TimedRotatingFileHandler(
-    _log_path, when="midnight", interval=1,
-    backupCount=get_retention_days(), encoding="utf-8",
-)
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
-    handlers=[_handler],
-)
-logger = logging.getLogger(__name__)
-
 import argparse
 import asyncio
 import atexit
+import logging
+import sys
 from datetime import datetime, timezone
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+from urllib.parse import urlparse
 
-from src.search.search_web import search_web_workflow
+from src.config import LOG_DIR
+from src.crawler.discovery import discover_urls_workflow
+from src.log_janitor import get_retention_days
+from src.scraper.chromium_scrape import scrape_url_chromium_workflow
+from src.scraper.index_scrapes import index_scrapes_workflow
 from src.search.browser import kill_own_chrome_atexit
 from src.search.cache import cache_key, cache_read, format_engine_pool
 from src.search.query_logger import log_query
-from urllib.parse import urlparse
+from src.search.search_web import search_web_workflow
 
-from src.scraper.chromium_scrape import scrape_url_chromium_workflow
-from src.scraper.index_scrapes import index_scrapes_workflow
-from src.crawler.discovery import discover_urls_workflow
-
-atexit.register(kill_own_chrome_atexit)
+logger = logging.getLogger(__name__)
 
 HELP_TEXT = (
     "This CLI has no help text. Invoke one of the skills via the Skill tool "
@@ -51,6 +33,8 @@ HELP_TEXT = (
 
 # ORCHESTRATOR
 def main():
+    configure_logging()
+    register_exit_hook()
     args = build_parser().parse_args()
 
     if args.cmd == "search_web":
@@ -66,6 +50,24 @@ def main():
 
 
 # FUNCTIONS
+def configure_logging() -> None:
+    log_path = LOG_DIR / "cli.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = TimedRotatingFileHandler(
+        log_path, when="midnight", interval=1,
+        backupCount=get_retention_days(), encoding="utf-8",
+    )
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+        handlers=[handler],
+    )
+
+
+def register_exit_hook() -> None:
+    atexit.register(kill_own_chrome_atexit)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = NoHelpParser(
         prog="cli.py",

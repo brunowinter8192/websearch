@@ -206,7 +206,7 @@ async def test_try_scrape_times_out_at_budget(monkeypatch, caplog):
 async def test_cdp_headed_teardown_fires_on_exception(monkeypatch):
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     kill_calls = []
-    monkeypatch.setattr(chromium_scrape, "_kill_by_profile", lambda d: kill_calls.append(d))
+    monkeypatch.setattr(chromium_scrape, "kill_by_profile", lambda d: kill_calls.append(d))
 
     class _RaisingCrawler:
         def __init__(self, *a, **kw):
@@ -229,7 +229,7 @@ async def test_cdp_headed_teardown_fires_on_exception(monkeypatch):
 async def test_cdp_headed_teardown_fires_on_budget_timeout(monkeypatch):
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     kill_calls = []
-    monkeypatch.setattr(chromium_scrape, "_kill_by_profile", lambda d: kill_calls.append(d))
+    monkeypatch.setattr(chromium_scrape, "kill_by_profile", lambda d: kill_calls.append(d))
     monkeypatch.setattr(chromium_scrape, "TOTAL_SCRAPE_BUDGET_S", 0.05)
 
     class _HangingCrawler:
@@ -254,9 +254,9 @@ async def test_cdp_headed_teardown_fires_on_budget_timeout(monkeypatch):
 @pytest.mark.asyncio
 async def test_acquire_cdp_headed_spawns_watchdog_with_pids_and_cleanup_dir(monkeypatch):
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
-    monkeypatch.setattr(chromium_scrape, "_pids_on_profile", lambda d: [555, 666])
+    monkeypatch.setattr(chromium_scrape, "pids_on_profile", lambda d: [555, 666])
     calls = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
+    monkeypatch.setattr(chromium_scrape.watchdog_spawn, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
 
     class _FakeCrawler:
         def __init__(self, *a, **kw):

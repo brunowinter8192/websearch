@@ -22,8 +22,8 @@ def _launch_trap(qualified_name: str):
 @pytest.fixture(autouse=True)
 def _no_real_browser_launch(monkeypatch):
     monkeypatch.setattr(browser, "Chrome", _launch_trap("src.search.browser.Chrome"))
-    monkeypatch.setattr(chromium_scrape, "_self_launch_chrome",
-                         _launch_trap("src.scraper.chromium_scrape._self_launch_chrome"))
+    monkeypatch.setattr(chromium_scrape, "self_launch_chrome",
+                         _launch_trap("src.scraper.chromium_scrape.self_launch_chrome"))
     monkeypatch.setattr(camoufox_scrape, "AsyncCamoufox",
                          _launch_trap("src.scraper.camoufox_scrape.AsyncCamoufox"))
     monkeypatch.setattr(pipe_scraper, "AsyncWebCrawler",

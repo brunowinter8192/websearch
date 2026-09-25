@@ -178,7 +178,7 @@ async def test_scrape_url_chromium_workflow_logs_document_status_chain(monkeypat
 async def test_try_scrape_calls_reap_orphaned_scrapes_at_start(monkeypatch):
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     calls = []
-    monkeypatch.setattr(chromium_scrape, "_reap_orphaned_scrapes", lambda: calls.append(1))
+    monkeypatch.setattr(chromium_scrape, "reap_orphaned_scrapes", lambda: calls.append(1))
 
     class _RaisingCrawler:
         def __init__(self, *a, **kw):

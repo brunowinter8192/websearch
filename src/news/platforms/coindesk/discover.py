@@ -21,34 +21,23 @@ from src.news.platforms.coindesk.config import (
 )
 from src.news.platforms.coindesk.browser import browser_load_feed
 from src.news.platforms.coindesk.timeline import parse_articles, build_cursor_url, fetch_feedpage, try_rewarm
-from src.news.platforms.coindesk.shards import _append_to_shard, load_discover
+from src.news.platforms.coindesk.shards import append_to_shard, load_discover
 
 
 # ORCHESTRATOR
 
 async def discover(timeframe: str = "30") -> list[dict]:
     stop_date = _parse_stop_date(timeframe)
-    print(f"[coindesk] discover timeframe={timeframe!r} stop_date={stop_date}", file=sys.stderr)
+    _log_discover_start(timeframe, stop_date)
 
-    print("[coindesk] Browser warmup …", file=sys.stderr)
-    headers, start_url, first_body = await browser_load_feed(CLICKS_WARMUP)
-    if first_body is None:
-        raise RuntimeError("CoinDesk browser warmup failed — could not capture timeline API response")
+    headers, start_url, first_body = await _warm_up_feed()
 
-    print(f"[coindesk] Warmup done. First URL: {start_url}", file=sys.stderr)
-
-    DISCOVER_DIR.mkdir(parents=True, exist_ok=True)
-    seen_urls = load_discover(DISCOVER_DIR)
-    print(f"[coindesk] Discover loaded: {len(seen_urls)} existing URLs", file=sys.stderr)
+    seen_urls = _load_seen_urls()
 
     entries = await cursor_loop(headers, start_url, first_body, stop_date, seen_urls, DISCOVER_DIR)
 
-    new_count = sum(1 for e in entries if e.get("_new"))
-    print(
-        f"[coindesk] discover → {len(entries)} entries total, {new_count} new to discover",
-        file=sys.stderr,
-    )
-    return [{k: v for k, v in e.items() if k != "_new"} for e in entries]
+    _log_discover_result(entries)
+    return _strip_new_marker(entries)
 
 
 # FUNCTIONS
@@ -61,14 +50,25 @@ def _parse_stop_date(timeframe: str) -> str:
     return floor.isoformat()
 
 
-@dataclass
-class _CursorLoopStats:
-    ok_calls:               int  = 0
-    fallback_count:         int  = 0
-    rewarm_count:           int  = 0
-    httpx_rewarm_confirmed: bool | None = None
-    oldest_date:            str | None  = None
-    last_rewarm_t:          float = field(default_factory=time.monotonic)
+def _log_discover_start(timeframe: str, stop_date: str) -> None:
+    print(f"[coindesk] discover timeframe={timeframe!r} stop_date={stop_date}", file=sys.stderr)
+
+
+async def _warm_up_feed() -> tuple[dict, str, bytes]:
+    print("[coindesk] Browser warmup …", file=sys.stderr)
+    headers, start_url, first_body = await browser_load_feed(CLICKS_WARMUP)
+    if first_body is None:
+        raise RuntimeError("CoinDesk browser warmup failed — could not capture timeline API response")
+
+    print(f"[coindesk] Warmup done. First URL: {start_url}", file=sys.stderr)
+    return headers, start_url, first_body
+
+
+def _load_seen_urls() -> set:
+    DISCOVER_DIR.mkdir(parents=True, exist_ok=True)
+    seen_urls = load_discover(DISCOVER_DIR)
+    print(f"[coindesk] Discover loaded: {len(seen_urls)} existing URLs", file=sys.stderr)
+    return seen_urls
 
 
 async def cursor_loop(
@@ -115,6 +115,16 @@ async def cursor_loop(
     return all_entries
 
 
+@dataclass
+class _CursorLoopStats:
+    ok_calls:               int  = 0
+    fallback_count:         int  = 0
+    rewarm_count:           int  = 0
+    httpx_rewarm_confirmed: bool | None = None
+    oldest_date:            str | None  = None
+    last_rewarm_t:          float = field(default_factory=time.monotonic)
+
+
 def _process_batch(
     articles:     list[dict],
     seen_urls:    set,
@@ -132,11 +142,37 @@ def _process_batch(
         is_new = entry["url"] not in seen_urls
         if is_new:
             seen_urls.add(entry["url"])
-            _append_to_shard(entry, year_files, discover_dir)
+            append_to_shard(entry, year_files, discover_dir)
         all_entries.append({**entry, "_new": is_new})
         d = entry["publication_date"][:10] if entry["publication_date"] else ""
         if d and (stats.oldest_date is None or d < stats.oldest_date):
             stats.oldest_date = d
+
+
+def _build_entry(a: dict) -> dict | None:
+    pathname = a.get("pathname") or ""
+    display_date = (a.get("displayDate") or "")[:10]
+    if not pathname or len(display_date) < 10:
+        return None
+    url = COINDESK_BASE + pathname
+    iso = f"{display_date}T00:00:00+00:00"
+    return {
+        "url":              url,
+        "lastmod":          iso,
+        "publication_date": iso,
+        "title":            a.get("title") or "",
+        "section":          _extract_section(pathname),
+    }
+
+
+def _extract_section(pathname: str) -> str:
+    parts = pathname.strip("/").split("/")
+    return parts[0] if parts else "unknown"
+
+
+def _is_live_blog(url: str) -> bool:
+    slug = urlparse(url).path.rstrip("/").split("/")[-1]
+    return slug.startswith("live-")
 
 
 def _maybe_proactive_rewarm(headers: dict, stats: _CursorLoopStats) -> None:
@@ -253,27 +289,13 @@ def _log_cursor_loop_summary(stats: _CursorLoopStats, all_entries: list[dict], t
     )
 
 
-def _build_entry(a: dict) -> dict | None:
-    pathname = a.get("pathname") or ""
-    display_date = (a.get("displayDate") or "")[:10]
-    if not pathname or len(display_date) < 10:
-        return None
-    url = COINDESK_BASE + pathname
-    iso = f"{display_date}T00:00:00+00:00"
-    return {
-        "url":              url,
-        "lastmod":          iso,
-        "publication_date": iso,
-        "title":            a.get("title") or "",
-        "section":          _extract_section(pathname),
-    }
+def _log_discover_result(entries: list[dict]) -> None:
+    new_count = sum(1 for e in entries if e.get("_new"))
+    print(
+        f"[coindesk] discover → {len(entries)} entries total, {new_count} new to discover",
+        file=sys.stderr,
+    )
 
 
-def _extract_section(pathname: str) -> str:
-    parts = pathname.strip("/").split("/")
-    return parts[0] if parts else "unknown"
-
-
-def _is_live_blog(url: str) -> bool:
-    slug = urlparse(url).path.rstrip("/").split("/")[-1]
-    return slug.startswith("live-")
+def _strip_new_marker(entries: list[dict]) -> list[dict]:
+    return [{k: v for k, v in e.items() if k != "_new"} for e in entries]

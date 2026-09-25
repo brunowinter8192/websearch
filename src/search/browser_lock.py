@@ -1,4 +1,6 @@
 # INFRASTRUCTURE
+from __future__ import annotations
+
 import fcntl
 import json
 import logging
@@ -14,6 +16,16 @@ _TS_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 POLL_INTERVAL_S = 0.25
 
 
+# ORCHESTRATOR
+
+def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None = None) -> LockHandle:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    sidecar_path = lock_path.with_suffix(".json")
+    return _acquire_when_free(lock_path, sidecar_path, hard_budget_s, on_stale)
+
+
+# FUNCTIONS
+
 class LockHandle:
     def __init__(self, fd, sidecar_path: Path):
         self._fd = fd
@@ -25,11 +37,9 @@ class LockHandle:
         self._sidecar_path.unlink(missing_ok=True)
 
 
-# FUNCTIONS
-
-def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None = None) -> LockHandle:
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    sidecar_path = lock_path.with_suffix(".json")
+def _acquire_when_free(
+    lock_path: Path, sidecar_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None,
+) -> LockHandle:
     while True:
         fd = open(lock_path, "a")
         try:
@@ -60,19 +70,19 @@ def _write_sidecar(sidecar_path: Path) -> None:
     os.replace(tmp_path, sidecar_path)
 
 
-def _read_sidecar(sidecar_path: Path) -> dict | None:
-    try:
-        return json.loads(sidecar_path.read_text())
-    except FileNotFoundError:
-        return None
-
-
 def _sidecar_age_s(sidecar_path: Path) -> float | None:
     data = _read_sidecar(sidecar_path)
     if data is None:
         return None
     started = datetime.strptime(data["started_at"], _TS_FMT).replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - started).total_seconds()
+
+
+def _read_sidecar(sidecar_path: Path) -> dict | None:
+    try:
+        return json.loads(sidecar_path.read_text())
+    except FileNotFoundError:
+        return None
 
 
 def _break_lock(lock_path: Path, sidecar_path: Path) -> None:

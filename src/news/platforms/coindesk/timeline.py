@@ -37,16 +37,6 @@ def build_cursor_url(last_id: str, last_date: str) -> str:
     return f"{TIMELINE_BASE}?size=16&lastId={last_id}&lastDisplayDate={last_date}&lang=en"
 
 
-def fetch_feedpage(headers: dict) -> int:
-    feed_hdrs = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept-language", "accept"}}
-    try:
-        resp = httpx.get(TARGET_URL, headers=feed_hdrs, follow_redirects=True, timeout=30)
-        return resp.status_code
-    except OSError as e:
-        print(f"[coindesk] fetch_feedpage error: {e}", file=sys.stderr)
-        return -1
-
-
 async def try_rewarm(failing_url: str, headers: dict) -> tuple[dict, bytes | None, str]:
     print("[coindesk] [rewarm] Attempting httpx feedpage re-warm …", file=sys.stderr)
     fp_status = fetch_feedpage(headers)
@@ -71,3 +61,13 @@ async def try_rewarm(failing_url: str, headers: dict) -> tuple[dict, bytes | Non
 
     print(f"[coindesk] [rewarm] browser re-warm also failed ({resp2.status_code}) — fatal", file=sys.stderr)
     return headers, None, "fatal"
+
+
+def fetch_feedpage(headers: dict) -> int:
+    feed_hdrs = {k: v for k, v in headers.items() if k.lower() in {"user-agent", "accept-language", "accept"}}
+    try:
+        resp = httpx.get(TARGET_URL, headers=feed_hdrs, follow_redirects=True, timeout=30)
+        return resp.status_code
+    except OSError as e:
+        print(f"[coindesk] fetch_feedpage error: {e}", file=sys.stderr)
+        return -1

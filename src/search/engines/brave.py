@@ -5,13 +5,14 @@ import logging
 import time
 
 from src.search.browser import new_tab, kill_tab
+from src.cdp_value import extract_value
 from src.search.document_status import attach_document_status, start_document_status_capture, update_partial
-from src.search.engines.base import BaseEngine
 from src.search.selector_hits import collect_selector_hits
-from src.search.rate_limiter import RateLimiter, _limiters
 from src.search.result import SearchResult
 
 logger = logging.getLogger(__name__)
+
+name = "brave"
 
 SEARCH_URL = "https://search.brave.com/search?q={}"
 MAX_WAIT_CYCLES = 20
@@ -111,46 +112,45 @@ return JSON.stringify({
 });
 """
 
-_limiters["brave"] = RateLimiter(max_requests=4, window_seconds=60)
-
 
 # ORCHESTRATOR
 
-class BraveEngine(BaseEngine):
-    name = "brave"
-
-    async def search_with_reason(self, query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
-        t0 = time.perf_counter()
-        logger.info("Brave search: %s", query)
-        tab = await new_tab()
-        try:
-            status_chain = await start_document_status_capture(tab)
-            await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
-            found, challenge_triggered, button_present = await _wait_for_results(tab, status_chain, t0, partial)
-            if not found:
-                diag = await _diagnose(tab)
-                diag["containers_found"] = False
-                diag["challenge_triggered"] = challenge_triggered
-                diag["button_present"] = button_present
-                _log_empty_result(query, diag)
-                return [], None, attach_document_status(diag, status_chain)
-            results, selector_hits = await _parse_results(tab, max_results)
-            if results:
-                diag = {"challenge_triggered": challenge_triggered, "selector_hits": selector_hits}
-                return results, None, attach_document_status(diag, status_chain)
-            diag = await _diagnose(tab)
-            diag["containers_found"] = True
-            diag["challenge_triggered"] = challenge_triggered
-            diag["button_present"] = button_present
-            return results, None, attach_document_status(diag, status_chain)
-        finally:
-            await kill_tab(tab)
+async def search_with_reason(query: str, language: str = "en", max_results: int = 10, partial: dict | None = None) -> tuple[list[SearchResult], str | None, dict | None]:
+    t0 = time.perf_counter()
+    logger.info("Brave search: %s", query)
+    tab = await new_tab()
+    return await _search_and_close(tab, query, max_results, partial, t0)
 
 
 # FUNCTIONS
 
-def _extract_value(result):
-    return result["result"]["result"]["value"]
+async def _search_and_close(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    try:
+        return await _search_in_tab(tab, query, max_results, partial, t0)
+    finally:
+        await kill_tab(tab)
+
+
+async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float) -> tuple[list[SearchResult], str | None, dict | None]:
+    status_chain = await start_document_status_capture(tab)
+    await tab.go_to(SEARCH_URL.format(query.replace(" ", "+")), timeout=10.0)
+    found, challenge_triggered, button_present = await _wait_for_results(tab, status_chain, t0, partial)
+    if not found:
+        diag = await _diagnose(tab)
+        diag["containers_found"] = False
+        diag["challenge_triggered"] = challenge_triggered
+        diag["button_present"] = button_present
+        _log_empty_result(query, diag)
+        return [], None, attach_document_status(diag, status_chain)
+    results, selector_hits = await _parse_results(tab, max_results)
+    if results:
+        diag = {"challenge_triggered": challenge_triggered, "selector_hits": selector_hits}
+        return results, None, attach_document_status(diag, status_chain)
+    diag = await _diagnose(tab)
+    diag["containers_found"] = True
+    diag["challenge_triggered"] = challenge_triggered
+    diag["button_present"] = button_present
+    return results, None, attach_document_status(diag, status_chain)
 
 
 async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: dict | None) -> tuple[bool, bool, bool]:
@@ -181,7 +181,7 @@ async def _wait_for_results(tab, status_chain: list[int], t0: float, partial: di
 
 async def _poll_state(tab) -> dict:
     raw = await tab.execute_script(_JS_POLL)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     state = {"count": 0, "pow_link": False, "button_present": False, "button_matched": False}
     if val:
         state.update(json.loads(val))
@@ -190,7 +190,7 @@ async def _poll_state(tab) -> dict:
 
 async def _click_challenge_button(tab) -> bool:
     raw = await tab.execute_script(_JS_CLICK_CHALLENGE)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     if not val:
         return False
     return bool(json.loads(val).get("clicked"))
@@ -198,7 +198,7 @@ async def _click_challenge_button(tab) -> bool:
 
 async def _diagnose(tab) -> dict:
     raw = await tab.execute_script(_JS_DIAGNOSE)
-    val = _extract_value(raw)
+    val = extract_value(raw)
     diag = {"marker": None, "pow_link": False, "url": "", "ready_state": "", "title": ""}
     if val:
         diag.update(json.loads(val))
@@ -218,7 +218,7 @@ def _log_empty_result(query: str, diag: dict) -> None:
 
 async def _parse_results(tab, max_results: int) -> tuple[list[SearchResult], dict]:
     raw = await tab.execute_script(_JS_PARSE)
-    value = _extract_value(raw)
+    value = extract_value(raw)
     if not value:
         return [], {}
     items = json.loads(value)

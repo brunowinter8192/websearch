@@ -14,16 +14,6 @@ from src.news.engine.proxy_riding.state import RiderState
 BROWSER_ELIGIBLE_PROTOS: frozenset[str] = frozenset({"http", "socks5"})
 
 
-@dataclass
-class RidingScrapeConfig:
-    burn_threshold:  int   = 2
-    n_slots:         int   = 64
-    n_browsers:      int   = 4
-    page_timeout_ms: int   = 8_000
-    stall_timeout_s: float = 300.0
-    cooldown_policy: str   = "fixed"
-
-
 # ORCHESTRATOR
 
 async def scrape_entries_riding(
@@ -34,12 +24,9 @@ async def scrape_entries_riding(
 ) -> tuple[list[dict], RiderState]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    urls        = [e["url"] for e in entries]
-    url_to_hash = {url: hashlib.sha256(url.encode()).hexdigest()[:12] for url in urls}
-
-    url_queue = asyncio.Queue()
-    for url in urls:
-        url_queue.put_nowait(url)
+    urls        = _target_urls(entries)
+    url_to_hash = _hash_urls(urls)
+    url_queue   = _fill_queue(urls)
 
     proxy_pool = await _pool_provider()
     cm         = RidingCooldownManager(policy=riding_cfg.cooldown_policy)
@@ -64,12 +51,38 @@ async def scrape_entries_riding(
 
 # FUNCTIONS
 
+@dataclass
+class RidingScrapeConfig:
+    burn_threshold:  int   = 2
+    n_slots:         int   = 64
+    n_browsers:      int   = 4
+    page_timeout_ms: int   = 8_000
+    stall_timeout_s: float = 300.0
+    cooldown_policy: str   = "fixed"
+
+
+def _target_urls(entries: list[dict]) -> list[str]:
+    return [e["url"] for e in entries]
+
+
+def _hash_urls(urls: list[str]) -> dict[str, str]:
+    return {url: hashlib.sha256(url.encode()).hexdigest()[:12] for url in urls}
+
+
+def _fill_queue(urls: list[str]) -> asyncio.Queue:
+    url_queue = asyncio.Queue()
+    for url in urls:
+        url_queue.put_nowait(url)
+    return url_queue
+
+
 async def _pool_provider() -> list[tuple[str, str]]:
     loop       = asyncio.get_running_loop()
     raw_pool, _ = await loop.run_in_executor(None, load_backfill_pool)
     pool       = [(p, hp) for p, hp in raw_pool if p in BROWSER_ELIGIBLE_PROTOS]
     random.shuffle(pool)
     return pool
+
 
 def _build_manifest(
     entries:     list[dict],

@@ -3,7 +3,7 @@ import pytest
 
 from src.crawler.seed_feeders_scope import FeederResult
 from src.crawler.seed_feeders_robots import fetch_robots_txt, parse_robots_directives
-from src.crawler import seed_feeders
+from src.crawler import robots_feeder
 from dev.tests._seed_feeders_fakes import _FakeResponse, _FakeAsyncClient, _RaisingAsyncClient
 
 
@@ -67,9 +67,9 @@ async def test_fetch_robots_txt_missing_returns_none_not_error():
 async def test_robots_feeder_workflow_returns_scoped_paths(monkeypatch):
     robots_text = "User-agent: *\nDisallow: /internal/\nAllow: /public/\n"
     routes = {"https://docs.example.com/robots.txt": _FakeResponse(200, text=robots_text)}
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
+    monkeypatch.setattr(robots_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient(routes))
 
-    result = await seed_feeders.robots_feeder_workflow("https://docs.example.com/")
+    result = await robots_feeder.robots_feeder_workflow("https://docs.example.com/")
     assert result.ok is True
     assert result.urls == [
         "https://docs.example.com/internal/", "https://docs.example.com/public/",
@@ -78,15 +78,15 @@ async def test_robots_feeder_workflow_returns_scoped_paths(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_robots_feeder_workflow_missing_robots_is_ok_empty(monkeypatch):
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient({}))
+    monkeypatch.setattr(robots_feeder.httpx, "AsyncClient", lambda *a, **kw: _FakeAsyncClient({}))
 
-    result = await seed_feeders.robots_feeder_workflow("https://docs.example.com/")
+    result = await robots_feeder.robots_feeder_workflow("https://docs.example.com/")
     assert result == FeederResult(urls=[], ok=True, source="robots")
 
 
 @pytest.mark.asyncio
 async def test_robots_feeder_workflow_invalid_seed_url_is_failed_not_empty():
-    result = await seed_feeders.robots_feeder_workflow("not-a-url-at-all")
+    result = await robots_feeder.robots_feeder_workflow("not-a-url-at-all")
     assert result.ok is False
     assert result.urls == []
     assert result.error is not None
@@ -102,9 +102,9 @@ async def test_fetch_robots_txt_network_error_propagates():
 @pytest.mark.asyncio
 async def test_robots_feeder_workflow_network_error_is_failed_with_error(monkeypatch):
     client = _RaisingAsyncClient(httpx.ConnectError("connection refused"))
-    monkeypatch.setattr(seed_feeders.httpx, "AsyncClient", lambda *a, **kw: client)
+    monkeypatch.setattr(robots_feeder.httpx, "AsyncClient", lambda *a, **kw: client)
 
-    result = await seed_feeders.robots_feeder_workflow("https://docs.example.com/")
+    result = await robots_feeder.robots_feeder_workflow("https://docs.example.com/")
     assert result.ok is False
     assert result.urls == []
     assert "connection refused" in result.error

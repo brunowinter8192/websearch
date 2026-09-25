@@ -11,7 +11,8 @@ def _url_hash(url: str) -> str:
 
 def test_1_surplus_slots_race_both_done() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     urls = ["https://cd.com/a", "https://cd.com/b"]
@@ -38,7 +39,7 @@ def test_1_surplus_slots_race_both_done() -> None:
                 total_urls=len(urls), target_urls=frozenset(urls),
             )
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", ok_fetch),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", ok_fetch),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 tasks = [asyncio.create_task(rider_mod._run_slot(i, None, state)) for i in range(6)]
@@ -55,7 +56,8 @@ def test_1_surplus_slots_race_both_done() -> None:
 
 def test_2_write_exactly_once_per_url() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/x"
@@ -81,7 +83,7 @@ def test_2_write_exactly_once_per_url() -> None:
                 total_urls=1, target_urls=frozenset([url_x]),
             )
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", ok_fetch),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", ok_fetch),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 tasks = [asyncio.create_task(rider_mod._run_slot(i, None, state)) for i in range(3)]
@@ -98,7 +100,8 @@ def test_2_write_exactly_once_per_url() -> None:
 
 def test_3a_stale_url_skipped() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/stale"
@@ -128,7 +131,7 @@ def test_3a_stale_url_skipped() -> None:
             )
             state.done_urls.add(url_x)
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", ok_fetch_spy),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", ok_fetch_spy),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 await rider_mod._run_slot(0, None, state)
@@ -143,7 +146,8 @@ def test_3a_stale_url_skipped() -> None:
 
 def test_3b_raced_fail_not_requeued() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     async def fixed_proxy(state):
@@ -175,7 +179,7 @@ def test_3b_raced_fail_not_requeued() -> None:
             orig_put = state.url_queue.put_nowait
             state.url_queue.put_nowait = lambda u: (put_calls.append(u), orig_put(u))[1]
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", fail_then_ok),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", fail_then_ok),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 await rider_mod._run_slot(0, None, state)
@@ -190,7 +194,8 @@ def test_3b_raced_fail_not_requeued() -> None:
 
 def test_4_normal_path_no_racing() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     urls = [f"https://cd.com/{i}" for i in range(4)]
@@ -218,7 +223,7 @@ def test_4_normal_path_no_racing() -> None:
                 total_urls=len(urls), target_urls=frozenset(urls),
             )
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", ok_fetch),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", ok_fetch),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 tasks = [asyncio.create_task(rider_mod._run_slot(i, None, state)) for i in range(4)]
@@ -235,7 +240,8 @@ def test_4_normal_path_no_racing() -> None:
 
 def test_5_fail_before_success_done_once() -> None:
     from src.news.engine.proxy_riding import rider as rider_mod
-    from src.news.engine.proxy_riding.state import RiderState, RAW_SUBDIR
+    from src.config import RAW_SUBDIR
+    from src.news.engine.proxy_riding.state import RiderState
     from src.news.engine.proxy_riding.cooldown import RidingCooldownManager as PersistentCooldownManager
 
     url_x = "https://cd.com/stubborn"
@@ -265,7 +271,7 @@ def test_5_fail_before_success_done_once() -> None:
                 total_urls=1, target_urls=frozenset([url_x]),
             )
             with (
-                unittest.mock.patch.object(rider_mod, "_fetch_one_url", fail_then_ok),
+                unittest.mock.patch.object(rider_mod, "fetch_one_url", fail_then_ok),
                 unittest.mock.patch.object(rider_mod, "_next_proxy",    fixed_proxy),
             ):
                 await rider_mod._run_slot(0, None, state)
