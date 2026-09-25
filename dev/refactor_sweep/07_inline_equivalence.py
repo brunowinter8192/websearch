@@ -21,6 +21,7 @@ HAND_EDITED = {
     "dev/scrape_pipeline/p1_pipe_scraper.py": "async-with gather moved to _scrape_all, exception replacement moved to _replace_exceptions",
     "dev/search_pipeline/google_selector_probe.py": "try/finally page probe moved to _probe_page; its early return becomes return None and the caller returns on None",
     "dev/news_pipeline/theblock/probe_repo_cf_survey.py": "per-repo check loop moved to _check_repos",
+    "dev/search_pipeline/selector_js_equivalence_check.py": "sys.path.insert moved from the main guard body to INFRASTRUCTURE; the guard keeps the exit line; main was extracted by the tool and its helpers compared by hand",
 }
 
 

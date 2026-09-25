@@ -81,7 +81,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 07_inline_equivalence.py (246 LOC)
+### 07_inline_equivalence.py (247 LOC)
 
 **Purpose:** Inlines every extraction helper back into its caller and compares the result with the merge-base function.
 **Reads:** git objects and working tree.

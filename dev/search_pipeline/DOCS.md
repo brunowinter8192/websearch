@@ -19,7 +19,7 @@ Scripts read `queries.txt` / `config.yml` or hardcoded query sets, drive `src/se
 **Called by:** CLI only.
 **Calls out:** none.
 
-### selector_js_equivalence_check.py (117 LOC)
+### selector_js_equivalence_check.py (141 LOC)
 
 **Purpose:** Runs old and current parse JS of four engines in headless Chrome on synthetic HTML, verifying identical items apart from the new selector key.
 **Reads:** Engine sources at a pinned git revision, current engine modules.

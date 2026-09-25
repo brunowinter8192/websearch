@@ -13,6 +13,7 @@ from pydoll.browser.options import ChromiumOptions
 
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 REPORT_DIR = SCRIPT_DIR / "md"
 BASE_REV = "b6fab1d"
 ENGINES = ("google", "bing", "brave", "yandex")
@@ -45,19 +46,46 @@ HTML = {
 
 # ORCHESTRATOR
 
-def run_main() -> None:
-    sys.path.insert(0, str(PROJECT_ROOT))
-    raise SystemExit(asyncio.run(main()))
+async def main() -> int:
+    old_js = _compute_old_js()
+    new_js = _compute_new_js()
+    browser = await _start_browser()
+    lines = _compute_lines()
+    failures = 0
+    failures = await _compare_engines(browser, old_js, new_js, failures, lines)
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    _write_report(stamp, lines)
+    _print_verdict(failures)
+    return failures
 
 
 # FUNCTIONS
 
-async def main() -> int:
+def _compute_old_js():
     old_js = {name: _load_js(_old_module(name)) for name in ENGINES}
+    return old_js
+
+
+def _compute_new_js():
     new_js = {name: _load_js(_new_module(name)) for name in ENGINES}
-    browser = await _start_browser()
+    return new_js
+
+
+async def _start_browser() -> Chrome:
+    options = ChromiumOptions()
+    options.headless = True
+    browser = Chrome(options)
+    await browser.start()
+    return browser
+
+
+def _compute_lines():
     lines = ["# Selector JS equivalence check", "", f"base rev: {BASE_REV}", ""]
-    failures = 0
+    return lines
+
+
+async def _compare_engines(browser, old_js, new_js, failures, lines):
     try:
         for name in ENGINES:
             old_items = await _run(browser, HTML[name], old_js[name])
@@ -68,11 +96,15 @@ async def main() -> int:
             lines.append(f"- {name}: items={len(old_items)} identical_minus_sel={same} sel={[i.get('sel') for i in new_items]}")
     finally:
         await browser.stop()
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    (REPORT_DIR / f"selector_js_equivalence_check_{stamp}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print("VERDICT", "PASS" if failures == 0 else "FAIL")
     return failures
+
+
+def _write_report(stamp, lines):
+    (REPORT_DIR / f"selector_js_equivalence_check_{stamp}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _print_verdict(failures):
+    print("VERDICT", "PASS" if failures == 0 else "FAIL")
 
 
 def _old_module(name: str):
@@ -96,14 +128,6 @@ def _new_module(name: str):
     return importlib.import_module(f"src.search.engines.{name}")
 
 
-async def _start_browser() -> Chrome:
-    options = ChromiumOptions()
-    options.headless = True
-    browser = Chrome(options)
-    await browser.start()
-    return browser
-
-
 async def _run(browser: Chrome, html: str, js: str) -> list:
     tab = await browser.new_tab()
     await tab.go_to("about:blank")
@@ -114,4 +138,4 @@ async def _run(browser: Chrome, html: str, js: str) -> list:
 
 
 if __name__ == "__main__":
-    run_main()
+    raise SystemExit(asyncio.run(main()))
