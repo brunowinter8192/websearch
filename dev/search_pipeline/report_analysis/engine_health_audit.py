@@ -119,13 +119,13 @@ def format_table(stats: dict[str, dict], n_records: int, last_n: int, since: str
 
     def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
         eng, s = item
-        emoji, label = classify_health(s)
+        level, label = classify_health(s)
         order = {"RED": 0, "GREY": 1, "YELLOW": 2, "TIMER": 3, "BLOCK": 4, "GREEN": 5}
-        return order.get(emoji, 9), eng
+        return order.get(level, 9), eng
 
     for eng, s in sorted(stats.items(), key=sort_key):
-        emoji, label = classify_health(s)
-        flag_col = f"{emoji} {label}"
+        level, label = classify_health(s)
+        flag_col = f"{level} {label}"
         avg_res_str = f"{s['avg_results']:>8.1f}" if s["avg_results"] else f"{'—':>8}"
         avg_ms_str = f"{s['avg_ms']:>7}" if s["avg_ms"] else f"{'—':>7}"
         lines.append(

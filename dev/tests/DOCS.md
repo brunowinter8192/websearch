@@ -291,7 +291,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Death-pipe intervention-log write failure raises; removed-dir reflects the real outcome.
 
-### test_dev_drop_reporting.py (175 LOC)
+### test_dev_drop_reporting.py (243 LOC)
 
 **Purpose:** Dev-script handlers that drop a value report it or abort; engine health levels are words.
 

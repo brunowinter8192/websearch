@@ -101,7 +101,8 @@ def cursor_loop(
 def extract_cursor(body: bytes) -> tuple[str | None, str | None]:
     try:
         data = json.loads(body)
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError) as exc:
+        print(f"extract_cursor: dropped {type(exc).__name__} for body {str(body)[:80]}", file=sys.stderr)
         return None, None
 
     articles = None

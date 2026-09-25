@@ -1,7 +1,7 @@
 # INFRASTRUCTURE
-import sys
 import asyncio
 import json
+import sys
 from urllib.parse import urlparse, parse_qs
 
 from pydoll.commands.network_commands import NetworkCommands

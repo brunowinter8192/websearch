@@ -68,7 +68,7 @@ different: 1
  },
  "cur": {
   "exit": 0,
-  "out": "usage: 03_coindesk_cleanup.py [-h] [--input INPUT] [--output OUTPUT]\n\nCoinDesk article cleanup \u2014 extract body, strip nav/footer noise, normalize.\n\noptions:\n  -h, --help       show this help message and exit\n  --input INPUT    Input dir of scraped .md files (default: /private/tmp/wsdev\n                   _base.eXOH/curtree_q1/dev/news_pipeline/02b_data)\n  --output OUTPUT  Output dir for cleaned .md files (default: /private/tmp/wsd\n                   ev_base.eXOH/curtree_q1/dev/news_pipeline/03_data)\n",
+  "out": "usage: 03_coindesk_cleanup.py [-h] [--input INPUT] [--output OUTPUT]\n\nCoinDesk article cleanup \u2014 extract body, strip nav/footer noise, normalize.\n\noptions:\n  -h, --help       show this help message and exit\n  --input INPUT    Input dir of scraped .md files (default: /private/tmp/wsdev\n                   _base.eXOH/curtree_r4/dev/news_pipeline/02b_data)\n  --output OUTPUT  Output dir for cleaned .md files (default: /private/tmp/wsd\n                   ev_base.eXOH/curtree_r4/dev/news_pipeline/03_data)\n",
   "err": "",
   "written": []
  }

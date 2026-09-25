@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from curl_cffi import requests as cffi_requests
 
+from proxy_rejections import record_rejection
+
 CONCURRENCY_CF        = 20
 CF_TIMEOUT_S          = 15
 
@@ -45,7 +47,8 @@ def cf_get(proxy_url: str, url: str) -> tuple[bytes, int]:
         r = s.get(url, proxies={"http": proxy_url, "https": proxy_url}, timeout=CF_TIMEOUT_S)
         s.close()
         return r.content, r.status_code
-    except Exception:
+    except cffi_requests.exceptions.RequestException as exc:
+        record_rejection(exc)
         return b"", 0
 
 

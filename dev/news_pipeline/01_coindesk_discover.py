@@ -175,14 +175,16 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
+    last_error = None
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=2) as resp:
                 data = json.loads(resp.read())
                 return data["webSocketDebuggerUrl"]
-        except Exception:
+        except OSError as exc:
+            last_error = exc
             time.sleep(0.5)
-    raise TimeoutError(f"Chrome did not start on port {port} within {timeout}s")
+    raise TimeoutError(f"Chrome did not start on port {port} within {timeout}s (last error: {last_error!r})")
 
 
 async def run_click_loop(tab, cutoff) -> dict:

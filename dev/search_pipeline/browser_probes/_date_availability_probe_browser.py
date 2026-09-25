@@ -1,10 +1,10 @@
 # INFRASTRUCTURE
-import sys
 import asyncio
 import json
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from pydoll.browser import Chrome

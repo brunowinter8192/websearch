@@ -19,7 +19,7 @@ Pipeline runner checks preconditions -> discover (UI pagination, 48-hour window)
 **Called by:** CLI only.
 **Calls out:** `rag-cli`.
 
-### 01_coindesk_discover.py (359 LOC)
+### 01_coindesk_discover.py (361 LOC)
 
 **Purpose:** Discovers CoinDesk articles via UI pagination in a background Chrome, stopping once enough articles older than the window are seen.
 **Reads:** Live CoinDesk site via pydoll.

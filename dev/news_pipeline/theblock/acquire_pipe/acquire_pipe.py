@@ -16,6 +16,7 @@ from p6_buffer import BUFFER_SIZE, DEFAULT_CONCURRENCY
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from curated_sources import load_backfill_pool
+from proxy_rejections import print_rejections
 
 ACQUIRE_BASE      = Path(__file__).parent
 OUTPUT_DIR        = ACQUIRE_BASE / "acquire_pipe_output"
@@ -35,6 +36,7 @@ def main() -> None:
         concurrency=args.concurrency,
         buffer_size=args.buffer_size,
     )
+    print_rejections()
 
 
 # FUNCTIONS

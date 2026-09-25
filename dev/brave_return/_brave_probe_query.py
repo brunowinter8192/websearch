@@ -1,8 +1,8 @@
 # INFRASTRUCTURE
-import sys
 import asyncio
 import json
 import logging
+import sys
 import time
 from dataclasses import dataclass, field
 

@@ -1,9 +1,9 @@
 # INFRASTRUCTURE
-import sys
 import base64
 import hashlib
 import json
 import statistics
+import sys
 
 RESULT_LINK_SELECTOR = "ul.results-standard > li > a.ob"
 BLOCK_MARKER_TEXT = "Verification required"

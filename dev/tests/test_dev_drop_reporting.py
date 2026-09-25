@@ -32,9 +32,19 @@ SECTION_MODULES = [
     "dev/news_pipeline/01_coindesk_discover.py",
     "dev/news_pipeline/exploration/03_coindesk_backfill_traversal.py",
 ]
-PROXY_CHECK_MODULES = [
-    "dev/news_pipeline/theblock/probe_curated_theblock_cf.py",
-    "dev/news_pipeline/theblock/probe_repo_cf_survey.py",
+PROXY_CHECK_CASES = [
+    ("dev/news_pipeline/theblock/probe_curated_theblock_cf.py", "cffi", "m.check_proxy('http', '1.2.3.4:80')", "False"),
+    ("dev/news_pipeline/theblock/probe_repo_cf_survey.py", "cffi", "m.check_proxy('http', '1.2.3.4:80')", "False"),
+    ("dev/news_pipeline/theblock/acquire_pipe/p1_fetch.py", "cffi", "m.fetch_url('http', '1.2.3.4:80', 'https://x.test/', 'xml')", "('fail', b'')"),
+    ("dev/news_pipeline/theblock/_pipe_theblock_cf.py", "cffi_requests", "m.cf_get('http://1.2.3.4:80', 'https://x.test/')", "(b'', 0)"),
+]
+POLL_MODULES = [
+    "dev/news_pipeline/01_coindesk_discover.py",
+    "dev/news_pipeline/exploration/05b_coindesk_warmth_probe.py",
+    "dev/news_pipeline/exploration/_03_capture.py",
+    "dev/news_pipeline/exploration/_04_capture.py",
+    "dev/news_pipeline/exploration/_05_capture.py",
+    "dev/news_pipeline/exploration/_06_capture.py",
 ]
 
 
@@ -86,35 +96,93 @@ def test_extract_json_sample_reports_a_non_json_body():
     assert "extract_json_sample: dropped" in proc.stderr
 
 
-@pytest.mark.parametrize("rel", PROXY_CHECK_MODULES)
-def test_check_proxy_counts_the_request_error_it_drops(rel):
-    code = textwrap.dedent("""
+@pytest.mark.parametrize("rel,alias,call,expected", PROXY_CHECK_CASES)
+def test_proxy_check_counts_the_request_error_it_drops(rel, alias, call, expected):
+    code = textwrap.dedent(f"""
+        import proxy_rejections
         def boom(*a, **k):
-            raise m.cffi.exceptions.ConnectionError('refused')
+            raise m.{alias}.exceptions.ConnectionError('refused')
         class S:
             def __init__(self, **k): pass
             get = boom
-        m.cffi.Session = S
-        print('RESULT', m.check_proxy('http', '1.2.3.4:80'), dict(m.REJECTIONS))
+        m.{alias}.Session = S
+        print('RESULT', {call}, dict(proxy_rejections.REJECTIONS))
     """)
     proc = run_child(rel, code)
-    assert "RESULT False {'ConnectionError': 1}" in proc.stdout
+    assert f"RESULT {expected} {{'ConnectionError': 1}}" in proc.stdout
 
 
-@pytest.mark.parametrize("rel", PROXY_CHECK_MODULES)
-def test_check_proxy_lets_an_unexpected_error_abort(rel):
-    code = textwrap.dedent("""
+@pytest.mark.parametrize("rel,alias,call,expected", PROXY_CHECK_CASES)
+def test_proxy_check_lets_an_unexpected_error_abort(rel, alias, call, expected):
+    code = textwrap.dedent(f"""
         class S:
             def __init__(self, **k): pass
             def get(self, *a, **k): raise KeyError('bug')
-        m.cffi.Session = S
+        m.{alias}.Session = S
         try:
-            m.check_proxy('http', '1.2.3.4:80')
+            {call}
             print('RESULT swallowed')
         except KeyError:
             print('RESULT aborted')
     """)
     assert "RESULT aborted" in run_child(rel, code).stdout
+
+
+@pytest.mark.parametrize("rel", POLL_MODULES)
+def test_chrome_poll_reports_the_last_connection_error(rel):
+    code = textwrap.dedent("""
+        import urllib.error
+        def refuse(*a, **k):
+            raise urllib.error.URLError('connection refused')
+        m.urllib.request.urlopen = refuse
+        m.time.sleep = lambda s: None
+        try:
+            m.wait_for_ws_url(1, timeout=0.05)
+        except TimeoutError as exc:
+            print('RESULT', exc)
+    """)
+    proc = run_child(rel, code)
+    assert "last error: URLError" in proc.stdout
+
+
+@pytest.mark.parametrize("rel", POLL_MODULES)
+def test_chrome_poll_lets_a_malformed_reply_abort(rel):
+    code = textwrap.dedent("""
+        import io
+        class R(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        m.urllib.request.urlopen = lambda *a, **k: R(b'not json')
+        m.time.sleep = lambda s: None
+        try:
+            m.wait_for_ws_url(1, timeout=5)
+            print('RESULT swallowed')
+        except ValueError:
+            print('RESULT aborted')
+    """)
+    assert "RESULT aborted" in run_child(rel, code).stdout
+
+
+def test_extract_cursor_reports_a_non_json_body():
+    proc = run_child("dev/news_pipeline/exploration/_04_replay.py", "print('RESULT', m.extract_cursor(b'<html>'))")
+    assert "RESULT (None, None)" in proc.stdout
+    assert "extract_cursor: dropped" in proc.stderr
+
+
+def test_audit_scan_lets_an_unparse_failure_abort(tmp_path):
+    source = tmp_path / "sample.py"
+    source.write_text("import logging\nlogger = logging.getLogger()\nlogger.info('x')\n")
+    code = textwrap.dedent(f"""
+        def boom(node): raise RuntimeError('unparse failed')
+        m.ast.unparse = boom
+        from pathlib import Path
+        try:
+            m._scan_file(Path({str(source)!r}))
+            print('RESULT swallowed')
+        except RuntimeError:
+            print('RESULT aborted')
+    """)
+    assert "RESULT aborted" in run_child("dev/logging/01_audit.py", code).stdout
 
 
 def test_stop_browser_lets_a_stop_failure_abort():

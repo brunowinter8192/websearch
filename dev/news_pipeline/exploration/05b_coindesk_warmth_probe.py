@@ -213,13 +213,15 @@ def launch_background_chrome(port: int, session_dir: str) -> None:
 def wait_for_ws_url(port: int, timeout: float = 30.0) -> str:
     url = f"http://localhost:{port}/json/version"
     deadline = time.monotonic() + timeout
+    last_error = None
     while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=2) as r:
                 return json.loads(r.read())["webSocketDebuggerUrl"]
-        except Exception:
+        except OSError as exc:
+            last_error = exc
             time.sleep(0.5)
-    raise TimeoutError(f"Chrome not ready on port {port}")
+    raise TimeoutError(f"Chrome not ready on port {port} (last error: {last_error!r})")
 
 
 async def run_capture_phase(tab) -> dict | None:

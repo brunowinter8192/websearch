@@ -131,7 +131,7 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 11_silent_handler_scan.py (114 LOC)
+### 11_silent_handler_scan.py (122 LOC)
 
 **Purpose:** Lists dev exception handlers that swallow an exception without a trace, apart from intended control-flow types.
 **Reads:** tracked `dev/**/*.py`.
@@ -151,10 +151,10 @@ Tracked `dev/**/*.py` -> AST analysis (markers, sections, orchestrator shape, st
 
 ---
 
-### 13_glyph_diff_check.py (89 LOC)
+### 13_glyph_diff_check.py (93 LOC)
 
-**Purpose:** Checks that string literals of glyph-cleaned scripts differ from the merge base only by the glyphs and their replacement words.
-**Reads:** git objects and working tree.
+**Purpose:** Checks that each glyph-cleaned script equals its merge-base text with exactly the recorded replacement pairs applied.
+**Reads:** git objects, working tree and `glyph_replacements.json`.
 **Writes:** `md/13_glyph_diff_check.md`.
 **Called by:** CLI only.
 **Calls out:** none.

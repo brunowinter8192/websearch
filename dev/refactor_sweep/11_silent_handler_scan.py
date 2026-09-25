@@ -19,7 +19,10 @@ INTENDED_TYPES = {
     "psutil.ZombieProcess": "process exited (race)",
     "psutil.Error": "process exited (race)",
 }
-BROAD = {"Exception", "BaseException"}
+INTENDED_FILES = {
+    "dev/brave_return/verify_brave_pydoll_core.py": "verification script: the tripwire under test raising is the expected outcome and is reported through check()",
+    "dev/mojeek_return/verify_mojeek_pydoll_core.py": "verification script: the tripwire under test raising is the expected outcome and is reported through check()",
+}
 
 
 # ORCHESTRATOR
@@ -73,34 +76,31 @@ def scan_file(rel: str) -> tuple[list[str], list[str]]:
 
 
 def is_silent(node: ast.ExceptHandler) -> bool:
-    body = node.body
-    if all(isinstance(s, ast.Pass) for s in body):
-        return True
-    if len(body) != 1:
-        return False
-    stmt = body[0]
-    if isinstance(stmt, (ast.Continue, ast.Break)):
-        return True
-    if isinstance(stmt, ast.Return):
-        return stmt.value is None or is_constant_value(stmt.value)
-    return False
+    return all(is_trace_free(stmt) for stmt in node.body)
 
 
 def classify(rel: str, node: ast.ExceptHandler, findings: list, intended: list) -> None:
     names = handler_names(node)
     label = f"{rel}:{node.lineno} except {','.join(names) or 'bare'}"
+    if rel in INTENDED_FILES:
+        intended.append(f"{label} ({INTENDED_FILES[rel]})")
+        return
     if names and all(n in INTENDED_TYPES for n in names):
         intended.append(f"{label} ({INTENDED_TYPES[names[0]]})")
     else:
         findings.append(label)
 
 
-def is_constant_value(value: ast.AST) -> bool:
-    if isinstance(value, ast.Constant):
+def is_trace_free(stmt: ast.stmt) -> bool:
+    if isinstance(stmt, (ast.Pass, ast.Continue, ast.Break)):
         return True
-    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
-        return not value.elts
-    return isinstance(value, ast.Dict) and not value.keys
+    if isinstance(stmt, ast.Return):
+        return stmt.value is None or is_constant_value(stmt.value)
+    if isinstance(stmt, ast.Assign):
+        return all(isinstance(t, ast.Name) for t in stmt.targets) and is_constant_value(stmt.value)
+    if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+        return ast.unparse(stmt.value.func).endswith("sleep")
+    return False
 
 
 def handler_names(node: ast.ExceptHandler) -> list[str]:
@@ -108,6 +108,14 @@ def handler_names(node: ast.ExceptHandler) -> list[str]:
         return []
     parts = node.type.elts if isinstance(node.type, ast.Tuple) else [node.type]
     return [ast.unparse(p) for p in parts]
+
+
+def is_constant_value(value: ast.AST) -> bool:
+    if isinstance(value, ast.Constant):
+        return True
+    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+        return all(isinstance(e, ast.Constant) for e in value.elts)
+    return isinstance(value, ast.Dict) and not value.keys
 
 
 if __name__ == "__main__":

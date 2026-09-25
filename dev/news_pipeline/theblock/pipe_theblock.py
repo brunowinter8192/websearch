@@ -16,6 +16,7 @@ from probe_discovery  import (
 )
 from source_tracker   import update_and_flush as tracker_flush
 from _pipe_theblock_cf import cf_get, is_xml, stage2_cf_check, CONCURRENCY_CF
+from proxy_rejections import print_rejections
 
 SCRIPT_DIR            = Path(__file__).parent
 PIPE_LOG              = SCRIPT_DIR / "pipe_log.md"
@@ -39,11 +40,13 @@ async def pipe_theblock_workflow() -> None:
     cf_passing, elapsed_s2 = run_stage2(neutral_alive)
 
     if not cf_passing:
+        print_rejections()
         abort_without_cf_proxies(ts, sample, source_results, hp_to_sources, liveness_results,
                                  neutral_alive, elapsed_s1, elapsed_s2)
         return
 
     subs_fetched, total_subs, b_exhausted, b_active, elapsed_s3 = run_stage3(cf_passing)
+    print_rejections()
 
     _print_total_elapsed_s(t0)
     append_pipe_log(ts, len(sample), len(neutral_alive), len(cf_passing),
