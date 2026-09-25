@@ -1,7 +1,8 @@
 import pytest
 
 from dev.search_pipeline._lib.text import strip_bloat
-from src.search.snippet import truncate, MAX_SNIPPET_LEN
+from src.config import MAX_SNIPPET_LEN
+from src.search.snippet import truncate
 
 
 def test_truncate_leaves_short_text_untouched():

@@ -1,7 +1,6 @@
 # INFRASTRUCTURE
 
 import asyncio
-import os
 import signal
 import sys
 import time
@@ -11,11 +10,13 @@ from pathlib import Path
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
-from src.config import DELAY_BEFORE_HTML, FAIL_THRESHOLD, RAW_SUBDIR
+from src.config import (
+    DELAY_BEFORE_HTML, FAIL_THRESHOLD, RAW_SUBDIR,
+    RIDING_PAGE_TIMEOUT_MS, RIDING_POOL_REFRESH_INTERVAL_S, RIDING_STALL_TIMEOUT_S,
+)
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 from src.news.engine.proxy_riding.state import (
     RiderState, RideRecord, JobRecord,
-    PAGE_TIMEOUT_MS, STALL_TIMEOUT_S, POOL_REFRESH_INTERVAL_S,
 )
 from src.news.engine.proxy_riding.fetch import (
     fetch_one_url, classify_connect_fail, write_raw, url_hash,
@@ -34,9 +35,9 @@ async def run_riding_pool(
     target_urls:     frozenset,
     burn_threshold:  int,
     n_slots:         int,
-    page_timeout_ms: int   = PAGE_TIMEOUT_MS,
+    page_timeout_ms: int   = RIDING_PAGE_TIMEOUT_MS,
     n_browsers:      int   = 1,
-    stall_timeout_s: float = STALL_TIMEOUT_S,
+    stall_timeout_s: float = RIDING_STALL_TIMEOUT_S,
     pool_provider:   object = None,
 ) -> RiderState:
     state = _prepare_state(
@@ -114,7 +115,7 @@ async def _watchdog(
         n_eligible = len(state.cooldown_mgr.eligible_candidates(state.proxy_pool))
         n_cooldown = state.cooldown_mgr.cooldown_count()
         state.pool_samples.append((elapsed_s, n_eligible, n_cooldown))
-        if state.pool_provider and time.monotonic() - _last_refresh_mono >= POOL_REFRESH_INTERVAL_S:
+        if state.pool_provider and time.monotonic() - _last_refresh_mono >= RIDING_POOL_REFRESH_INTERVAL_S:
             new_pool = await state.pool_provider()
             if new_pool:
                 old_n = len(state.proxy_pool)

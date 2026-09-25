@@ -15,7 +15,6 @@ from pydoll.browser import Chrome
 from src.cdp_value import extract_value
 from src.news.platforms.coindesk.config import (
     TARGET_URL,
-    CLICKS_REWARM,
     SKIP_HEADERS,
 )
 

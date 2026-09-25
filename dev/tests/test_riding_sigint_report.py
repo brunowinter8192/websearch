@@ -1,4 +1,5 @@
 import asyncio
+import os
 import signal
 import tempfile
 import time
@@ -109,7 +110,7 @@ def test_abort_interrupted_sigint() -> None:
 
         async def run() -> None:
             state = _make_state(tmp_dir)
-            with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit):
+            with unittest.mock.patch.object(os, "_exit", fake_exit):
                 try:
                     abort_interrupted(state, signal.SIGINT)
                 except SystemExit as exc:
@@ -143,7 +144,7 @@ def test_abort_interrupted_sigterm() -> None:
 
         async def run() -> None:
             state = _make_state(tmp_dir)
-            with unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit):
+            with unittest.mock.patch.object(os, "_exit", fake_exit):
                 try:
                     abort_interrupted(state, signal.SIGTERM)
                 except SystemExit as exc:

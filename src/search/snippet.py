@@ -2,8 +2,6 @@
 import html
 import re
 
-MAX_SNIPPET_LEN = 500
-
 
 # FUNCTIONS
 

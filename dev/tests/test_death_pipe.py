@@ -7,6 +7,7 @@ import psutil
 import pytest
 
 import src.death_pipe as death_pipe
+import src.watchdog_spawn as watchdog_spawn
 
 
 def _spawn_dummy() -> subprocess.Popen:
@@ -54,11 +55,11 @@ def _has_exited(proc: psutil.Process) -> bool:
 
 
 def test_spawn_watchdog_returns_none_when_nothing_to_protect():
-    assert death_pipe.spawn_watchdog([], cleanup_dir=None) is None
+    assert watchdog_spawn.spawn_watchdog([], cleanup_dir=None) is None
 
 
 def test_watchdog_kills_dummy_process_once_write_end_closes(dummy_process, watchdog_log_path):
-    write_fd = death_pipe.spawn_watchdog([dummy_process.pid])
+    write_fd = watchdog_spawn.spawn_watchdog([dummy_process.pid])
     assert write_fd is not None
     assert psutil.pid_exists(dummy_process.pid)
 
@@ -71,7 +72,7 @@ def test_watchdog_removes_cleanup_dir_once_write_end_closes(tmp_path, dummy_proc
     protected_dir = tmp_path / "throwaway-profile"
     protected_dir.mkdir()
 
-    write_fd = death_pipe.spawn_watchdog([dummy_process.pid], cleanup_dir=str(protected_dir))
+    write_fd = watchdog_spawn.spawn_watchdog([dummy_process.pid], cleanup_dir=str(protected_dir))
     os.close(write_fd)
 
     assert _wait_until(lambda: dummy_process.poll() is not None)
@@ -79,7 +80,7 @@ def test_watchdog_removes_cleanup_dir_once_write_end_closes(tmp_path, dummy_proc
 
 
 def test_watchdog_is_silent_noop_when_target_already_dead(dummy_process, watchdog_log_path):
-    write_fd = death_pipe.spawn_watchdog([dummy_process.pid])
+    write_fd = watchdog_spawn.spawn_watchdog([dummy_process.pid])
     watchdog = _find_watchdog(dummy_process.pid)
 
     dummy_process.kill()
@@ -91,7 +92,7 @@ def test_watchdog_is_silent_noop_when_target_already_dead(dummy_process, watchdo
 
 
 def test_watchdog_logs_intervention_when_it_actually_kills_something(dummy_process, watchdog_log_path):
-    write_fd = death_pipe.spawn_watchdog([dummy_process.pid])
+    write_fd = watchdog_spawn.spawn_watchdog([dummy_process.pid])
     os.close(write_fd)
     assert _wait_until(lambda: dummy_process.poll() is not None)
     assert _wait_until(watchdog_log_path.exists)

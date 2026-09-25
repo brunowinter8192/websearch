@@ -2,10 +2,9 @@
 
 import httpx
 
-from src.config import PROXY_LIST_FETCH_TIMEOUT
+from src.config import MONOSANS_URL, PROXY_LIST_FETCH_TIMEOUT
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 
-MONOSANS_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies.json"
 
 
 # ORCHESTRATOR

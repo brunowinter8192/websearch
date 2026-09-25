@@ -15,10 +15,10 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from mcp.types import TextContent
 from src.scraper.scrape_logger import domain_of, elapsed_ms, log_scrape, utc_timestamp, write_sidecar
-from src import death_pipe
-from src.config import CDP_PORT_WAIT_TIMEOUT_S
+from src import watchdog_spawn
+from src.config import CDP_PORT_WAIT_TIMEOUT_S, TOTAL_SCRAPE_BUDGET_S
 from src.scraper.chromium_process import (
-    TOTAL_SCRAPE_BUDGET_S, build_self_launch_flags,
+    build_self_launch_flags,
     focus_steal_watchdog, kill_by_profile, pids_on_profile, reap_orphaned_scrapes,
     resolve_chromium_bundle_path, self_launch_chrome, wait_for_devtools_port,
 )
@@ -111,7 +111,7 @@ async def _acquire_cdp_headed(
         self_launch_chrome(bundle_path, user_data_dir, flags)
         port = await asyncio.to_thread(wait_for_devtools_port, user_data_dir, CDP_PORT_WAIT_TIMEOUT_S)
         pids = await asyncio.to_thread(pids_on_profile, user_data_dir)
-        death_pipe.spawn_watchdog(pids, cleanup_dir=user_data_dir)
+        watchdog_spawn.spawn_watchdog(pids, cleanup_dir=user_data_dir)
         browser_config = BrowserConfig(
             cdp_url=f"http://127.0.0.1:{port}",
             browser_mode="custom",

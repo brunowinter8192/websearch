@@ -45,7 +45,7 @@ async def scrape_one(
         except Exception as exc:
             wall_ms = int((time.time() - t0) * 1000)
             log_pipe_record(run_ctx, ts, url, domain, None, 0, wall_ms, {},
-                             error=f"{type(exc).__name__}: {exc}")
+                           error=f"{type(exc).__name__}: {exc}")
             return {'url': url, 'wall_ms': wall_ms, 'bytes': 0, 'status_code': None}
         wall_ms = int((time.time() - t0) * 1000)
 
@@ -61,7 +61,7 @@ async def scrape_one(
     landed_url = getattr(result, "redirected_url", None)
     links = _extract_onward_links(result, urlparse(url).hostname or domain)
     log_pipe_record(run_ctx, ts, url, domain, status, byte_count, wall_ms, diagnosis,
-                      landed_url=landed_url)
+                   landed_url=landed_url)
 
     return {'url': url, 'wall_ms': wall_ms, 'bytes': byte_count, 'status_code': status,
             'links': links}

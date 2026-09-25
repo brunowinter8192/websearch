@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from src.config import TOTAL_SCRAPE_BUDGET_S
 from src.scraper import chromium_process, chromium_scrape
 
 
@@ -98,7 +99,7 @@ def test_reap_orphaned_scrapes_kills_only_pids_older_than_budget(monkeypatch, tm
             self.pid = pid
 
         def create_time(self):
-            return now - (10.0 if self.pid == young_pid else chromium_process.TOTAL_SCRAPE_BUDGET_S + 5.0)
+            return now - (10.0 if self.pid == young_pid else TOTAL_SCRAPE_BUDGET_S + 5.0)
 
     monkeypatch.setattr(chromium_process, "_pids_matching_scrape_profiles", lambda: [young_pid, old_pid])
     monkeypatch.setattr(chromium_process.psutil, "Process", _FakeProc)

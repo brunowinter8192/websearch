@@ -256,7 +256,7 @@ async def test_acquire_cdp_headed_spawns_watchdog_with_pids_and_cleanup_dir(monk
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
     monkeypatch.setattr(chromium_scrape, "pids_on_profile", lambda d: [555, 666])
     calls = []
-    monkeypatch.setattr(chromium_scrape.death_pipe, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
+    monkeypatch.setattr(chromium_scrape.watchdog_spawn, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
 
     class _FakeCrawler:
         def __init__(self, *a, **kw):

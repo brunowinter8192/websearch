@@ -27,7 +27,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** cli.py, camoufox_scrape.py, src/crawler/pipe_scraper.py, src/crawler/pipe_scraper_acquisition.py.
 **Calls out:** crawl4ai, mcp types.
 
-### chromium_process.py (173 LOC)
+### chromium_process.py (171 LOC)
 
 **Purpose:** Self-launched Chrome process lifecycle for the chromium lane: bundle resolution, launch, port wait, focus-steal watchdog, teardown and orphan reaping.
 **Reads:** nothing of its own; callers pass all inputs.
@@ -35,7 +35,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** chromium_scrape.py.
 **Calls out:** crawl4ai browser manager, patchright, psutil, macOS open, pgrep and osascript.
 
-### scrape_logger.py (66 LOC)
+### scrape_logger.py (65 LOC)
 
 **Purpose:** Per-URL structured logging shared by both lanes: one JSONL record and one full-content sidecar per call, plus record-field helpers.
 **Reads:** the scrape-log path environment variable; the sidecar directory.
@@ -43,7 +43,7 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** chromium_scrape.py, camoufox_scrape.py, index_scrapes.py.
 **Calls out:** none.
 
-### index_scrapes.py (102 LOC)
+### index_scrapes.py (103 LOC)
 
 **Purpose:** Bridge from ad-hoc scrapes to an external RAG collection: resolves each URL's sidecar, rewrites it in collection format and triggers indexing.
 **Reads:** the sidecar directory and the external collection directory.

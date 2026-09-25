@@ -2,7 +2,6 @@
 # INFRASTRUCTURE
 import os
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -78,21 +77,6 @@ def _log_intervention(message: str) -> None:
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     with open(_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(f"{ts} [WARNING] src.death_pipe:watchdog - {message}\n")
-
-
-def spawn_watchdog(pids: list[int], cleanup_dir: str | None = None) -> int | None:
-    if not pids and not cleanup_dir:
-        return None
-    read_fd, write_fd = os.pipe()
-    cmd = [sys.executable, str(Path(__file__).resolve()), ",".join(str(p) for p in pids)]
-    if cleanup_dir:
-        cmd.append(cleanup_dir)
-    subprocess.Popen(
-        cmd, stdin=read_fd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    os.close(read_fd)
-    return write_fd
 
 
 if __name__ == "__main__":

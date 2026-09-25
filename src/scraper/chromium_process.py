@@ -13,11 +13,9 @@ import psutil
 from patchright.async_api import async_playwright
 
 from src import death_pipe
-from src.config import FOCUS_STEAL_POLL_INTERVAL_S
+from src.config import FOCUS_STEAL_POLL_INTERVAL_S, TOTAL_SCRAPE_BUDGET_S
 
 logger = logging.getLogger(__name__)
-
-TOTAL_SCRAPE_BUDGET_S = 242.8
 
 _osascript_warned: set[str] = set()
 

@@ -8,7 +8,8 @@ import time
 from pathlib import Path
 
 from src.search.result import SearchResult
-from src.search.snippet import strip_bloat, truncate, MAX_SNIPPET_LEN
+from src.config import MAX_SNIPPET_LEN
+from src.search.snippet import strip_bloat, truncate
 
 logger = logging.getLogger(__name__)
 

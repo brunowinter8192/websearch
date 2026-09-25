@@ -4,8 +4,8 @@ import re
 
 import httpx
 
-from src.config import PROXY_LIST_FETCH_TIMEOUT
-from src.news.engine.proxy_pool.monosans_loader import load_monosans_proxies, MONOSANS_URL
+from src.config import MONOSANS_URL, PROXY_LIST_FETCH_TIMEOUT
+from src.news.engine.proxy_pool.monosans_loader import load_monosans_proxies
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 from src.news.engine.proxy_pool.proxy_key import proxy_key
 

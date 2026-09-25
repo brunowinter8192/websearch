@@ -12,7 +12,7 @@ def _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process):
     monkeypatch.setattr(chromium_scrape, "kill_by_profile", lambda *a, **kw: None)
     monkeypatch.setattr(chromium_scrape, "pids_on_profile", lambda *a, **kw: [])
     monkeypatch.setattr(chromium_scrape, "reap_orphaned_scrapes", lambda: None)
-    monkeypatch.setattr(chromium_scrape.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape.watchdog_spawn, "spawn_watchdog", lambda *a, **kw: None)
 
 
 class _FakeMarkdown:

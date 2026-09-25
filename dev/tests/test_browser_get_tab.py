@@ -30,7 +30,7 @@ def _patch_launch_mechanics(monkeypatch, resolve_bundle=_fake_resolve_bundle, ac
     monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 12345)
     monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
     monkeypatch.setattr(browser, "_record_own_pids", lambda session_dir: None)
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: None)
+    monkeypatch.setattr(browser.watchdog_spawn, "spawn_watchdog", lambda *a, **kw: None)
     monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: None)
 
 
@@ -56,7 +56,7 @@ async def test_get_tab_orders_lock_reap_launch_anchor_record(monkeypatch):
     monkeypatch.setattr(browser, "_wait_for_devtools_port", lambda user_data_dir, timeout_s: 54321)
     monkeypatch.setattr(browser, "ConnectionHandler", lambda port: f"fake-conn-{port}")
     monkeypatch.setattr(browser, "_record_own_pids", lambda session_dir: order.append("record"))
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda *a, **kw: order.append("watchdog"))
+    monkeypatch.setattr(browser.watchdog_spawn, "spawn_watchdog", lambda *a, **kw: order.append("watchdog"))
     monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: order.append(("focus_watchdog", anchor_pid)))
 
     try:
@@ -113,7 +113,7 @@ async def test_get_tab_spawns_focus_watchdog_with_owned_pids_and_anchor(monkeypa
     monkeypatch.setattr(browser, "_record_own_pids", _fake_record_own_pids)
 
     calls = []
-    monkeypatch.setattr(browser.death_pipe, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
+    monkeypatch.setattr(browser.watchdog_spawn, "spawn_watchdog", lambda pids, cleanup_dir=None: calls.append((pids, cleanup_dir)))
     focus_calls = []
     monkeypatch.setattr(browser, "_spawn_focus_watchdog", lambda pids, anchor_pid: focus_calls.append((pids, anchor_pid)))
 

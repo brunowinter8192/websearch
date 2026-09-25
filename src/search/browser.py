@@ -16,7 +16,7 @@ from pydoll.commands import TargetCommands
 from pydoll.connection import ConnectionHandler
 
 from src.search import browser_lock
-from src import death_pipe
+from src import death_pipe, watchdog_spawn
 from src.config import CDP_PORT_WAIT_TIMEOUT_S, FOCUS_STEAL_POLL_INTERVAL_S
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ async def get_tab():
                 _browser._connection_port = port
                 _browser._connection_handler = ConnectionHandler(port)
                 _record_own_pids(_session_dir)
-                death_pipe.spawn_watchdog(_owned_pids, cleanup_dir=_session_dir)
+                watchdog_spawn.spawn_watchdog(_owned_pids, cleanup_dir=_session_dir)
                 _spawn_focus_watchdog(_owned_pids, anchor_pid)
             except Exception:
                 _browser = None
@@ -234,7 +234,6 @@ def _activate_pid(pid: int) -> None:
 
 
 async def kill_tab(tab) -> None:
-    global _browser
     target_id = getattr(tab, '_target_id', None)
     if _browser is None or target_id is None:
         return

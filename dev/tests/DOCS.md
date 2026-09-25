@@ -31,7 +31,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Import check of the proxy-riding package, config defaults, and absence of path hacks.
 
-### test_riding_sigint_report.py (164 LOC)
+### test_riding_sigint_report.py (165 LOC)
 
 **Purpose:** Riding abort on interrupt: exit codes 130 and 143 and report writes.
 
@@ -39,11 +39,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Riding slot tail-race cases with the per-URL fetch and proxy selection mocked.
 
-### test_riding_watchdog.py (93 LOC)
+### test_riding_watchdog.py (94 LOC)
 
 **Purpose:** Riding watchdog: wedge after all URLs resolved, and pool refresh.
 
-### test_snippet.py (40 LOC)
+### test_snippet.py (41 LOC)
 
 **Purpose:** Snippet truncation cases and the dev-side copy of the bloat stripper in `dev/search_pipeline/_lib/text.py`.
 
@@ -63,7 +63,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/search/browser_lock.py` against a real file lock: immediate acquire, blocking until release, stale takeover.
 
-### test_death_pipe.py (141 LOC)
+### test_death_pipe.py (142 LOC)
 
 **Purpose:** `src/death_pipe.py`: a real spawned watchdog subprocess plus mocked terminate and kill logic.
 
@@ -171,7 +171,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/scraper/chromium_scrape.py` document-status listener through the real acquisition machinery.
 
-### test_chromium_process.py (214 LOC)
+### test_chromium_process.py (215 LOC)
 
 **Purpose:** `src/scraper/chromium_process.py`: self-launch mechanics, live crawl4ai flag-parity guard, profile pid parsing, orphan reaping.
 

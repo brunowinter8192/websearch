@@ -1,4 +1,5 @@
 import asyncio
+import os
 import tempfile
 import unittest.mock
 from pathlib import Path
@@ -35,7 +36,7 @@ def test_6_watchdog_wedge_after_all_resolved() -> None:
             state.in_flight = 1
 
             with (
-                unittest.mock.patch.object(rider_mod.os, "_exit", fake_exit),
+                unittest.mock.patch.object(os, "_exit", fake_exit),
                 unittest.mock.patch("src.news.engine.proxy_riding.reporter.write_riding_report"),
             ):
                 try:
@@ -83,7 +84,7 @@ def test_7_watchdog_pool_refresh() -> None:
             )
             state.done_urls.add(url_done)
 
-            with unittest.mock.patch.object(rider_mod, "POOL_REFRESH_INTERVAL_S", 0.0):
+            with unittest.mock.patch.object(rider_mod, "RIDING_POOL_REFRESH_INTERVAL_S", 0.0):
                 await _watchdog(state, poll_interval=0.05)
             return state
 

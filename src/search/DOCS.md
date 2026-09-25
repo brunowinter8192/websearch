@@ -43,7 +43,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** search_web.py.
 **Calls out:** none.
 
-### cache.py (112 LOC)
+### cache.py (113 LOC)
 
 **Purpose:** Atomic JSON disk cache of per-engine pools with a one-hour TTL, plus numbered-list rendering for drilldown.
 **Reads:** cache files under the user cache directory.
@@ -51,7 +51,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** cli.py, search_web.py.
 **Calls out:** none.
 
-### snippet.py (55 LOC)
+### snippet.py (53 LOC)
 
 **Purpose:** Snippet cleanup for drilldown display: unescape, bloat stripping and sentence-aware truncation.
 **Reads:** raw snippet text.
@@ -67,13 +67,13 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** search_web.py, cli.py.
 **Calls out:** none.
 
-### browser.py (293 LOC)
+### browser.py (292 LOC)
 
 **Purpose:** Chrome lifecycle for the browser engines: one shared headed, backgrounded Chrome with a fresh profile per run and one tab per engine.
 **Reads:** nothing until first access.
 **Writes:** a per-run profile directory; the cross-process lock file and its sidecar.
 **Called by:** cli.py, search_web.py, engines/, many dev probes.
-**Calls out:** pydoll, patchright, psutil, macOS open, pgrep and osascript.
+**Calls out:** pydoll, patchright, macOS open, pgrep and osascript.
 
 ### browser_lock.py (90 LOC)
 
@@ -88,7 +88,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Purpose:** Per-engine token-bucket limiter registry, created lazily from a per-engine limits table.
 **Reads:** in-memory registry.
 **Writes:** in-memory registry.
-**Called by:** search_web.py, engines/.
+**Called by:** search_web.py.
 **Calls out:** none (stdlib only).
 
 ### result.py (19 LOC)
@@ -123,7 +123,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** search_web.py, degraded_notice.py; a dev smoke script.
 **Calls out:** none.
 
-### selector_hits.py (13 LOC)
+### selector_hits.py (10 LOC)
 
 **Purpose:** Aggregates per-item selector indexes from engine parse scripts into hit counts for the diagnosis.
 **Reads:** parse-script output handed in.

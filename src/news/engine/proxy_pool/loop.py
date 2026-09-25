@@ -7,10 +7,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Callable
 
+from src.config import PROXY_POOL_BUFFER_SIZE, PROXY_POOL_CONCURRENCY
 from src.news.engine.proxy_pool.fetch import fetch_url
 from src.news.engine.proxy_pool.cooldown import PersistentCooldownManager
 from src.news.engine.proxy_pool.logger import AcquireLogger
-from src.news.engine.proxy_pool.buffer import build_active_buffer, refill_buffer, BUFFER_SIZE, DEFAULT_CONCURRENCY
+from src.news.engine.proxy_pool.buffer import build_active_buffer, refill_buffer
 
 _sleep             = time.sleep
 REFRESH_INTERVAL_S = 3600
@@ -25,8 +26,8 @@ def run_loop(
     content_type: str,
     logger: AcquireLogger,
     cm: PersistentCooldownManager,
-    concurrency: int = DEFAULT_CONCURRENCY,
-    buffer_size: int = BUFFER_SIZE,
+    concurrency: int = PROXY_POOL_CONCURRENCY,
+    buffer_size: int = PROXY_POOL_BUFFER_SIZE,
     content_handler: Callable[[str, bytes], None] | None = None,
     refresh_interval_s: float = REFRESH_INTERVAL_S,
 ) -> tuple[list[str], list[str], list[str]]:

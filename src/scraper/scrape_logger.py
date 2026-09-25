@@ -7,9 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from src.config import SCRAPE_LOG_PATH
 from src.log_janitor import maybe_prune_jsonl, maybe_prune_sidecars
-
-DEFAULT_LOG_PATH = Path(__file__).parent.parent.parent / "src" / "logs" / "scrape_log.jsonl"
 
 
 # FUNCTIONS
@@ -30,7 +29,7 @@ def write_sidecar(url: str, ts: str, content: str, mode: str, engine: str) -> st
     if not content:
         return None
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
-    log_path = Path(env) if env else DEFAULT_LOG_PATH
+    log_path = Path(env) if env else SCRAPE_LOG_PATH
     sidecar_dir = log_path.parent / "scrape_content"
     filename = f"{_sanitize_ts(ts)}_{url_slug(url)}.md"
     header = (
@@ -59,7 +58,7 @@ def url_slug(url: str) -> str:
 
 def log_scrape(record: dict) -> None:
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
-    log_path = Path(env) if env else DEFAULT_LOG_PATH
+    log_path = Path(env) if env else SCRAPE_LOG_PATH
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")

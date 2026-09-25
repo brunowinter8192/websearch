@@ -6,7 +6,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.scraper.scrape_logger import DEFAULT_LOG_PATH, url_slug
+from src.config import SCRAPE_LOG_PATH
+from src.scraper.scrape_logger import url_slug
 from src.crawler.pipe_scraper_acquisition import url_to_filename
 
 RAG_CLI_COLLECTIONS_ROOT = Path(
@@ -52,7 +53,7 @@ def _missing_collection_result(collection_dir: Path) -> IndexScrapesResult:
 
 def _resolve_sidecar_dir() -> Path:
     env = os.environ.get("WEBSEARCH_SCRAPE_LOG_PATH")
-    log_path = Path(env) if env else DEFAULT_LOG_PATH
+    log_path = Path(env) if env else SCRAPE_LOG_PATH
     return log_path.parent / "scrape_content"
 
 

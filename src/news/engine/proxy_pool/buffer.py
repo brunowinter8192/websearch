@@ -1,9 +1,7 @@
 # INFRASTRUCTURE
 
+from src.config import PROXY_POOL_BUFFER_SIZE
 from src.news.engine.proxy_pool.cooldown import PersistentCooldownManager
-
-BUFFER_SIZE         = 1280
-DEFAULT_CONCURRENCY = 128
 
 
 # FUNCTIONS
@@ -11,7 +9,7 @@ DEFAULT_CONCURRENCY = 128
 def build_active_buffer(
     pool: list[tuple[str, str]],
     cm: PersistentCooldownManager,
-    max_size: int = BUFFER_SIZE,
+    max_size: int = PROXY_POOL_BUFFER_SIZE,
 ) -> list[tuple[str, str]]:
     eligible = cm.eligible_candidates(pool)
     return eligible[:max_size]
@@ -21,7 +19,7 @@ def refill_buffer(
     buf: list[tuple[str, str]],
     pool: list[tuple[str, str]],
     cm: PersistentCooldownManager,
-    target_size: int = BUFFER_SIZE,
+    target_size: int = PROXY_POOL_BUFFER_SIZE,
 ) -> list[tuple[str, str]]:
     if len(buf) >= target_size:
         return buf

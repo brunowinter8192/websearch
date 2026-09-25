@@ -6,11 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.config import RIDING_STALL_TIMEOUT_S
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 
-PAGE_TIMEOUT_MS         = 8_000
-STALL_TIMEOUT_S         = 3_600.0
-POOL_REFRESH_INTERVAL_S = 1_800.0
 
 
 # FUNCTIONS
@@ -67,7 +65,7 @@ class RiderState:
     job_records:     list  = field(default_factory=list)
     ride_records:    list  = field(default_factory=list)
     last_progress_mono: float      = field(default_factory=time.monotonic)
-    stall_timeout_s:    float      = STALL_TIMEOUT_S
+    stall_timeout_s:    float      = RIDING_STALL_TIMEOUT_S
     termination:        str        = "running"
     proxy_cursor:       int        = 0
     proxy_lock:         asyncio.Lock = field(default_factory=asyncio.Lock)

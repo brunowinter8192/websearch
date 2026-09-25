@@ -27,9 +27,9 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, scrape.py, state.py.
 **Calls out:** none.
 
-### state.py (85 LOC)
+### state.py (83 LOC)
 
-**Purpose:** Shared riding dataclasses and calibrated constants; the one canonical import source for all riding modules and dev tests.
+**Purpose:** Shared riding dataclasses (job, ride and runner state); the import source for all riding modules and dev tests.
 **Reads:** none.
 **Writes:** none.
 **Called by:** rider.py, fetch.py, abort.py, reporter.py, metrics.py, scrape.py; dev tests.
@@ -51,7 +51,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py.
 **Calls out:** none.
 
-### rider.py (380 LOC)
+### rider.py (381 LOC)
 
 **Purpose:** Runner: orchestrates browsers, slot coroutines, per-URL proxy contexts, burn and fail rotation, pool refresh, the watchdog and signal handlers.
 **Reads:** the URL queue, proxy pool and shared cooldown state.

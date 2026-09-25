@@ -6,7 +6,7 @@ CoinDesk platform implementation using the proxy-riding scrape engine and raw HT
 
 ## Public Interface
 
-`__init__.py` exports the CoinDesk platform class .
+`__init__.py` exports the CoinDesk platform class.
 
 ## Flow
 
@@ -16,13 +16,13 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 
 ### config.py (25 LOC)
 
-**Purpose:** Platform constants: regwall signal strings, scrape configuration and timeline-API discovery parameters.
+**Purpose:** Platform constants: scrape configuration and timeline-API discovery parameters.
 **Reads:** none.
 **Writes:** none.
 **Called by:** browser.py, discover.py, timeline.py, __init__.py.
 **Calls out:** none.
 
-### browser.py (175 LOC)
+### browser.py (174 LOC)
 
 **Purpose:** Launches Chrome and captures the first timeline API request and response during the feed warmup.
 **Reads:** the CoinDesk feed page (network).
