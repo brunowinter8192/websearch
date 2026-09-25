@@ -113,3 +113,9 @@ The review found no behaviour defect. Fixed afterwards:
 - Cleanups: empty INFRASTRUCTURE markers removed (`selector_hits.py`, `proxy_key.py`), continuation lines re-indented in `pipe_scraper.py` and `pipe_scraper_acquisition.py`, unused `global _browser`, `os` (rider), `CLICKS_REWARM`, `timedelta`, and the `death_pipe` import in `chromium_scrape.py` removed; pyflakes on `src` and `cli.py` is clean.
 - Two tests patched `rider_mod.os` (a module attribute that only existed because of the unused import); they now patch the `os` module directly.
 - Docs: four violations and three notes from the review fixed; `watchdog_spawn.py` documented in `src/DOCS.md`.
+
+## Round 2 review fixes
+
+Two docs sentences that still named moved constants (`proxy_pool/DOCS.md` buffer.py, `proxy_riding/DOCS.md` state.py) were corrected, and runs of three blank lines in `monosans_loader.py` and `state.py` were collapsed to two, with LOC headings updated. A regex scan of `src/` and `cli.py` finds no remaining run of three blank lines. Suite: 678 passed.
+
+Files changed against `integration` (recap inventory): `src/` and `cli.py` (all modules listed above), `dev/tests` (adapted and four new tests), the eleven `dev/search_pipeline` callers, the affected DOCS.md files (`DOCS.md`, `src/`, `src/crawler`, `src/news`, `src/news/engine`, `src/news/engine/proxy_pool`, `src/news/engine/proxy_riding`, `src/news/platforms`, both platform directories, `src/scraper`, `src/search`, `src/search/engines`, `dev/tests`, `dev/search_pipeline`) and this file.

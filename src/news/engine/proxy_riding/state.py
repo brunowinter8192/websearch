@@ -10,7 +10,6 @@ from src.config import RIDING_STALL_TIMEOUT_S
 from src.news.engine.proxy_riding.cooldown import RidingCooldownManager
 
 
-
 # FUNCTIONS
 
 @dataclass

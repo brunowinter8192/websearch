@@ -11,7 +11,7 @@ Third scrape engine: browser plus rotating proxies, built to get past CoinDesk's
 - scrape.py: the engine entry and its configuration dataclass, used by the news pipeline in scrape-only mode.
 - reporter.py: the job report writer, used after normal completion and by the abort paths.
 - rider.py: the pool runner entry, a stable import path.
-- state.py: the shared state and record dataclasses and calibrated constants.
+- state.py: the shared state and record dataclasses.
 
 ## Flow
 
@@ -27,7 +27,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** rider.py, scrape.py, state.py.
 **Calls out:** none.
 
-### state.py (83 LOC)
+### state.py (82 LOC)
 
 **Purpose:** Shared riding dataclasses (job, ride and runner state); the import source for all riding modules and dev tests.
 **Reads:** none.

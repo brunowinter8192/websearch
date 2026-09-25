@@ -6,7 +6,6 @@ from src.config import MONOSANS_URL, PROXY_LIST_FETCH_TIMEOUT
 from src.news.engine.proxy_pool.pool_retry import fetch_with_retry
 
 
-
 # ORCHESTRATOR
 
 def load_monosans_proxies() -> list[tuple[str, str]]:
