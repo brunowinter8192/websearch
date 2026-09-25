@@ -37,22 +37,6 @@ def _wait_for_parent_death() -> None:
     os.read(0, 1)
 
 
-def _remove_cleanup_dir(cleanup_dir: str | None) -> bool:
-    dir_removed = False
-    if cleanup_dir and Path(cleanup_dir).exists():
-        shutil.rmtree(cleanup_dir, ignore_errors=True)
-        dir_removed = not Path(cleanup_dir).exists()
-    return dir_removed
-
-
-def _report_intervention(killed: list[int], dir_removed: bool, cleanup_dir: str | None) -> None:
-    if killed or dir_removed:
-        _log_intervention(
-            f"parent died without tearing down its own browser — killed pids={killed}, "
-            f"removed_dir={cleanup_dir if dir_removed else None}"
-        )
-
-
 def terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
     procs = []
     for pid in pids:
@@ -71,6 +55,22 @@ def terminate_then_kill(pids: list[int], timeout_s: float = 5.0) -> list[int]:
         except psutil.NoSuchProcess:
             continue
     return killed
+
+
+def _remove_cleanup_dir(cleanup_dir: str | None) -> bool:
+    dir_removed = False
+    if cleanup_dir and Path(cleanup_dir).exists():
+        shutil.rmtree(cleanup_dir, ignore_errors=True)
+        dir_removed = not Path(cleanup_dir).exists()
+    return dir_removed
+
+
+def _report_intervention(killed: list[int], dir_removed: bool, cleanup_dir: str | None) -> None:
+    if killed or dir_removed:
+        _log_intervention(
+            f"parent died without tearing down its own browser — killed pids={killed}, "
+            f"removed_dir={cleanup_dir if dir_removed else None}"
+        )
 
 
 def _log_intervention(message: str) -> None:

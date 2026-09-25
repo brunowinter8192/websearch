@@ -75,7 +75,7 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** cli.py, search_web.py, engines/, many dev probes.
 **Calls out:** pydoll, patchright, psutil, macOS open, pgrep and osascript.
 
-### browser_lock.py (82 LOC)
+### browser_lock.py (90 LOC)
 
 **Purpose:** Domain-agnostic blocking cross-process file lock with stale-holder takeover via a caller-supplied callback.
 **Reads:** the lock file and its sidecar.

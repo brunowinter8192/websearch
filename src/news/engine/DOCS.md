@@ -22,7 +22,7 @@ Entries and platform parameters in, all passed explicitly. Dedup filters entries
 **Called by:** src/news/pipeline.py, scrape_job.py.
 **Calls out:** crawl4ai.
 
-### dedup.py (54 LOC)
+### dedup.py (70 LOC)
 
 **Purpose:** Filters entries to those not yet in the raw corpus and hosts the single publication-date helper.
 **Reads:** the entry list, a directory listing and an optional exclusion set.

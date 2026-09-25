@@ -30,7 +30,7 @@ Sitemap index fetched directly, via the proxy pool when the direct fetch does no
 **Called by:** __init__.py.
 **Calls out:** httpx.
 
-### cleanup.py (112 LOC)
+### cleanup.py (121 LOC)
 
 **Purpose:** Parses the JSON-LD article from raw HTML, converts the body to markdown, post-cleans it and stamps the publication date.
 **Reads:** raw HTML text and the manifest entry.

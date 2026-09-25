@@ -7,7 +7,7 @@ from src.config import BACKFILL_TOTAL, FAIL_THRESHOLD
 from src.news.engine.proxy_riding.state import RiderState
 
 
-# FUNCTIONS
+# ORCHESTRATOR
 
 def compute_stats(state: RiderState, t_job_start: datetime) -> dict:
     jobs  = state.job_records
@@ -15,28 +15,19 @@ def compute_stats(state: RiderState, t_job_start: datetime) -> dict:
 
     fetch_counts = _compute_fetch_counts(jobs, state, t_job_start)
 
-    ride_lengths   = [r.n_urls_attempted for r in rides]
-    ride_ok_counts = [r.n_ok             for r in rides]
-    ride_len_stats = _distribution_stats(ride_lengths)
-    n_proxies_burned     = len(rides)
-    proxies_for_backfill = round(n_proxies_burned / max(fetch_counts["n_ok"], 1) * BACKFILL_TOTAL)
-    n_fail_rotations     = sum(1 for r in rides if r.n_failed >= FAIL_THRESHOLD)
+    ride_stats = _compute_ride_stats(rides, fetch_counts)
 
     n_urls_with_regwall, retried_ok, retried_failed = _compute_retry_outcome(jobs)
-    wasted_ratio = fetch_counts["n_regwall_fetches"] / max(fetch_counts["n_total_fetches"], 1)
+    wasted_ratio = _compute_wasted_ratio(fetch_counts)
 
     pool_total, pool_windows = _compute_pool_windows(state)
-    page_timeout_s = state.page_timeout_ms / 1000
+    page_timeout_s = _page_timeout_seconds(state)
     load_times, load_perc = _compute_load_percentiles(jobs)
     cf_times, cf_perc, cf_subtype_counts = _compute_connect_fail_stats(state)
 
     return {
         **fetch_counts,
-        "ride_ok_counts": ride_ok_counts,
-        "ride_len_stats": ride_len_stats,
-        "n_proxies_burned": n_proxies_burned,
-        "proxies_for_backfill": proxies_for_backfill,
-        "n_fail_rotations": n_fail_rotations,
+        **ride_stats,
         "retried_ok": retried_ok, "retried_failed": retried_failed,
         "n_urls_with_regwall": n_urls_with_regwall,
         "wasted_ratio": wasted_ratio,
@@ -50,6 +41,8 @@ def compute_stats(state: RiderState, t_job_start: datetime) -> dict:
         "cf_subtype_counts": cf_subtype_counts,
     }
 
+
+# FUNCTIONS
 
 def _compute_fetch_counts(jobs: list, state: RiderState, t_job_start: datetime) -> dict:
     n_total_fetches   = len(jobs)
@@ -80,6 +73,22 @@ def _compute_fetch_counts(jobs: list, state: RiderState, t_job_start: datetime) 
     }
 
 
+def _compute_ride_stats(rides: list, fetch_counts: dict) -> dict:
+    ride_lengths   = [r.n_urls_attempted for r in rides]
+    ride_ok_counts = [r.n_ok             for r in rides]
+    ride_len_stats = _distribution_stats(ride_lengths)
+    n_proxies_burned     = len(rides)
+    proxies_for_backfill = round(n_proxies_burned / max(fetch_counts["n_ok"], 1) * BACKFILL_TOTAL)
+    n_fail_rotations     = sum(1 for r in rides if r.n_failed >= FAIL_THRESHOLD)
+    return {
+        "ride_ok_counts": ride_ok_counts,
+        "ride_len_stats": ride_len_stats,
+        "n_proxies_burned": n_proxies_burned,
+        "proxies_for_backfill": proxies_for_backfill,
+        "n_fail_rotations": n_fail_rotations,
+    }
+
+
 def _distribution_stats(values: list) -> dict:
     if not values:
         return {"mean": None, "median": None, "min": None, "max": None}
@@ -103,6 +112,10 @@ def _compute_retry_outcome(jobs: list) -> tuple[int, int, int]:
     return len(url_rw), retried_ok, retried_failed
 
 
+def _compute_wasted_ratio(fetch_counts: dict) -> float:
+    return fetch_counts["n_regwall_fetches"] / max(fetch_counts["n_total_fetches"], 1)
+
+
 def _compute_pool_windows(state: RiderState) -> tuple[int, list[dict]]:
     pool_total   = len(state.proxy_pool)
     pool_windows: list[dict] = []
@@ -122,6 +135,10 @@ def _compute_pool_windows(state: RiderState) -> tuple[int, list[dict]]:
                     "peak_cooldown": peak_cooldown,
                 })
     return pool_total, pool_windows
+
+
+def _page_timeout_seconds(state: RiderState) -> float:
+    return state.page_timeout_ms / 1000
 
 
 def _compute_load_percentiles(jobs: list) -> tuple[list[float], dict | None]:

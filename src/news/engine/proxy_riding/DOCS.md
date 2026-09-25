@@ -67,7 +67,7 @@ The entry builds the URL queue, loads and filters the proxy pool and creates the
 **Called by:** src/news/pipeline.py, abort.py.
 **Calls out:** none.
 
-### metrics.py (151 LOC)
+### metrics.py (168 LOC)
 
 **Purpose:** Derives job statistics from the rider state for the report and plots.
 **Reads:** the rider state and job start time.

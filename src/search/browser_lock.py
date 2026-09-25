@@ -16,11 +16,30 @@ _TS_FMT = "%Y-%m-%dT%H:%M:%S.%fZ"
 POLL_INTERVAL_S = 0.25
 
 
-# FUNCTIONS
+# ORCHESTRATOR
 
 def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None = None) -> LockHandle:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     sidecar_path = lock_path.with_suffix(".json")
+    return _acquire_when_free(lock_path, sidecar_path, hard_budget_s, on_stale)
+
+
+# FUNCTIONS
+
+class LockHandle:
+    def __init__(self, fd, sidecar_path: Path):
+        self._fd = fd
+        self._sidecar_path = sidecar_path
+
+    def release(self) -> None:
+        fcntl.flock(self._fd, fcntl.LOCK_UN)
+        self._fd.close()
+        self._sidecar_path.unlink(missing_ok=True)
+
+
+def _acquire_when_free(
+    lock_path: Path, sidecar_path: Path, hard_budget_s: float, on_stale: Callable[[], None] | None,
+) -> LockHandle:
     while True:
         fd = open(lock_path, "a")
         try:
@@ -40,17 +59,6 @@ def acquire(lock_path: Path, hard_budget_s: float, on_stale: Callable[[], None] 
             _break_lock(lock_path, sidecar_path)
             continue
         time.sleep(POLL_INTERVAL_S)
-
-
-class LockHandle:
-    def __init__(self, fd, sidecar_path: Path):
-        self._fd = fd
-        self._sidecar_path = sidecar_path
-
-    def release(self) -> None:
-        fcntl.flock(self._fd, fcntl.LOCK_UN)
-        self._fd.close()
-        self._sidecar_path.unlink(missing_ok=True)
 
 
 def _write_sidecar(sidecar_path: Path) -> None:

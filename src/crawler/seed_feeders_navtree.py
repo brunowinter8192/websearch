@@ -22,42 +22,30 @@ _CURRENT_VERSION_KEY_HINT = "currentversion"
 _PATH_WITHOUT_LANGUAGE_KEY_HINT = "pathwithoutlanguage"
 
 
-# FUNCTIONS
+# ORCHESTRATOR
 
 async def resolve_navigation_tree(client: httpx.AsyncClient, seed_url: str) -> tuple:
-    html = await _fetch_html(client, seed_url)
-    if html is None:
-        raise RuntimeError(f"could not fetch seed_url: {seed_url!r}")
-
-    payloads = extract_payloads(html)
-    hrefs, tier, source_payload = find_navigation_tree(payloads)
-    absolute = [urljoin(seed_url, href) for href in hrefs]
+    html = await _fetch_seed_html(client, seed_url)
+    absolute, tier, source_payload = _find_seed_tree(html, seed_url)
 
     if source_payload is None:
         return absolute, tier, None
 
-    all_versions = _find_version_list(source_payload)
-    current_version = _find_current_version(source_payload)
-    path_without_language = _find_path_without_language(source_payload)
-    version_urls = _build_version_urls(seed_url, all_versions, current_version, path_without_language)
-    all_version_keys = list(all_versions.keys()) if all_versions else None
+    version_urls, all_version_keys = _plan_versions(seed_url, source_payload)
     if not version_urls:
         return absolute, tier, all_version_keys
 
-    canonical_default = [canonicalize_version_url(url, all_version_keys) for url in absolute]
-
-    semaphore = asyncio.Semaphore(NAVTREE_FETCH_CONCURRENCY)
-
-    async def _bounded(version_url: str) -> list:
-        async with semaphore:
-            return await _resolve_one_version(client, version_url, all_version_keys)
-
-    per_version_results = await asyncio.gather(*[_bounded(u) for u in version_urls.values()])
-
-    union = list(canonical_default)
-    for urls in per_version_results:
-        union.extend(urls)
+    union = await _union_with_versions(client, absolute, version_urls, all_version_keys)
     return union, tier, all_version_keys
+
+
+# FUNCTIONS
+
+async def _fetch_seed_html(client: httpx.AsyncClient, seed_url: str) -> str:
+    html = await _fetch_html(client, seed_url)
+    if html is None:
+        raise RuntimeError(f"could not fetch seed_url: {seed_url!r}")
+    return html
 
 
 async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
@@ -68,6 +56,13 @@ async def _fetch_html(client: httpx.AsyncClient, url: str) -> str | None:
     if response.status_code != 200:
         raise RuntimeError(f"unexpected status {response.status_code} for {url}")
     return response.text
+
+
+def _find_seed_tree(html: str, seed_url: str) -> tuple:
+    payloads = extract_payloads(html)
+    hrefs, tier, source_payload = find_navigation_tree(payloads)
+    absolute = [urljoin(seed_url, href) for href in hrefs]
+    return absolute, tier, source_payload
 
 
 def extract_payloads(html: str) -> list:
@@ -177,6 +172,15 @@ def _collect_flat_hrefs(payload, out: list) -> None:
             _collect_flat_hrefs(item, out)
 
 
+def _plan_versions(seed_url: str, source_payload) -> tuple:
+    all_versions = _find_version_list(source_payload)
+    current_version = _find_current_version(source_payload)
+    path_without_language = _find_path_without_language(source_payload)
+    version_urls = _build_version_urls(seed_url, all_versions, current_version, path_without_language)
+    all_version_keys = list(all_versions.keys()) if all_versions else None
+    return version_urls, all_version_keys
+
+
 def _find_version_list(payload) -> dict | None:
     return _find_field(
         payload,
@@ -243,6 +247,23 @@ def _build_version_urls(seed_url: str, all_versions: dict | None, current_versio
         for version_key in all_versions
         if version_key != current_version
     }
+
+
+async def _union_with_versions(client: httpx.AsyncClient, absolute: list, version_urls: dict, all_version_keys) -> list:
+    canonical_default = [canonicalize_version_url(url, all_version_keys) for url in absolute]
+
+    semaphore = asyncio.Semaphore(NAVTREE_FETCH_CONCURRENCY)
+
+    async def _bounded(version_url: str) -> list:
+        async with semaphore:
+            return await _resolve_one_version(client, version_url, all_version_keys)
+
+    per_version_results = await asyncio.gather(*[_bounded(u) for u in version_urls.values()])
+
+    union = list(canonical_default)
+    for urls in per_version_results:
+        union.extend(urls)
+    return union
 
 
 def canonicalize_version_url(url: str, version_keys) -> str:

@@ -137,7 +137,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** robots_feeder.py, sitemap_feeder.py.
 **Calls out:** httpx.
 
-### seed_feeders_sitemap.py (69 LOC)
+### seed_feeders_sitemap.py (79 LOC)
 
 **Purpose:** Fetches and parses sitemaps, resolving sitemap indexes recursively with bounded concurrency and cycle protection.
 **Reads:** sitemap documents over HTTP.
@@ -145,7 +145,7 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** sitemap_feeder.py.
 **Calls out:** httpx.
 
-### seed_feeders_navtree.py (267 LOC)
+### seed_feeders_navtree.py (288 LOC)
 
 **Purpose:** Detects a site's own frontend navigation tree in page payloads, walks it and unions every exposed version.
 **Reads:** the seed page and each version's root page over HTTP.

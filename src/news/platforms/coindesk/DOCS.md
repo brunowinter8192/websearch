@@ -54,7 +54,7 @@ Discovery warms a real Chrome session under HAR capture to obtain the timeline A
 **Called by:** discover.py, __init__.py.
 **Calls out:** none (stdlib only).
 
-### cleanup.py (120 LOC)
+### cleanup.py (135 LOC)
 
 **Purpose:** Strips CoinDesk page chrome from raw markdown to leave the article body.
 **Reads:** raw markdown text handed in.
