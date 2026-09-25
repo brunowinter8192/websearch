@@ -83,7 +83,7 @@ Query set from `../queries.txt` runs through the instrumented production pipelin
 **Called by:** `acquire_probe.py`.
 **Calls out:** none.
 
-### _acquire_probe_instrument.py (80 LOC)
+### _acquire_probe_instrument.py (75 LOC)
 
 **Purpose:** Lock-watching limiter monkeypatch emitting enter and exit events, applied at import.
 **Reads:** nothing; patches the production rate limiter.
