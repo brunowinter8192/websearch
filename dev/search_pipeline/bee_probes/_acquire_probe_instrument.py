@@ -23,16 +23,11 @@ def install_instrument() -> None:
     _require_limiter_internals()
     RateLimiter.__init__ = _patched_init
     RateLimiter.acquire = _patched_acquire
-    for limiter in _rl_mod._limiters.values():
-        limiter._lock = _WatchedLock(limiter._lock, limiter)
 
 
 def _require_limiter_internals() -> None:
     if not hasattr(_rl_mod, "_limiters"):
-        raise RuntimeError("src.search.rate_limiter no longer has _limiters: the acquire instrument cannot wrap existing limiters")
-    for name, limiter in _rl_mod._limiters.items():
-        if not hasattr(limiter, "_lock"):
-            raise RuntimeError(f"limiter {name} has no _lock: the acquire instrument cannot wrap it")
+        raise RuntimeError("src.search.rate_limiter no longer has _limiters: the acquire instrument cannot name limiters")
 
 
 def _patched_init(self, *args, **kwargs) -> None:
