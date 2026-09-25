@@ -469,8 +469,8 @@ top-level node multiset differs: 119
 - only in current: run_simulation, _print_parsed_records, _compute_results, _print_report
 
 ### dev/search_pipeline/selector_js_equivalence_check.py
-- only in base: If@111
-- only in current: run_main, If@116
+- only in base: main, If@111
+- only in current: Expr@16, main, _compute_old_js, _compute_new_js, _compute_lines, _compare_engines, _write_report, _print_verdict, If@140
 
 ### dev/search_pipeline/with_google_decoupling_smoke.py
 - only in base: run_smoke
