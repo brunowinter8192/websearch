@@ -143,3 +143,26 @@ Three decisions of the user after verification part 1.
 Result of the rerun on the Basner directory (the 40-page build, unchanged on disk): `assemble` now exits 0 and writes `/tmp/pdfwf_out/BasnerMcGuireNoiseAndSleepReview2018.md` (184 600 characters, 45 page markers). Batch 1-40 recall 0.9789 with page 37 unjudged, batch 41-45 recall 0.9995. The end record has `outcome` ok, `chars_ref` 140 572, `char_ratio` 0.991, `unjudged_pages` [37]. `stats` then reports 2 runs, 1 ok, 1 failed (`missing_batch`, the Kuepper run), "recovered by retry: 1" (the Basner run: its first end record was the false `low_recall`, the second is ok; this retry was a code change, not a worker retry), mean duration 37.8 minutes (wall time from `extract` to the last `assemble`, mostly waiting). Both runs belong to config hash `ef02c8db4356d4f2` (the 40-page build); the 50-page build with the new config has not been run on a real PDF yet.
 
 Not handled, unobserved: `format_success` takes the minimum recall over judged batches and would fail on a book in which every batch is unjudged (fewer than 200 reference characters each); a one-page PDF with 100 to 199 text characters passes the text-layer gate and would hit this.
+
+## Recap (2026-10-11): how the work ran, what to reuse, what went wrong
+
+Order of work: (1) read the skill draft, the monitor-cc process-docs of the area pdf_conversion_qa, the trial driver and the websearch conventions, and answer with gaps and a plan before any code; (2) throwaway probes in `/tmp/pdfwf_probe` outside the worktree (liteparse in a scratch venv, recall of the 50 trial batches against pdftotext, text-layer statistics of the 21 PDFs of wise2627) which set the entry point, the threshold and the batch protocol; (3) build with tests; (4) three spec changes from the user (50-page batches with 20 fixed workers and a RAM tripwire, then removal of the tripwire, then the outlier-page rule after a false failure found by verification); (5) verification on real Haiku output. Every number in the code has its origin in a section above.
+
+What to reuse:
+- Running tests from the worktree: `PYTHON=<main checkout>/venv/bin/python bash dev/tests/run_strands.sh` runs one fail-fast pytest per file in parallel (77 files, about 1 minute). One file: `<main checkout>/venv/bin/python -m pytest -x -q -p no:cacheprovider dev/tests/test_pdf_extract.py`. A worktree has no `venv/`; `liteparse` was installed into the main checkout's `venv/` (gitignored).
+- Generated PDFs: `dev/tests/_pdf_fakes.py` writes a raw PDF with Helvetica text, blank pages and superimposed layers (same text drawn N times, shifted 3 pt per layer, which poppler does not merge). It is the shortest way to a hermetic fixture; no PDF library is installed.
+- Diagnosing a failing content check: compute recall per page, not per batch, with `latin_char_counts` and `pdftotext_pages` from `src/pdf/pdf_text.py`; one page with 20 times the normal character count explained the 0.638 of Basner 1-40.
+- The log of real runs lives in the checkout that ran them (`src/logs/conversions.jsonl` below `PROJECT_ROOT`); run `assemble` and `stats` from the same checkout.
+- The real verification directories are `/tmp/pdf_BasnerMcGuireNoiseAndSleepReview2018/` and `/tmp/pdf_KuepperControlling_2024/` (40-page build, Haiku output of Basner 1-40, 41-45 and Kuepper 241-280). `/tmp` is not persistent.
+
+Mistakes made, so that they are not repeated:
+- BSD `sed -i` on macOS needs `-i ''`; two edits failed with "extra characters at the end of d command" and were redone with the Edit tool or a Python replace.
+- The shell resets its working directory after every call; every command begins with `cd <worktree>`.
+- Two test expectations were computed wrongly the first time (the mean duration in the stats fixture, and a character ratio above 1.0 because the output carries page markers); the code was right, the tests were corrected.
+- A process-docs sentence claimed that page 37 of the Basner output had been compared against the layer; only its first 900 characters (a clean pipe table) had been read. The claim was corrected in this file. Write what was actually read.
+- The first threshold reasoning used trial batches of 20 pages with the old prompt; real 40-page Haiku batches then showed a failure mode (superimposed text layer) that those data could not contain.
+
+Open at the end of this session:
+- The 50-page build (`extract` with 50-page batches, the three-chunk prompt) has been exercised only by tests and by rendering a prompt, not by a real `extract` and not by real Haiku workers.
+- `skills/websearch-pdf/SKILL.md` still describes the earlier design (script path, log path, 40 pages, RAM-derived parallelism); it is user-owned and was not touched.
+- The unjudged-everything case in `format_success` (see Update 3) and the hypothesis that the Read tool may reject a one-page range such as `"21-21"` are unobserved and unhandled or guarded only by the bare-number form.
