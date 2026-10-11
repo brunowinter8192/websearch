@@ -105,7 +105,7 @@ Both directories were built by the 40-page build (commit 3a24944) and assembled 
 
 ### Finding 1: the content check false-fails Basner 1-40 because the text layer of that PDF is superimposed
 
-- The Haiku output of Basner 1-40 is correct (40 page markers, page 6 and page 37 read against the layer: the output has the final text once). The reference is wrong.
+- The Haiku output of Basner 1-40 looks correct in the two pages read: 40 page markers; page 6 has the final text once and matches the readable lines of the `-layout` text; page 37 is a clean pipe table (Table 13, Summary of findings). Not every page was read. The reference is what is wrong.
 - Per page, 33 of 40 pages have recall 0.97 to 1.0. Page 37 has a pdftotext layer of 67 082 alphanumeric characters against 2 822 in the output (recall 0.042); the typical page has 3 000 to 4 000. That one page is 35 percent of the reference of the batch. Seven more pages (3, 6, 10, 11, 12, 21, 22) have recall 0.60 to 0.79.
 - Cause, observed on page 6 with `pdftotext -layout`: the PDF carries two superimposed text layers, the final article (header "6 of 45") and the peer-review draft (header "Int. J. Environ. Res. Public Health 2018, 15, x FOR PEER REVIEW ... 6 of 43"), so the same sentences appear twice, and on page 37 about twenty times (words like "However, However, However, we we we downgraded downgraded"). The liteparse anchor is affected the same way (page 37 anchor: 15 090 characters).
 - Recall of the batch with page 37 removed from reference and output: 0.9598, above the threshold.
