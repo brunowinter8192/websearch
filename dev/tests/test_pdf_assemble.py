@@ -154,3 +154,28 @@ def test_outlier_boundary_is_strictly_more_than_five_times_the_median():
 def test_batch_with_a_zero_median_has_no_outlier_pages():
     reference, outliers = judged_reference(pages_of_size(0, 0, 0, 900))
     assert outliers == () and sum(reference.values()) == 900
+
+
+def test_assemble_splits_long_paragraphs_after_the_check_and_logs_the_count(extracted, tmp_path, conversion_log):
+    write_batches(extracted, [(51, 85)])
+    long_paragraph = " ".join(f"Zusatz {number} über Äpfel und Größen." for number in range(60))
+    (extracted / "batch_1-50.md").write_text(worker_output(1, 50, blank=(BLANK_PAGE,)) + "\n" + long_paragraph + "\n")
+    report = assemble_workflow(str(extracted), str(tmp_path / "out"))
+    assert report.ok
+    book = (tmp_path / "out" / "Book.md").read_text()
+    assert max(len(p.encode("utf-8")) for p in book.split("\n\n")) <= 900
+    assert long_paragraph.replace(" ", "") in book.replace(" ", "").replace("\n", "")
+    assert "paragraphs split: " in report.text and "limit 900 bytes" in report.text
+    end = read_log(conversion_log)[-1]
+    assert end["paragraphs_split"] >= 1
+    assert end["tables_split"] == 0
+    assert end["paragraphs_over_limit"] == 0
+
+
+def test_failed_assemble_reports_no_split_and_writes_nothing(extracted, tmp_path, conversion_log):
+    write_batches(extracted, [(1, 50)])
+    report = assemble_workflow(str(extracted), str(tmp_path / "out"))
+    assert not report.ok
+    assert "paragraphs split" not in report.text
+    assert "paragraphs_split" not in read_log(conversion_log)[-1]
+    assert not (tmp_path / "out").exists()

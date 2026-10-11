@@ -81,6 +81,7 @@ def test_extract_logs_a_start_record_before_any_end_record(tmp_path, conversion_
     assert start["config"]["batch_pages"] == 50
     assert start["config"]["workers"] == 20
     assert start["config"]["outlier_page_factor"] == 5
+    assert start["config"]["paragraph_limit_bytes"] == 900
     assert start["config"]["worker_model"] == "claude-haiku-5-5[1m]"
     assert len(start["pdf_sha256"]) == 64
 
