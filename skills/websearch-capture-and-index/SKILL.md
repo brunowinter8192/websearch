@@ -5,15 +5,15 @@ description:
 
 # Capture-and-Index — Skill
 
-**Mehrere Domains laufen nacheinander.**
-- Nimm eine Domain durch Schritt 1 bis Schritt 4 und fange danach mit der nächsten wieder bei Schritt 1 an.
+**Input aus dem Spawn-Prompt.**
+- `SEED_URL` — die Einstiegsseite der Domain.
+- `COLLECTION` — die Ziel-Collection.
+- `INFO_NEED` — der Informationsbedarf des Main Agents, dein einziger Maßstab für Relevanz.
 
-**Fehler werden in Schritt 4 gemeldet und niemals mitten im Capture behandelt.**
+**Fehler werden in Step 6 gemeldet und stoppen den Ablauf nicht.**
+- Führe den Ablauf bis zum Ende durch, es sei denn ein Fehler macht ein Weitermachen unmöglich.
 
-## Schritt 1 — Discovery
-
-**Input, den der Main Agent mit dem Go benennt.**
-- `<seed_url>` hält eine Seed-URL pro Domain.
+## Step 1 — Discovery
 
 1. Führe die Discovery gegen die Seed-URL aus.
 
@@ -22,17 +22,21 @@ description:
    ./venv/bin/python cli.py discover_urls "<seed_url>" --url-file /tmp/<domain>_urls.txt
    ```
 
-2. 🛑 STOP und melde:
-   - den absoluten Pfad von `/tmp/<domain>_urls.txt`, eine URL pro Zeile, als klickbaren Link
+## Step 2 — Cull
 
-3. Geh idle.
+1. Filtere die Liste so weit es geht
+   - Auf `platform.claude.com` hieß das: eine Sprache behalten, die Console-Routen streichen, die API-Referenz streichen. Aus 3571 Zeilen wurden 242.
 
-## Schritt 2 — Scrape
+2. Lies jede verbleibende Zeile vollständig
 
-**Input, den der Main Agent mit dem Go benennt.**
-- `<culled_url_file>` hält die URLs, die gescrapet werden.
+3. Behalte jede URL, die `INFO_NEED` dienen kann.
+   - bist du dir unsicher ob eine URL dem `INFO_NEED` zuträglich ist, so lasse sie drin
 
-1. Scrape die zusammengestrichene Liste.
+4. Schreibe die behaltenen URLs nach `/tmp/<domain>_urls_culled.txt`.
+
+## Step 3 — Scrape
+
+1. Scrape die gefilterte Liste.
 
    ```bash
    cd /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch
@@ -41,84 +45,131 @@ description:
        --output-dir /tmp/<domain>/ > /tmp/<domain>_scrape.log 2>&1
    ```
 
-2. Geh idle, sobald dieses Command läuft.
-   - Es geht von selbst in den Hintergrund, und `/tmp/<domain>_scrape.log` trägt seine Summary-Zeile, sobald es zurückkommt.
+2. Geh idle, bis der Scrape fertig ist.
+   - Polle nicht, du wirst benachrichtigt.
 
-3. Teile die Link-Datei auf, die pipe_scraper geschrieben hat.
+3. Hole die neuen Links aus den gescrapten Seiten.
+   - pipe_scraper sammelt alle Links der gescrapten Seiten in `/tmp/<domain_underscored>_scrape_links.txt`.
+      - Die Punkte im Domainnamen werden zu Unterstrichen, zum Beispiel `/tmp/docs_pytest_org_scrape_links.txt`.
+   - Streiche daraus jede URL, die schon in der Discovery stand oder schon gescrapt wurde.
 
    ```bash
-   comm -13 <(sort /tmp/<domain>_urls.txt) <(sort /tmp/<domain>_scrape_links.txt) > /tmp/<domain>_new_links.txt
-   comm -12 <(sort /tmp/<domain>_urls.txt) <(sort /tmp/<domain>_scrape_links.txt) > /tmp/<domain>_known_links.txt
+   cat /tmp/<domain>_urls.txt <culled_url_file> >> /tmp/<domain>_seen.txt
+   comm -13 <(sort -u /tmp/<domain>_seen.txt) <(sort -u /tmp/<domain_underscored>_scrape_links.txt) > /tmp/<domain>_new_links.txt
    ```
 
-4. 🛑 STOP und melde:
-   - den absoluten Pfad von `/tmp/<domain>/`, als klickbaren Link
-   - den absoluten Pfad von `/tmp/<domain>_new_links.txt`, als klickbaren Link
+4. Lies `/tmp/<domain>_new_links.txt` vollständig und behalte jede URL, die `INFO_NEED` dienen kann.
 
-5. Geh idle.
-   - Der Main Agent liest die Dateien und entscheidet zwischen einer weiteren Scrape-Runde und Schritt 3.
+5. Gibt es behaltene neue URLs, schreibe sie in eine neue URL-Datei, scrape sie wie in 1 und wiederhole ab 3.
+   - Sobald keine neue URL mehr behalten wird, geht es zu Step 4.
 
-## Schritt 3 — Cleanup
+## Step 4 — Cleanup
 
-**Dieser Schritt startet, wenn der Main Agent sagt, dass es zu Schritt 3 geht, und in keinem anderen Moment.**
+**Der Cleanup räumt genau zwei Dinge ab.**
+- Dateien von gescheiterten Scrapes.
+- Verschmutzungen in den übrigen Dateien.
 
-**Rauschen stehen zu lassen ist besser, als Inhalt herauszuschneiden.**
-- Eine Passage, über die man streiten kann, bleibt drin.
+### Stage 1 — Gescheiterte Scrapes
 
-**Eine Defektklasse nach der anderen, von Anfang bis Ende, bevor die nächste benannt wird.**
+**Eine extrem kleine Datei ist das deutlichste Zeichen für einen gescheiterten Scrape.**
+- Beispiel: `test.com` lieferte eine Cloudflare-Sperrseite mit 506 Bytes statt des Inhalts.
 
-**Eine Datei, bei der es so aussieht als wäre der Scrape schiefgegangen, wandert in den Report von Schritt 4.**
-- Beim Cleanup fällt so etwas auf, also notiere es im Vorbeigehen und mach mit dem Cleanup weiter.
+1. Liste die Dateien in `/tmp/<domain>/` nach Größe, die kleinste zuerst.
 
-### Stufe 1 — Stichprobe
+   ```bash
+   ls -lSr /tmp/<domain>/
+   ```
+
+2. Lies die Dateien von der kleinsten an, bis du auf echten Inhalt triffst.
+
+3. Verschiebe jede Datei ohne echten Inhalt nach `/tmp/<domain>_failed/`.
+   - Sie wird nicht indexiert und steht im Report von Step 6.
+
+### Stage 2 — Stichprobe der Verschmutzung
+
+**Jede verschmutzte Passage wird entweder bereinigt oder komplett gelöscht.**
+- Lässt sich die Verschmutzung vom Inhalt trennen, bereinige die Passage.
+- Lässt sie sich nicht trennen, lösche die Passage komplett.
+
+**Bearbeite eine Defektklasse nach der anderen**
+- cleane zuerst alle mds vollständig in bezug auf eine klasse, bevor du mit der nächsten beginnst.
 
 1. Wähle eine `.md` aus `/tmp/<domain>/` und lies sie mit dem Read-Tool von vorne bis hinten, jede Zeile.
 
 2. Benenne die Defektklassen, die du darin siehst.
    - Jede Klasse trägt den Anker, über den sie sich identifizieren lässt.
 
-### Stufe 2 — Ein Skript pro Klasse
+### Stage 3 — Ein Skript pro Klasse
 
-1. Schreibe `/tmp/clean_<class>_<domain>.py` in `python3`.
-   - Der Dry-Run ist der Standard, `--apply` ist ein eigener, getrennter Lauf.
+**Das Skript hat zwei Modi, Probelauf und echter Lauf.**
+- Ohne Flag macht es einen Probelauf.
+   - escschreibt nur auf, was es schneiden würde.
+- Mit `--apply` macht es den echten Lauf.
+   - Es schneidet die Passagen wirklich aus den `.md`-Dateien.
 
-2. Lass das Skript zwei Dinge schreiben.
-   - die bereinigten `.md`-Dateien, direkt an Ort und Stelle, und zwar nur unter `--apply`
-   - `/tmp/cut_<class>_<domain>.md` mit jeder entfernten Passage im Wortlaut, und zwar immer, auch im Dry-Run
-
-3. Gib `cut_` einen Block pro Passage, ohne irgendetwas drumherum.
+**In beiden Modi schreibt das Skript jede geschnittene Passage nach `/tmp/cut_<class>_<domain>.md`.**
+- Ein Block pro Passage, ohne irgendetwas drumherum:
 
    ```
    <filename>:<start_line>-<end_line>
    <the removed text, verbatim>
    ```
 
-4. Lass es zuerst trocken laufen.
-   - Die `.md`-Dateien bleiben unangetastet, bis Stufe 3 die Klasse freigibt.
+1. Schreibe für die Defektklasse ein Python-Skript, das ihre Defekte aus allen `.md`-Dateien schneidet.
+   - Das Skript liegt unter `/tmp/clean_<class>_<domain>.py`.
 
-### Stufe 3 — Lies was du geschnitten hast, dann wende es an
+2. Starte den Probelauf.
 
-1. Lies `/tmp/cut_<class>_<domain>.md` mit dem Read-Tool, mit `offset` über die Datei gestuft.
-   - Stufe so weit, bis du Passagen vom Anfang, aus der Mitte und vom Ende gesehen hast.
+### Stage 4 — Bewerte was du geschnitten hast
 
-2. Behalte jede Passage, die du nicht als Rauschen einordnen kannst.
-   - Verenge den Anker, lass erneut trocken laufen und lies erneut.
+1. Lies `/tmp/cut_<class>_<domain>.md` mit dem Read-Tool, ggf. mit `offset`.
+    - nimm Stichproben von dem war wirklich geschnitten werden würde.
 
-3. Sichere und wende an, sobald sich jede Passage als Rauschen liest.
-   - Kopiere ganz `/tmp/<domain>/` nach `/tmp/<domain>_PRE_<class>_BACKUP/` und führe dann `--apply` aus.
+2. Hat das Skript eine saubere Passage mitgeschnitten, passe das skritp an. 
+   - Starte erneut den Probelauf und lies erneut.
 
-### Stufe 4 — Verifiziere, dann nimm die nächste Klasse
+3. Starte den echten Lauf, sobald jeder Schnitt nur Verschmutzung oder untrennbar verschmutzte Passagen trifft.
+   - Kopiere vorher ganz `/tmp/<domain>/` als Sicherung nach `/tmp/<domain>_PRE_<class>_BACKUP/`.
 
-1. Scanne die Klasse erneut über `/tmp/<domain>/` und erwarte null verbleibende Treffer.
+### Stage 5 — Verifiziere, dann nimm die nächste Klasse
 
-2. Lies 10 bis 15 Zeilen aus der Mitte von zwei bereinigten Dateien.
+1. Suche den Anker der Klasse erneut in allen Dateien unter `/tmp/<domain>/`.
+   - Gibt es noch Treffer, hat das Skript sie verfehlt.
+   - Passe das Skript so an, dass es diese Treffer erfasst, und geh zurück zu Stage 4.
 
-3. Bestätige, dass jede Datei weiterhin ihre Zeile `<!-- source: URL -->` trägt.
+2. Bestätige, dass jede Datei weiterhin ihre Zeile `<!-- source: URL -->` trägt.
 
-4. Geh zu Stufe 1 für die nächste Klasse.
+3. Geh zu Stage 2 für die nächste Klasse.
 
-## Schritt 4 — Report
+## Step 5 — Index
 
-**Melde, dass das Cleanup fertig ist, und geh idle.**
-- den absoluten Pfad von `/tmp/<domain>/`, wo die bereinigten `.md`-Dateien liegen, als klickbaren Link
-- jeden Fehler jeder Art, über den du in allen vier Schritten gestolpert bist
+1. Kopiere die bereinigten Dateien in das Verzeichnis der Collection.
+
+   ```bash
+   D=~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<collection>
+   mkdir -p $D && cp /tmp/<domain>/*.md $D/
+   ```
+
+2. Indexiere die Collection und geh idle, bis der Lauf fertig ist.
+   - Polle nicht, du wirst benachrichtigt.
+
+   ```bash
+   PYTHONUNBUFFERED=1 rag-cli index --collection <collection> > /tmp/<collection>_index.log 2>&1
+   ```
+
+3. Lies `/tmp/<collection>_index.log` vollständig und notiere jeden Fehler für den Report.
+   - Zum Beispiel eine Datei, die rag-cli nicht chunken oder embedden konnte.
+
+## Step 6 — Report
+
+1. Schreibe den Report in diesem Format in den Chat.
+
+   ```
+   Deep Dive fertig: <domain>
+   Collection: <collection>
+   Indexiert: <Zahl> Seiten
+   Gescheiterte Scrapes: <Dateien aus /tmp/<domain>_failed/ oder "keine">
+   Fehler: <jeder Fehler aus allen Steps oder "keine">
+   ```
+
+2. Geh idle.

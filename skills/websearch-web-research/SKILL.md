@@ -11,7 +11,6 @@ description:
    - Handbuch oder Referenz eines Herstellers.
 - Diese Typen kommen meist nicht infrage:
    - Blog, News, Forum, Produktseite, Changelog, Release Feed.
-- Schlage dem User proaktiv einen Deep Dive vor.
 
 **Schreibe die Query in der Sprache, in der du die Ergebnisse haben willst.**
 - Die Sprache des Chats gilt hier nicht.
@@ -52,11 +51,6 @@ Engine breakdown for "<query>":
 
 **Schau dir die URLs eines oder mehrerer Engines an**
 - Solltest du feststellen, dass eine Engine auf deine Query keine brauchbaren Ergebnisse liefert, versuche IMMER eine kürzere Query in anderen Worten.
-
-**PDF-URLs werden IMMER an den User zum Download gegeben**
-- Bevorzuge PDFs vor anderen Webinhalten.
-- Die `PDF:`-Zeile ist der einzige Weg zum Volltext, denn eine `.pdf`-URL lässt sich nicht scrapen.
-- Der Nutzer lädt selbst, die Umwandlung nach Markdown steht im Skill `websearch-pdf`.
 
 #### Input args
 
