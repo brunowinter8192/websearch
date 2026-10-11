@@ -331,21 +331,21 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_planning.py (34 LOC)
+### test_pdf_planning.py (33 LOC)
 
-**Purpose:** `src/pdf/extract.py` batch ranges for 50-page batches, the one-wave boundary at 1 000 pages and the fixed worker count with its RAM tripwire value.
+**Purpose:** `src/pdf/extract.py` batch ranges for 50-page batches, the one-wave boundary at 1 000 pages and the fixed worker count.
 
 ### test_pdf_worker_prompt.py (71 LOC)
 
 **Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule.
 
-### test_pdf_extract.py (128 LOC)
+### test_pdf_extract.py (132 LOC)
 
-**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, low-RAM stop, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
+**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, no RAM measurement, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
 
-### test_pdf_assemble.py (100 LOC)
+### test_pdf_assemble.py (156 LOC)
 
-**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run.
+**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run, a superimposed text-layer page (named as unjudged, real loss still caught), outlier boundary.
 
 ### test_pdf_stats.py (68 LOC)
 
@@ -355,9 +355,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Argument parsing of the `pdf` subcommands and rejection of a malformed `--since` date.
 
-### _pdf_fakes.py (89 LOC)
+### _pdf_fakes.py (95 LOC)
 
-**Purpose:** Shared helper: raw-PDF writer for generated text pages, simulated worker output, log reader, extract runner with injected free RAM, conversion-log fixture.
+**Purpose:** Shared helper: raw-PDF writer for generated text pages, superimposed text layers, simulated worker output, log reader, extract runner, conversion-log fixture.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.

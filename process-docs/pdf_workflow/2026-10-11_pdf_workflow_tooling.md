@@ -125,3 +125,21 @@ Both directories were built by the 40-page build (commit 3a24944) and assembled 
 
 - Basner 1-40: low-resolution figures were described approximately and marked with `[?]` (5 `[?]` in the batch file, 0 in Kuepper 241-280).
 - Kuepper 241-280: the anchor misses the opening sentence of page 268 and is sparse for Abb. 7-2 on page 264; the worker took both from the image. Finished with 69 percent context left at 40 dense pages, about 7 800 tokens per page including output; 50 dense pages would stay near 400k of the 1M window.
+
+## Update 3 (2026-10-11): outlier-page rule in assemble, RAM tripwire removed by user decision
+
+Three decisions of the user after verification part 1.
+
+1. **Outlier-page rule (implemented).** In the content check, a reference page whose character count is more than 5 times the median page of its batch is left out of the reference, and the batch is judged on the remaining pages. Constants: `OUTLIER_PAGE_FACTOR = 5` in `src/config.py` (shared by `extract`, which logs it in the config, and `assemble`). Details that are easy to get wrong:
+   - "More than": exactly 5 times is not an outlier (test: sizes 100, 100, 100, 500 keep all four; 501 drops the fourth).
+   - A batch whose median page has 0 characters gets no exclusion (test: sizes 0, 0, 0, 900).
+   - Only the reference loses the page. The output text of that page stays in the output multiset, which cannot raise recall beyond what the other pages' reference allows because recall counts the minimum of both.
+   - Excluded pages are named in the `assemble` output (`unjudged pages (text layer over 5x the median page of the batch): 37`) on success and on failure, and in the end record as `unjudged_pages` (list of page numbers). `chars_ref` and `char_ratio` use the judged reference.
+   - The rule does not hide real loss: a fixture with one superimposed page (20 layers, shifted 3 pt each, the page-37 case) plus 15 percent lost lines on the other pages still fails with `low_recall` and names the page. Without the rule the same fixture gives recall 0.728 and fails although the output is complete.
+   - Pages like Basner 3, 6, 10, 11, 12, 21, 22 (recall 0.60 to 0.79, text layer roughly doubled) are not excluded; they only lower the batch recall.
+2. **No hyphen handling in `assemble`** (user agrees with the judgement in verification part 1).
+3. **The RAM tripwire is removed completely (user decision).** `extract` makes no RAM measurement at all: no `psutil` call, no `available_gb` in the start record or the manifest, no `min_available_gb` in the config, no `low_ram` failure class, no abort. Parallel workers are fixed at 20 (`PARALLEL_WORKERS`, logged in the config as `workers`, written to the manifest). This supersedes point 4 of "Update 2026-10-11 (later the same day)" and every RAM statement in that section and in "Worker limit". A test patches `psutil.virtual_memory` to raise and requires `extract` to succeed and to log no RAM field. Records written before this change (the two start records of the 40-page build) still carry `available_gb` and `workers`; they stay in the append-only log.
+
+Result of the rerun on the Basner directory (the 40-page build, unchanged on disk): `assemble` now exits 0 and writes `/tmp/pdfwf_out/BasnerMcGuireNoiseAndSleepReview2018.md` (184 600 characters, 45 page markers). Batch 1-40 recall 0.9789 with page 37 unjudged, batch 41-45 recall 0.9995. The end record has `outcome` ok, `chars_ref` 140 572, `char_ratio` 0.991, `unjudged_pages` [37]. `stats` then reports 2 runs, 1 ok, 1 failed (`missing_batch`, the Kuepper run), "recovered by retry: 1" (the Basner run: its first end record was the false `low_recall`, the second is ok; this retry was a code change, not a worker retry), mean duration 37.8 minutes (wall time from `extract` to the last `assemble`, mostly waiting). Both runs belong to config hash `ef02c8db4356d4f2` (the 40-page build); the 50-page build with the new config has not been run on a real PDF yet.
+
+Not handled, unobserved: `format_success` takes the minimum recall over judged batches and would fail on a book in which every batch is unjudged (fewer than 200 reference characters each); a one-page PDF with 100 to 199 text characters passes the text-layer gate and would hit this.

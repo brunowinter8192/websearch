@@ -1,7 +1,7 @@
 # INFRASTRUCTURE
 import pytest
 
-from src.pdf.extract import MIN_AVAILABLE_GB, PARALLEL_WORKERS, plan_batches
+from src.pdf.extract import PARALLEL_WORKERS, plan_batches
 
 
 # FUNCTIONS
@@ -29,6 +29,5 @@ def test_a_book_of_one_thousand_pages_fits_one_wave_of_workers():
     assert len(plan_batches(1001)) > PARALLEL_WORKERS
 
 
-def test_ram_tripwire_is_the_measured_demand_of_all_workers():
+def test_parallel_workers_are_twenty():
     assert PARALLEL_WORKERS == 20
-    assert MIN_AVAILABLE_GB == pytest.approx(16.0)

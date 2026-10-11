@@ -29,3 +29,12 @@ def pdftotext_range(pdf: Path, first_page: int, last_page: int) -> str:
 def latin_char_counts(text: str) -> Counter:
     normalized = unicodedata.normalize("NFKC", text).lower()
     return Counter(ch for ch in normalized if ch.isalnum() and ord(ch) < MAX_LATIN_CODEPOINT)
+
+
+def pdftotext_pages(pdf: Path, first_page: int, last_page: int) -> list[str]:
+    pages = pdftotext_range(pdf, first_page, last_page).split("\f")
+    if pages and not pages[-1].strip():
+        pages = pages[:-1]
+    if len(pages) != last_page - first_page + 1:
+        raise WorkflowError("page_count_mismatch", f"pdftotext returned {len(pages)} pages for {first_page}-{last_page}")
+    return pages

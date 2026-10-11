@@ -10,23 +10,23 @@ PDF to markdown tooling for the websearch-pdf skill: splits a PDF into fixed-siz
 
 ## Flow
 
-extract: PDF in, free-RAM tripwire, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer, one markdown file out only if every batch passes, end record logged. stats: log in, summary text out.
+extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer (pages with an outlier text layer are left out of the reference and named), one markdown file out only if every batch passes, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (285 LOC)
+### extract.py (265 LOC)
 
-**Purpose:** Orchestrates the extract command: free-RAM tripwire, text-layer gate, anchors, worker prompts and manifest with the fixed worker count.
-**Reads:** the PDF, `config/pdf_models.json`, `prompts/`, available RAM via psutil.
+**Purpose:** Orchestrates the extract command: text-layer gate, anchors, worker prompts and manifest with the fixed worker count.
+**Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
 **Writes:** anchors, prompts and manifest in the batch directory (removes its own stale files there); start record in the conversion log.
 **Called by:** cli.py.
-**Calls out:** liteparse, psutil, poppler (via pdf_text.py).
+**Calls out:** liteparse, poppler (via pdf_text.py).
 
 ---
 
-### assemble.py (145 LOC)
+### assemble.py (175 LOC)
 
-**Purpose:** Orchestrates the assemble command: content check per batch against the PDF text layer, all-or-nothing join into `<STEM>.md`.
+**Purpose:** Orchestrates the assemble command: content check per batch against the PDF text layer without outlier pages, all-or-nothing join into `<STEM>.md`.
 **Reads:** manifest and batch files in the batch directory, the PDF text layer.
 **Writes:** the markdown file in the output directory (atomic); end record in the conversion log.
 **Called by:** cli.py.
@@ -54,9 +54,9 @@ extract: PDF in, free-RAM tripwire, text-layer gate, one liteparse parse, per-ba
 
 ---
 
-### pdf_text.py (31 LOC)
+### pdf_text.py (40 LOC)
 
-**Purpose:** Poppler wrappers (page count, text of a page range) and the character count used by the gate and the content check.
+**Purpose:** Poppler wrappers (page count, text of a page range, text per page) and the character count used by the gate and the content check.
 **Reads:** the PDF.
 **Writes:** none.
 **Called by:** extract.py, assemble.py.

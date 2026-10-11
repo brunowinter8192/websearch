@@ -1,12 +1,14 @@
 # INFRASTRUCTURE
 import json
 import os
+import statistics
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME
+from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
-from src.pdf.pdf_text import latin_char_counts, pdftotext_range
+from src.pdf.pdf_text import latin_char_counts, pdftotext_pages
 from src.pdf.report import Report, WorkflowError
 
 MIN_REFERENCE_CHARS = 200
@@ -29,6 +31,7 @@ class BatchResult:
     recall: float | None
     ref_chars: int
     out_chars: int
+    unjudged_pages: tuple[int, ...] = ()
 
 
 def load_manifest(batch_dir: Path) -> dict:
@@ -60,18 +63,34 @@ def ordered_batches(manifest: dict) -> list[dict]:
 
 def check_batch(pdf: Path, batch_dir: Path, batch: dict) -> BatchResult:
     first, last = batch["from"], batch["to"]
-    reference = latin_char_counts(pdftotext_range(pdf, first, last))
+    reference, outliers = judged_reference(reference_pages(pdf, first, last))
     ref_chars = sum(reference.values())
     output = batch_dir / batch["output"]
     if not output.is_file():
-        return BatchResult(first, last, "missing_file", None, ref_chars, 0)
+        return BatchResult(first, last, "missing_file", None, ref_chars, 0, outliers)
     produced = latin_char_counts(output.read_text(encoding="utf-8"))
     out_chars = sum(produced.values())
     if ref_chars < MIN_REFERENCE_CHARS:
-        return BatchResult(first, last, "unjudged", None, ref_chars, out_chars)
+        return BatchResult(first, last, "unjudged", None, ref_chars, out_chars, outliers)
     recall = sum(min(count, produced.get(char, 0)) for char, count in reference.items()) / ref_chars
     status = "ok" if recall >= CONTENT_CHECK_THRESHOLD else "low_recall"
-    return BatchResult(first, last, status, recall, ref_chars, out_chars)
+    return BatchResult(first, last, status, recall, ref_chars, out_chars, outliers)
+
+
+def reference_pages(pdf: Path, first: int, last: int) -> dict[int, Counter]:
+    texts = pdftotext_pages(pdf, first, last)
+    return {first + offset: latin_char_counts(text) for offset, text in enumerate(texts)}
+
+
+def judged_reference(pages: dict[int, Counter]) -> tuple[Counter, tuple[int, ...]]:
+    sizes = {number: sum(counts.values()) for number, counts in pages.items()}
+    median = statistics.median(sizes.values())
+    outliers = tuple(number for number, size in sizes.items() if median > 0 and size > OUTLIER_PAGE_FACTOR * median)
+    reference: Counter = Counter()
+    for number, counts in pages.items():
+        if number not in outliers:
+            reference.update(counts)
+    return reference, outliers
 
 
 def report_failure(manifest: dict, results: list[BatchResult], failed: list[BatchResult]) -> Report:
@@ -83,6 +102,7 @@ def report_failure(manifest: dict, results: list[BatchResult], failed: list[Batc
     ))
     lines = [f"assemble FAILED ({failure_class}): {len(failed)} of {len(results)} batches, nothing written"]
     lines += [describe_failure(result) for result in failed]
+    lines += describe_unjudged_pages(results)
     return Report("\n".join(lines), False)
 
 
@@ -111,6 +131,7 @@ def totals(results: list[BatchResult]) -> dict:
         "chars_out": chars_out,
         "chars_ref": chars_ref,
         "char_ratio": round(chars_out / chars_ref, 4) if chars_ref else None,
+        "unjudged_pages": [number for result in results for number in result.unjudged_pages],
     }
 
 
@@ -141,5 +162,14 @@ def format_success(manifest: dict, target: Path, results: list[BatchResult]) -> 
         f"batches={len(results)} pages={manifest['pages']} lowest recall={lowest.recall:.3f} at {lowest.first}-{lowest.last}",
     ]
     if unjudged:
-        lines.append("unjudged (too little reference text): " + " ".join(f"{r.first}-{r.last}" for r in unjudged))
+        lines.append("unjudged batches (too little reference text): " + " ".join(f"{r.first}-{r.last}" for r in unjudged))
+    lines += describe_unjudged_pages(results)
     return "\n".join(lines)
+
+
+def describe_unjudged_pages(results: list[BatchResult]) -> list[str]:
+    pages = [number for result in results for number in result.unjudged_pages]
+    if not pages:
+        return []
+    label = f"unjudged pages (text layer over {OUTLIER_PAGE_FACTOR}x the median page of the batch): "
+    return [label + " ".join(str(number) for number in pages)]

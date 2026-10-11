@@ -4,10 +4,9 @@ import json
 from importlib.metadata import version
 from pathlib import Path
 
-import psutil
 from liteparse import LiteParse
 
-from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, PROJECT_ROOT
+from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR, PROJECT_ROOT
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
 from src.pdf.pdf_text import latin_char_counts, pdf_page_count, pdftotext_range
 from src.pdf.report import Report, WorkflowError
@@ -21,10 +20,7 @@ CONVERTER_NAME = "liteparse"
 BATCH_PAGES = 50
 READ_PAGES_LIMIT = 20
 PARALLEL_WORKERS = 20
-WORKER_RAM_GB = 0.8
-MIN_AVAILABLE_GB = PARALLEL_WORKERS * WORKER_RAM_GB
 MIN_TEXT_CHARS_PER_PAGE = 100
-BYTES_PER_GB = 1024 ** 3
 SHA_CHUNK_BYTES = 1024 * 1024
 
 
@@ -45,7 +41,6 @@ def require_pdf(pdf: str) -> Path:
 
 def open_run(pdf: Path) -> dict:
     pages = pdf_page_count(pdf)
-    available_bytes = current_available_bytes()
     pdf_sha256 = file_sha256(pdf)
     config = build_config()
     record = {
@@ -60,14 +55,9 @@ def open_run(pdf: Path) -> dict:
         "config_hash": hash_config(config),
         "config": config,
         "attempt": count_earlier_attempts(pdf_sha256) + 1,
-        "available_gb": round(available_bytes / BYTES_PER_GB, 1),
     }
     append_record(record)
     return record
-
-
-def current_available_bytes() -> int:
-    return psutil.virtual_memory().available
 
 
 def file_sha256(path: Path) -> str:
@@ -82,11 +72,11 @@ def build_config() -> dict:
     return {
         "batch_pages": BATCH_PAGES,
         "workers": PARALLEL_WORKERS,
-        "min_available_gb": MIN_AVAILABLE_GB,
         "ocr": False,
         "worker_model": read_worker_model(),
         "prompt_sha": prompt_sha(),
         "threshold": CONTENT_CHECK_THRESHOLD,
+        "outlier_page_factor": OUTLIER_PAGE_FACTOR,
         "min_text_chars_per_page": MIN_TEXT_CHARS_PER_PAGE,
     }
 
@@ -119,7 +109,6 @@ def extract_logged(run: dict, pdf: Path, batch_dir: Path) -> Report:
 
 
 def extract_batches(run: dict, pdf: Path, batch_dir: Path) -> Report:
-    require_free_ram(run["available_gb"])
     require_text_layer(pdf, run["pages"])
     prepare_batch_dir(batch_dir)
     page_markdown = parse_pages(pdf, run["pages"])
@@ -127,14 +116,6 @@ def extract_batches(run: dict, pdf: Path, batch_dir: Path) -> Report:
     entries = [write_batch_files(pdf, batch_dir, first, last, page_markdown) for first, last in batches]
     write_manifest(run, pdf, batch_dir, entries)
     return Report(format_summary(run, batch_dir, entries), True)
-
-
-def require_free_ram(available_gb: float) -> None:
-    if available_gb < MIN_AVAILABLE_GB:
-        raise WorkflowError(
-            "low_ram",
-            f"{available_gb} GB available, {PARALLEL_WORKERS} workers at {WORKER_RAM_GB} GB need {MIN_AVAILABLE_GB:.1f} GB",
-        )
 
 
 def require_text_layer(pdf: Path, pages: int) -> None:
@@ -267,7 +248,6 @@ def write_manifest(run: dict, pdf: Path, batch_dir: Path, entries: list[dict]) -
         "pages": run["pages"],
         "batch_pages": BATCH_PAGES,
         "workers": run["config"]["workers"],
-        "available_gb": run["available_gb"],
         "worker_model": run["config"]["worker_model"],
         "batches": entries,
     }
@@ -277,7 +257,7 @@ def write_manifest(run: dict, pdf: Path, batch_dir: Path, entries: list[dict]) -
 def format_summary(run: dict, batch_dir: Path, entries: list[dict]) -> str:
     lines = [
         f"extract ok: {Path(run['pdf']).stem}",
-        f"pages={run['pages']} batches={len(entries)} workers={run['config']['workers']} available_gb={run['available_gb']}",
+        f"pages={run['pages']} batches={len(entries)} workers={run['config']['workers']}",
         f"batch dir: {batch_dir}",
         f"manifest: {batch_dir / MANIFEST_FILE_NAME}",
         "prompts: " + " ".join(entry["prompt"] for entry in entries),
