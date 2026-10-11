@@ -10,11 +10,11 @@ PDF to markdown tooling for the websearch-pdf skill: splits a PDF into fixed-siz
 
 ## Flow
 
-extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer (pages with an outlier text layer are left out of the reference and named), one markdown file out only if every batch passes, end record logged. stats: log in, summary text out.
+extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer (pages with an outlier text layer are left out of the reference and named), one markdown file out only if every batch passes, with over-long paragraphs split after the check, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (265 LOC)
+### extract.py (268 LOC)
 
 **Purpose:** Orchestrates the extract command: text-layer gate, anchors, worker prompts and manifest with the fixed worker count.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
@@ -24,9 +24,9 @@ extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and
 
 ---
 
-### assemble.py (175 LOC)
+### assemble.py (283 LOC)
 
-**Purpose:** Orchestrates the assemble command: content check per batch against the PDF text layer without outlier pages, all-or-nothing join into `<STEM>.md`.
+**Purpose:** Orchestrates the assemble command: content check per batch against the PDF text layer without outlier pages, all-or-nothing join, paragraph splitting for the embedder, atomic write of `<STEM>.md`.
 **Reads:** manifest and batch files in the batch directory, the PDF text layer.
 **Writes:** the markdown file in the output directory (atomic); end record in the conversion log.
 **Called by:** cli.py.

@@ -339,13 +339,17 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule.
 
-### test_pdf_extract.py (132 LOC)
+### test_pdf_extract.py (133 LOC)
 
 **Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, no RAM measurement, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
 
-### test_pdf_assemble.py (156 LOC)
+### test_pdf_assemble.py (181 LOC)
 
-**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run, a superimposed text-layer page (named as unjudged, real loss still caught), outlier boundary.
+**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run, a superimposed text-layer page (named as unjudged, real loss still caught), outlier boundary, splitting wired into the write with its log count.
+
+### test_pdf_split_paragraphs.py (120 LOC)
+
+**Purpose:** `src/pdf/assemble.py` paragraph splitting: byte limit with umlauts, sentence and space boundaries, list blocks, tables with repeated head, unsplittable leftovers, counts, untouched text.
 
 ### test_pdf_stats.py (68 LOC)
 

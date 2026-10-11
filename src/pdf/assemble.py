@@ -1,18 +1,23 @@
 # INFRASTRUCTURE
 import json
 import os
+import re
 import statistics
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR
+from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR, PARAGRAPH_LIMIT_BYTES
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
 from src.pdf.pdf_text import latin_char_counts, pdftotext_pages
 from src.pdf.report import Report, WorkflowError
 
 MIN_REFERENCE_CHARS = 200
 FAILED_STATUSES = ("missing_file", "low_recall")
+PARAGRAPH_SEPARATOR = re.compile(r"(\n{2,})")
+SENTENCE_END = re.compile(r"(?<=[.!?:;])\s+(?=\S)")
+TABLE_RULE_CHARS = set("-: ")
+NEW_PARAGRAPH = "\n\n"
 
 
 # ORCHESTRATOR
@@ -32,6 +37,14 @@ class BatchResult:
     ref_chars: int
     out_chars: int
     unjudged_pages: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class SplitResult:
+    text: str
+    paragraphs_split: int
+    tables_split: int
+    paragraphs_over_limit: int
 
 
 def load_manifest(batch_dir: Path) -> dict:
@@ -136,14 +149,101 @@ def totals(results: list[BatchResult]) -> dict:
 
 
 def write_book(manifest: dict, batch_dir: Path, out_dir: Path, results: list[BatchResult]) -> Report:
-    texts = [(batch_dir / batch["output"]).read_text(encoding="utf-8").strip() for batch in ordered_batches(manifest)]
+    split = split_long_paragraphs(join_batches(manifest, batch_dir))
     target = out_dir / f"{manifest['stem']}.md"
-    write_atomically(target, "\n\n".join(texts) + "\n")
+    write_atomically(target, split.text + "\n")
     append_record(build_end_record(
         manifest["run_id"], manifest["ts_start"], "ok", None,
-        md=str(target), **totals(results),
+        md=str(target), **totals(results), **split_counts(split),
     ))
-    return Report(format_success(manifest, target, results), True)
+    return Report(format_success(manifest, target, results, split), True)
+
+
+def join_batches(manifest: dict, batch_dir: Path) -> str:
+    texts = [(batch_dir / batch["output"]).read_text(encoding="utf-8").strip() for batch in ordered_batches(manifest)]
+    return NEW_PARAGRAPH.join(texts)
+
+
+def split_long_paragraphs(book: str) -> SplitResult:
+    parts = PARAGRAPH_SEPARATOR.split(book)
+    pieces = [split_paragraph(paragraph) for paragraph in parts[0::2]]
+    rebuilt = [NEW_PARAGRAPH.join(chunks) for chunks in pieces]
+    text = "".join(part for pair in zip(rebuilt, parts[1::2] + [""]) for part in pair)
+    split = [(paragraph, chunks) for paragraph, chunks in zip(parts[0::2], pieces) if len(chunks) > 1]
+    return SplitResult(
+        text=text,
+        paragraphs_split=len(split),
+        tables_split=sum(1 for paragraph, _ in split if is_table(paragraph)),
+        paragraphs_over_limit=sum(1 for chunks in pieces for chunk in chunks if size(chunk) > PARAGRAPH_LIMIT_BYTES),
+    )
+
+
+def size(text: str) -> int:
+    return len(text.encode("utf-8"))
+
+
+def is_table(paragraph: str) -> bool:
+    return paragraph.lstrip().startswith("|")
+
+
+def split_paragraph(paragraph: str) -> list[str]:
+    if size(paragraph) <= PARAGRAPH_LIMIT_BYTES:
+        return [paragraph]
+    if is_table(paragraph):
+        return split_table(paragraph)
+    return split_block(paragraph)
+
+
+def split_table(paragraph: str) -> list[str]:
+    lines = paragraph.split("\n")
+    has_rule = len(lines) > 1 and set(lines[1].replace("|", "").strip()) <= TABLE_RULE_CHARS
+    head = lines[:2] if has_rule else []
+    blocks, current = [], list(head)
+    for row in lines[len(head):]:
+        if size("\n".join(current + [row])) > PARAGRAPH_LIMIT_BYTES and len(current) > len(head):
+            blocks.append("\n".join(current))
+            current = list(head)
+        current.append(row)
+    blocks.append("\n".join(current))
+    return blocks
+
+
+def split_block(paragraph: str) -> list[str]:
+    lines = paragraph.split("\n")
+    if len(lines) == 1:
+        return split_line(paragraph)
+    pieces = [piece for line in lines for piece in split_line(line)]
+    return pack(pieces, "\n")
+
+
+def split_line(line: str) -> list[str]:
+    if size(line) <= PARAGRAPH_LIMIT_BYTES:
+        return [line]
+    sentences = []
+    for sentence in SENTENCE_END.split(line):
+        sentences += pack(sentence.split(" "), " ") if size(sentence) > PARAGRAPH_LIMIT_BYTES else [sentence]
+    return pack(sentences, " ")
+
+
+def pack(pieces: list[str], joiner: str) -> list[str]:
+    chunks, current = [], ""
+    for piece in pieces:
+        candidate = f"{current}{joiner}{piece}" if current else piece
+        if size(candidate) > PARAGRAPH_LIMIT_BYTES and current:
+            chunks.append(current)
+            current = piece
+        else:
+            current = candidate
+    chunks.append(current)
+    return chunks
+
+
+def split_counts(split: SplitResult) -> dict:
+    return {
+        "paragraphs_split": split.paragraphs_split,
+        "tables_split": split.tables_split,
+        "paragraphs_over_limit": split.paragraphs_over_limit,
+    }
 
 
 def write_atomically(target: Path, content: str) -> None:
@@ -153,7 +253,7 @@ def write_atomically(target: Path, content: str) -> None:
     os.replace(temporary, target)
 
 
-def format_success(manifest: dict, target: Path, results: list[BatchResult]) -> str:
+def format_success(manifest: dict, target: Path, results: list[BatchResult], split: SplitResult) -> str:
     judged = [result for result in results if result.recall is not None]
     unjudged = [result for result in results if result.status == "unjudged"]
     lowest = min(judged, key=lambda result: result.recall)
@@ -164,7 +264,15 @@ def format_success(manifest: dict, target: Path, results: list[BatchResult]) -> 
     if unjudged:
         lines.append("unjudged batches (too little reference text): " + " ".join(f"{r.first}-{r.last}" for r in unjudged))
     lines += describe_unjudged_pages(results)
+    lines.append(describe_split(split))
     return "\n".join(lines)
+
+
+def describe_split(split: SplitResult) -> str:
+    return (
+        f"paragraphs split: {split.paragraphs_split} (tables: {split.tables_split}), "
+        f"limit {PARAGRAPH_LIMIT_BYTES} bytes, left over the limit: {split.paragraphs_over_limit}"
+    )
 
 
 def describe_unjudged_pages(results: list[BatchResult]) -> list[str]:

@@ -14,7 +14,7 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 
 ## Modules
 
-### config.py (39 LOC)
+### config.py (40 LOC)
 
 **Purpose:** Constants shared by two or more modules with identical meaning; single-module constants stay in their module.
 **Reads:** nothing.

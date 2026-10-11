@@ -166,3 +166,36 @@ Open at the end of this session:
 - The 50-page build (`extract` with 50-page batches, the three-chunk prompt) has been exercised only by tests and by rendering a prompt, not by a real `extract` and not by real Haiku workers.
 - `skills/websearch-pdf/SKILL.md` still describes the earlier design (script path, log path, 40 pages, RAM-derived parallelism); it is user-owned and was not touched.
 - The unjudged-everything case in `format_success` (see Update 3) and the hypothesis that the Read tool may reject a one-page range such as `"21-21"` are unobserved and unhandled or guarded only by the bare-number form.
+
+## Milestone (2026-10-11): paragraph splitting moved into assemble
+
+Request: the skill must no longer ask the agent to split long paragraphs by hand. Reason (process-docs area pdf_pipeline, class J): the rag-cli embedder crashed on oversized paragraphs. The old skill rule was 1000 characters per line and per blank-line paragraph, measured with macOS `awk`, which counts bytes (an umlaut is 2).
+
+### Rule as built (`split_long_paragraphs` in `src/pdf/assemble.py`)
+
+- **Limit: 900 bytes of UTF-8** (`PARAGRAPH_LIMIT_BYTES` in `src/config.py`, logged in the start config as `paragraph_limit_bytes`). Bytes, not characters: a test builds 800 characters that are 1 200 bytes and requires a split. 900 leaves margin below the old 1000.
+- **Paragraph** = text between blank lines. The book is split on runs of two or more newlines; the original separators are kept, so untouched paragraphs, including the five places with three or more newlines in Coenenberg, stay byte-identical. Pieces of a split paragraph are joined by one blank line.
+- **Prose (one line):** split at sentence ends (`.`, `!`, `?`, `:`, `;` followed by whitespace), chunks packed up to the limit; a sentence that alone exceeds the limit is split at spaces; never inside a word.
+- **Multi-line blocks (lists):** split between lines, lines packed up to the limit; a single line over the limit is split as prose first.
+- **Tables** (paragraph whose first non-space character is `|`): split between rows; the header row and the separator row are repeated at the top of every following piece. Table without a separator row (never observed: 0 of 52 over-limit table paragraphs in Coenenberg): no head is repeated, so no row is duplicated.
+- **Left over the limit** (counted, not an error): a single table row longer than the limit, a single word longer than the limit. They stay whole.
+- Content is not changed: apart from whitespace and the repeated table heads the text is identical. Not observed, hypothesis: a fenced code block over the limit would be split between lines and lose its fence in the pieces (Coenenberg has 0 fences).
+
+### Order and logging
+
+`assemble` order: content check on the unsplit batch files, then join, then split, then atomic write. The check never sees split text. The end record of an ok run has `paragraphs_split` (paragraphs that became several), `tables_split` (of those, tables) and `paragraphs_over_limit` (paragraphs still over the limit after splitting); the report has the line `paragraphs split: N (tables: T), limit 900 bytes, left over the limit: K`. A failed assemble writes nothing and has neither field.
+
+### Verification on the real book
+
+Input: the batch directory of Coenenberg (993 pages, 20 batches of 50), assembled with `cli.py pdf assemble` into `/tmp/pdfwf_out`, with `WEBSEARCH_CONVERSION_LOG_PATH` pointing at a scratch log (the directory was built by another checkout; an end record without its start record in the worktree log would make `stats` refuse the log by design).
+
+- Content check: ok, lowest recall 0.992 at 951-993. Report line: `paragraphs split: 541 (tables: 50), limit 900 bytes, left over the limit: 2`.
+- Unsplit join of the batch files equals `/tmp/pdf_backup_wise2627/Coenenberg_presplit.md` apart from one trailing newline (byte-exact after whitespace removal).
+- Paragraphs: 9 682 before, 10 312 after. At the limit of 1000 bytes the input had 409 paragraphs over; at 900 it has 543, of which 541 were split and 2 remain.
+- Result compared with the input: all non-table text identical after removing whitespace; every old table row present (0 missing); the only additions are 150 repeated table head rows (50 split tables); non-whitespace character surplus 5 891, all from those heads.
+- Remaining over 900 bytes: two table paragraphs (992 and 1 077 bytes), each head plus separator plus one long row (rows of 929 and 991 bytes). Lines over 1000 bytes: 0. Paragraphs over 1000 bytes: 1 (the 1 077 one). Maximum paragraph: 1 077 bytes.
+- The output is byte-identical to what the ad hoc script `/tmp/split_long_paragraphs.py` (limit 900) produced on the same input; the only code difference is the table-without-separator branch, which does not occur in this book.
+
+### Consequence for the skill
+
+Step 4.2 (long lines and paragraphs, manual shortening) can be replaced by reading the `paragraphs split` line of `assemble`. The repeated-character rule (runs of 40 or more identical characters shortened to 3) is not part of `assemble` and stays a separate step. The old awk check with limit 1000 can still report single over-long table rows; they are counted in `left over the limit` and were not a problem so far.

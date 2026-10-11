@@ -6,7 +6,9 @@ from pathlib import Path
 
 from liteparse import LiteParse
 
-from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR, PROJECT_ROOT
+from src.config import (
+    CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR, PARAGRAPH_LIMIT_BYTES, PROJECT_ROOT,
+)
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
 from src.pdf.pdf_text import latin_char_counts, pdf_page_count, pdftotext_range
 from src.pdf.report import Report, WorkflowError
@@ -77,6 +79,7 @@ def build_config() -> dict:
         "prompt_sha": prompt_sha(),
         "threshold": CONTENT_CHECK_THRESHOLD,
         "outlier_page_factor": OUTLIER_PAGE_FACTOR,
+        "paragraph_limit_bytes": PARAGRAPH_LIMIT_BYTES,
         "min_text_chars_per_page": MIN_TEXT_CHARS_PER_PAGE,
     }
 
