@@ -13,3 +13,4 @@ psutil
 matplotlib
 pytest-xdist
 pytest-timeout
+liteparse

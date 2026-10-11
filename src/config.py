@@ -33,3 +33,7 @@ MONOSANS_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxi
 TOTAL_SCRAPE_BUDGET_S = 242.8
 SCRAPE_LOG_PATH = LOG_DIR / "scrape_log.jsonl"
 MAX_SNIPPET_LEN = 500
+
+MANIFEST_FILE_NAME = "manifest.json"
+CONTENT_CHECK_THRESHOLD = 0.90
+OUTLIER_PAGE_FACTOR = 5

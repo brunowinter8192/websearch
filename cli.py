@@ -14,6 +14,10 @@ from urllib.parse import urlparse
 from src.config import LOG_DIR
 from src.crawler.discovery import discover_urls_workflow
 from src.log_janitor import get_retention_days
+from src.pdf.assemble import assemble_workflow
+from src.pdf.extract import extract_workflow
+from src.pdf.report import WorkflowError
+from src.pdf.stats import stats_workflow
 from src.scraper.chromium_scrape import scrape_url_chromium_workflow
 from src.scraper.index_scrapes import index_scrapes_workflow
 from src.search.browser import kill_own_chrome_atexit
@@ -47,6 +51,8 @@ def main():
         _dispatch_discover_urls(args)
     elif args.cmd == "index_scrapes":
         _dispatch_index_scrapes(args)
+    elif args.cmd == "pdf":
+        _dispatch_pdf(args)
 
 
 # FUNCTIONS
@@ -71,7 +77,7 @@ def register_exit_hook() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = NoHelpParser(
         prog="cli.py",
-        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls, index_scrapes."
+        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls, index_scrapes, pdf."
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -109,7 +115,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("collection", help="Target RAG collection name")
     p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
 
+    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, assemble, stats.")
+    pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
+
+    pp = pdf_sub.add_parser("extract", help="Split a PDF into 50-page batches with anchor text, worker prompts and manifest.")
+    pp.add_argument("--pdf", required=True, help="Path to the PDF")
+    pp.add_argument("--batch-dir", required=True, help="Directory for anchors, prompts, manifest and worker output")
+
+    pp = pdf_sub.add_parser("assemble", help="Join worker batches into one markdown file after a content check.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
+    pp.add_argument("--out-dir", required=True, help="Directory for the finished <STEM>.md")
+
+    pp = pdf_sub.add_parser("stats", help="Conversion statistics from the conversion log.")
+    pp.add_argument("--since", type=_iso_date, default=None, help="Only runs started on or after this date (YYYY-MM-DD)")
+
     return parser
+
+
+def _iso_date(value: str) -> str:
+    datetime.strptime(value, "%Y-%m-%d")
+    return value
 
 
 class NoHelpParser(argparse.ArgumentParser):
@@ -198,6 +223,25 @@ def _write_discovery_output(result, url_file: str) -> None:
     by_source_str = ", ".join(f"{k}={v}" for k, v in sorted(by_source.items()))
     print(f"total URLs: {len(result.urls)} (by source: {by_source_str})")
     print(f"url-file: {url_file} ({len(scrape_urls)} URLs written)")
+
+
+def _dispatch_pdf(args) -> None:
+    try:
+        report = _run_pdf_command(args)
+    except WorkflowError as error:
+        print(f"pdf {args.pdf_cmd} FAILED ({error.failure_class}): {error}", file=sys.stderr)
+        sys.exit(1)
+    print(report.text)
+    if not report.ok:
+        sys.exit(1)
+
+
+def _run_pdf_command(args):
+    if args.pdf_cmd == "extract":
+        return extract_workflow(args.pdf, args.batch_dir)
+    if args.pdf_cmd == "assemble":
+        return assemble_workflow(args.batch_dir, args.out_dir)
+    return stats_workflow(args.since)
 
 
 def _dispatch_index_scrapes(args) -> None:

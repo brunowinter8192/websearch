@@ -2,7 +2,7 @@
 
 ## Role
 
-Root of the source tree. config.py, cdp_value.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news) live one level down, each with its own DOCS.md.
+Root of the source tree. config.py, cdp_value.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news, pdf) live one level down, each with its own DOCS.md.
 
 ## Public Interface
 
@@ -14,12 +14,12 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 
 ## Modules
 
-### config.py (35 LOC)
+### config.py (39 LOC)
 
 **Purpose:** Constants shared by two or more modules with identical meaning; single-module constants stay in their module.
 **Reads:** nothing.
 **Writes:** nothing.
-**Called by:** cli.py, src/search, src/scraper and src/news modules.
+**Called by:** cli.py, src/search, src/scraper, src/news and src/pdf modules.
 **Calls out:** none.
 
 ---
