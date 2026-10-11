@@ -331,17 +331,17 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_planning.py (36 LOC)
+### test_pdf_planning.py (34 LOC)
 
-**Purpose:** `src/pdf/extract.py` batch ranges for 40-page batches (including books over 1 000 pages) and the RAM-derived worker limit.
+**Purpose:** `src/pdf/extract.py` batch ranges for 50-page batches, the one-wave boundary at 1 000 pages and the fixed worker count with its RAM tripwire value.
 
-### test_pdf_worker_prompt.py (49 LOC)
+### test_pdf_worker_prompt.py (71 LOC)
 
-**Purpose:** Rendered worker prompts: one or two Read calls by batch size, part-file assembly, bare page number for a single page, figure-description rule.
+**Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule.
 
-### test_pdf_extract.py (109 LOC)
+### test_pdf_extract.py (128 LOC)
 
-**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, worker limit, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
+**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, low-RAM stop, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
 
 ### test_pdf_assemble.py (100 LOC)
 

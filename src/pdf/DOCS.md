@@ -2,7 +2,7 @@
 
 ## Role
 
-PDF to markdown tooling for the websearch-pdf skill: splits a PDF into 40-page batches with anchor text and ready worker prompts, joins the worker output after a content check, and answers conversion statistics from an append-only log. No model runs here; the workers are spawned by the skill. Touch it when the batch protocol, the check or the log changes.
+PDF to markdown tooling for the websearch-pdf skill: splits a PDF into fixed-size batches with anchor text and ready worker prompts, joins the worker output after a content check, and answers conversion statistics from an append-only log. No model runs here; the workers are spawned by the skill. Touch it when the batch protocol, the check or the log changes.
 
 ## Public Interface
 
@@ -10,13 +10,13 @@ PDF to markdown tooling for the websearch-pdf skill: splits a PDF into 40-page b
 
 ## Flow
 
-extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer, one markdown file out only if every batch passes, end record logged. stats: log in, summary text out.
+extract: PDF in, free-RAM tripwire, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer, one markdown file out only if every batch passes, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (247 LOC)
+### extract.py (285 LOC)
 
-**Purpose:** Orchestrates the extract command: text-layer gate, anchors, worker prompts, manifest and the worker limit derived from free RAM.
+**Purpose:** Orchestrates the extract command: free-RAM tripwire, text-layer gate, anchors, worker prompts and manifest with the fixed worker count.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`, available RAM via psutil.
 **Writes:** anchors, prompts and manifest in the batch directory (removes its own stale files there); start record in the conversion log.
 **Called by:** cli.py.

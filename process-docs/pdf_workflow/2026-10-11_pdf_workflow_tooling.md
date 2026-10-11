@@ -2,6 +2,22 @@
 
 Builds the tooling the `websearch-pdf` skill calls. Evidence and the method decision come from the area pdf_conversion_qa in the monitor-cc project (liteparse as default converter, Haiku batch transcription, content check against the PDF text layer, JSONL conversion log). This file records how the tooling was built and why the numbers are what they are. Worker branch `pdfwf`, not pushed, not published.
 
+## Update 2026-10-11 (later the same day): spec change, supersedes the sections marked "superseded"
+
+The user changed four points after the first build. Everything below is implemented and tested; the sections "Worker limit", "Output cap" and "Verification state" describe the earlier 40-page build and are superseded where they contradict this section.
+
+1. **Batch size is fixed at 50 pages** (was 40). Goal: a book of up to 1 000 pages runs in one wave. 1 000 pages give exactly 20 batches; 1 001 pages give 21 and need a second wave. Books over 1 000 pages are rare, a second wave is accepted. A test pins the boundary.
+2. **Parallel workers are fixed at 20**, written to the manifest and the logged config, independent of free RAM and of the batch count (a 2-batch book also gets 20). The RAM-derived formula (`worker_limit`, reserve, 1.0 GB per worker) is removed.
+3. **Worker prompt is generalised: one Read and one part file per 20 pages.** A 50-page batch reads 1-20, 21-40, 41-50, writes `part1_`, `part2_`, `part3_<span>.md`, then runs one Bash command that concatenates them in order (with an empty line between) into `batch_<from>-<to>.md` and deletes the parts. Batches of 20 pages or fewer keep one Read and a direct Write. A chunk of one page uses the bare number as pages parameter (`"21"`, 21-page batch). The manifest entry lists the part file names (`parts`, empty for single-chunk batches). Templates: `worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`; the step numbers and the concatenation command are generated in `extract.py`. Observed example of the rendered prompt for pages 51-100: 9 steps, three Read/Write pairs, step 8 is the `cat` command.
+4. **Tripwire instead of the formula: `extract` stops with failure class `low_ram` (and an end record) when free RAM is below 16.0 GB.**
+   - Derivation: observed on 2026-10-11, 20 parallel Haiku workers ran fine with about 21 GB available at start; measured about 0.8 GB per worker with 6 workers. 20 workers times 0.8 GB is 16.0 GB, the measured demand of all workers alone. "Clearly less than the observed condition" is implemented as "less than that measured demand": below 16.0 GB the workers cannot fit by the measurement. Between 16.0 and 21 GB is less than observed but not clearly less; it passes.
+   - Code: `PARALLEL_WORKERS = 20`, `WORKER_RAM_GB = 0.8`, `MIN_AVAILABLE_GB = PARALLEL_WORKERS * WORKER_RAM_GB` in `extract.py`; the check runs first in the extract steps, after the start record, so the refusal is in the log (start has `available_gb`, end has `low_ram`). Free RAM is `psutil.virtual_memory().available`, compared after rounding to 0.1 GB.
+   - Observed free RAM on this machine on 2026-10-11: 17.2 GB (probe) and 23.9 GB (real extract runs); the tripwire would have passed both.
+   - Caveat (hypothesis): the 0.8 GB comes from 6 workers with 20-page contexts. A 50-page worker holds about 300k tokens of context (see next point), memory per worker at that size is not measured.
+5. **Context observation from today (reported by the user, not measured here):** Basner batch 1-40 finished with 76 percent context left on `claude-haiku-5-5[1m]`, which is about 240k tokens for 40 pages, roughly 6 000 tokens per page. The 1M window is effective for Haiku. A 50-page batch is therefore expected at about 300k tokens.
+
+Log consequences: the logged `config` now contains `batch_pages` 50, `workers` 20 and `min_available_gb` 16.0, so the 50-page runs form a new `config_hash`; the start record no longer has a top-level `workers`; new failure class `low_ram`. The two start records written earlier today by the 40-page build stay in the append-only log with the old hash.
+
 ## Decisions taken with the user (2026-10-11)
 
 | Topic | Decision |
@@ -33,15 +49,15 @@ All trial batches except one are at or above 0.934. The one below, 0.890, really
 
 Metric: NFKC, lowercased, only alphanumeric characters below U+0250 (Latin). Greek letters are alphanumeric in pdftotext but become `\alpha` in LaTeX output; restricting to Latin avoids false failures on formula papers. This is a hypothesis: no formula-dense paper went through the Haiku path yet. Precision (extra text) is not checked, because figure descriptions legitimately add text. A batch with fewer than 200 reference characters is "unjudged" and passes.
 
-## Worker limit
+## Worker limit (superseded by the update above)
 
-`workers = max(1, min(20, batch_count, floor(available_gb - 8)))` with 1.0 GB per worker. The trial measured about 0.8 GB per worker with 20-page contexts; 40-page contexts are larger, so 1.0. 8 GB reserve for the rest of the machine. 20 is the highest parallelism actually run in the trial. Examples (test table): 17.2 GB free and 25 batches gives 9; 40 GB and 25 batches gives 20; 6 GB gives 1. Real runs: 23.9 GB free, Basner 2 batches gives 2, Kuepper 17 batches gives 15.
+First build: `workers = max(1, min(20, batch_count, floor(available_gb - 8)))` at 1.0 GB per worker. Replaced by the fixed 20 and the 16.0 GB tripwire.
 
-## Output cap (why part files)
+## Output cap (why part files; batch size 40 in this section is superseded by 50)
 
-A 40-page batch is roughly 30 to 45k output tokens in one Write call; the proxy cap for Haiku is 64 000 max tokens and adaptive thinking counts against it. Dense books are close (Kuepper: 2 495 alphanumeric characters per page). The prompt for batches over 20 pages therefore has two Read calls (the Read tool returns at most 20 PDF pages per call), a part file after each, and one Bash command that concatenates and deletes the parts. Side effect used on purpose: `batch_<from>-<to>.md` appears atomically, so the skill's "file exists = done" signal cannot fire while the worker is still busy. Batches of 20 pages or fewer use one Read and one Write. A single-page last batch uses the bare number (`"41"`) as pages parameter, not `"41-41"` (hypothesis: the Read tool may reject a one-page range; not observed).
+A 40-page batch is roughly 30 to 45k output tokens in one Write call; the proxy cap for Haiku is 64 000 max tokens and adaptive thinking counts against it. Dense books are close (Kuepper: 2 495 alphanumeric characters per page). The prompt for batches over 20 pages therefore has two Read calls (the Read tool returns at most 20 PDF pages per call), a part file after each, and one Bash command that concatenates and deletes the parts. Side effect used on purpose: `batch_<from>-<to>.md` appears atomically, so the skill's "file exists = done" signal cannot fire while the worker is still busy. Batches of 20 pages or fewer use one Read and one Write. A one-page chunk uses the bare number as pages parameter, not `"41-41"` (hypothesis: the Read tool may reject a one-page range; not observed).
 
-Open risk, not decidable offline: about 5 000 tokens per page means about 200k tokens per 40-page worker. If `[1m]` does not take effect for Haiku, workers hit the context limit. It is visible in the tmux status line of the first real worker.
+The open risk of this section (whether `[1m]` takes effect for Haiku) is answered by the update above: it does.
 
 ## Log design as built
 
@@ -57,18 +73,18 @@ Two record types in one file, linked by `run_id`.
 
 ## Tests
 
-`dev/tests/test_pdf_*.py` plus `_pdf_fakes.py`, all offline. PDFs are generated by a small raw-PDF writer in the helper (Helvetica text pages, optional blank pages); liteparse and poppler run for real on them. Free RAM is injected by patching `src.pdf.extract.current_available_bytes`, the log path by env var, directories by `tmp_path`. Cases come from observed situations: blank page inside a batch, a page marker missing with complete content, a batch that lost about 15 percent (fails) against one that lost about 5 percent (passes), books over 1 000 pages, stale batch files, retry of the same run. The full suite (77 files) was run in parallel with `dev/tests/run_strands.sh` and passed.
+`dev/tests/test_pdf_*.py` plus `_pdf_fakes.py`, all offline. PDFs are generated by a small raw-PDF writer in the helper (Helvetica text pages, optional blank pages); liteparse and poppler run for real on them. Free RAM is injected by patching `src.pdf.extract.current_available_bytes`, the log path by env var, directories by `tmp_path`. Cases come from observed situations: blank page inside a batch, a page marker missing with complete content, a batch that lost about 15 percent (fails) against one that lost about 5 percent (passes), books over 1 000 pages, stale batch files, retry of the same run. The full suite (77 files) was run in parallel with `dev/tests/run_strands.sh` and passed for the 40-page build; for the 50-page build the six pdf test files pass (38 tests) and the full suite (77 files) passed again in parallel.
 
 Running one file: `venv/bin/python -m pytest -x -q dev/tests/test_pdf_extract.py`. The venv of the main checkout is used from worktrees (`../../../venv` relative to the worktree).
 
-## Verification state (2026-10-11)
+## Verification state of the 40-page build (superseded as a plan, the directories exist)
 
 Real `extract` run through `cli.py` from the worktree on two PDFs of `rag-cli/data/pdf/wise2627/`:
 
 - `BasnerMcGuireNoiseAndSleepReview2018.pdf`: 45 pages, 2 batches (1-40, 41-45), 2 workers, into `/tmp/pdf_BasnerMcGuireNoiseAndSleepReview2018/`. Run time 1.5 s.
 - `KuepperControlling_2024.pdf`: 658 pages, 17 batches, 15 workers, into `/tmp/pdf_KuepperControlling_2024/`. Run time 3.4 s. Only batch 241-280 is to be spawned; the other 16 batches act as the missing-batch case for `assemble`.
 
-The log of these runs is `src/logs/conversions.jsonl` inside the worktree (`PROJECT_ROOT` follows the checkout). `assemble` and `stats` must run from the same checkout, or with `WEBSEARCH_CONVERSION_LOG_PATH` set, otherwise `stats` does not see the runs. Worker verification (Haiku output, `assemble`, `stats`) is the orchestrator's step and not done at the time of this entry.
+The log of these runs is `src/logs/conversions.jsonl` inside the worktree (`PROJECT_ROOT` follows the checkout). `assemble` and `stats` must run from the same checkout, or with `WEBSEARCH_CONVERSION_LOG_PATH` set, otherwise `stats` does not see the runs. Worker verification (Haiku output, `assemble`, `stats`) is the orchestrator's step. The two directories were created with the 40-page prompts and were not touched by the 50-page change; they are assembled as they are. No `extract` with the 50-page build has been run on a real PDF yet.
 
 ## For a successor
 

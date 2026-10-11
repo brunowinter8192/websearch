@@ -1,22 +1,21 @@
 # INFRASTRUCTURE
 import pytest
 
-from src.pdf.extract import plan_batches, worker_limit
-
-GIB = 1024 ** 3
+from src.pdf.extract import MIN_AVAILABLE_GB, PARALLEL_WORKERS, plan_batches
 
 
 # FUNCTIONS
 
 @pytest.mark.parametrize("pages, count, first, last", [
-    (993, 25, (1, 40), (961, 993)),
-    (1000, 25, (1, 40), (961, 1000)),
-    (1050, 27, (1, 40), (1041, 1050)),
-    (40, 1, (1, 40), (1, 40)),
-    (41, 2, (1, 40), (41, 41)),
-    (80, 2, (1, 40), (41, 80)),
+    (993, 20, (1, 50), (951, 993)),
+    (1000, 20, (1, 50), (951, 1000)),
+    (1001, 21, (1, 50), (1001, 1001)),
+    (1050, 21, (1, 50), (1001, 1050)),
+    (50, 1, (1, 50), (1, 50)),
+    (51, 2, (1, 50), (51, 51)),
+    (100, 2, (1, 50), (51, 100)),
 ])
-def test_plan_batches_covers_every_page_in_forties(pages, count, first, last):
+def test_plan_batches_covers_every_page_in_fifties(pages, count, first, last):
     batches = plan_batches(pages)
     assert len(batches) == count
     assert batches[0] == first
@@ -25,12 +24,11 @@ def test_plan_batches_covers_every_page_in_forties(pages, count, first, last):
     assert covered == list(range(1, pages + 1))
 
 
-@pytest.mark.parametrize("available_gb, batch_count, expected", [
-    (17.2, 25, 9),
-    (40.0, 25, 20),
-    (40.0, 2, 2),
-    (9.5, 25, 1),
-    (6.0, 25, 1),
-])
-def test_worker_limit_follows_free_ram_and_is_capped(available_gb, batch_count, expected):
-    assert worker_limit(int(available_gb * GIB), batch_count) == expected
+def test_a_book_of_one_thousand_pages_fits_one_wave_of_workers():
+    assert len(plan_batches(1000)) <= PARALLEL_WORKERS
+    assert len(plan_batches(1001)) > PARALLEL_WORKERS
+
+
+def test_ram_tripwire_is_the_measured_demand_of_all_workers():
+    assert PARALLEL_WORKERS == 20
+    assert MIN_AVAILABLE_GB == pytest.approx(16.0)

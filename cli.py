@@ -118,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, assemble, stats.")
     pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
 
-    pp = pdf_sub.add_parser("extract", help="Split a PDF into 40-page batches with anchor text, worker prompts and manifest.")
+    pp = pdf_sub.add_parser("extract", help="Split a PDF into 50-page batches with anchor text, worker prompts and manifest.")
     pp.add_argument("--pdf", required=True, help="Path to the PDF")
     pp.add_argument("--batch-dir", required=True, help="Directory for anchors, prompts, manifest and worker output")
 
