@@ -2,7 +2,7 @@
 
 ## Role
 
-CLI-driven web research toolkit for Claude Code. cli.py is the only root-level Python file, a thin argparse dispatcher wiring search, drilldown, scrape, discovery and indexing into five subcommands. Touch it to add or remove a subcommand or change global logging; workflow logic lives in src/search, src/scraper and src/crawler.
+CLI-driven web research toolkit for Claude Code. cli.py is the only root-level Python file, a thin argparse dispatcher wiring search, drilldown, scrape, discovery, indexing and PDF conversion into six subcommands. Touch it to add or remove a subcommand or change global logging; workflow logic lives in src/search, src/scraper, src/crawler and src/pdf.
 
 ## Public Interface
 
@@ -10,13 +10,13 @@ No package init at this level. Entry path is `python cli.py <subcommand>`; nothi
 
 ## Flow
 
-File logging is configured as the first step of main, before argparse runs; no src module logs at import time. Arguments in via argparse. The chosen subcommand calls one workflow from src/search, src/scraper or src/crawler. Results leave as text on stdout; the discovery subcommand additionally writes a URL file on success. Logs go to a rotating file, never stderr.
+File logging is configured as the first step of main, before argparse runs; no src module logs at import time. Arguments in via argparse. The chosen subcommand calls one workflow from src/search, src/scraper, src/crawler or src/pdf. Results leave as text on stdout; the discovery subcommand additionally writes a URL file on success. Logs go to a rotating file, never stderr.
 
 ## Modules
 
-### cli.py (221 LOC)
+### cli.py (265 LOC)
 
-**Purpose:** CLI entry point: main sets up rotating file logging and the browser at-exit cleanup, then dispatches the five subcommands to their workflows in src/search, src/scraper and src/crawler.
+**Purpose:** CLI entry point: main sets up rotating file logging and the browser at-exit cleanup, then dispatches the six subcommands to their workflows in src/search, src/scraper, src/crawler and src/pdf.
 **Reads:** CLI arguments, the disk cache of search pools (drilldown path).
 **Writes:** the rotating CLI log under src/logs, stdout, and the URL file of the discovery subcommand.
 **Called by:** invoked directly as the CLI entry point; no importer.

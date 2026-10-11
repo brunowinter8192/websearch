@@ -1,7 +1,7 @@
 # dev/tests/
 
 ## Role
-The project's pytest suite: regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`, `src/news/`, and the log janitor. I/O boundaries are mocked per test and production logic runs for real. Touch it when coverage changes, not when production behavior changes without an assertion needing to change.
+The project's pytest suite: regression coverage for `src/search/`, `src/scraper/`, `src/crawler/`, `src/news/`, `src/pdf/`, and the log janitor. I/O boundaries are mocked per test and production logic runs for real. Touch it when coverage changes, not when production behavior changes without an assertion needing to change.
 
 ## Public Interface
 `__init__.py` is empty. Collected via `pytest` from the repo root (settings in `pytest.ini`). Real-browser tests carry the `browser` marker and run only with `-m browser`. Files named `_*_fakes.py` are shared helpers, not collected. `run_strands.sh` runs one fail-fast pytest per file in parallel, skips modules marked browser-only with a printed SKIP line, and counts any other nonzero exit (including 5, no tests collected) as a failure.
@@ -330,6 +330,34 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 ### test_drop_reporting.py (148 LOC)
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
+
+### test_pdf_planning.py (36 LOC)
+
+**Purpose:** `src/pdf/extract.py` batch ranges for 40-page batches (including books over 1 000 pages) and the RAM-derived worker limit.
+
+### test_pdf_worker_prompt.py (49 LOC)
+
+**Purpose:** Rendered worker prompts: one or two Read calls by batch size, part-file assembly, bare page number for a single page, figure-description rule.
+
+### test_pdf_extract.py (109 LOC)
+
+**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, worker limit, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
+
+### test_pdf_assemble.py (100 LOC)
+
+**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run.
+
+### test_pdf_stats.py (68 LOC)
+
+**Purpose:** `stats` over a handwritten conversion log: runs, failures by reason, unfinished, retry recovery, averages, `--since`, per config.
+
+### test_pdf_cli.py (33 LOC)
+
+**Purpose:** Argument parsing of the `pdf` subcommands and rejection of a malformed `--since` date.
+
+### _pdf_fakes.py (89 LOC)
+
+**Purpose:** Shared helper: raw-PDF writer for generated text pages, simulated worker output, log reader, extract runner with injected free RAM, conversion-log fixture.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.

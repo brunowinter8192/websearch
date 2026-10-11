@@ -1,0 +1,4 @@
+{
+  "main": "claude-opus-5-5",
+  "worker": "claude-haiku-5-5[1m]"
+}
