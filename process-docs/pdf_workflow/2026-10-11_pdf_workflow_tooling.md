@@ -91,3 +91,37 @@ The log of these runs is `src/logs/conversions.jsonl` inside the worktree (`PROJ
 - Do not edit the threshold or the worker formula without new measurements from real 40-page Haiku batches. The recall values above are from 20-page batches written with the old prompt.
 - The prompt template set is hashed into the logged config (`prompt_sha`), so a prompt change shows up as a new `config_hash` in `stats`.
 - The skill file `skills/websearch-pdf/SKILL.md` is user-owned and was not touched. It still names `src/pdf/workflow.py` and `WEBSEARCH/logs/conversions.jsonl`; both differ from what was built (see decisions).
+
+## Verification part 1 (2026-10-11): assemble and stats on the 40-page directories
+
+Both directories were built by the 40-page build (commit 3a24944) and assembled with the current code; the manifest keys `from`, `to`, `output` are the same in both builds. Run from the worktree, so the log is the worktree's `src/logs/conversions.jsonl`.
+
+| Directory | Result | Detail |
+|---|---|---|
+| Basner (45 pages) | `assemble` FAILED, `low_recall`, nothing written | batch 1-40 recall 0.638 (false failure, see below); batch 41-45 recall 0.9995 |
+| Kuepper (658 pages) | `assemble` FAILED, `missing_batch`, nothing written | 16 batches named, as intended; batch 241-280 exists and has recall 0.9909 (ref 98 234, out 100 854 characters) |
+
+`/tmp/pdfwf_out` was not created by either run (all-or-nothing works). `stats` afterwards: runs 2, ok 0, failed 2 (`low_recall` 1, `missing_batch` 1), unfinished 0, mean pages 351.5, mean duration 31.8 min (the wall time from `extract` to `assemble`, which includes the spawning and the waiting for the workers), one config hash with 2 runs. `assemble` prints only the failed batches and the lowest recall on success; the per-batch recall above was computed with `check_batch` in a throwaway script.
+
+### Finding 1: the content check false-fails Basner 1-40 because the text layer of that PDF is superimposed
+
+- The Haiku output of Basner 1-40 is correct (40 page markers, page 6 and page 37 read against the layer: the output has the final text once). The reference is wrong.
+- Per page, 33 of 40 pages have recall 0.97 to 1.0. Page 37 has a pdftotext layer of 67 082 alphanumeric characters against 2 822 in the output (recall 0.042); the typical page has 3 000 to 4 000. That one page is 35 percent of the reference of the batch. Seven more pages (3, 6, 10, 11, 12, 21, 22) have recall 0.60 to 0.79.
+- Cause, observed on page 6 with `pdftotext -layout`: the PDF carries two superimposed text layers, the final article (header "6 of 45") and the peer-review draft (header "Int. J. Environ. Res. Public Health 2018, 15, x FOR PEER REVIEW ... 6 of 43"), so the same sentences appear twice, and on page 37 about twenty times (words like "However, However, However, we we we downgraded downgraded"). The liteparse anchor is affected the same way (page 37 anchor: 15 090 characters).
+- Recall of the batch with page 37 removed from reference and output: 0.9598, above the threshold.
+- A word-set recall instead of the character multiset was tested and does not help: Basner 1-40 0.869 (overlay creates merged garbage tokens such as "ofAlthough"), Coenenberg trial batches median 0.933 and minimum 0.800 (841-860), and a simulated 15 percent line loss still gives 0.92 or less there, so the separation is worse than with characters. Not recommended.
+- Candidate rule (not implemented, pending the user): exclude a reference page from the judgement when its character count exceeds 5 times the median page of its batch, and name it in the output and in the end record as unjudged. Evidence for the factor: the largest page-to-median ratio inside any 50-page window is 19.7 (Basner p37) against 2.7 (Kuepper p652), 2.1, 1.9, 1.7, 1.7, 1.5, 1.5, 1.4 in the eight other measured PDFs (about 4 400 pages in total); any factor between 3 and 19 separates them. With the rule Basner 1-40 would pass at 0.960. Limit: a PDF with many superimposed pages (here 7 of 40 pages sit at 0.6 to 0.8) can still fall below 0.90; this was observed only once, in one PDF of 21.
+- The all-or-nothing `assemble` offers no override today. A failed batch that is correct after inspection can only be fixed by changing the rule.
+
+### Finding 2: hyphenation at a batch boundary
+
+- Kuepper 241-280 ends with "...in Vorgaben fuer Organisationseinheiten umgesetzt wer-" and page 281 (first page of the next batch) starts "den. Hierzu sind ...". In the text layer the pair is the same (page 280 ends with "wer-", page 281 starts with the running header and then "den.").
+- Frequency at batch seams, text layer of the last two lines of the seam page ending in a letter plus hyphen: Kuepper with 40-page batches 4 of 16 seams (pages 240, 280, 440, 520), with 50-page batches 1 of 13 (page 450); Coenenberg 1 of 24 (page 840) and 0 of 19. So zero to four split words per book.
+- The same defect happens inside a batch: in Kuepper 241-280, page 257 ends in "beein-" and page 258 starts (after the running header) with "flusst werden sollen"; the worker joined other page-end hyphens (243, 249, 251, 263) but not this one. A repair in `assemble` therefore would not make the output hyphen-free.
+- Judgement: no handling in `assemble`. A join would edit worker content with a heuristic (a line-end hyphen followed by a lowercase word can also be a suspended hyphen such as "Personal- und Sachkosten" or a real compound hyphen), the damage is one split word per seam, and the embedding is not affected in a measurable way.
+- If the user wants visibility: a grep for lines ending in a letter plus hyphen in the skill's sample step, counting the leftovers, no repair.
+
+### Worker reports of this verification (relayed by the user)
+
+- Basner 1-40: low-resolution figures were described approximately and marked with `[?]` (5 `[?]` in the batch file, 0 in Kuepper 241-280).
+- Kuepper 241-280: the anchor misses the opening sentence of page 268 and is sparse for Abb. 7-2 on page 264; the worker took both from the image. Finished with 69 percent context left at 40 dense pages, about 7 800 tokens per page including output; 50 dense pages would stay near 400k of the 1M window.
