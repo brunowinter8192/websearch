@@ -5,112 +5,130 @@ description:
 
 # PDF → MD → Index — Skill
 
-Dieser Ablauf ist interaktiv. Der NUTZER führt das Convert-Command aus, Claude macht NUR Benennung, Cleanup und Index.
-EIN Command wandelt ALLE PDFs des Batches nacheinander um, jedes als ganzes Dokument,
-über MinerU mit `vlm-auto-engine` (mlx).
-
 ## Pfade
-- MINERU = `~/Documents/ai/Mineru/venv/bin/python ~/Documents/ai/Mineru/workflow.py`
-- COLLECTION = `trading-reference`, der Standard, den du nur bestätigst wenn der Nutzer eine andere nennt
-- OUTPUT_DIR = `~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<COLLECTION>/`
-- PDF_DIR = `~/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/pdf/<Thema>/`, der etablierte PDF-Ablageort.
-  `<Thema>` ist ein bestehender Unterordner (z.B. `RAG`, `Trading`, `wise2627`), der zur Collection passt;
-  existiert keiner, lege einen passenden an.
 
-## Regel
-Das CONVERT-Command führt der NUTZER aus. Claude führt die Benennung, die Cleanup-Skripte und `rag-cli index` aus.
+- WEBSEARCH = `/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch`
+- WORKFLOW = `WEBSEARCH/venv/bin/python WEBSEARCH/cli.py pdf`
+- PDF_MODELS = `WEBSEARCH/config/pdf_models.json`, legt `claude-haiku-5-5[1m]` als Worker-Modell fest.
+- PDF_DIR = `/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/pdf`
+- OUTPUT_DIR = `/Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/rag-cli/data/documents/<COLLECTION>/`
+- BATCH_DIR = `/tmp/pdf_<STEM>/`
 
-## Phase 0 — Benennung und Skip-Check (CLAUDE)
-1. Vergib pro PDF einen STEM in PascalCase, ausschließlich alphanumerisch plus Unterstrich, also keine eckigen
-   Klammern, keine runden Klammern, keine Punkte, keine Kommas und keine Leerzeichen. Benenne das Quell-PDF
-   direkt an Ort und Stelle um nach `<STEM>.pdf`.
-2. Kopiere jedes umbenannte PDF nach `<PDF_DIR>/<STEM>.pdf`. Das Convert-Command referenziert IMMER die
-   Archiv-Pfade unter PDF_DIR, nie die Downloads.
-3. Skip-Check: Wirf jedes PDF raus, zu dem es bereits `<OUTPUT_DIR>/<STEM>.md` gibt. Nur noch nicht umgewandelte
-   PDFs gehen in das Command.
-4. Das Backend ist immer `vlm-auto-engine` (mlx).
+---
 
-## Phase 1 — MinerU convert (der NUTZER führt aus, EIN Command für den ganzen Batch)
-POSTE DAS COMMAND IM CHAT und schreibe es niemals in eine Datei. Es ist EIN Codeblock, der ALLE nicht
-übersprungenen PDFs auflistet, jedes als ganzes Dokument, und drumherum steht nichts außer den Vorbehalten, die zählen:
-```
-mkdir -p <OUTPUT_DIR>
-PYTHONUNBUFFERED=1 ~/Documents/ai/Mineru/venv/bin/python ~/Documents/ai/Mineru/workflow.py convert \
-  --pdf "<PDF1>" "<PDF2>" "<PDF3>" ... \
-  --out-dir <OUTPUT_DIR> 2>&1 | tee /tmp/<batch>_mineru.log
-```
-- Die Ausgabe ist eine flache `<OUTPUT_DIR>/<STEM>.md` pro PDF.
-- Der NUTZER führt den Block aus und meldet, dass er fertig ist.
+## Workflow
 
-## Phase 2 — Cleanup (CLAUDE)
-Laufe über jede `<OUTPUT_DIR>/<STEM>.md`. Prüfe ZUERST, zieh also Stichproben aus den Treffern, und strippe erst danach.
+**Step 1 bis 4 führst du für jedes PDF getrennt aus, Step 5 und 6 nur einmal am Ende für die ganze Collection.**
+- Starte Step 5 erst, wenn alle PDFs Step 4 hinter sich haben.
+- Nach Step 0 läuft der Skill ohne Rückfrage an den User bis zum Report in Step 6 durch.
+- Scheitert ein PDF, notierst du es für den Report und machst mit den übrigen PDFs weiter.
 
-Erkennung und Aktion pro Klasse:
-- **A — verlorene Formel (NICHT WIEDERHERSTELLBAR, also NICHT reinigen):** `??`, `` (U+FFFD), leere oder ein `?`
-  enthaltende `<sub>` und `<sup>` (`<su[bp]>[[:space:]]*</su[bp]>|<su[bp]>[^<]*\?[^<]*</su[bp]>`), dazu
-  `$$…$$`-Blöcke aus reinem Whitespace (auf `$$` splitten, die ungeraden Segmente prüfen). Jeder Treffer in A heißt,
-  dass NICHT gereinigt wird.
-  **Melde das Symbol und die Seite an den Nutzer.**
-- **B — zerrissene Mathematik (WIEDERHERSTELLBAR, also Leerzeichen entfernen):** `_ {`, `^ {`, `\ [a-z]( [a-z])+`,
-  dazu Läufe aus einzelnen Zeichen mit Leerzeichen `([A-Za-z] ){3,}[A-Za-z]`. Ziehe diese Läufe zu echten Tokens
-  zusammen, also `\mathrm { a r g m i n }` zu `\mathrm{argmin}`. Die Invariante ist, dass die Anzahl der
-  alphanumerischen Zeichen EXAKT gleich bleibt und die Wortanzahl sinkt.
-- **C — Encoding (WIEDERHERSTELLBAR, also unescapen):** HTML-Entities
-  `&(amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-fA-F]+);` und Mojibake wie `Ã.` oder `â€`. Die Anzahl der Entities muss danach 0 sein.
-- **D — Zeichenfehler im Fließtext:** ignorieren. Ist der Fließtext durchgängig zerschossen, behandle es wie A und melde es.
-- **E — Backmatter (ZWINGEND STRIPPEN):** ab der ersten Überschrift
-  References, Bibliography, Index, Symbols, Abbreviations oder Nomenclature in den letzten rund 40 Prozent bis EOF.
-  Das gilt auch für einen Referenz-Lauf ohne Überschrift, bei dem die meisten nicht-leeren Zeilen auf
-  `\(\d{4}[a-z]?\)` oder `^Surname, Init.` passen, sowie für einen Index-Lauf mit `,\s*\d+([–-]\d+)?`.
-  Bestätige, dass 3 Zeilen über dem Schnitt echter Inhalt stehen. Schneide KEINE nummerierten Unterabschnitte mit
-  Inhalt, deren Überschrift mit einer Ziffer beginnt, und keine Bibliographic Notes einzelner Kapitel.
-- **F — Tabellen-Markup (WIEDERHERSTELLBAR, also in Pipe-Text wandeln):** MinerU schreibt `<table>` als HTML, mit einem
-  Markup-Anteil über 50 Prozent. Strippe die Tags, mache eine Zeile pro `</tr>`, trenne die Zellen mit `|`, lass den
-  Inhalt unverändert und kürze nichts. Validiere, dass die Token-Menge des Zelltexts unverändert ist.
-- **G — Image-Tags (ZWINGEND STRIPPEN):** `!\[[^\]]*\]\([^)]*\)`, entferne jeden Treffer. Wirf Zeilen weg, die durch das
-  Entfernen leer werden, und ziehe 3 oder mehr aufeinanderfolgende Leerzeilen auf 1 zusammen. Scanne erneut, die Anzahl muss 0 sein.
-- **H — Block-Rauschen (ZWINGEND STRIPPEN):** Läufe von 2 oder mehr nackten Fence-Zeilen, wobei eine Zeile aus
-  optionalem Whitespace, 3 oder mehr Backticks und optionalem Whitespace besteht und sonst nichts. Entferne den ganzen
-  Lauf. BEHALTE einzelne Fences und Opener mit Sprach-Tag, also ```` ```txt ```` und ```` ```csv ````.
-  Bei Trennlinien gilt: Wenn auf der von Leerzeichen befreiten Zeile das häufigste Zeichen aus `=#-~*_.+` über
-  70 Prozent aller Zeichen ausmacht UND die Länge mindestens 20 beträgt, entferne die Zeile. Scanne erneut, der längste
-  Lauf nackter Fences muss 1 sein.
-- **I — zusammengelaufene Tokens (BEDINGT, der Nutzer entscheidet):** Splitte an Whitespace und markiere Tokens ab
-  46 Zeichen mit einem Alpha-Anteil über 0.7, wobei Tokens mit `\`, `http` oder `/` ausgenommen sind. Ist ein markiertes
-  Token länger als 2000 Zeichen, STOPPE, liste dem Nutzer Dokument und Token und warte auf seine Entscheidung. Sind alle
-  markierten Tokens höchstens 2000 Zeichen lang, lass sie stehen und strippe NICHT.
-- **J — übergroße Passagen (ZWINGEND):** Scanne BEIDE Granularitäten und melde jeden Treffer mit Zeilennummer und den
-  ersten 200 Zeichen:
-  ```bash
-  awk '{ if (length($0) > 1000) print NR, length($0) }' "$MD"                       # long lines
-  awk 'BEGIN{RS="\n\n"} { gsub(/\n/," "); if (length($0) > 1000) print NR, length($0) }' "$MD"  # long blocks
-  ```
-  Klassifiziere jeden Treffer und handle danach:
-  - **Lauf aus wiederholten Zeichen** (`(.)\1{39,}`) zieht auf 3 Zeichen zusammen:
-    `re.sub(r"(.)\1{39,}", lambda m: m.group(1)*3, text)`.
-  - **echter Fließtext, echte Tabelle oder echte Formel** bleibt stehen.
-  Scanne erneut und melde die maximale Zeilenlänge und die maximale Blocklänge. Benenne jede verbleibende Passage über
-  1000 Zeichen als echten Inhalt.
+### Step 0 — PDFs festlegen
 
-Fließtext-Fenster für jede md: Zieh 1 bis 2 Textzeilen aus dem mittleren Drittel, mit einer Länge über 70, beginnend mit
-einem Buchstaben, mit mehr als 10 Leerzeichen und einem Alpha-Anteil über 0.78, und LIES sie. Ist der Text kohärent, ist
-der Test bestanden. Ist er zerschossen, ist es Klasse A und du meldest es als nicht wiederherstellbar.
+1. Frage den User nach den PDFs und der Collection, falls er sie nicht genannt hat.
 
-Skripte pro Problem: je ein `/tmp/fix_<issue>_<STEM>.py`, teste es an der Datei, scanne diese Klasse erneut auf 0 und
-prüfe stichprobenartig 10 bis 15 Zeilen aus der Mitte. Erhalte den Quellinhalt, überschreibe direkt an Ort und Stelle und
-sichere vorher nach `/tmp/backup_<STEM>.md`.
+2. Benenne jedes PDF nach seinem Inhalt und sortiere es in ein Projektverzeichnis unter PDF_DIR ein.
+   - PDF_DIR hat ein Unterverzeichnis je Projekt, z. B. `PDF_DIR/wise2627/`.
+   - Ist unklar, in welches Verzeichnis das PDF gehört, frag den User.
+   - Muster: Autor + Titel + Jahr in PascalCase, nur Buchstaben, Ziffern und Unterstrich.
+       - Beispiel: `CoenenbergKostenrechnungKostenanalyse_2016.pdf`, der STEM ist dann `CoenenbergKostenrechnungKostenanalyse_2016`.
 
-## Phase 3 — Index (CLAUDE)
-```
-rag-cli index --collection <COLLECTION>
-```
-Das läuft inkrementell und überspringt über den Hash. Es muss das EINZIGE Command in seinem Bash-Aufruf sein. Zuweisungen,
-ein `cd` und ein Redirect dürfen dabeistehen, sonst nichts, und keine Command-Substitution.
+### Step 1 — Extraktion
 
-Wenn es zurückkommt, LIES DIE AUSGABE VOLLSTÄNDIG, bevor du meldest oder diagnostizierst.
-Der Fehler sitzt in der ERSTEN Zeile. Ein stehender Chunk-Zähler heißt, dass der Lauf BEENDET ist, und niemals dass er langsam ist.
+**Rufe `extract` für jedes PDF nur ein einziges Mal auf.**
+- `extract` löscht beim Start alle Dateien in BATCH_DIR, auch die fertigen Texte der Haiku-Worker.
+- Ein zweiter Aufruf, nachdem Worker schon gelaufen sind, vernichtet also deren Arbeit.
+- Hat das PDF keine Textebene, bricht `extract` mit Fehler ab. Notiere das für den Report und mach mit dem nächsten PDF weiter.
 
-Bei `HTTP 400 … exceeds the available context size` lässt du den Scan aus Klasse J erneut über das genannte Dokument
-laufen, behebst den Fund und indexierst erneut.
+1. Rufe `extract` auf. Es teilt das PDF in Stapel zu je 50 Seiten und schreibt für jeden Stapel einen fertigen Prompt für einen Haiku-Worker nach BATCH_DIR.
+   - Die Ausgabe landet in einer Datei, lies sie danach vollständig.
 
-Melde die Anzahl der indexierten Dateien und der Chunks. Bestätige, dass die Dokumente in der Collection liegen.
+   ```bash
+   WORKFLOW extract --pdf "PDF_DIR/<Projekt>/<STEM>.pdf" --batch-dir BATCH_DIR > /tmp/pdf_<STEM>_extract.txt 2>&1
+   ```
+
+2. Lies `BATCH_DIR/manifest.json`. Dort stehen alle Stapel mit ihrem Seitenbereich, z. B. 1-50, 51-100, 101-150.
+   - Zu jedem Stapel gibt es die Datei `BATCH_DIR/prompt_<von>-<bis>.md`, das ist der Prompt für seinen Worker.
+
+### Step 2 — Haiku-Worker, einer pro Stapel
+
+**Es laufen nie mehr als 20 Worker gleichzeitig.**
+- `MODEL_SELECTION_FILE` vor dem Spawn sorgt dafür, dass der Worker mit Haiku statt mit Sonnet startet. Setze die Variable nur hier, bei allen anderen Workern nie.
+
+1. Starte für jeden Stapel einen Haiku-Worker, alle direkt nacheinander, aber nie mehr als 20 gleichzeitig.
+   - `<von>` ist die erste Seite des Stapels, `<bis>` die letzte.
+   - Starte einen Spawn erst, wenn der vorige zurückgekehrt ist, nie mehrere parallel im Hintergrund mit `&`.
+
+   ```bash
+   MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-<von> BATCH_DIR/prompt_<von>-<bis>.md
+   ```
+
+2. Ein Worker ist fertig, wenn er idle ist und seine Datei `BATCH_DIR/batch_<von>-<bis>.md` existiert. Kille ihn dann.
+
+   ```bash
+   worker-cli kill pdf-<stem>-<von>
+   ```
+
+3. Nur bei mehr als 20 Stapeln: Starte für jeden beendeten Worker den nächsten Stapel, der noch keinen Worker hatte.
+
+### Step 3 — Zusammenführen und Inhaltskontrolle
+
+**`assemble` prüft jeden Stapel, bevor es etwas schreibt.**
+- Es zählt die Buchstaben und Ziffern im Text des Workers und vergleicht sie mit dem Text, der im PDF selbst steckt. Fehlt zu viel, gilt der Stapel als gescheitert.
+- Ein Stapel, zu dem es keine Datei `batch_<von>-<bis>.md` gibt, gilt ebenfalls als gescheitert.
+- Ist auch nur ein Stapel gescheitert, schreibt `assemble` keine Datei nach OUTPUT_DIR und nennt in seiner Ausgabe die gescheiterten Stapel. 
+- Vor dem Schreiben teilt `assemble` jeden zu langen Absatz in kürzere Absätze.
+
+1. Rufe `assemble` auf. Sind alle Stapel in Ordnung, schreibt es das ganze Buch als eine Datei `<OUTPUT_DIR>/<STEM>.md`.
+   - Die Ausgabe landet in einer Datei, lies sie danach vollständig.
+
+   ```bash
+   WORKFLOW assemble --batch-dir BATCH_DIR --out-dir <OUTPUT_DIR> > /tmp/pdf_<STEM>_assemble.txt 2>&1
+   ```
+
+2. Nennt `assemble` gescheiterte Stapel, finde für jeden Stapel selbst heraus, warum er gescheitert ist.
+   - Vergleiche dazu `BATCH_DIR/batch_<von>-<bis>.md` mit denselben Seiten im PDF.
+   - Fehlt im Text des Workers wirklich Inhalt, oder stimmt etwas mit dem PDF selbst nicht?
+   - Beispiel: In einem PDF können zwei Textebenen übereinanderliegen. Dann zählt `assemble` denselben Text doppelt, obwohl der Text des Workers vollständig ist.
+
+3. Entscheide danach, was zu tun ist.
+   - Fehlt beim Worker wirklich Inhalt, bessere `BATCH_DIR/batch_<von>-<bis>.md` selbst aus, anhand derselben Seiten im PDF. Starte dafür keinen neuen Worker.
+       - Rufe danach erneut `assemble` auf.
+       - Scheitert `assemble` auch nach deiner Ausbesserung, wird das PDF nicht indexiert.
+    - Blockt Anthropic den Worker, z. B. mit `API Error: Output blocked by content filtering policy`, übernimmst du den Stapel.
+       - Entscheide, ob du ihn selbst 1:1 abschreibst.
+       - Falls nein: Erzeuge `batch_<von>-<bis>.md` mit `pdftotext`, je Seite mit `<!-- page N -->` davor, und korrigiere anhand der Seitenbilder gezielt Erkennungsfehler, Überschriften, Zitate und Bildbeschreibungen.
+       - Rufe danach erneut `assemble` auf.
+ 
+### Step 4 — Stichprobe
+
+1. Vergleiche je eine Stelle aus Anfang, Mitte und Ende von `<OUTPUT_DIR>/<STEM>.md` mit derselben Stelle im PDF.
+   - Achte auf fehlende Absätze, erfundenen Text, zerbrochene Tabellen und Formeln, Abbildungen ohne Beschreibung.
+       - Bei Funden entscheidest du, ob sie so gravierend sind, dass das PDF nicht indexiert werden kann.
+       
+### Step 5 — Index
+
+1. Indexiere die Collection und geh idle, bis der Lauf fertig ist.
+   - Polle nicht, du wirst benachrichtigt.
+
+   ```bash
+   PYTHONUNBUFFERED=1 rag-cli index --collection <COLLECTION> > /tmp/<COLLECTION>_index.log 2>&1
+   ```
+
+2. Lies `/tmp/<collection>_index.log` vollständig und notiere jeden Fehler für den Report.
+   - Zum Beispiel eine Datei, die rag-cli nicht chunken oder embedden konnte.
+
+### Step 6 — Report
+
+1. Schreibe den Report in diesem Format in den Chat.
+
+   ```
+   PDF-Konvertierung fertig
+   Collection: <collection>
+   Indexiert: <Zahl> PDFs, <Zahl> Chunks
+   Nicht indexiert: <PDF mit Grund, oder "keine">
+   Funde der Stichprobe: <PDF, Seite, Fund, oder "keine">
+   Fehler: <jeder Fehler aus allen Steps, oder "keine">
+   ```
+
+2. Geh idle.
