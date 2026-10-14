@@ -14,9 +14,9 @@ Query in, engine-specific fetch (browser tab navigation with injected parse scri
 
 ## Modules
 
-### google.py (284 LOC)
+### google.py (302 LOC)
 
-**Purpose:** Google search via a Chrome tab with consent cookie, captcha detection and resolution of Google's goto redirect links.
+**Purpose:** Google search via a Chrome tab with consent cookie, navigation until DOMContentLoaded (not the load event), captcha detection and resolution of Google's goto redirect links.
 **Reads:** none (network only).
 **Writes:** none.
 **Called by:** src/search/search_web.py.

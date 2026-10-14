@@ -21,7 +21,7 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_config.py (55 LOC)
+### kvp_config.py (57 LOC)
 
 **Purpose:** Paths, verdict labels and constants shared by two or more modules of this directory.
 **Reads:** none.
@@ -51,9 +51,9 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_indicators.py (255 LOC)
+### kvp_indicators.py (290 LOC)
 
-**Purpose:** Applies the verdicts to the records and computes the indicators per lane and level, split by `code_version`, plus the rows of the collapse searches.
+**Purpose:** Applies the verdicts to the records and computes the indicators per lane and level, split by `code_version`, plus the rows of the collapse searches and the per-version table of the focus engine (google).
 **Reads:** the loaded and classified records.
 **Writes:** none.
 **Called by:** kvp_report.py.
@@ -61,9 +61,9 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_render.py (246 LOC)
+### kvp_render.py (263 LOC)
 
-**Purpose:** Renders the indicator data, the collapse searches with their host facts and the lists of flagged records as markdown tables.
+**Purpose:** Renders the indicator data, the focus-engine table, the collapse searches with their host facts and the lists of flagged records as markdown tables.
 **Reads:** none.
 **Writes:** none.
 **Called by:** kvp_report.py.
@@ -88,6 +88,16 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 **Writes:** none.
 **Called by:** kvp_canary.py, dev/tests/test_kvp_canary.py.
 **Calls out:** none.
+
+---
+
+### probe_google_load_events.py (216 LOC)
+
+**Purpose:** One-off measurement of when Google's results DOM, `DOMContentLoaded` and the load event arrive in the production browser setup; run with `--mode poll` or `--mode events`.
+**Reads:** nothing from the production logs; sends real Google searches through `search_web_workflow` with an isolated log and no cache write.
+**Writes:** `md/probe_google_load_events_<mode>_<timestamp>.md`, `json/probe_google_load_events_<mode>_<timestamp>.json`.
+**Called by:** invoked directly with `-m`; no stop at Google's CAPTCHA page, mind the Google volume (see process-docs area kvp).
+**Calls out:** src/search/search_web.py, src/search/engines/google.py.
 
 ---
 

@@ -138,8 +138,16 @@ def _result():
 
 
 class _FakeTab:
-    async def go_to(self, url, timeout=None):
+    async def enable_page_events(self):
         return None
+
+    async def on(self, event_name, callback):
+        self.dom_content_callback = callback
+        return 1
+
+    async def _execute_command(self, command):
+        self.dom_content_callback({})
+        return {"result": {}}
 
     @property
     async def current_url(self):

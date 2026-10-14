@@ -102,3 +102,26 @@ def test_report_lists_collapse_searches_with_pattern_and_host_facts(tmp_path, mo
     assert "load 14.6/14 cpus; busy 93.4 %; top: mds_stores 31.2s; errors: ps: 1 unparseable lines" in collapse
     assert collapse.count("| not recorded |") == 5
     assert "2026-10-14T16:39:36" not in collapse
+
+
+def test_report_splits_the_focus_engine_by_code_version_and_names_page_load_timeouts(tmp_path, monkeypatch):
+    cases = [json.loads(l) for l in (FIXTURE_DIR / "collapse_cases.jsonl").read_text(encoding="utf-8").splitlines()]
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    lines = []
+    for case in cases:
+        record = dict(case["record"])
+        if case["case"] in ("2026-10-14T16:39:24Z", "2026-10-14T16:39:36Z"):
+            record["code_version"] = "abc1234567"
+        lines.append(json.dumps(record, ensure_ascii=False))
+    (log_dir / "query_log.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    report = _run_report(tmp_path, monkeypatch, log_dir)
+
+    table = report.split("## Engine google by code version")[1].split("## Collapse searches")[0]
+    rows = {line.split("|")[1].strip(): [c.strip() for c in line.split("|")[2:-1]] for line in table.splitlines() if line.startswith("| ") and not line.startswith("| code_version")}
+    assert rows["all"][0] == "7"
+    assert rows["all"][2].startswith("4/7")
+    assert rows["abc1234567"][0] == "2"
+    assert rows["abc1234567"][2].startswith("2/2")
+    assert rows["unversioned"][2].startswith("2/5")

@@ -8,7 +8,9 @@ from dev.kvp.kvp_config import (
     ENGINE_OK,
     ENGINE_RATE_SKIP,
     ENGINE_TRANSPORT_ERROR,
+    FOCUS_ENGINE,
     MIN_ENGINES_OK,
+    PAGE_LOAD_TIMEOUT_REASON,
     SCRAPE_USABLE,
     SILENT_SCRAPE_LABELS,
 )
@@ -24,6 +26,7 @@ def render_report(meta: dict, data: dict, searches: list[dict], scrapes: list[di
     sections = [
         _render_header(meta),
         _render_ad_hoc(data["ad_hoc"]),
+        _render_focus_engine(data["focus_engine"]),
         _render_collapse(data["collapse"]),
         _render_deep_dive(data["deep_dive"]),
         _render_silent_scrapes(scrapes),
@@ -113,6 +116,20 @@ def _render_relevance(ad_hoc: dict) -> str:
         rows.append([name, relevance["searches"], relevance["drilldowns"], relevance["searches_with_scrape"], relevance["attributed_scrapes"], ranks])
     headers = ["code_version", "searches", "drilldowns", "searches with scrape", "attributed scrapes", "rank of scraped URL (rank:count)"]
     return "### Relevance: click data\n\nA scrape is attributed to a drilldown list when its URL is in the list and it happened within 3 h after the drilldown.\n\n" + _table(headers, rows)
+
+
+def _render_focus_engine(rows: dict) -> str:
+    columns = ("ok", "page_load_timeout", "timeout", "blocked", "empty_no_signal", "transport_error")
+    cells = [
+        [name, row["runs"], *[_ratio(row["labels"].get(label, 0), row["runs"]) for label in columns], row["ok_median_ms"], row["ok_p90_ms"]]
+        for name, row in rows.items()
+    ]
+    headers = ["code_version", "runs", *columns, "ok median ms", "ok p90 ms"]
+    note = (
+        f"Engine `{FOCUS_ENGINE}` per code version. `page_load_timeout` is `ERROR_BROWSER` with the reason `{PAGE_LOAD_TIMEOUT_REASON}`, "
+        "`timeout` is any `TIMEOUT_*` status, `blocked` is an empty page with a block signal (Google's `/sorry/` CAPTCHA page arrives with HTTP 429)."
+    )
+    return f"## Engine {FOCUS_ENGINE} by code version\n\n" + note + "\n\n" + _table(headers, cells)
 
 
 def _render_collapse(rows: list[dict]) -> str:
