@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import shutil
 import tempfile
 import time
@@ -26,6 +27,9 @@ from src.scraper.chromium_process import (
 logger = logging.getLogger(__name__)
 
 LAUNCH_MODE = "cdp_headed_backgrounded"
+CONTENT_SOURCE_FIT = "fit_markdown"
+CONTENT_SOURCE_RAW_FALLBACK = "raw_markdown_fallback"
+WORD_CHARACTER = re.compile(r"\w")
 
 _BROWSER_LAUNCH_SIGNATURES = (
     "executable doesn't exist",
@@ -62,7 +66,7 @@ async def try_scrape(url: str) -> tuple[str, dict]:
     budget_s = TOTAL_SCRAPE_BUDGET_S
     _empty_meta: dict = {
         "acquisition_error": None, "status_code": None, "content_type": None,
-        "raw_markdown_bytes": 0, "og_published_time": None,
+        "raw_markdown_bytes": 0, "og_published_time": None, "content_source": None,
         "crawl4ai_success": None, "crawl4ai_error_message": None,
         "crawl4ai_attempts": None, "crawl4ai_resolved_by": None,
         "landed_url": None,
@@ -215,8 +219,19 @@ async def _acquire_scrape(
         return "", meta
     meta["raw_markdown_bytes"] = len((result.markdown.raw_markdown or "").encode("utf-8"))
     meta["og_published_time"] = (getattr(result, "metadata", None) or {}).get("og:published_time")
-    content = result.markdown.fit_markdown or ""
+    content, meta["content_source"] = select_content(result.markdown.fit_markdown, result.markdown.raw_markdown)
     return content, meta
+
+
+def select_content(fit_markdown: str | None, raw_markdown: str | None) -> tuple[str, str]:
+    fit, raw = fit_markdown or "", raw_markdown or ""
+    if not _has_word_character(fit) and _has_word_character(raw):
+        return raw, CONTENT_SOURCE_RAW_FALLBACK
+    return fit, CONTENT_SOURCE_FIT
+
+
+def _has_word_character(text: str) -> bool:
+    return WORD_CHARACTER.search(text) is not None
 
 
 def extract_crawl4ai_diagnosis(result) -> dict:
@@ -256,6 +271,7 @@ def _build_scrape_record(
         "http_status": meta.get("status_code"), "content_type": meta.get("content_type"),
         "bytes_returned": len(content.encode("utf-8")) if content else 0,
         "bytes_raw_markdown": meta.get("raw_markdown_bytes", 0),
+        "content_source": meta.get("content_source"),
         "content_path": content_path,
         "og_published_time": meta.get("og_published_time"),
         "landed_url": meta.get("landed_url"),

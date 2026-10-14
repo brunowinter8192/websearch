@@ -1,13 +1,13 @@
 # dev/kvp/
 
 ## Role
-Continuous-improvement report for the ad hoc lane and the deep dive lane: reads the production logs, derives every verdict (blocked, usable, silent failure) offline and writes one markdown report per run. Touch it to change an indicator definition or a verdict rule; never write verdicts into the production logs.
+Continuous-improvement report for the ad hoc lane and the deep dive lane: reads the production logs, derives every verdict (blocked, usable, silent failure) offline and writes one markdown report per run. The canary runner re-scrapes a fixed URL list before and after a fix. Touch it to change an indicator definition, a verdict rule or the case list; never write verdicts into the production logs.
 
 ## Public Interface
-No `__init__.py`. Run from the repo root as `./venv/bin/python -m dev.kvp.kvp_report [--since ISO] [--until ISO]`. Optional path flags: `--log-dir`, `--rag-search-log`, `--collection-dir`. Prints the report path.
+No `__init__.py`. Run from the repo root as `./venv/bin/python -m dev.kvp.kvp_report [--since ISO] [--until ISO]`. Optional path flags: `--log-dir`, `--rag-search-log`, `--collection-dir`. Prints the report path. Canary: `./venv/bin/python -m dev.kvp.kvp_canary [--baseline <json>]`, prints the report and JSON path.
 
 ## Flow
-Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection are loaded, filtered to the window -> verdict rules classify scrapes, engine runs, pipe records and collection files -> indicators are computed for all records and per `code_version` -> markdown goes to `md/`.
+Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection are loaded, filtered to the window -> verdict rules classify scrapes, engine runs, pipe records and collection files -> indicators are computed for all records and per `code_version` -> markdown goes to `md/`. Canary: fixed cases are scraped one by one through the real chromium workflow into a throwaway log -> `kvp_classify` gives the verdict, `must_contain` checks the content -> report to `md/`, JSON to `json/`, optional comparison with an earlier JSON.
 
 ## Modules
 
@@ -21,7 +21,7 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_config.py (45 LOC)
+### kvp_config.py (49 LOC)
 
 **Purpose:** Paths, verdict labels and constants shared by two or more modules of this directory.
 **Reads:** none.
@@ -71,5 +71,25 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
+### kvp_canary.py (105 LOC)
+
+**Purpose:** Entry point of the canary run: loads the case list, scrapes each URL through the production workflow into an isolated log, evaluates and writes report and JSON.
+**Reads:** `canary_cases.json`, an earlier canary JSON via `--baseline`, the throwaway scrape log it writes itself.
+**Writes:** `md/kvp_canary_<timestamp>.md`, `json/kvp_canary_<timestamp>.json`; sets `WEBSEARCH_SCRAPE_LOG_PATH` for its own process.
+**Called by:** invoked directly with `-m`.
+**Calls out:** src/scraper/chromium_scrape.py, src/code_version.py.
+
+---
+
+### kvp_canary_logic.py (165 LOC)
+
+**Purpose:** Pure canary functions: evaluates one case against its expected verdict and content marker, compares two runs, renders the report.
+**Reads:** none.
+**Writes:** none.
+**Called by:** kvp_canary.py, dev/tests/test_kvp_canary.py.
+**Calls out:** none.
+
+---
+
 ## State
-None. Each run is stateless; reports in `md/` are written once and never edited. Verdict definitions and details: process-docs area kvp. Test fixtures: `dev/tests/fixtures/kvp/`.
+None. Each run is stateless; reports in `md/` and `json/` are written once and never edited. `canary_cases.json` is the one hand-maintained data file. Verdict definitions and details: process-docs area kvp. Test fixtures: `dev/tests/fixtures/kvp/`.

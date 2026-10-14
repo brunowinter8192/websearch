@@ -89,3 +89,48 @@ Collection file (`websearch-pages`, state at report time, not windowed): `placeh
 - Thresholds `BLOCK_BODY_MAX_BYTES` 2000, `INTERSTITIAL_BODY_MAX_BYTES` 1000 and the 5-line placeholder limit are tuned to the 156 observed scrapes. Re-check them when the first report on a new window shows records in the counter-check table or in the silent list that a human judges differently.
 - Collection-based numbers (survival, flagged files, usefulness) are the state at report time. For a before/after comparison they change between runs even with an identical window.
 - Next in the plan: M3 (run record for deep dives) and M4 (canary set).
+
+## Iteration 1 (2026-10-14): M4 canary runner and the empty-filter fallback
+
+This section supersedes the line above that says M4 is not started. Commits on branch `kvpreport`: `c4d6606` (canary runner), `ba9a2f3` (baseline on unfixed code), `d6f7f06` (fix), `ae8ca4e` (run after the fix). The worktree was fast-forwarded to `integration` (`e44a35f`) first, so the baseline ran on the integrated code.
+
+### Trigger and evidence
+
+- Three `scrape_log` records had `bytes_returned=1` while `bytes_raw_markdown` was 15 to 17 KB, HTTP 200, mode filtered: `https://vorschriften.bgn-branchenwissen.de/daten/gv/eg_2004_853/a35.htm` (2026-09-15), `https://dbis.ur.de/UBFM/resources?q=JSTOR` and `...?q=Business+Source` (2026-09-23). `chromium_scrape._acquire_scrape` sent only `fit_markdown`.
+- Probe before any change (`try_scrape` with the response captured, nothing logged): for all three, `fit_markdown` is `"\n"` (1 B). bgn raw is 16742 B and holds the complete legal text (Annex III Section V, chapters I to IV with tables, then the table of contents). The pruning filter removes a table-layout page entirely. dbis raw is 15916 B for both queries and byte-identical: it is the list of library organisations ("Keine Organisation wählen", AACHEN to MÜNSTER). The words JSTOR and Business Source are not in it, so the result list is missing before the filter runs. Hypothesis, not verified: the results are loaded by JavaScript after the capture.
+- Precedent: a fit-to-raw fallback with a 200 B threshold existed and was removed on 2026-08-22 (area `scrape_pipeline`). That record names the evidence a reintroduction needs: a concrete failing URL with a large filtered-vs-raw gap where raw is real content, not chrome. bgn is that URL. The old threshold was never reintroduced.
+
+### Decisions
+
+- Rule in `select_content(fit, raw)`: if `fit_markdown` has no word character (`\w`) and `raw_markdown` has one, the agent gets raw. Otherwise fit, also when both are empty. No byte threshold: the observed condition is "whitespace only", and the earlier threshold had fired once in 69 scrapes without effect. The existing test that a short fit with text stays untouched remains valid.
+- Owner decision: the rule also applies to dbis. The agent otherwise receives nothing; `content_source` keeps it traceable.
+- New fact field `content_source` in the scrape record: `fit_markdown`, `raw_markdown_fallback`, or `null` when crawl4ai produced no markdown. `bytes_returned` is what was sent, `bytes_raw_markdown` unchanged. Not added to the config stamp: `code_version` already separates the records and `config_hash` stays stable.
+- Scope: only the chromium ad hoc lane. Camoufox and pipe_scraper already use raw markdown.
+- Known weakness, hypothesis only: `\w` also matches letters inside URLs, so a raw page made of nothing but link syntax counts as "has text". No such page was observed.
+
+### Canary runner (M4)
+
+- Files: `dev/kvp/kvp_canary.py` (entry), `kvp_canary_logic.py` (pure functions), `canary_cases.json` (17 cases). Run: `./venv/bin/python -m dev.kvp.kvp_canary [--baseline dev/kvp/json/<file>.json]`. Output `dev/kvp/md/kvp_canary_<ts>.md` and `dev/kvp/json/kvp_canary_<ts>.json`; exit code is always 0, the runner only reports.
+- Each case: `name`, `url`, `expected` (a `kvp_classify` label), optional `must_contain`, `origin`, optional `volatile`. Verdict comes from `classify_scrape`; the content marker is checked against the returned body. A case is PASS only if the verdict matches and every marker is present.
+- `expected` is the wanted state for the defect cases (usable) and the observed state for failures nobody can fix (cosdna, stern, raspberrypi: blocked; ub login: login_wall; three 404 pages). A flip of a pinned case therefore shows up as FAIL and must be looked at, improvement or site change.
+- Cases: 3 empty-filter URLs, 3 blocks, 2 volatile challenges (mojeek, amazon.de), 1 login wall, 3 404, 5 regression guards (example.com, pytest builtin, a stackoverflow and an eclecticlight page that carry `crawl4ai_success=false` with real content, kubernetes.io for the code-block guard).
+- Volatile cases are annotated and listed in their own table in the baseline comparison. Observed: amazon.de returned a 120 KB page in both canary runs while the logged 2026-09-26 record was a 374 B interstitial; mojeek returned the 185 B verification page in both runs although it served real results in two of eight logged calls.
+- The runner calls the real `scrape_url_chromium_workflow` with `WEBSEARCH_SCRAPE_LOG_PATH` pointing to a directory under `$TMPDIR` named `kvp_canary_*` (on this machine `/var/folders/...`, not `/tmp`). Production logs stay clean. One run per case, sequential, because `reap_orphaned_scrapes` at the start of every scrape would kill the Chrome of a parallel scrape. A run takes about 4 minutes.
+- The canary report prints `code_version`. A run from a dirty tree reads `+dirty`; commit before a baseline run.
+
+### Result
+
+| Case | Baseline `c4d66065ce` | After fix `d6f7f060cf` |
+|---|---|---|
+| bgn a35 | FAIL, `filtered_to_nothing`, 1 B | PASS, `usable`, 16742 B, `raw_markdown_fallback`, marker "Sterilisationsvorrichtungen" present |
+| dbis JSTOR | FAIL, 1 B | verdict `usable`, 15916 B, marker JSTOR missing: FAIL |
+| dbis Business Source | FAIL, 1 B | verdict `usable`, 15916 B, marker missing: FAIL |
+| 12 other stable cases | PASS | PASS, `content_source` `fit_markdown` |
+
+Stable cases passing: 12 of 15 before, 13 of 15 after. Byte differences in unchanged cases are page variance (stern 121 to 119 B, stackoverflow 9609 to 9656 B), not an effect of the fix. Reports: `dev/kvp/md/kvp_canary_20261014T171108.md` (baseline) and `kvp_canary_20261014T171607.md` (after). Real record after the fix, bgn: `content_source raw_markdown_fallback`, `bytes_returned 16742`, `code_version d6f7f060cf`.
+
+### Open points
+
+- dbis stays unsolved at content level: the agent now gets the organisation list instead of one byte, not the result list. The KVP report classifies such a record as `usable`, because its rules cannot see missing content; only the canary marker shows it. Cause of the missing results is unexplained.
+- The fix is active in production only after the merge; until then new records in the main logs carry no `content_source`. After the merge, a KVP report on a window with `code_version` split should show no new `filtered_to_nothing` records.
+- The hook setup blocks `cli.py scrape_url_chromium` run through a venv path; the canary was started with `./venv/bin/python -m dev.kvp.kvp_canary > /tmp/<file> 2>&1`, which was accepted.
