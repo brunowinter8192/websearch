@@ -103,7 +103,11 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/search/engines/google.py`: result building, source-level guard for the snippet selector, URL resolution against a loopback fixture server.
 
-### test_google_goto_drops.py (146 LOC)
+### test_google_navigation.py (92 LOC)
+
+**Purpose:** `src/search/engines/google.py` navigation: returns at DOMContentLoaded without a load event, listener before navigate, one bounded wait, navigate error text, wiring and the fit of the navigation timeout into the engine watchdog.
+
+### test_google_goto_drops.py (154 LOC)
 
 **Purpose:** `src/search/engines/google.py` redirect resolution: drop-reason counting, timeout and request-error classification, diagnosis attachment.
 
@@ -147,9 +151,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Canary evaluation against real fixture records (expected verdict, content marker, missing record), the order of `run_cases`, the baseline comparison with volatile cases separate, and the sanity of the case list.
 
-### test_kvp_report.py (104 LOC)
+### test_kvp_report.py (127 LOC)
 
-**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts) and the scrape-to-drilldown attribution with rank.
+**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts, google table per code version) and the scrape-to-drilldown attribution with rank.
 
 ### test_index_scrapes.py (162 LOC)
 
