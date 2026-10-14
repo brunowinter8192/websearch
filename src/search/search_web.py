@@ -11,6 +11,7 @@ import pydoll.exceptions as _pydoll_exc
 import websockets.exceptions as _ws_exc
 from mcp.types import TextContent
 
+from src.host_load import host_facts_since, take_host_snapshot
 from src.search.browser import get_tab, kill_own_chrome
 from src.search.cache import cache_key, cache_write
 from src.search.engines import bing, brave, duckduckgo, google, mojeek, openalex, startpage, yandex
@@ -74,6 +75,7 @@ async def search_web_workflow(
     query_modifier_map: dict[str, Callable[[str], str]] | None = None,
 ) -> list[TextContent] | tuple[list[TextContent], dict]:
     t_total = time.perf_counter()
+    host_start = take_host_snapshot()
     logger.info("Searching: %s (language=%s)", query, language)
     selected = _select_engines(engines)
     effective_timeout = _effective_timeout(engine_timeout)
@@ -81,6 +83,7 @@ async def search_web_workflow(
     raw_results, engine_stats, engine_fanout_ms, engine_ms, engine_details = await _fanout_with_browser(
         selected, query, language, effective_timeout, query_modifier_map, _with_timings
     )
+    host = host_facts_since(host_start)
 
     pools, pool_build_ms = _timed(build_engine_pools, raw_results)
 
@@ -93,7 +96,7 @@ async def search_web_workflow(
     _, cache_write_ms = _timed(cache_write, key, capped_pools, query, language, engines, time_range)
 
     total_ms = _elapsed_ms(t_total)
-    _build_query_log_entry(query, language, selected, total_ms, engine_stats, key)
+    _build_query_log_entry(query, language, selected, total_ms, engine_stats, key, host)
 
     return _build_search_result(
         formatted_text, _with_timings, engine_fanout_ms, engine_ms, engine_details,
@@ -311,6 +314,7 @@ def _build_query_log_entry(
     total_ms: int,
     engine_stats: dict,
     search_key: str,
+    host: dict,
 ) -> None:
     bottleneck = max(engine_stats, key=lambda k: engine_stats[k]["search_ms"]) if engine_stats else None
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -324,6 +328,7 @@ def _build_query_log_entry(
         "bottleneck_engine": bottleneck,
         "engines": engine_stats,
         "search_key": search_key,
+        "host": host,
     })
 
 

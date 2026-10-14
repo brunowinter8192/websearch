@@ -124,6 +124,31 @@ async def test_engine_with_timing_timeout_preserves_facts_written_before_cancell
 
 
 @pytest.mark.asyncio
+async def test_search_web_workflow_summary_carries_the_host_facts(tmp_path, monkeypatch):
+    mock_engines = {"google": _make_mock_engine_with_reason("google", [_fake_result("https://a.com", engine="google")])}
+
+    lines = await _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, {"google"})
+
+    [summary] = [r for r in map(json.loads, lines) if r["record_type"] == "workflow_summary"]
+    assert set(summary["host"]) == {"cpu_count", "load_avg_start", "cpu_busy_pct", "top_cpu_processes", "errors"}
+    assert summary["host"]["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_web_workflow_still_logs_when_the_process_table_is_unparseable(tmp_path, monkeypatch):
+    from src import host_load
+    monkeypatch.setattr(host_load, "read_ps_output", lambda: "no process line at all\n")
+    mock_engines = {"google": _make_mock_engine_with_reason("google", [_fake_result("https://a.com", engine="google")])}
+
+    lines = await _run_search_web_workflow_and_get_log_lines(tmp_path, monkeypatch, mock_engines, {"google"})
+
+    [summary] = [r for r in map(json.loads, lines) if r["record_type"] == "workflow_summary"]
+    assert summary["engines"]["google"]["status"] == "OK"
+    assert len(summary["host"]["errors"]) == 1
+    assert "unparseable" in summary["host"]["errors"][0]
+
+
+@pytest.mark.asyncio
 async def test_engine_with_timing_empty():
     from src.search.search_web import _engine_with_timing
 

@@ -4,6 +4,7 @@ import tempfile
 
 import pytest
 
+from src import host_load
 from src.search import browser
 from src.scraper import chromium_scrape
 from src.scraper import camoufox_scrape
@@ -45,6 +46,11 @@ def _no_real_osascript(monkeypatch):
 @pytest.fixture(autouse=True)
 def _constant_system_locale(monkeypatch):
     monkeypatch.setattr(camoufox_scrape, "_resolve_system_locale", lambda: "en-US")
+
+
+@pytest.fixture(autouse=True)
+def _constant_process_table(monkeypatch):
+    monkeypatch.setattr(host_load, "read_ps_output", lambda: "    1 0:01.50 /sbin/launchd\n")
 
 
 def _launch_trap(qualified_name: str):
