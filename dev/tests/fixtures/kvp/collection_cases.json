@@ -1,0 +1,30 @@
+{
+ "cases": [
+  {
+   "case": "title_only_minerU_demo_68B",
+   "expected": "title_only",
+   "body": "<!-- source: https://opendatalab.github.io/MinerU/demo/ -->\n\n# Demo\n"
+  },
+  {
+   "case": "normal_pytest_page",
+   "expected": null,
+   "body": "<!-- source: https://docs.pytest.org/en/stable/builtin.html -->\n\n# Pytest API and builtin fixtures[¶](https://docs.pytest.org/en/stable/builtin.html#pytest-api-and-builtin-fixtures \"Link to this heading\")\nMost of the information of this page has been moved over to [API Reference](https://docs.pytest.org/en/stable/reference/reference.html#api-reference).\nFor information on plugin hooks and objects, see [Writing plugins](https://docs.pytest.org/en/stable/how-to/writing_plugins.html#plugins).\nFor information on the `pytest.mark` mechanism, see [How to mark test functions with attributes](https://docs.pytest.org/en/stable/how-to/mark.html#mark).\nFor information about fixtures, see [Fixtures reference](https://docs.pytest.org/en/stable/reference/fixtures.html#fixtures). To see a complete list of available fixtures (add [`-v`](https://docs.pytest.org/en/stable/reference/reference.html#cmdoption-v) to also see fixtures with leading `_`), type :\n\n```\n$ pytest  --fixtures -v\n=========================== test session starts ============================\nplatform linux -- Python 3.x.y, pytest-9.x.y, pluggy-1.x.y -- $PYTHON_PREFIX/bin/python\ncachedir: .pytest_cache\nrootdir: /home/sweet/project\ncollected 0 items\ncache -- .../_pytest/cacheprovider.py:560\n    Return a cache object that can persist state between testing sessions.\n\n    cache.get(key, default)\n    cache.set(key, value)\n\n    Keys must be ``/`` separated strings, where the first part is usually the\n    name of your plugin or appli"
+  },
+  {
+   "case": "constructed_loading_placeholder_shape",
+   "expected": "placeholder",
+   "constructed": true,
+   "body": "<!-- source: https://platform.claude.com/docs/en/api/example -->\n\n[Skip to main content](#main)\nAPI Reference\nGuides\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nLoading...\nSupport\nPricing\n"
+  }
+ ],
+ "duplicate_pair": [
+  {
+   "name": "sre_google_books.md",
+   "body": "<!-- source: https://sre.google/books/ -->\n# SRE Books\n[Read online](https://google.github.io/building-secure-and-reliable-systems/raw/toc.html \"Read online\") View details\n[Read online](https://sre.google/workbook/table-of-contents/ \"Read online\") View details\n [Book updates](https://sre.google/resources/book-update/ \"Book updates\")\n[Read online](https://sre.google/sre-book/table-of-contents/ \"Read online\") View details\n## Building Secure & Reliable Systems\n**By:**  \nHeather Adkins, Betsy Beyer, Paul Blankinship, Ana Oprea, Piotr Lewandowski, Adam Stubblefield\nCan a system be considered truly reliable if it isn't fundamentally secure? Or can it be considered secure if it's unreliable? Security is crucial to the design and operation of scalable systems in production, as it plays an important part in product quality, performance, an"
+  },
+  {
+   "name": "sre_google_books_building_secure_reliable_systems.md",
+   "body": "<!-- source: https://sre.google/books/building-secure-reliable-systems/ -->\n# SRE Books\n[Read online](https://google.github.io/building-secure-and-reliable-systems/raw/toc.html \"Read online\") View details\n[Read online](https://sre.google/workbook/table-of-contents/ \"Read online\") View details\n [Book updates](https://sre.google/resources/book-update/ \"Book updates\")\n[Read online](https://sre.google/sre-book/table-of-contents/ \"Read online\") View details\n## Building Secure & Reliable Systems\n**By:**  \nHeather Adkins, Betsy Beyer, Paul Blankinship, Ana Oprea, Piotr Lewandowski, Adam Stubblefield\nCan a system be considered truly reliable if it isn't fundamentally secure? Or can it be considered secure if it's unreliable? Security is crucial to the design and operation of scalable systems in production, as it plays an important part in product quality, performance, an"
+  }
+ ]
+}

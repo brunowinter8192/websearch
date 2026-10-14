@@ -1,0 +1,20 @@
+{
+ "ts": "2026-08-24T16:19:50.026Z",
+ "run_id": "34214881-1630-41ab-b21c-94bf4ed29664",
+ "url": "https://docs.pytest.org/en/stable/builtin.html",
+ "domain": "docs.pytest.org",
+ "outcome": "ok",
+ "http_status": 200,
+ "bytes": 17079,
+ "wall_ms": 2331,
+ "engine": "chromium",
+ "crawl4ai_success": true,
+ "crawl4ai_error_message": null,
+ "crawl4ai_attempts": 1,
+ "crawl4ai_resolved_by": "direct",
+ "crawl4ai_fallback_fetch_used": false,
+ "pipe_fallback_used": false,
+ "pipe_fallback_resolved": false,
+ "landed_url": "https://docs.pytest.org/en/stable/builtin.html",
+ "config_hash": "33802296e3"
+}
