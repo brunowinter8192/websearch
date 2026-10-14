@@ -42,7 +42,7 @@ Worker record for two tasks of the KVP stream: (A) one persistent run record per
 
 - `dev/tests/test_deep_dive_records.py`, `test_deep_dive_closing.py`, additions to `test_kvp_report.py`. Real fixtures: excerpts of two `cut_*` files, the sre.google index log (first 15 lines plus the `Done:` line) and the one-line `Error: rag busy` log in `dev/tests/fixtures/deep_dive/`; the three real records of step 1 to 3 in `dev/tests/fixtures/kvp/deep_dive_log_real.jsonl`.
 - Constructed (spec, not observed), named as such: `deep_dive_log_constructed.jsonl` (a dive without closing record with a failed navtree feeder, a round without discovery), the `/tmp` tree of the workflow test, the second-discovery grouping case.
-- Full suite on the branch: 904 passed, 12 browser tests deselected (`./venv/bin/python -m pytest -q -n0`).
+- Full suite on the branch: 905 passed, 12 browser tests deselected (`./venv/bin/python -m pytest -q -n0`).
 
 ### Report reading guide
 
