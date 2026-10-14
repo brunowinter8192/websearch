@@ -15,6 +15,8 @@ SCRAPE_LOG_NAME = "scrape_log.jsonl"
 PIPE_LOG_NAME = "pipe_scrape_log.jsonl"
 
 UNVERSIONED = "unversioned"
+FOCUS_ENGINE = "google"
+PAGE_LOAD_TIMEOUT_REASON = "Page load timed out"
 ATTRIBUTION_WINDOW_HOURS = 3
 MIN_ENGINES_OK = 3
 

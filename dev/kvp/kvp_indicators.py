@@ -20,7 +20,9 @@ from dev.kvp.kvp_config import (
     ENGINE_OK,
     ENGINE_RATE_SKIP,
     ENGINE_TRANSPORT_ERROR,
+    FOCUS_ENGINE,
     MIN_ENGINES_OK,
+    PAGE_LOAD_TIMEOUT_REASON,
     SCRAPE_NO_CONTENT,
     SCRAPE_USABLE,
     SILENT_SCRAPE_LABELS,
@@ -80,6 +82,11 @@ def engine_indicators(searches: list[dict]) -> dict[str, dict]:
             per_engine[engine]["runs"] += 1
             per_engine[engine][verdict.label] += 1
     return dict(sorted(per_engine.items()))
+
+
+def focus_engine_indicators(searches: list[dict]) -> dict[str, dict]:
+    groups = {"all": searches, **split_by_version(searches)}
+    return {name: _focus_engine_row(group) for name, group in groups.items()}
 
 
 def scrape_indicators(scrapes: list[dict]) -> dict:
@@ -183,6 +190,33 @@ def _collapse_row(record: dict, verdicts: dict) -> dict:
     }
 
 
+def _focus_engine_row(searches: list[dict]) -> dict:
+    labels: Counter = Counter()
+    ok_ms: list[int] = []
+    for search in searches:
+        stats = search["record"]["engines"].get(FOCUS_ENGINE)
+        if stats is None:
+            continue
+        labels[_focus_label(stats, search["verdicts"][FOCUS_ENGINE].label)] += 1
+        if stats["status"] == "OK":
+            ok_ms.append(stats["search_ms"])
+    ordered = sorted(ok_ms)
+    return {
+        "runs": sum(labels.values()),
+        "labels": dict(labels),
+        "ok_median_ms": round(statistics.median(ordered)) if ordered else None,
+        "ok_p90_ms": ordered[min(len(ordered) - 1, int(len(ordered) * 0.9))] if ordered else None,
+    }
+
+
+def _focus_label(stats: dict, verdict_label: str) -> str:
+    if stats["status"] == "ERROR_BROWSER" and stats.get("drop_reason") == PAGE_LOAD_TIMEOUT_REASON:
+        return "page_load_timeout"
+    if stats["status"].startswith("TIMEOUT"):
+        return "timeout"
+    return verdict_label
+
+
 def _total_results(record: dict) -> int:
     return sum(stats.get("result_count", 0) for stats in record["engines"].values())
 
@@ -247,6 +281,7 @@ def compute_report_data(
             for name, (group_searches, group_scrapes) in groups.items()
         },
         "collapse": collapse_searches(searches),
+        "focus_engine": focus_engine_indicators(searches),
         "deep_dive": {
             "runs": deep_dive_run_indicators(pipe_items, collection_items),
             "collection": collection_indicators(collection_items),

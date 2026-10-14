@@ -1,0 +1,645 @@
+{
+ "summary": {
+  "runs": 28,
+  "valid_runs": 28,
+  "excluded": [],
+  "percentiles_ms": {
+   "document_response": {
+    "n": 28,
+    "min": 68,
+    "p50": 97,
+    "p90": 185,
+    "max": 1978
+   },
+   "dom_content_loaded": {
+    "n": 28,
+    "min": 904,
+    "p50": 1328,
+    "p90": 2115,
+    "max": 3107
+   },
+   "results_dom": {
+    "n": 28,
+    "min": 591,
+    "p50": 1013,
+    "p90": 1450,
+    "max": 3102
+   },
+   "load": {
+    "n": 28,
+    "min": 1565,
+    "p50": 3046,
+    "p90": 4067,
+    "max": 4209
+   }
+  },
+  "runs_without_results_dom": 0,
+  "load_over_production_limit": 14,
+  "slow_runs": [
+   {
+    "query": "python dataclass vs namedtuple",
+    "events": {
+     "document_response": 1978,
+     "results_dom": 3102,
+     "dom_content_loaded": 3107,
+     "load": 4085,
+     "go_to_returned": 4086
+    },
+    "requests": 40,
+    "results_at_end": 24
+   },
+   {
+    "query": "how to remove rust from cast iron",
+    "events": {
+     "document_response": 185,
+     "results_dom": 1132,
+     "dom_content_loaded": 2115,
+     "load": 3890,
+     "go_to_returned": 3891
+    },
+    "requests": 101,
+    "results_at_end": 21
+   },
+   {
+    "query": "typescript generic constraints explained",
+    "events": {
+     "document_response": 125,
+     "results_dom": 1358,
+     "dom_content_loaded": 1370,
+     "load": 3705,
+     "go_to_returned": 3707
+    },
+    "requests": 69,
+    "results_at_end": 21
+   },
+   {
+    "query": "marathon training plan 16 weeks",
+    "events": {
+     "document_response": 136,
+     "results_dom": 1004,
+     "dom_content_loaded": 2219,
+     "load": 3862,
+     "go_to_returned": 3890
+    },
+    "requests": 59,
+    "results_at_end": 23
+   },
+   {
+    "query": "difference between ssd and nvme",
+    "events": {
+     "document_response": 182,
+     "results_dom": 922,
+     "dom_content_loaded": 1308,
+     "load": 3643,
+     "go_to_returned": 3645
+    },
+    "requests": 110,
+    "results_at_end": 23
+   },
+   {
+    "query": "how to prune apple trees",
+    "events": {
+     "document_response": 79,
+     "results_dom": 1216,
+     "dom_content_loaded": 1234,
+     "load": 3636,
+     "go_to_returned": 3639
+    },
+    "requests": 101,
+    "results_at_end": 21
+   },
+   {
+    "query": "history of the hanseatic league",
+    "events": {
+     "document_response": 100,
+     "results_dom": 775,
+     "dom_content_loaded": 1186,
+     "load": 3969,
+     "go_to_returned": 3971
+    },
+    "requests": 102,
+    "results_at_end": 22
+   },
+   {
+    "query": "electric car charging cost per kwh",
+    "events": {
+     "document_response": 145,
+     "results_dom": 1022,
+     "dom_content_loaded": 1169,
+     "load": 4209,
+     "go_to_returned": 4285
+    },
+    "requests": 100,
+    "results_at_end": 22
+   },
+   {
+    "query": "how to descale an espresso machine",
+    "events": {
+     "document_response": 96,
+     "results_dom": 828,
+     "dom_content_loaded": 1109,
+     "load": 3221,
+     "go_to_returned": 3223
+    },
+    "requests": 78,
+    "results_at_end": 22
+   },
+   {
+    "query": "safe temperature for cooked chicken",
+    "events": {
+     "document_response": 140,
+     "results_dom": 973,
+     "dom_content_loaded": 1459,
+     "load": 3683,
+     "go_to_returned": 3688
+    },
+    "requests": 70,
+    "results_at_end": 22
+   },
+   {
+    "query": "causes of the french revolution",
+    "events": {
+     "document_response": 79,
+     "results_dom": 939,
+     "dom_content_loaded": 1942,
+     "load": 4067,
+     "go_to_returned": 4068
+    },
+    "requests": 121,
+    "results_at_end": 22
+   },
+   {
+    "query": "how to fix a leaking tap",
+    "events": {
+     "document_response": 71,
+     "results_dom": 711,
+     "dom_content_loaded": 1439,
+     "load": 3152,
+     "go_to_returned": 3153
+    },
+    "requests": 96,
+    "results_at_end": 21
+   },
+   {
+    "query": "linux file permissions chmod",
+    "events": {
+     "document_response": 98,
+     "results_dom": 1398,
+     "dom_content_loaded": 1828,
+     "load": 3218,
+     "go_to_returned": 3223
+    },
+    "requests": 58,
+    "results_at_end": 24
+   },
+   {
+    "query": "how to repot a monstera",
+    "events": {
+     "document_response": 80,
+     "results_dom": 1450,
+     "dom_content_loaded": 1456,
+     "load": 3252,
+     "go_to_returned": 3253
+    },
+    "requests": 93,
+    "results_at_end": 21
+   }
+  ],
+  "gap_load_minus_dom_ms": {
+   "n": 28,
+   "min": 356,
+   "p50": 1717,
+   "p90": 2402,
+   "max": 3040
+  },
+  "requests_before_end": {
+   "n": 28,
+   "min": 40,
+   "p50": 69,
+   "p90": 102,
+   "max": 121
+  }
+ },
+ "records": [
+  {
+   "query": "python dataclass vs namedtuple",
+   "events": {
+    "document_response": 1978,
+    "results_dom": 3102,
+    "dom_content_loaded": 3107,
+    "load": 4085,
+    "go_to_returned": 4086
+   },
+   "requests": 40,
+   "error": null,
+   "results_at_first_sight": 24,
+   "final_url": "https://www.google.com/search?q=python+dataclass+vs+namedtuple&hl=en&num=100&sei=br7PaufMOqqm2roP4unp6QQ",
+   "results_at_end": 24
+  },
+  {
+   "query": "best hiking trails black forest",
+   "events": {
+    "document_response": 190,
+    "results_dom": 1604,
+    "dom_content_loaded": 1942,
+    "load": 2304,
+    "go_to_returned": 2306
+   },
+   "requests": 58,
+   "error": null,
+   "results_at_first_sight": 24,
+   "final_url": "https://www.google.com/search?q=best+hiking+trails+black+forest&hl=en&num=100&sei=e77PaueLDLqohbIP_v3qyAE",
+   "results_at_end": 24
+  },
+  {
+   "query": "sourdough starter feeding schedule",
+   "events": {
+    "document_response": 112,
+    "results_dom": 686,
+    "dom_content_loaded": 1057,
+    "load": 2293,
+    "go_to_returned": 2297
+   },
+   "requests": 57,
+   "error": null,
+   "results_at_first_sight": 8,
+   "final_url": "https://www.google.com/search?q=sourdough+starter+feeding+schedule&hl=en&num=100&sei=iL7Pat_xFJaoxc8PtJKXsAg",
+   "results_at_end": 23
+  },
+  {
+   "query": "kubernetes pod pending reason",
+   "events": {
+    "document_response": 68,
+    "results_dom": 591,
+    "dom_content_loaded": 1179,
+    "load": 2941,
+    "go_to_returned": 2944
+   },
+   "requests": 64,
+   "error": null,
+   "results_at_first_sight": 20,
+   "final_url": "https://www.google.com/search?q=kubernetes+pod+pending+reason&hl=en&num=100&sei=mr7PaunBHYmLxc8P9PWfoAs",
+   "results_at_end": 20
+  },
+  {
+   "query": "how to remove rust from cast iron",
+   "events": {
+    "document_response": 185,
+    "results_dom": 1132,
+    "dom_content_loaded": 2115,
+    "load": 3890,
+    "go_to_returned": 3891
+   },
+   "requests": 101,
+   "error": null,
+   "results_at_first_sight": 18,
+   "final_url": "https://www.google.com/search?q=how+to+remove+rust+from+cast+iron&hl=en&num=100&sei=qb7PapzsGYmhjfYPzO_QgQo",
+   "results_at_end": 21
+  },
+  {
+   "query": "typescript generic constraints explained",
+   "events": {
+    "document_response": 125,
+    "results_dom": 1358,
+    "dom_content_loaded": 1370,
+    "load": 3705,
+    "go_to_returned": 3707
+   },
+   "requests": 69,
+   "error": null,
+   "results_at_first_sight": 21,
+   "final_url": "https://www.google.com/search?q=typescript+generic+constraints+explained&hl=en&num=100&sei=xr7PaoEg4t3Fzw-Ip-ahDw",
+   "results_at_end": 21
+  },
+  {
+   "query": "marathon training plan 16 weeks",
+   "events": {
+    "document_response": 136,
+    "results_dom": 1004,
+    "dom_content_loaded": 2219,
+    "load": 3862,
+    "go_to_returned": 3890
+   },
+   "requests": 59,
+   "error": null,
+   "results_at_first_sight": 1,
+   "final_url": "https://www.google.com/search?q=marathon+training+plan+16+weeks&hl=en&num=100&sei=1r7PauC_H9mOxc8PpLnkkAM",
+   "results_at_end": 23
+  },
+  {
+   "query": "difference between ssd and nvme",
+   "events": {
+    "document_response": 182,
+    "results_dom": 922,
+    "dom_content_loaded": 1308,
+    "load": 3643,
+    "go_to_returned": 3645
+   },
+   "requests": 110,
+   "error": null,
+   "results_at_first_sight": 19,
+   "final_url": "https://www.google.com/search?q=difference+between+ssd+and+nvme&hl=en&num=100&sei=5b7Pasz8GYiRxc8PqbvV4Aw",
+   "results_at_end": 23
+  },
+  {
+   "query": "how to prune apple trees",
+   "events": {
+    "document_response": 79,
+    "results_dom": 1216,
+    "dom_content_loaded": 1234,
+    "load": 3636,
+    "go_to_returned": 3639
+   },
+   "requests": 101,
+   "error": null,
+   "results_at_first_sight": 21,
+   "final_url": "https://www.google.com/search?q=how+to+prune+apple+trees&hl=en&num=100&sei=877Pat_BBoySxc8PlaHBoQw",
+   "results_at_end": 21
+  },
+  {
+   "query": "postgres index only scan",
+   "events": {
+    "document_response": 68,
+    "results_dom": 1208,
+    "dom_content_loaded": 1213,
+    "load": 2753,
+    "go_to_returned": 2755
+   },
+   "requests": 57,
+   "error": null,
+   "results_at_first_sight": 23,
+   "final_url": "https://www.google.com/search?q=postgres+index+only+scan&hl=en&num=100&sei=Ab_Pav_kOs2Uxc8PjqKCkAI",
+   "results_at_end": 23
+  },
+  {
+   "query": "history of the hanseatic league",
+   "events": {
+    "document_response": 100,
+    "results_dom": 775,
+    "dom_content_loaded": 1186,
+    "load": 3969,
+    "go_to_returned": 3971
+   },
+   "requests": 102,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=history+of+the+hanseatic+league&hl=en&num=100&sei=Er_PaubuHrmExc8Pv4aD8Ac",
+   "results_at_end": 22
+  },
+  {
+   "query": "electric car charging cost per kwh",
+   "events": {
+    "document_response": 145,
+    "results_dom": 1022,
+    "dom_content_loaded": 1169,
+    "load": 4209,
+    "go_to_returned": 4285
+   },
+   "requests": 100,
+   "error": null,
+   "results_at_first_sight": 7,
+   "final_url": "https://www.google.com/search?q=electric+car+charging+cost+per+kwh&hl=en&num=100&sei=Ib_Pav37FaWtxc8Pt6aR6Qc",
+   "results_at_end": 22
+  },
+  {
+   "query": "css grid vs flexbox",
+   "events": {
+    "document_response": 154,
+    "results_dom": 1379,
+    "dom_content_loaded": 1389,
+    "load": 1857,
+    "go_to_returned": 1860
+   },
+   "requests": 69,
+   "error": null,
+   "results_at_first_sight": 23,
+   "final_url": "https://www.google.com/search?q=css+grid+vs+flexbox&hl=en&num=100&sei=L7_PavOTNbSIxc8PvafM4Qk",
+   "results_at_end": 23
+  },
+  {
+   "query": "how to descale an espresso machine",
+   "events": {
+    "document_response": 96,
+    "results_dom": 828,
+    "dom_content_loaded": 1109,
+    "load": 3221,
+    "go_to_returned": 3223
+   },
+   "requests": 78,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=how+to+descale+an+espresso+machine&hl=en&num=100&sei=Pb_PaojbOo7mxc8P4PTJqAY",
+   "results_at_end": 22
+  },
+  {
+   "query": "rust borrow checker lifetimes",
+   "events": {
+    "document_response": 83,
+    "results_dom": 685,
+    "dom_content_loaded": 1005,
+    "load": 1565,
+    "go_to_returned": 1568
+   },
+   "requests": 55,
+   "error": null,
+   "results_at_first_sight": 23,
+   "final_url": "https://www.google.com/search?q=rust+borrow+checker+lifetimes&hl=en&num=100&sei=Tr_PatXqHd-Rxc8PqraB8Qw",
+   "results_at_end": 23
+  },
+  {
+   "query": "safe temperature for cooked chicken",
+   "events": {
+    "document_response": 140,
+    "results_dom": 973,
+    "dom_content_loaded": 1459,
+    "load": 3683,
+    "go_to_returned": 3688
+   },
+   "requests": 70,
+   "error": null,
+   "results_at_first_sight": 4,
+   "final_url": "https://www.google.com/search?q=safe+temperature+for+cooked+chicken&hl=en&num=100&sei=Xb_PaoafF63kxc8PlbGH8AM",
+   "results_at_end": 22
+  },
+  {
+   "query": "tax deductible home office germany",
+   "events": {
+    "document_response": 84,
+    "results_dom": 1261,
+    "dom_content_loaded": 1262,
+    "load": 2701,
+    "go_to_returned": 2703
+   },
+   "requests": 69,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=tax+deductible+home+office+germany&hl=en&num=100&sei=a7_PaqKgMJWFxc8PqqPrgAU",
+   "results_at_end": 22
+  },
+  {
+   "query": "docker multi stage build size",
+   "events": {
+    "document_response": 109,
+    "results_dom": 703,
+    "dom_content_loaded": 1419,
+    "load": 1909,
+    "go_to_returned": 1910
+   },
+   "requests": 66,
+   "error": null,
+   "results_at_first_sight": 1,
+   "final_url": "https://www.google.com/search?q=docker+multi+stage+build+size&hl=en&num=100&sei=eb_PauKWOsmP7NYP8pTA-A4",
+   "results_at_end": 22
+  },
+  {
+   "query": "causes of the french revolution",
+   "events": {
+    "document_response": 79,
+    "results_dom": 939,
+    "dom_content_loaded": 1942,
+    "load": 4067,
+    "go_to_returned": 4068
+   },
+   "requests": 121,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=causes+of+the+french+revolution&hl=en&num=100&sei=ir_Pap2yHtnBxc8PsZDKmQg",
+   "results_at_end": 22
+  },
+  {
+   "query": "how to fix a leaking tap",
+   "events": {
+    "document_response": 71,
+    "results_dom": 711,
+    "dom_content_loaded": 1439,
+    "load": 3152,
+    "go_to_returned": 3153
+   },
+   "requests": 96,
+   "error": null,
+   "results_at_first_sight": 21,
+   "final_url": "https://www.google.com/search?q=how+to+fix+a+leaking+tap&hl=en&num=100&sei=mb_PatCgE_uRxc8P-KGpIQ",
+   "results_at_end": 21
+  },
+  {
+   "query": "machine learning cross validation",
+   "events": {
+    "document_response": 83,
+    "results_dom": 745,
+    "dom_content_loaded": 904,
+    "load": 2625,
+    "go_to_returned": 2628
+   },
+   "requests": 74,
+   "error": null,
+   "results_at_first_sight": 1,
+   "final_url": "https://www.google.com/search?q=machine+learning+cross+validation&hl=en&num=100&sei=p7_PasvqL7OQxc8P8ty44As",
+   "results_at_end": 25
+  },
+  {
+   "query": "best time to visit lisbon",
+   "events": {
+    "document_response": 150,
+    "results_dom": 1403,
+    "dom_content_loaded": 1417,
+    "load": 1773,
+    "go_to_returned": 1774
+   },
+   "requests": 65,
+   "error": null,
+   "results_at_first_sight": 25,
+   "final_url": "https://www.google.com/search?q=best+time+to+visit+lisbon&hl=en&num=100&sei=tb_PaqSGPMOOxc8Pl8_zgQQ",
+   "results_at_end": 25
+  },
+  {
+   "query": "linux file permissions chmod",
+   "events": {
+    "document_response": 98,
+    "results_dom": 1398,
+    "dom_content_loaded": 1828,
+    "load": 3218,
+    "go_to_returned": 3223
+   },
+   "requests": 58,
+   "error": null,
+   "results_at_first_sight": 24,
+   "final_url": "https://www.google.com/search?q=linux+file+permissions+chmod&hl=en&num=100&sei=xr_Pap68H8qIxc8PnLKuoAo",
+   "results_at_end": 24
+  },
+  {
+   "query": "how do vaccines train the immune system",
+   "events": {
+    "document_response": 83,
+    "results_dom": 975,
+    "dom_content_loaded": 1024,
+    "load": 2818,
+    "go_to_returned": 2827
+   },
+   "requests": 73,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=how+do+vaccines+train+the+immune+system&hl=en&num=100&sei=1b_PatOGE9aJ7NYPu4u88AY",
+   "results_at_end": 22
+  },
+  {
+   "query": "photovoltaic payback period germany",
+   "events": {
+    "document_response": 79,
+    "results_dom": 1336,
+    "dom_content_loaded": 1348,
+    "load": 2259,
+    "go_to_returned": 2263
+   },
+   "requests": 54,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=photovoltaic+payback+period+germany&hl=en&num=100&sei=47_PatekL8CE7NYPm-TXyQU",
+   "results_at_end": 22
+  },
+  {
+   "query": "git rebase vs merge",
+   "events": {
+    "document_response": 79,
+    "results_dom": 1271,
+    "dom_content_loaded": 1277,
+    "load": 1678,
+    "go_to_returned": 1680
+   },
+   "requests": 62,
+   "error": null,
+   "results_at_first_sight": 22,
+   "final_url": "https://www.google.com/search?q=git+rebase+vs+merge&hl=en&num=100&sei=8b_PaqPhOoWCxc8P2MC0kQc",
+   "results_at_end": 22
+  },
+  {
+   "query": "how to repot a monstera",
+   "events": {
+    "document_response": 80,
+    "results_dom": 1450,
+    "dom_content_loaded": 1456,
+    "load": 3252,
+    "go_to_returned": 3253
+   },
+   "requests": 93,
+   "error": null,
+   "results_at_first_sight": 21,
+   "final_url": "https://www.google.com/search?q=how+to+repot+a+monstera&hl=en&num=100&sei=AsDPauGbHpSKxc8Pqta24Q0",
+   "results_at_end": 21
+  },
+  {
+   "query": "tcp congestion control algorithms",
+   "events": {
+    "document_response": 71,
+    "results_dom": 764,
+    "dom_content_loaded": 932,
+    "load": 2871,
+    "go_to_returned": 2878
+   },
+   "requests": 72,
+   "error": null,
+   "results_at_first_sight": 24,
+   "final_url": "https://www.google.com/search?q=tcp+congestion+control+algorithms&hl=en&num=100&sei=EcDPauiWFOKoxc8PgJmogQ8",
+   "results_at_end": 24
+  }
+ ]
+}

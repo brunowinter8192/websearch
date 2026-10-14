@@ -8,7 +8,10 @@ from urllib.parse import quote_plus, urlparse, parse_qs
 from curl_cffi.requests import AsyncSession
 from curl_cffi.requests.exceptions import RequestException, Timeout
 from pydoll.commands.network_commands import NetworkCommands
+from pydoll.commands.page_commands import PageCommands
+from pydoll.exceptions import NavigationError, PageLoadTimeout
 from pydoll.protocol.network.types import CookieSameSite
+from pydoll.protocol.page.events import PageEvent
 
 from src.search.browser import new_tab, kill_tab
 from src.cdp_value import extract_value
@@ -28,6 +31,7 @@ SOCS_NAME = "SOCS"
 SOCS_VALUE = "CAISHAgCEhJnd3NfMjAyNjA0MDctMCAgIBgEIAEaBgiA_fC8Bg"
 SOCS_DOMAIN = ".google.com"
 GOTO_RESOLVE_TIMEOUT_S = 1.5
+NAVIGATION_TIMEOUT_S = 3.0
 
 _JS_WAIT = "return document.querySelectorAll('div.MjjYud').length"
 
@@ -137,7 +141,7 @@ async def _search_and_close(tab, query: str, max_results: int, partial: dict | N
 
 async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None, t0: float, search_url: str) -> tuple[list[SearchResult], str | None, dict | None]:
     status_chain = await start_document_status_capture(tab)
-    await tab.go_to(search_url, timeout=3.0)
+    await _go_to_dom_content_loaded(tab, search_url, NAVIGATION_TIMEOUT_S)
     current = await tab.current_url
     if CAPTCHA_PATH in current:
         logger.warning("Google CAPTCHA detected for: %s", query)
@@ -158,6 +162,20 @@ async def _search_in_tab(tab, query: str, max_results: int, partial: dict | None
     diag["containers_found"] = True
     diag["goto_resolution"] = resolution
     return results, None, attach_document_status(diag, status_chain)
+
+
+async def _go_to_dom_content_loaded(tab, url: str, timeout: float) -> None:
+    dom_content_loaded = asyncio.Event()
+    await tab.enable_page_events()
+    await tab.on(PageEvent.DOM_CONTENT_EVENT_FIRED, lambda _: dom_content_loaded.set())
+    response = await tab._execute_command(PageCommands.navigate(url))
+    error_text = response["result"].get("errorText")
+    if error_text:
+        raise NavigationError(url, error_text)
+    try:
+        await asyncio.wait_for(dom_content_loaded.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise PageLoadTimeout()
 
 
 async def _diagnose(tab) -> dict:
