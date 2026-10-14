@@ -43,3 +43,7 @@ ENGINE_OTHER = "other"
 COLLECTION_PLACEHOLDER = "placeholder"
 COLLECTION_TITLE_ONLY = "title_only"
 COLLECTION_DUPLICATE = "duplicate"
+
+CANARY_CASES_PATH = Path(__file__).parent / "canary_cases.json"
+CANARY_JSON_DIR = Path(__file__).parent / "json"
+CANARY_SCRAPE_ERROR = "scrape_error"
