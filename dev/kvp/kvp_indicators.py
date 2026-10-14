@@ -27,6 +27,7 @@ from dev.kvp.kvp_config import (
     SCRAPE_USABLE,
     SILENT_SCRAPE_LABELS,
 )
+from dev.kvp.kvp_dives import dive_rows
 from dev.kvp.kvp_load import parse_ts, version_of
 
 ENGINE_LABELS = (ENGINE_OK, ENGINE_BLOCKED, ENGINE_EMPTY_NO_SIGNAL, ENGINE_TRANSPORT_ERROR, ENGINE_RATE_SKIP)
@@ -264,12 +265,13 @@ def _domain_of(url: str | None) -> str:
 
 def compute_report_data(
     searches: list[dict], scrapes: list[dict], drilldowns: list[dict], attribution_scrapes: list[dict],
-    pipe_items: list[dict], collection_items: list[dict], rag_searches: list[dict],
+    pipe_items: list[dict], collection_items: list[dict], rag_searches: list[dict], dive_records: list[dict],
 ) -> dict:
     search_groups, scrape_groups = split_by_version(searches), split_by_version(scrapes)
     groups = {"all": (searches, scrapes)}
     for version in sorted(set(search_groups) | set(scrape_groups)):
         groups[version] = (search_groups.get(version, []), scrape_groups.get(version, []))
+    runs = deep_dive_run_indicators(pipe_items, collection_items)
     return {
         "ad_hoc": {
             name: {
@@ -283,7 +285,8 @@ def compute_report_data(
         "collapse": collapse_searches(searches),
         "focus_engine": focus_engine_indicators(searches),
         "deep_dive": {
-            "runs": deep_dive_run_indicators(pipe_items, collection_items),
+            "dives": dive_rows(dive_records, runs),
+            "runs": runs,
             "collection": collection_indicators(collection_items),
             "usefulness": usefulness_indicators(collection_items, rag_searches),
         },

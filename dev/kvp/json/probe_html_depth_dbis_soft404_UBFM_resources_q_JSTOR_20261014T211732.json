@@ -1,0 +1,40 @@
+{
+  "generated": "2026-10-14T21:17:32Z",
+  "html": "dev/kvp/html/dbis_soft404_UBFM_resources_q_JSTOR.html.gz",
+  "url": "https://dbis.ur.de/UBFM/resources?q=JSTOR",
+  "html_chars": 214825,
+  "div_tags_opened_closed": [
+    399,
+    18
+  ],
+  "runs": [
+    {
+      "huge_tree": false,
+      "parsed_text_chars": 94925,
+      "max_depth": 256,
+      "cleaned_html_chars": 125386,
+      "raw_markdown_chars": 15552,
+      "fit_markdown_chars": 1,
+      "in_raw_markdown": {
+        "MÜNSTER": true,
+        "Zürich": false,
+        "Leider ist ein Fehler aufgetreten": false,
+        "JSTOR": false
+      }
+    },
+    {
+      "huge_tree": true,
+      "parsed_text_chars": 138303,
+      "max_depth": 393,
+      "cleaned_html_chars": 183479,
+      "raw_markdown_chars": 22504,
+      "fit_markdown_chars": 1,
+      "in_raw_markdown": {
+        "MÜNSTER": true,
+        "Zürich": true,
+        "Leider ist ein Fehler aufgetreten": true,
+        "JSTOR": false
+      }
+    }
+  ]
+}

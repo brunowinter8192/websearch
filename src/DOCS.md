@@ -39,7 +39,7 @@ code_version.py: the three log writers stamp its result into every record they w
 **Purpose:** Provides the git commit of the running code as the `code_version` stamp; marks tracked local changes, ignores untracked files.
 **Reads:** the git state of the project root.
 **Writes:** none.
-**Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py.
+**Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py, src/crawler/deep_dive_logger.py.
 **Calls out:** git (subprocess).
 
 ---
@@ -59,7 +59,7 @@ code_version.py: the three log writers stamp its result into every record they w
 **Purpose:** Retention janitor for JSONL logs and sidecar directories, triggered on write and throttled by a marker file.
 **Reads:** JSONL log files, sidecar directories, the retention environment variable.
 **Writes:** atomically rewritten JSONL files; deletes stale sidecar files.
-**Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py, cli.py.
+**Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py, src/crawler/deep_dive_logger.py, cli.py.
 **Calls out:** none (stdlib only).
 
 ### death_pipe.py (83 LOC)

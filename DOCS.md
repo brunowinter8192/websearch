@@ -2,7 +2,7 @@
 
 ## Role
 
-CLI-driven web research toolkit for Claude Code. cli.py is the only root-level Python file, a thin argparse dispatcher wiring search, drilldown, scrape, discovery, indexing and PDF conversion into six subcommands. Touch it to add or remove a subcommand or change global logging; workflow logic lives in src/search, src/scraper, src/crawler and src/pdf.
+CLI-driven web research toolkit for Claude Code. cli.py is the only root-level Python file, a thin argparse dispatcher wiring search, drilldown, scrape, discovery, indexing, the deep dive run record and PDF conversion into seven subcommands. Touch it to add or remove a subcommand or change global logging; workflow logic lives in src/search, src/scraper, src/crawler and src/pdf.
 
 ## Public Interface
 
@@ -14,11 +14,11 @@ File logging is configured as the first step of main, before argparse runs; no s
 
 ## Modules
 
-### cli.py (265 LOC)
+### cli.py (288 LOC)
 
-**Purpose:** CLI entry point: main sets up rotating file logging and the browser at-exit cleanup, then dispatches the six subcommands to their workflows in src/search, src/scraper, src/crawler and src/pdf.
+**Purpose:** CLI entry point: main sets up rotating file logging and the browser at-exit cleanup, then dispatches the seven subcommands to their workflows in src/search, src/scraper, src/crawler and src/pdf.
 **Reads:** CLI arguments, the disk cache of search pools (drilldown path).
-**Writes:** the rotating CLI log under src/logs, stdout, and the URL file of the discovery subcommand.
+**Writes:** the rotating CLI log under src/logs, stdout, the URL file of the discovery subcommand, and (through src/crawler) the discovery and closing records of the deep dive run log.
 **Called by:** invoked directly as the CLI entry point; no importer.
 **Calls out:** none.
 

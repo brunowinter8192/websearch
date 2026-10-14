@@ -6,6 +6,7 @@ from pathlib import Path
 from dev.kvp.kvp_config import (
     DEFAULT_COLLECTION_DIR,
     DEFAULT_LOG_DIR,
+    DEEP_DIVE_LOG_NAME,
     DEFAULT_RAG_SEARCH_LOG,
     PIPE_LOG_NAME,
     QUERY_LOG_NAME,
@@ -34,6 +35,7 @@ def main() -> None:
     scrape_records = load_scrapes(log_dir / SCRAPE_LOG_NAME, since, until)
     attribution_scrapes = load_scrapes(log_dir / SCRAPE_LOG_NAME, since, attribution_end(until))
     pipe_records = load_window(log_dir / PIPE_LOG_NAME, since, until)
+    dive_records = load_window(log_dir / DEEP_DIVE_LOG_NAME, since, until)
     rag_searches = load_window(Path(args.rag_search_log), since, until)
     collection_files = load_collection(Path(args.collection_dir))
     summaries, drilldowns = split_query_records(query_records)
@@ -42,9 +44,9 @@ def main() -> None:
     collection_items = classify_collection(collection_files)
     data = compute_report_data(
         searches, scrapes, drilldowns, attribution_scrapes,
-        classify_pipe_records(pipe_records), collection_items, rag_searches,
+        classify_pipe_records(pipe_records), collection_items, rag_searches, dive_records,
     )
-    meta = build_meta(args, log_dir, summaries, drilldowns, scrape_records, pipe_records, rag_searches, collection_files)
+    meta = build_meta(args, log_dir, summaries, drilldowns, scrape_records, pipe_records, dive_records, rag_searches, collection_files)
     report = render_report(meta, data, searches, scrapes, collection_items, scrape_counter_check(scrapes))
     path = write_report(report, REPORT_DIR, args.since, args.until)
     print(path)
@@ -70,7 +72,7 @@ def split_query_records(query_records: list[dict]) -> tuple[list[dict], list[dic
 
 def build_meta(
     args: argparse.Namespace, log_dir: Path, summaries: list[dict], drilldowns: list[dict],
-    scrape_records: list[dict], pipe_records: list[dict], rag_searches: list[dict], collection_files: list[dict],
+    scrape_records: list[dict], pipe_records: list[dict], dive_records: list[dict], rag_searches: list[dict], collection_files: list[dict],
 ) -> dict:
     return {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -79,7 +81,7 @@ def build_meta(
         "log_dir": str(log_dir),
         "counts": {
             "searches": len(summaries), "drilldowns": len(drilldowns), "scrapes": len(scrape_records),
-            "pipe URLs": len(pipe_records), "rag-cli searches": len(rag_searches), "collection files (unwindowed)": len(collection_files),
+            "pipe URLs": len(pipe_records), "deep dive records": len(dive_records), "rag-cli searches": len(rag_searches), "collection files (unwindowed)": len(collection_files),
         },
     }
 

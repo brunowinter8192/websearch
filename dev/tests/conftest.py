@@ -25,6 +25,12 @@ def _no_real_browser_launch(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_deep_dive_log(monkeypatch, tmp_path_factory):
+    isolated = tmp_path_factory.mktemp("deepdivelog") / "deep_dive_log.jsonl"
+    monkeypatch.setenv("WEBSEARCH_DEEP_DIVE_LOG_PATH", str(isolated))
+
+
+@pytest.fixture(autouse=True)
 def _isolated_tempdir(monkeypatch, tmp_path_factory):
     isolated = tmp_path_factory.mktemp("systmp")
     monkeypatch.setattr(tempfile, "tempdir", str(isolated))

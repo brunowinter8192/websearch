@@ -10,6 +10,7 @@ from crawl4ai import AsyncWebCrawler
 from src.scraper.chromium_scrape import hash_config
 from src.crawler.pipe_scraper_constants import DOWNLOAD_DELAY, CONCURRENCY_PER_DOMAIN, CAMOUFOX_CONCURRENCY_PER_DOMAIN
 from src.crawler.pipe_scraper_config import build_configs, extract_pipe_config_stamp
+from src.crawler.deep_dive_records import log_scrape_round_record
 from src.crawler.pipe_scraper_acquisition import scrape_one, scrape_one_camoufox
 from src.crawler.pipe_scraper_report import (
     domain_from_urls, write_tmp_report, print_summary, collect_onward_links,
@@ -24,7 +25,7 @@ def run_cli() -> None:
     urls = _read_url_file(args.url_file)
     asyncio.run(scrape_urls_workflow(
         urls, Path(args.output_dir), args.download_delay, args.concurrency_per_domain,
-        args.engine, args.block_images, args.headed,
+        args.engine, args.block_images, args.headed, args.url_file,
     ))
 
 
@@ -68,17 +69,20 @@ async def scrape_urls_workflow(
     engine: str = "chromium",
     block_images: bool = False,
     headed: bool = False,
+    url_file: str | None = None,
 ) -> list[dict]:
     output_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
+    run_id = str(uuid.uuid4())
     results = await _scrape_all(urls, output_dir, download_delay, concurrency_per_domain,
-                                 engine, block_images, headed)
+                                 engine, block_images, headed, run_id)
     wall_s = _elapsed_since(t0)
     domain = domain_from_urls(urls)
     onward_links = collect_onward_links(urls, results, engine)
     print_summary(results, wall_s, onward_links)
     write_tmp_report(domain, results)
     write_onward_links_file(domain, onward_links)
+    log_scrape_round_record(run_id, urls, results, onward_links, engine, url_file, output_dir, wall_s)
     return results
 
 
@@ -90,14 +94,16 @@ async def _scrape_all(
     engine: str = "chromium",
     block_images: bool = False,
     headed: bool = False,
+    run_id: str | None = None,
 ) -> list[dict]:
+    run_id = run_id or str(uuid.uuid4())
     resolved_concurrency = concurrency_per_domain if concurrency_per_domain is not None else (
         CAMOUFOX_CONCURRENCY_PER_DOMAIN if engine == "camoufox" else CONCURRENCY_PER_DOMAIN
     )
     domain_states: dict = {}
 
     if engine == "camoufox":
-        run_ctx = {"run_id": str(uuid.uuid4())}
+        run_ctx = {"run_id": run_id}
         raw = await asyncio.gather(
             *[scrape_one_camoufox(url, domain_states, download_delay, resolved_concurrency,
                                   output_dir, run_ctx, block_images)
@@ -107,7 +113,7 @@ async def _scrape_all(
         browser_cfg, run_cfg = build_configs(headed=headed)
         config_stamp = extract_pipe_config_stamp(browser_cfg, run_cfg, download_delay, resolved_concurrency)
         run_ctx = {
-            "run_id": str(uuid.uuid4()),
+            "run_id": run_id,
             "config_hash": hash_config(config_stamp),
             "config": config_stamp,
         }
