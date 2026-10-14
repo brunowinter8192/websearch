@@ -36,8 +36,7 @@ def main() -> None:
     pipe_records = load_window(log_dir / PIPE_LOG_NAME, since, until)
     rag_searches = load_window(Path(args.rag_search_log), since, until)
     collection_files = load_collection(Path(args.collection_dir))
-    summaries = [r for r in query_records if r["record_type"] == "workflow_summary"]
-    drilldowns = [r for r in query_records if r["record_type"] == "drilldown"]
+    summaries, drilldowns = split_query_records(query_records)
     searches = classify_searches(summaries)
     scrapes = classify_scrapes(scrape_records)
     collection_items = classify_collection(collection_files)
@@ -61,6 +60,12 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--rag-search-log", type=str, default=str(DEFAULT_RAG_SEARCH_LOG))
     ap.add_argument("--collection-dir", type=str, default=str(DEFAULT_COLLECTION_DIR))
     return ap.parse_args()
+
+
+def split_query_records(query_records: list[dict]) -> tuple[list[dict], list[dict]]:
+    summaries = [r for r in query_records if r["record_type"] == "workflow_summary"]
+    drilldowns = [r for r in query_records if r["record_type"] == "drilldown"]
+    return summaries, drilldowns
 
 
 def build_meta(
