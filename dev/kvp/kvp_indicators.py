@@ -5,6 +5,7 @@ from datetime import timedelta
 from urllib.parse import urlparse
 
 from dev.kvp.kvp_classify import (
+    classify_collapse,
     classify_collection_file,
     classify_engine_run,
     classify_pipe_record,
@@ -94,6 +95,16 @@ def scrape_indicators(scrapes: list[dict]) -> dict:
     }
 
 
+def collapse_searches(searches: list[dict]) -> list[dict]:
+    rows = []
+    for search in searches:
+        record, verdicts = search["record"], search["verdicts"]
+        if sum(1 for v in verdicts.values() if v.label == ENGINE_OK) >= MIN_ENGINES_OK:
+            continue
+        rows.append(_collapse_row(record, verdicts))
+    return sorted(rows, key=lambda row: row["ts"])
+
+
 def scrape_counter_check(scrapes: list[dict]) -> list[dict]:
     return [
         item for item in scrapes
@@ -153,6 +164,23 @@ def usefulness_indicators(collection_items: list[dict], rag_searches: list[dict]
 def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     return f"{(parsed.hostname or '').lower()}{parsed.path.rstrip('/')}" + (f"?{parsed.query}" if parsed.query else "")
+
+
+def _collapse_row(record: dict, verdicts: dict) -> dict:
+    engines = record["engines"]
+    completed = [stats["search_ms"] for stats in engines.values() if not stats["status"].startswith("TIMEOUT")]
+    pattern = classify_collapse(engines)
+    return {
+        "ts": record["ts"],
+        "version": version_of(record),
+        "ok": sum(1 for v in verdicts.values() if v.label == ENGINE_OK),
+        "wall_ms": record["total_wall_ms"],
+        "overhead_ms": record["total_wall_ms"] - max(stats["search_ms"] for stats in engines.values()),
+        "median_completed_ms": round(statistics.median(completed)) if completed else None,
+        "pattern": pattern.label,
+        "evidence": pattern.evidence,
+        "host": record.get("host"),
+    }
 
 
 def _total_results(record: dict) -> int:
@@ -218,6 +246,7 @@ def compute_report_data(
             }
             for name, (group_searches, group_scrapes) in groups.items()
         },
+        "collapse": collapse_searches(searches),
         "deep_dive": {
             "runs": deep_dive_run_indicators(pipe_items, collection_items),
             "collection": collection_indicators(collection_items),

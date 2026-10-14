@@ -5,6 +5,11 @@ from typing import NamedTuple
 from urllib.parse import urlparse
 
 from dev.kvp.kvp_config import (
+    COLLAPSE_BLOCKED,
+    COLLAPSE_CONNECT_FAILED,
+    COLLAPSE_LOCAL_NETWORK,
+    COLLAPSE_MIXED,
+    COLLAPSE_SLOW_NAVIGATION,
     COLLECTION_DUPLICATE,
     COLLECTION_PLACEHOLDER,
     COLLECTION_TITLE_ONLY,
@@ -40,6 +45,11 @@ ENGINE_BLOCK_URL_MARKER = "showcaptcha"
 PLACEHOLDER_LINE_PATTERN = re.compile(r"^Loading\.*$")
 PLACEHOLDER_MIN_LINES = 5
 TITLE_ONLY_MAX_BYTES = 100
+CONNECT_FAILED_MARKER = "Failed to get browser ws address"
+CONNECTION_REFUSED_MARKER = "ERR_CONNECTION_REFUSED"
+LOCAL_NETWORK_MIN_REFUSED = 3
+SLOW_NAVIGATION_MIN_TIMEOUTS = 3
+BLOCKED_MIN_ENGINES = 2
 SOURCE_LINE_PATTERN = re.compile(r"^<!-- source: .*? -->\n?")
 
 
@@ -86,6 +96,16 @@ def classify_engine_run(stats: dict) -> Verdict:
     return Verdict(ENGINE_OTHER, status)
 
 
+def classify_collapse(engines: dict) -> Verdict:
+    return (
+        _connect_failed(engines)
+        or _local_network(engines)
+        or _slow_navigation(engines)
+        or _blocked_majority(engines)
+        or Verdict(COLLAPSE_MIXED, "")
+    )
+
+
 def classify_collection_file(body: str) -> Verdict | None:
     content = strip_source_line(body)
     placeholder_lines = sum(1 for line in content.splitlines() if PLACEHOLDER_LINE_PATTERN.match(line.strip()))
@@ -111,6 +131,37 @@ def find_duplicate_files(files: list[dict]) -> dict[str, Verdict]:
 
 def strip_source_line(body: str) -> str:
     return SOURCE_LINE_PATTERN.sub("", body, count=1)
+
+
+def _connect_failed(engines: dict) -> Verdict | None:
+    failed = [name for name, stats in engines.items() if CONNECT_FAILED_MARKER in (stats.get("drop_reason") or "")]
+    if failed:
+        return Verdict(COLLAPSE_CONNECT_FAILED, f"{len(failed)} engines: {CONNECT_FAILED_MARKER}")
+    return None
+
+
+def _local_network(engines: dict) -> Verdict | None:
+    refused = [name for name, stats in engines.items() if CONNECTION_REFUSED_MARKER in (stats.get("drop_reason") or "")]
+    if len(refused) < LOCAL_NETWORK_MIN_REFUSED:
+        return None
+    http_errors = [name for name, stats in engines.items() if stats.get("status") == "ERROR_HTTP"]
+    suffix = f", HTTP errors from {', '.join(http_errors)}" if http_errors else ""
+    return Verdict(COLLAPSE_LOCAL_NETWORK, f"{len(refused)} engines {CONNECTION_REFUSED_MARKER}{suffix}")
+
+
+def _slow_navigation(engines: dict) -> Verdict | None:
+    timed_out = [stats for stats in engines.values() if stats.get("status") == "TIMEOUT_WATCHDOG"]
+    if len(timed_out) < SLOW_NAVIGATION_MIN_TIMEOUTS:
+        return None
+    still_navigating = sum(1 for stats in timed_out if not stats.get("diagnosis"))
+    return Verdict(COLLAPSE_SLOW_NAVIGATION, f"{len(timed_out)} watchdog timeouts, {still_navigating} without diagnosis")
+
+
+def _blocked_majority(engines: dict) -> Verdict | None:
+    blocked = [name for name, stats in engines.items() if classify_engine_run(stats).label == ENGINE_BLOCKED]
+    if len(blocked) < BLOCKED_MIN_ENGINES:
+        return None
+    return Verdict(COLLAPSE_BLOCKED, f"blocked: {', '.join(blocked)}")
 
 
 def _no_content(record: dict) -> Verdict | None:
