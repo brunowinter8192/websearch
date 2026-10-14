@@ -40,6 +40,12 @@ ENGINE_TRANSPORT_ERROR = "transport_error"
 ENGINE_RATE_SKIP = "rate_skip"
 ENGINE_OTHER = "other"
 
+COLLAPSE_CONNECT_FAILED = "browser_connect_failed"
+COLLAPSE_LOCAL_NETWORK = "local_network"
+COLLAPSE_SLOW_NAVIGATION = "slow_navigation"
+COLLAPSE_BLOCKED = "blocked"
+COLLAPSE_MIXED = "mixed"
+
 COLLECTION_PLACEHOLDER = "placeholder"
 COLLECTION_TITLE_ONLY = "title_only"
 COLLECTION_DUPLICATE = "duplicate"

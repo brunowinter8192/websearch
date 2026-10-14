@@ -1,4 +1,6 @@
 # INFRASTRUCTURE
+from collections import Counter
+
 from dev.kvp.kvp_config import (
     COLLECTION_NAME,
     ENGINE_BLOCKED,
@@ -22,6 +24,7 @@ def render_report(meta: dict, data: dict, searches: list[dict], scrapes: list[di
     sections = [
         _render_header(meta),
         _render_ad_hoc(data["ad_hoc"]),
+        _render_collapse(data["collapse"]),
         _render_deep_dive(data["deep_dive"]),
         _render_silent_scrapes(scrapes),
         _render_blocked_engine_runs(searches),
@@ -110,6 +113,37 @@ def _render_relevance(ad_hoc: dict) -> str:
         rows.append([name, relevance["searches"], relevance["drilldowns"], relevance["searches_with_scrape"], relevance["attributed_scrapes"], ranks])
     headers = ["code_version", "searches", "drilldowns", "searches with scrape", "attributed scrapes", "rank of scraped URL (rank:count)"]
     return "### Relevance: click data\n\nA scrape is attributed to a drilldown list when its URL is in the list and it happened within 3 h after the drilldown.\n\n" + _table(headers, rows)
+
+
+def _render_collapse(rows: list[dict]) -> str:
+    patterns = Counter(row["pattern"] for row in rows)
+    summary = ", ".join(f"{label}={count}" for label, count in sorted(patterns.items())) or "none"
+    cells = [
+        [r["ts"][:19], r["version"], r["ok"], r["wall_ms"], r["overhead_ms"], r["median_completed_ms"], r["pattern"], r["evidence"], _host_cell(r["host"])]
+        for r in rows
+    ]
+    headers = ["ts", "code_version", "engines OK", "wall ms", "overhead ms", "median completed engine ms", "pattern", "evidence", "host"]
+    note = (
+        f"Searches with fewer than {MIN_ENGINES_OK} engines OK: {len(rows)} ({summary}). Overhead is wall time minus the slowest engine "
+        "(browser start and lock wait). The pattern is derived offline from the engine statuses. `host` holds the saturation facts "
+        "recorded with the search; records written before they existed show `not recorded`."
+    )
+    return "## Collapse searches\n\n" + note + "\n\n" + _table(headers, cells)
+
+
+def _host_cell(host: dict | None) -> str:
+    if host is None:
+        return "not recorded"
+    load = host.get("load_avg_start")
+    parts = [
+        f"load {load[0]}/{host.get('cpu_count')} cpus" if load else "load n/a",
+        f"busy {host['cpu_busy_pct']} %" if host.get("cpu_busy_pct") is not None else "busy n/a",
+    ]
+    top = host.get("top_cpu_processes")
+    parts.append("top: " + ", ".join(f"{p['name']} {p['cpu_s']}s" for p in top) if top else "top n/a")
+    if host.get("errors"):
+        parts.append("errors: " + "; ".join(host["errors"]))
+    return "; ".join(parts)
 
 
 def _render_deep_dive(deep_dive: dict) -> str:

@@ -15,6 +15,7 @@ from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from mcp.types import TextContent
+from src.host_load import host_facts_since, take_host_snapshot
 from src.scraper.scrape_logger import domain_of, elapsed_ms, log_scrape, utc_timestamp, write_sidecar
 from src import watchdog_spawn
 from src.config import CDP_PORT_WAIT_TIMEOUT_S, TOTAL_SCRAPE_BUDGET_S
@@ -43,17 +44,19 @@ _BROWSER_LAUNCH_SIGNATURES = (
 
 async def scrape_url_chromium_workflow(url: str) -> list[TextContent]:
     t_total = time.perf_counter()
+    host_start = take_host_snapshot()
     ts = utc_timestamp()
     domain = domain_of(url)
     logger.info("Scraping: %s", url)
 
     content, meta = await try_scrape(url)
     total_wall = elapsed_ms(t_total)
+    host = host_facts_since(host_start)
     config = _config_of(meta)
     config_hash = hash_config(config)
 
     content_path = write_sidecar(url, ts, content, "filtered", "chromium")
-    log_scrape(_build_scrape_record(ts, url, domain, content, meta, total_wall, content_path, config_hash, config))
+    log_scrape(_build_scrape_record(ts, url, domain, content, meta, total_wall, content_path, config_hash, config, host))
     _log_scrape_complete(url, content, meta)
     return [_scrape_text_content(url, content)]
 
@@ -261,7 +264,7 @@ def hash_config(config: dict) -> str:
 
 def _build_scrape_record(
     ts: str, url: str, domain: str, content: str, meta: dict,
-    total_wall: int, content_path: str | None, config_hash: str, config: dict,
+    total_wall: int, content_path: str | None, config_hash: str, config: dict, host: dict,
 ) -> dict:
     return {
         "ts": ts, "url": url, "domain": domain, "mode": "filtered",
@@ -281,6 +284,7 @@ def _build_scrape_record(
         "crawl4ai_resolved_by": meta.get("crawl4ai_resolved_by"),
         "document_status_chain": meta.get("document_status_chain"),
         "config_hash": config_hash, "config": config,
+        "host": host,
     }
 
 

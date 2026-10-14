@@ -134,3 +134,62 @@ Stable cases passing: 12 of 15 before, 13 of 15 after. Byte differences in uncha
 - dbis stays unsolved at content level: the agent now gets the organisation list instead of one byte, not the result list. The KVP report classifies such a record as `usable`, because its rules cannot see missing content; only the canary marker shows it. Cause of the missing results is unexplained.
 - The fix is active in production only after the merge; until then new records in the main logs carry no `content_source`. After the merge, a KVP report on a window with `code_version` split should show no new `filtered_to_nothing` records.
 - The hook setup blocks `cli.py scrape_url_chromium` run through a venv path; the canary was started with `./venv/bin/python -m dev.kvp.kvp_canary > /tmp/<file> 2>&1`, which was accepted.
+
+## Iteration 2 (2026-10-14): collapse searches, host saturation facts
+
+Commits on branch `kvpreport`: `0a5b117` (host facts), `a23deaf` (report section and collapse classification). Task A is analysis only, no code. No fix for the collapse itself was made; the iteration only adds facts so the next collapse can be diagnosed from the log.
+
+### A: what the existing sources show
+
+Trigger: 14 of 265 searches had fewer than 3 engines OK. Method notes for a successor: `cli.log` and the rag-cli logs use local time (CEST, UTC+2), `query_log` uses UTC; `cli.log` holds 3.3 M DEBUG lines (about 99 % pydoll and websockets), so it was read by time window and logger name, never in full; its CDP event lines are truncated to 1000 bytes and carry no request ids.
+
+The 14 searches fall into five groups, only the last one is the saturation question:
+
+| Group | Searches | Evidence | Reading |
+|---|---|---|---|
+| Blocks | 2026-09-15T11:52Z (1) | brave and yandex `blocked`, openalex and google `EMPTY`, startpage 1 watchdog timeout | engine blocks, not an outage |
+| Old architecture | 09-15 18:42Z to 18:43Z (3) | persistent Chrome profile `~/.websearch/browser-session`, `TIMEOUT_NONCOOP` and `TIMEOUT_HTTPX` | before the self-launched Chrome per search (commit `4769358`) |
+| Connect failure | 09-21 08:40Z to 10:03Z (6) | pydoll connects to its preassigned port (log: `Browser initialized: port=9296`) while Chrome was started with `--remote-debugging-port=0`; "Failed to get browser ws address: Cannot connect to host localhost:92xx", 24 of 24 occurrences on that day; Chrome start 10:40:40, first tab 10:40:45 (local) | never seen again after 09-21; hypothesis: transitional or probe code (one query is "orchestrator failure path probe") |
+| Local network | 09-24 17:13:08Z and 17:13:10Z (2) | 7 browser engines `net::ERR_CONNECTION_REFUSED` within 0.25 to 0.36 s and openalex (httpx) "502 Bad Gateway" in the same second, twice | cause outside the tool; hypothesis: proxy or VPN, nothing logged |
+| Slow navigation | 10-10T12:09:15Z, 10-14T16:39:24Z (2) | see below | current architecture |
+
+Since the fresh-profile-per-run architecture (2026-09-19): 114 searches, 12 with at least one watchdog timeout, 10 with fewer than 3 OK (6 connect failures, 2 local network, 2 slow navigation).
+
+Slow-navigation facts (the two cases of the task):
+- Chrome start is not the cause: process start to all tabs created took about 0.8 s in both cases.
+- All engines slow down together. Over 249 healthy searches the navigation duration (INFO lines "Navigating to URL" to "Navigation complete") has the median 0.57 s startpage, 0.80 s bing, 1.21 s brave, 1.16 s yandex, 1.42 s google, 1.24 s duckduckgo. In the 10-14 16:39:24Z search the median over engines is 4.96 s (startpage 5.2 s, bing 5.2 s, yandex 5.0 s). On 10-10 five of seven browser engines never logged "Navigation complete" within the 6 s watchdog; google hit its own 3 s page-load limit. Engines of different companies and CDNs slowing down together points to the local side or the local network, not to the engines.
+- Dose and response: the four searches of 10-11 14:11Z (owner-reported load average 14.6 during a rag-cli index) had median navigation 2.0 to 2.65 s and all engines stayed OK; the 10-14 16:39:24Z search had about 5x and collapsed; 16:39:36Z had 3.3 s and 5 OK. Healthy maxima are 3.6 to 4.9 s and the watchdog is 6 s, so a slowdown of roughly 4x or more tips engines over the limit.
+- The Python event loop was not starved: the lag between a CDP frame arriving and pydoll processing it had median 0 ms and maximum 12 ms (2803 events on 10-14, 1707 on 10-10). A process that macOS throttles as a whole would not show up in this measure.
+- Concurrent load seen in other sources: 10-14, rag-cli indexing of `websearch-reference` ran 18:38:44 to 18:41:39 local (indexer and chunker log), overlapping both slow searches. 10-10, `pmset -g log` shows a Spotlight task (`mds_stores` BackgroundTask) held 14:01:23 to 14:06:18 and about 14:06:57 to 14:17:30 local, covering the search at 14:09:08; the rag-cli logs show nothing then. No Spotlight task around 10-14 18:39. The machine never slept and pmset holds no thermal event (it only reaches back to 2026-10-07).
+- Weak and confounded: rag-cli embedding activity overlapped 7 of 14 collapse searches against 29 of 251 normal ones; median concurrent Claude sessions around the search was 2 against 1.
+
+Not decidable from these sources: local CPU contention, local I/O or the local network. Nothing recorded CPU. Hypothesis, not proven: CPU contention.
+
+Other facts: the 52 `TIMEOUT_WATCHDOG` are spread over many days (09-21 18, 09-15 11, 09-19 8, 10-10 5, 09-24 3, 10-14 3, rest 1 or 2). The 12 "Page load timed out" are the own 3 s page-load limit of google, duckduckgo and mojeek, logged as `ERROR_BROWSER`. A watchdog timeout with `diagnosis` null means the engine was still before the result wait (navigating); with `diagnosis_partial` it was already waiting for results. Overhead (browser start plus lock wait) is derivable as `total_wall_ms` minus the largest `search_ms`, so no extra field.
+
+### B: what was added
+
+- `src/host_load.py`, field `host` in the `workflow_summary` record and in the chromium scrape record: `cpu_count`, `load_avg_start` (load average before the own Chrome runs), `cpu_busy_pct` (system CPU over the workflow window, from `psutil.cpu_times()` deltas), `top_cpu_processes` (top 3 by CPU seconds in the window, aggregated by process name, own python process excluded, with process count), `errors` (list).
+- The process table comes from `ps -axo pid=,time=,comm=`, not from psutil: psutil returned no CPU time for 291 of 868 processes (root processes such as `mds_stores`). `ps` lists all 869 in about 26 ms. Expected format is `mm:ss.cc`; other formats (for example `3-04:05:06`) are not parsed.
+- Monitoring must never break the tool (owner decision, same principle as `code_version` `unknown`): every source read is guarded. An unparseable `ps` line is skipped and noted as `ps: <n> unparseable lines, first: '<line>'` in `host.errors`; a failing `ps` or psutil call leaves the field `null` and adds the error. The other fields stay. Process names are in the log on purpose (owner decision).
+- Not added because the analysis did not show it: memory pressure, event-loop lag, prewarm time, host facts for camoufox and pipe records.
+- Report: section "Collapse searches" with one row per search with fewer than 3 OK engines (timestamp, code version, OK count, wall, overhead, median of the completed engine times, pattern, evidence, host facts or `not recorded`). `classify_collapse` assigns the pattern offline: `browser_connect_failed` (any "Failed to get browser ws address"), `local_network` (at least 3 engines `ERR_CONNECTION_REFUSED`), `slow_navigation` (at least 3 `TIMEOUT_WATCHDOG`), `blocked` (at least 2 blocked engines), else `mixed`; the first match wins. On the 14 real searches: browser_connect_failed 6, slow_navigation 4, local_network 2, blocked 2, mixed 0. The two 09-15 searches of the old architecture are labelled `slow_navigation` and `blocked` by these rules only because the rules look at statuses.
+- Fixtures: 7 real workflow summaries in `dev/tests/fixtures/kvp/collapse_cases.jsonl` (6 collapse cases plus the healthy 10-14T16:39:36Z search). The host cell in the report test is constructed. `conftest.py` pins the process table for all tests.
+
+### Verification and one negative result
+
+Real records from the worktree (`code_version a23deaf632`): a scrape of `https://example.com/` at 2026-10-14T17:32:30Z with `cpu_busy_pct 17.5`, `load_avg_start 3.8`, top processes WindowServer, System Events (the focus watchdog's osascript), Preview; a search at 17:32:29Z with `cpu_busy_pct 29.9`.
+
+Load demonstration, owner-approved: 14 `yes > /dev/null` for one search (17:33:08Z) gave `cpu_busy_pct 100.0`, `load_avg_start 5.34`, `yes` 73.14 CPU-s over 14 processes; 30 of them for another search (17:33:41Z) gave `load_avg_start 16.32`, `yes` 85.69 CPU-s over 30 processes. Both searches degraded (startpage `TIMEOUT_WATCHDOG`, google `ERROR_BROWSER`, wall 7.2 s and 8.3 s) but 4 engines stayed OK each, so no collapse. n = 2, the count was not raised further. Reading: pure CPU saturation alone degraded the search but did not reproduce the collapse of 10-10 and 10-14; the next real collapse with `host` will show whether the machine was saturated then.
+
+### Gotchas for a successor
+
+- zsh does not split an unquoted variable: `kill $pids` with several pids failed with "illegal pid" and left the 14 `yes` running for a while. Use `pkill -x yes` (after checking `pgrep -x yes` shows only your own) or an array. macOS `sed -i` needs a suffix argument; use python for in-place edits.
+- A host fact exists only for records written after the merge; the report shows `not recorded` for everything older. The production CLI runs the main checkout.
+- The first search after a code change in a worktree is run with `./venv/bin/python cli.py search_web "<q>" > /tmp/<file> 2>&1` and the scrape with the wrapper `/tmp/wt_ws scrape_url_chromium <url>` (see the entry above for why).
+
+### Open points
+
+- Whether the collapse needs more than CPU saturation (I/O, Spotlight, the local network, many tabs in one Chrome) stays open until a collapse is logged with `host`.
+- The collapse labels are rules over statuses, not diagnoses; `mixed` has no real example yet.
+- `top_cpu_processes` shows only the 3 biggest consumers; a diffuse load (many small processes) shows up only in `cpu_busy_pct`.

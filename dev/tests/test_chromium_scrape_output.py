@@ -89,6 +89,26 @@ async def test_scrape_url_chromium_workflow_logs_full_field_set_unchanged(monkey
 
 
 @pytest.mark.asyncio
+async def test_scrape_record_carries_host_facts_and_survives_an_unparseable_process_table(monkeypatch):
+    from src import host_load
+    captured = {}
+
+    async def _fake_try_scrape(url):
+        return "real content", _meta()
+
+    monkeypatch.setattr(host_load, "read_ps_output", lambda: "garbage\n")
+    monkeypatch.setattr(chromium_scrape, "try_scrape", _fake_try_scrape)
+    monkeypatch.setattr(chromium_scrape, "write_sidecar", lambda *a, **kw: None)
+    monkeypatch.setattr(chromium_scrape, "log_scrape", lambda record: captured.update(record))
+
+    await chromium_scrape.scrape_url_chromium_workflow("https://example.com")
+
+    assert set(captured["host"]) == {"cpu_count", "load_avg_start", "cpu_busy_pct", "top_cpu_processes", "errors"}
+    assert len(captured["host"]["errors"]) == 1
+    assert captured["bytes_returned"] == len("real content")
+
+
+@pytest.mark.asyncio
 async def test_launch_mode_truthful_on_cdp_path(monkeypatch):
     _patch_cdp_launch_mechanics(monkeypatch, chromium_scrape, chromium_process)
 

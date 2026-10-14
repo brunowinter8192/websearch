@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from dev.kvp.kvp_classify import (
+    classify_collapse,
     classify_collection_file,
     classify_engine_run,
     classify_pipe_record,
@@ -74,3 +75,22 @@ def test_successful_pipe_record_is_usable():
     record = json.loads((FIXTURE_DIR / "pipe_record.json").read_text(encoding="utf-8"))
 
     assert classify_pipe_record(record).label == SCRAPE_USABLE
+
+
+COLLAPSE_CASES = _load_jsonl("collapse_cases.jsonl")
+COLLAPSED = [c for c in COLLAPSE_CASES if c["expected"]]
+
+
+@pytest.mark.parametrize("case", COLLAPSED, ids=[c["case"] for c in COLLAPSED])
+def test_collapse_pattern_matches_observed_search(case):
+    verdict = classify_collapse(case["record"]["engines"])
+
+    assert verdict.label == case["expected"]
+
+
+def test_collapse_evidence_names_the_observed_signals():
+    by_case = {c["case"]: classify_collapse(c["record"]["engines"]) for c in COLLAPSED}
+
+    assert by_case["2026-09-24T17:13:08Z"].evidence == "7 engines ERR_CONNECTION_REFUSED, HTTP errors from openalex"
+    assert by_case["2026-10-10T12:09:15Z"].evidence == "5 watchdog timeouts, 5 without diagnosis"
+    assert by_case["2026-09-15T11:52:18Z"].evidence == "blocked: brave, yandex"

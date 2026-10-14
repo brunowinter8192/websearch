@@ -75,3 +75,30 @@ def _run_report(tmp_path: Path, monkeypatch, log_dir: Path, *extra: str) -> str:
     kvp_report.main()
     [path] = list(report_dir.glob("kvp_report_*.md"))
     return path.read_text(encoding="utf-8")
+
+
+def test_report_lists_collapse_searches_with_pattern_and_host_facts(tmp_path, monkeypatch):
+    cases = [json.loads(l) for l in (FIXTURE_DIR / "collapse_cases.jsonl").read_text(encoding="utf-8").splitlines()]
+    constructed_host = {
+        "cpu_count": 14, "load_avg_start": [14.6, 9.1, 5.0], "cpu_busy_pct": 93.4,
+        "top_cpu_processes": [{"name": "mds_stores", "cpu_s": 31.2, "procs": 1}], "errors": ["ps: 1 unparseable lines, first: 'x'"],
+    }
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    lines = []
+    for case in cases:
+        record = dict(case["record"])
+        if case["case"] == "2026-10-14T16:39:24Z":
+            record["host"] = constructed_host
+            record["code_version"] = "abc1234567"
+        lines.append(json.dumps(record, ensure_ascii=False))
+    (log_dir / "query_log.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    report = _run_report(tmp_path, monkeypatch, log_dir)
+
+    collapse = report.split("## Collapse searches")[1].split("## Deep dive lane")[0]
+    assert "Searches with fewer than 3 engines OK: 6" in collapse
+    assert "slow_navigation=3" in collapse and "local_network=1" in collapse
+    assert "load 14.6/14 cpus; busy 93.4 %; top: mds_stores 31.2s; errors: ps: 1 unparseable lines" in collapse
+    assert collapse.count("| not recorded |") == 5
+    assert "2026-10-14T16:39:36" not in collapse

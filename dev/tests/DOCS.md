@@ -11,9 +11,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ## Modules
 
-### conftest.py (57 LOC)
+### conftest.py (63 LOC)
 
-**Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name.
+**Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name; also pins the process table the host facts read.
 
 ### run_strands.sh (39 LOC)
 
@@ -123,9 +123,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/search/degraded_notice.py`: real recorded engine-run fixtures, threshold, drop-reason display, repair-line gate.
 
-### test_query_logger.py (350 LOC)
+### test_query_logger.py (375 LOC)
 
-**Purpose:** `src/search/query_logger.py`, per-engine timing, the search workflow's log shape, and the CLI drill-down via an isolated subprocess.
+**Purpose:** `src/search/query_logger.py`, per-engine timing, the search workflow's log shape including the host facts (also with an unparseable process table), and the CLI drill-down via an isolated subprocess.
 
 ### test_scrape_logger.py (58 LOC)
 
@@ -135,17 +135,21 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/code_version.py` against throwaway git repos (clean, modified tracked file, untracked file, no repo) and the stamp written by all three log writers.
 
-### test_kvp_classify.py (76 LOC)
+### test_kvp_classify.py (96 LOC)
 
-**Purpose:** The KVP verdict rules in `dev/kvp/kvp_classify.py` against real scrape, engine-run and collection cases in `fixtures/kvp/`, including the five inverse cases that carry `crawl4ai_success=false` but real content.
+**Purpose:** The KVP verdict rules in `dev/kvp/kvp_classify.py` against real scrape, engine-run, collection and collapse-search cases in `fixtures/kvp/`, including the five inverse cases that carry `crawl4ai_success=false` but real content.
+
+### test_host_load.py (117 LOC)
+
+**Purpose:** `src/host_load.py`: real `ps` lines, CPU busy share, top-process aggregation, reused pids, and that measuring errors end up in the facts instead of raising.
 
 ### test_kvp_canary.py (156 LOC)
 
 **Purpose:** Canary evaluation against real fixture records (expected verdict, content marker, missing record), the order of `run_cases`, the baseline comparison with volatile cases separate, and the sanity of the case list.
 
-### test_kvp_report.py (77 LOC)
+### test_kvp_report.py (104 LOC)
 
-**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window) and the scrape-to-drilldown attribution with rank.
+**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts) and the scrape-to-drilldown attribution with rank.
 
 ### test_index_scrapes.py (162 LOC)
 
@@ -179,9 +183,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/scraper/chromium_scrape.py`: landed URL, logged fact fields, budget guard, teardown on every exit path, watchdog spawn.
 
-### test_chromium_scrape_output.py (126 LOC)
+### test_chromium_scrape_output.py (146 LOC)
 
-**Purpose:** `src/scraper/chromium_scrape.py`: config stamp, output format, logged field set, launch mode.
+**Purpose:** `src/scraper/chromium_scrape.py`: config stamp, output format, logged field set including the host facts, launch mode.
 
 ### test_chromium_scrape_content_source.py (116 LOC)
 
