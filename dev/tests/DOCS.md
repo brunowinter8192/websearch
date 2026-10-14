@@ -139,6 +139,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** The KVP verdict rules in `dev/kvp/kvp_classify.py` against real scrape, engine-run and collection cases in `fixtures/kvp/`, including the five inverse cases that carry `crawl4ai_success=false` but real content.
 
+### test_kvp_canary.py (156 LOC)
+
+**Purpose:** Canary evaluation against real fixture records (expected verdict, content marker, missing record), the order of `run_cases`, the baseline comparison with volatile cases separate, and the sanity of the case list.
+
 ### test_kvp_report.py (77 LOC)
 
 **Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window) and the scrape-to-drilldown attribution with rank.
@@ -178,6 +182,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 ### test_chromium_scrape_output.py (126 LOC)
 
 **Purpose:** `src/scraper/chromium_scrape.py`: config stamp, output format, logged field set, launch mode.
+
+### test_chromium_scrape_content_source.py (116 LOC)
+
+**Purpose:** `src/scraper/chromium_scrape.py` content selection: raw markdown when fit has no text (real bgn and dbis raw in `fixtures/scrape/`), fit kept otherwise, `content_source` in the logged record.
 
 ### test_chromium_scrape_document_status.py (199 LOC)
 
