@@ -1,0 +1,21 @@
+--- /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch/skills/websearch-capture-and-index/SKILL.md	2026-10-11 14:46:05
++++ /tmp/capture_new.md	2026-10-14 18:27:29
+@@ -30,7 +30,8 @@
+ 2. Lies jede verbleibende Zeile vollständig
+ 
+ 3. Behalte jede URL, die `INFO_NEED` dienen kann.
+-   - bist du dir unsicher ob eine URL dem `INFO_NEED` zuträglich ist, so lasse sie drin
++   - Bist du dir unsicher, ob eine URL dem `INFO_NEED` zuträglich ist, so lass sie weg.
++      - Eine fehlende Seite holt später ein einzelner Ad-hoc-Scrape, eine überflüssige Seite verwässert die Collection dauerhaft.
+ 
+ 4. Schreibe die behaltenen URLs nach `/tmp/<domain>_urls_culled.txt`.
+ 
+@@ -162,7 +163,7 @@
+ 
+ ## Step 6 — Report
+ 
+-1. Schreibe den Report in diesem Format in den Chat.
++1. Schreibe ausschließlich diese fünf Zeilen in den Chat, nichts davor und nichts danach.
+ 
+    ```
+    Deep Dive fertig: <domain>

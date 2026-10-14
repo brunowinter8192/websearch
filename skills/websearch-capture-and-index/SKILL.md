@@ -30,7 +30,7 @@ description:
 2. Lies jede verbleibende Zeile vollständig
 
 3. Behalte jede URL, die `INFO_NEED` dienen kann.
-   - bist du dir unsicher ob eine URL dem `INFO_NEED` zuträglich ist, so lasse sie drin
+   - Bist du dir unsicher, ob eine URL dem `INFO_NEED` zuträglich ist, so lass sie weg.
 
 4. Schreibe die behaltenen URLs nach `/tmp/<domain>_urls_culled.txt`.
 
@@ -162,7 +162,7 @@ description:
 
 ## Step 6 — Report
 
-1. Schreibe den Report in diesem Format in den Chat.
+1. Schreibe ausschließlich diese fünf Zeilen in den Chat, nichts davor und nichts danach.
 
    ```
    Deep Dive fertig: <domain>

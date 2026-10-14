@@ -1,0 +1,41 @@
+--- /Users/brunowinter2000/.claude/shared-rules/main/workers.md	2026-10-11 14:04:34
++++ /tmp/workers_new.md	2026-10-14 18:18:52
+@@ -18,6 +18,21 @@
+ 
+ **Mit externen Quellen werden RAG, GitHub, Reddit und Web bezeichnet.**
+ - Der Worker hat nativ keinen Zugang zu externen Quellen, und das ist auch nicht vorgesehen.
++
++**RAG kommt immer zuerst, zu jedem Zeitpunkt im Zyklus.**
++- Vor jedem Aufruf von websearch, gh-cli oder reddit-cli durchsuchst du die passende Collection.
++
++| Tool | Collection, die du vor dem Tool durchsuchst |
++|---|---|
++| websearch | `websearch-pages` |
++| gh-cli | `github_issues` |
++| reddit-cli | `reddit-cli-posts` |
++| jede externe Quelle | jede Collection aus `rag-cli list_collections --filter reference` |
++
++- Eine RAG-Suche dauert Sekunden, eine Websuche mit Scrapen Minuten.
++- Erst wenn RAG die Frage nicht beantwortet, gehst du an die externe Quelle.
++    - Ein Teiltreffer wird mit `expand_chunks` erweitert, bevor du nach außen gehst.
++- Papers und Bücher gibt es nur in RAG, deshalb prüfst du die reference-Collections immer mit.
+ 
+ **Der Worker liest nur was du ihm zur Verfügung stellst.**
+ - Klone Repos oder einzelne Files und stelle sie dem Worker zur Verfügung.
+@@ -198,7 +213,7 @@
+ #### Stage 2 Lücken identifizieren.
+ 
+ 1. Benenne gedanklich die Lücken.
+-2. Prüfe jede Lücke gegen das, was bereits in RAG indexiert ist.
++2. Prüfe jede Lücke gegen jede der vier Collection-Gruppen in der Tabelle, nicht nur gegen eine.
+ 
+ | Inhalt | Collection |
+ |---|---|
+@@ -208,6 +223,7 @@
+ | Papers und Bücher aller Projekte | jede Collection aus `rag-cli list_collections --filter reference` |
+ 
+ - Melde anschließend kurz im Chat, welche Lücke sich über RAG schließt und welche offen bleibt.
++    - Nenne pro Lücke die Collection und das Dokument des besten Treffers.
+ - Kein Treffer in RAG heißt nicht, dass die Lücke extern nicht zu schließen ist, es heißt nur, dass das Material noch nicht indexiert ist.
+ 
+ 3. Spawne einen frischen Worker und übergib ihm deinen kompletten Kenntnisstand.
