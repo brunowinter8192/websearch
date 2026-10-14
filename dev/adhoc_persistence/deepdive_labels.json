@@ -1,0 +1,230 @@
+{
+  "host_types": {
+    "aam2core-holding-ag.jobs.personio.com": "job_posting",
+    "aam2core.com": "company_site",
+    "aboutamazon.de": "news",
+    "academia.edu": "paper",
+    "ai-act-service-desk.ec.europa.eu": "authority",
+    "altcha.org": "docs",
+    "amazon.de": "product",
+    "anthropic.com": "news",
+    "bfr.bund.de": "authority",
+    "blog.crawlex.net": "blog",
+    "claudecodecamp.com": "blog",
+    "community.mojeek.com": "forum",
+    "cosdna.com": "product",
+    "dbis.ur.de": "institution",
+    "de.tumi.com": "product",
+    "deal-magazin.com": "news",
+    "deepwiki.com": "docs",
+    "deitel.com": "product",
+    "developer.apple.com": "docs",
+    "dm.de": "product",
+    "docs.getbifrost.ai": "changelog",
+    "ebay.de": "product",
+    "eclecticlight.co": "blog",
+    "einzelhandel.de": "news",
+    "esquire.de": "news",
+    "everysize.com": "product",
+    "fachschaft.org": "institution",
+    "faq.whatsapp.com": "vendor_manual",
+    "footlocker.de": "product",
+    "forum.cursor.com": "forum",
+    "forums.raspberrypi.com": "forum",
+    "fragrantica.de": "product",
+    "geizhals.de": "product",
+    "gist.github.com": "code_host",
+    "github.blog": "changelog",
+    "github.com": "forum",
+    "h-ka.de": "institution",
+    "idealo.de": "product",
+    "immobilienmanager.de": "news",
+    "iz.de": "news",
+    "jamesloper.com": "blog",
+    "jobs.smartrecruiters.com": "job_posting",
+    "journals.plos.org": "paper",
+    "journals.sagepub.com": "paper",
+    "lobste.rs": "forum",
+    "macinternals.app": "blog",
+    "mangofriseurbedarf.de": "product",
+    "markenfactory.com": "company_site",
+    "mojeek.com": "search_engine",
+    "moodle.studiumdigitale.uni-frankfurt.de": "institution",
+    "moquer.com": "product",
+    "nick-liu.com": "blog",
+    "notino.de": "product",
+    "oceanwash.de": "blog",
+    "otsuka-europe.com": "company_site",
+    "otsuka.com": "company_site",
+    "otsuka.de": "company_site",
+    "packhacker.com": "blog",
+    "platform.claude.com": "docs",
+    "procxray.com": "blog",
+    "qis.server.uni-frankfurt.de": "institution",
+    "reddit.com": "forum",
+    "reebok.eu": "product",
+    "rz.uni-frankfurt.de": "institution",
+    "sandqvist.com": "product",
+    "stackoverflow.com": "forum",
+    "stern.de": "news",
+    "superuser.com": "forum",
+    "swffm.de": "institution",
+    "techcrunch.com": "news",
+    "thenorthface.com": "product",
+    "theodorehq.com": "blog",
+    "tk.de": "company_site",
+    "trustpilot.com": "forum",
+    "ub.uni-frankfurt.de": "institution",
+    "uni-frankfurt.de": "institution",
+    "vorschriften.bgn-branchenwissen.de": "regulation_text",
+    "wetransco.de": "blog",
+    "whitecase.com": "news",
+    "wiwi-frankfurt.de": "institution",
+    "wiwi.uni-frankfurt.de": "institution",
+    "yandex.com": "vendor_manual",
+    "zalando.de": "product",
+    "docs.pytest.org": "docs",
+    "code.claude.com": "docs",
+    "developers.cloudflare.com": "docs",
+    "git-scm.com": "docs",
+    "help.openalex.org": "docs",
+    "scrapebadger.com": "blog",
+    "scrapfly.io": "blog",
+    "sre.google": "vendor_manual"
+  },
+  "judgments": {
+    "adfd041c:reddit.com": {
+      "need_multi": false,
+      "stable": "yes",
+      "reason": "Two threads for two unrelated questions (jeans cut, bath products) 76 minutes apart; no site structure involved."
+    },
+    "adfd041c:fragrantica.de": {
+      "need_multi": true,
+      "stable": "partly",
+      "reason": "Two perfume entries scraped to compare two named perfumes; ratings and votes drift, entry notes are stable. The second entry was not in a drilldown list."
+    },
+    "adfd041c:ub.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "partly",
+      "reason": "How to get a permanent library desk: seven pages, two were login walls, two were 404 pages from guessed URLs (agent navigated blind). Application rules are stable, the registration dates are not. Host recurs in four other sessions."
+    },
+    "0e9319ff:wiwi.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "yes",
+      "reason": "Dean's list criteria for master and bachelor, exam office FAQ, master download page: examination regulations, stable for a semester. Host recurs in four other sessions."
+    },
+    "f3816eda:ub.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "no",
+      "reason": "Status check of an application window: the page was changed that same morning to 'fully booked'. Needs the live page, an indexed copy would be stale."
+    },
+    "f3816eda:wiwi.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "partly",
+      "reason": "Five pages for several questions in one session: registration deadlines and news ticker (perishable), department structure (stable). Host recurs in four other sessions."
+    },
+    "c3d6ed15:ub.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "yes",
+      "reason": "Off-campus access to licensed e-media: home, FAQ, e-book readme, virtual textbook collection, subject page. Access conditions are stable; one page was reached by link, not by search. Host recurs in four other sessions."
+    },
+    "c3d6ed15:dbis.ur.de": {
+      "need_multi": true,
+      "stable": "no",
+      "reason": "Two query result pages of a database directory (?q=JSTOR, ?q=Business+Source), both filtered to 1 byte. Dynamic search results, nothing a discovery can list."
+    },
+    "c3d6ed15:qis.server.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "no",
+      "reason": "Four query variants of one course-catalogue search. Result pages of a dynamic search, not enumerable by discovery."
+    },
+    "79cb77e8:zalando.de": {
+      "need_multi": true,
+      "stable": "no",
+      "reason": "Four product and listing pages to find one shoe in one size; prices and stock are the answer and they are perishable."
+    },
+    "79cb77e8:idealo.de": {
+      "need_multi": false,
+      "stable": "no",
+      "reason": "Two price-comparison pages for two different products (shoe, bag) 58 minutes apart."
+    },
+    "79cb77e8:reddit.com": {
+      "need_multi": false,
+      "stable": "yes",
+      "reason": "Two threads on two different bags. The user's phrase 'mach nochmal einen deep dive' means thorough research, not the capture workflow."
+    },
+    "79cb77e8:de.tumi.com": {
+      "need_multi": true,
+      "stable": "no",
+      "reason": "Category page and one product page, 47 minutes apart; model list and prices are the answer."
+    },
+    "6224cb5d:uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "partly",
+      "reason": "Service page and its sub page for one contact lookup (sub page returned no content). Content of the question is personal and not named in this report."
+    },
+    "6224cb5d:swffm.de": {
+      "need_multi": true,
+      "stable": "partly",
+      "reason": "Service page and its consultation-hours sub page for the same single lookup."
+    },
+    "6224cb5d:rz.uni-frankfurt.de": {
+      "need_multi": true,
+      "stable": "yes",
+      "reason": "Campus software offer page and the install guide for it, both direct search hits; one lookup, answered by the two pages."
+    }
+  },
+  "runs": {
+    "34214881": {
+      "trigger": "agent-side capture to ground suite-relocation decisions; who asked is not recorded",
+      "source": "documented in the area tests (2026-08-24 pytest capture)"
+    },
+    "42d1a7e9": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "eeb9128d": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "575fabca": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "2527ff0b": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "9d949ee8": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "cf4b5a19": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "67554e80": {
+      "trigger": "not recoverable, no transcript: the earliest transcript is from 2026-09-14",
+      "source": "none"
+    },
+    "cf205813": {
+      "trigger": "orchestrator probe while designing the capture skill, 1 URL, scraped to /tmp",
+      "source": "session 51731b00, 2026-10-10 19:39Z"
+    },
+    "09dc0c1e": {
+      "trigger": "owner request, started by the orchestrator via worker-cli spawn capture-sre-google",
+      "source": "session 51731b00 spawn at 2026-10-11 14:54Z, worker session e02ad316"
+    }
+  },
+  "sessions": {
+    "51731b00": "orchestrator probing discover_urls while designing the capture skill; later spawned the sre.google worker on the owner's request",
+    "ae0071bd": "orchestrator live test of discovery behavior during a dev change",
+    "43d27df6": "worker live test of discovery behavior during a dev change",
+    "e02ad316": "capture worker for sre.google (the only run that followed the capture skill)",
+    "8599391e": "dev test of the index_scrapes command",
+    "1440c8ea": "dev test of the index_scrapes command (nonexistent collection)",
+    "dcb383a9": "agent indexed single research pages (paper, Apple doc) while working from the websearch directory",
+    "c5c3b4c1": "agent indexed single research pages (GitHub issue, Q&A) for the canvas project",
+    "ad72996d": "agent indexed single research pages (two blog posts) for the monitor-cc project"
+  }
+}
