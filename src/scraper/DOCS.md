@@ -35,11 +35,11 @@ URL in, one stealth browser call on a self-launched, dynamically resolved Chromi
 **Called by:** chromium_scrape.py.
 **Calls out:** crawl4ai browser manager, patchright, psutil, macOS open, pgrep and osascript.
 
-### scrape_logger.py (65 LOC)
+### scrape_logger.py (66 LOC)
 
 **Purpose:** Per-URL structured logging shared by both lanes: one JSONL record and one full-content sidecar per call, plus record-field helpers.
 **Reads:** the scrape-log path environment variable; the sidecar directory.
-**Writes:** the scrape JSONL log and per-call sidecar files under src/logs (gitignored).
+**Writes:** the scrape JSONL log, every record carrying `code_version`, and per-call sidecar files under src/logs (gitignored).
 **Called by:** chromium_scrape.py, camoufox_scrape.py, index_scrapes.py.
 **Calls out:** none.
 

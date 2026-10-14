@@ -75,11 +75,11 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Called by:** pipe_scraper.py.
 **Calls out:** none.
 
-### pipe_scrape_logger.py (19 LOC)
+### pipe_scrape_logger.py (20 LOC)
 
 **Purpose:** Per-URL JSONL log writer for the batch scraper, shared by both engines, separate from the ad-hoc scrape log.
 **Reads:** the pipe-scrape log-path environment variable.
-**Writes:** the pipe scrape JSONL log under src/logs (gitignored).
+**Writes:** the pipe scrape JSONL log under src/logs (gitignored), every record carrying `code_version`.
 **Called by:** pipe_scraper_records.py.
 **Calls out:** none.
 

@@ -131,6 +131,18 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/scraper/scrape_logger.py` sidecar header content.
 
+### test_code_version.py (73 LOC)
+
+**Purpose:** `src/code_version.py` against throwaway git repos (clean, modified tracked file, untracked file, no repo) and the stamp written by all three log writers.
+
+### test_kvp_classify.py (76 LOC)
+
+**Purpose:** The KVP verdict rules in `dev/kvp/kvp_classify.py` against real scrape, engine-run and collection cases in `fixtures/kvp/`, including the five inverse cases that carry `crawl4ai_success=false` but real content.
+
+### test_kvp_report.py (77 LOC)
+
+**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window) and the scrape-to-drilldown attribution with rank.
+
 ### test_index_scrapes.py (162 LOC)
 
 **Purpose:** `src/scraper/index_scrapes.py`: sidecar resolution, collection file convention, missing-directory tripwire, rag-cli index paths.

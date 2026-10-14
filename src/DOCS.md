@@ -2,7 +2,7 @@
 
 ## Role
 
-Root of the source tree. config.py, cdp_value.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news, pdf) live one level down, each with its own DOCS.md.
+Root of the source tree. config.py, cdp_value.py, code_version.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news, pdf) live one level down, each with its own DOCS.md.
 
 ## Public Interface
 
@@ -10,7 +10,7 @@ Root of the source tree. config.py, cdp_value.py, log_janitor.py, death_pipe.py 
 
 ## Flow
 
-log_janitor.py: a log writer calls it after appending; it prunes old records or files at most once per hour. watchdog_spawn.py: a browser lane hands it PIDs; it starts death_pipe.py as a detached helper that waits on a pipe and cleans up when the caller dies.
+code_version.py: the three log writers stamp its result into every record they write. log_janitor.py: a log writer calls it after appending; it prunes old records or files at most once per hour. watchdog_spawn.py: a browser lane hands it PIDs; it starts death_pipe.py as a detached helper that waits on a pipe and cleans up when the caller dies.
 
 ## Modules
 
@@ -31,6 +31,16 @@ log_janitor.py: a log writer calls it after appending; it prunes old records or 
 **Writes:** none.
 **Called by:** src/search/engines/ modules, src/news/platforms/coindesk/browser.py.
 **Calls out:** none.
+
+---
+
+### code_version.py (41 LOC)
+
+**Purpose:** Provides the git commit of the running code as the `code_version` stamp; marks tracked local changes, ignores untracked files.
+**Reads:** the git state of the project root.
+**Writes:** none.
+**Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py.
+**Calls out:** git (subprocess).
 
 ---
 

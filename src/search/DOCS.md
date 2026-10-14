@@ -59,11 +59,11 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 **Called by:** cache.py.
 **Calls out:** none (stdlib only).
 
-### query_logger.py (19 LOC)
+### query_logger.py (20 LOC)
 
 **Purpose:** Append-only JSONL query log with three record types correlated by a shared search key.
 **Reads:** the query-log path environment variable.
-**Writes:** the query log under src/logs.
+**Writes:** the query log under src/logs; every record carries `code_version`.
 **Called by:** search_web.py, cli.py.
 **Calls out:** none.
 
