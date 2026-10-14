@@ -2,7 +2,7 @@
 
 ## Role
 
-Root of the source tree. config.py, cdp_value.py, code_version.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news, pdf) live one level down, each with its own DOCS.md.
+Root of the source tree. config.py, cdp_value.py, code_version.py, host_load.py, log_janitor.py, death_pipe.py and watchdog_spawn.py are the modules directly at this level: shared, domain-agnostic utilities and constants used by the packages below. All functional packages (search, scraper, crawler, news, pdf) live one level down, each with its own DOCS.md.
 
 ## Public Interface
 
@@ -10,7 +10,7 @@ Root of the source tree. config.py, cdp_value.py, code_version.py, log_janitor.p
 
 ## Flow
 
-code_version.py: the three log writers stamp its result into every record they write. log_janitor.py: a log writer calls it after appending; it prunes old records or files at most once per hour. watchdog_spawn.py: a browser lane hands it PIDs; it starts death_pipe.py as a detached helper that waits on a pipe and cleans up when the caller dies.
+code_version.py: the three log writers stamp its result into every record they write. host_load.py: the search and the chromium scrape take a snapshot at the start and ask for the facts at the end of their window. log_janitor.py: a log writer calls it after appending; it prunes old records or files at most once per hour. watchdog_spawn.py: a browser lane hands it PIDs; it starts death_pipe.py as a detached helper that waits on a pipe and cleans up when the caller dies.
 
 ## Modules
 
@@ -41,6 +41,16 @@ code_version.py: the three log writers stamp its result into every record they w
 **Writes:** none.
 **Called by:** src/search/query_logger.py, src/scraper/scrape_logger.py, src/crawler/pipe_scrape_logger.py.
 **Calls out:** git (subprocess).
+
+---
+
+### host_load.py (113 LOC)
+
+**Purpose:** Measures machine saturation over a workflow window: load average, system CPU busy share and the top CPU consumers; measuring errors are returned as facts, never raised.
+**Reads:** the process table via `ps`, system CPU times via psutil, the load average.
+**Writes:** none.
+**Called by:** src/search/search_web.py, src/scraper/chromium_scrape.py.
+**Calls out:** psutil, `ps` (subprocess).
 
 ---
 

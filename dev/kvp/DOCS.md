@@ -21,7 +21,7 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_config.py (49 LOC)
+### kvp_config.py (55 LOC)
 
 **Purpose:** Paths, verdict labels and constants shared by two or more modules of this directory.
 **Reads:** none.
@@ -41,9 +41,9 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_classify.py (193 LOC)
+### kvp_classify.py (244 LOC)
 
-**Purpose:** The verdict rules as pure functions: scrape, pipe record, engine run, collection file, duplicate files.
+**Purpose:** The verdict rules as pure functions: scrape, pipe record, engine run, collapse search pattern, collection file, duplicate files.
 **Reads:** none.
 **Writes:** none.
 **Called by:** kvp_indicators.py, dev/tests/test_kvp_classify.py.
@@ -51,9 +51,9 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_indicators.py (226 LOC)
+### kvp_indicators.py (255 LOC)
 
-**Purpose:** Applies the verdicts to the records and computes the indicators per lane and level, split by `code_version`.
+**Purpose:** Applies the verdicts to the records and computes the indicators per lane and level, split by `code_version`, plus the rows of the collapse searches.
 **Reads:** the loaded and classified records.
 **Writes:** none.
 **Called by:** kvp_report.py.
@@ -61,9 +61,9 @@ Logs, scrape sidecars, rag-cli search log and the `websearch-pages` collection a
 
 ---
 
-### kvp_render.py (212 LOC)
+### kvp_render.py (246 LOC)
 
-**Purpose:** Renders the indicator data and the lists of flagged records as markdown tables.
+**Purpose:** Renders the indicator data, the collapse searches with their host facts and the lists of flagged records as markdown tables.
 **Reads:** none.
 **Writes:** none.
 **Called by:** kvp_report.py.

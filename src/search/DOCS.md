@@ -19,13 +19,13 @@ Query in, engines selected, the shared Chrome prewarmed outside any watchdog, th
 
 ## Modules
 
-### search_web.py (351 LOC)
+### search_web.py (356 LOC)
 
-**Purpose:** Search orchestrator: engine selection, concurrent fan-out with status classification, pool building, breakdown formatting, cache write and query logging.
+**Purpose:** Search orchestrator: engine selection, concurrent fan-out with status classification, pool building, breakdown formatting, cache write and query logging, including the host saturation facts of the search window.
 **Reads:** the query and parameters; engine registry data.
 **Writes:** the disk cache via cache.py; query log via query_logger.py.
 **Called by:** cli.py; dev scripts.
-**Calls out:** httpx, pydoll and websocket exceptions, mcp types.
+**Calls out:** httpx, pydoll and websocket exceptions, mcp types; host_load.py for the host facts.
 
 ### degraded_notice.py (61 LOC)
 
