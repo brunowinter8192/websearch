@@ -18,6 +18,7 @@ from dev.kvp.kvp_config import (
 SCRAPE_COLUMNS = (SCRAPE_USABLE, "no_content", *SILENT_SCRAPE_LABELS)
 ENGINE_COLUMNS = (ENGINE_OK, ENGINE_BLOCKED, ENGINE_EMPTY_NO_SIGNAL, ENGINE_TRANSPORT_ERROR, ENGINE_RATE_SKIP)
 QUERY_PREVIEW_CHARS = 60
+INFO_NEED_PREVIEW_CHARS = 80
 
 
 # FUNCTIONS
@@ -166,10 +167,56 @@ def _host_cell(host: dict | None) -> str:
 def _render_deep_dive(deep_dive: dict) -> str:
     return "\n\n".join([
         "## Deep dive lane",
+        _render_dives(deep_dive["dives"]),
         _render_runs(deep_dive["runs"]),
         _render_collection(deep_dive["collection"]),
         _render_usefulness(deep_dive["usefulness"]),
     ])
+
+
+def _render_dives(dives: list[dict]) -> str:
+    rows = [
+        [d["first_ts"][:19], d["host"], ", ".join(d["versions"]), d["state"], _dive_discovered(d), _dive_kept(d),
+         ", ".join(str(n) for n in d["rounds"]) or "-", d["files_written"], d["pipe_failed"], _none_as_dash(d["failed_aside"]),
+         _format_dict(d["cuts"]) or "-", _none_as_dash(d["work_files"]), _none_as_dash(d["copied"]), _dive_indexed(d),
+         _none_as_dash(d["index_errors"]), _none_as_dash(d["collection"]), _info_need_preview(d["info_need"])]
+        for d in sorted(dives, key=lambda d: d["first_ts"])
+    ]
+    headers = ["start", "host", "code_version", "record state", "discovered (by source)", "kept (share)", "rounds (URLs each)",
+               "files written", "failed in pipe log", "failed moved aside", "cleanup cuts (passages per class)", "files after cleanup",
+               "copied to collection", "indexed files / chunks", "index errors", "collection", "info need"]
+    note = ("### Run record per deep dive\n\nFrom `deep_dive_log.jsonl`. A dive is a discovery record, the scrape rounds on the same host after it and "
+            "the closing record on that host; the closing record is written by the worker at the end (`deep_dive_record`). "
+            "Kept is the line count of the culled URL list, cleanup cuts are the passages in the `cut_*` files at closing time.")
+    return note + "\n\n" + _table(headers, rows)
+
+
+def _dive_discovered(dive: dict) -> str:
+    if dive["discovered"] is None:
+        return "-"
+    failed = f"; failed feeders: {', '.join(dive['failed_feeders'])}" if dive["failed_feeders"] else ""
+    return f"{dive['discovered']} ({_format_dict(dive['by_source'])}){failed}"
+
+
+def _dive_kept(dive: dict) -> str:
+    if dive["kept"] is None:
+        return "-"
+    return _ratio(dive["kept"], dive["discovered"]) if dive["discovered"] else str(dive["kept"])
+
+
+def _dive_indexed(dive: dict) -> str:
+    done = dive["indexed"]
+    return f"{done['files']} / {done['chunks']}" if done else "-"
+
+
+def _none_as_dash(value) -> str:
+    return "-" if value is None else str(value)
+
+
+def _info_need_preview(text: str | None) -> str:
+    if not text:
+        return "-"
+    return text if len(text) <= INFO_NEED_PREVIEW_CHARS else text[:INFO_NEED_PREVIEW_CHARS] + "..."
 
 
 def _render_runs(runs: list[dict]) -> str:
@@ -179,7 +226,7 @@ def _render_runs(runs: list[dict]) -> str:
         for r in sorted(runs, key=lambda r: r["first_ts"])
     ]
     headers = ["run", "date", "domains", "code_version", "URLs scraped", "failed", "zero-byte", "http statuses", "wall ms median", "present in collection", "survival"]
-    note = "Discovered, kept, rounds, cleanup cuts and indexed counts are not recorded anywhere (open milestone M3). Survival reads the collection as it is at report time, not as of the window."
+    note = "Per-URL view from the pipe log; pipe runs from before the run record existed appear only here. Survival reads the collection as it is at report time, not as of the window."
     return "### Technical and relevance per pipe run\n\n" + note + "\n\n" + _table(headers, rows)
 
 
@@ -238,7 +285,7 @@ def _render_not_covered() -> str:
     return (
         "## Not covered\n\n"
         "- Ad hoc usefulness (from transcripts) is out of scope.\n"
-        "- Deep dive discovered, kept and indexed counts need the run record of M3.\n"
+        "- Deep dives from before the run record existed (`deep_dive_log.jsonl`) have no discovered, kept or indexed counts.\n"
         "- The classification of EMPTY without a signal is open: the report cannot tell a true empty from an unexplained one."
     )
 

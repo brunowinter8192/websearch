@@ -7,6 +7,7 @@ import pytest
 
 import dev.kvp.kvp_report as kvp_report
 from dev.kvp.kvp_config import SILENT_SCRAPE_LABELS
+from dev.kvp.kvp_dives import group_dives
 from dev.kvp.kvp_indicators import relevance_indicators
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "kvp"
@@ -125,3 +126,40 @@ def test_report_splits_the_focus_engine_by_code_version_and_names_page_load_time
     assert rows["abc1234567"][0] == "2"
     assert rows["abc1234567"][2].startswith("2/2")
     assert rows["unversioned"][2].startswith("2/5")
+
+
+def test_report_shows_the_run_record_of_each_deep_dive_with_its_state(tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    real = (FIXTURE_DIR / "deep_dive_log_real.jsonl").read_text(encoding="utf-8")
+    constructed = (FIXTURE_DIR / "deep_dive_log_constructed.jsonl").read_text(encoding="utf-8")
+    (log_dir / "deep_dive_log.jsonl").write_text(real + constructed, encoding="utf-8")
+
+    report = _run_report(tmp_path, monkeypatch, log_dir)
+
+    dives = report.split("### Run record per deep dive")[1].split("### Technical and relevance per pipe run")[0]
+    rows = [line for line in dives.splitlines() if line.startswith("| 2026-")]
+    assert len(rows) == 3
+    complete = next(r for r in rows if "| complete |" in r)
+    assert "205/229 (89.5 %)" in complete
+    assert "book_footer=300, book_toc=75, images=730, site_footer=130, site_header=130" in complete
+    assert "205 / 3222" in complete and "| websearch-pages |" in complete
+    unclosed = next(r for r in rows if "docs.example.org" in r)
+    assert "| no closing record |" in unclosed and "40 (seed=1, sitemap=39); failed feeders: navtree" in unclosed
+    assert "| 30 | 28 |" in unclosed
+    orphan = next(r for r in rows if "| no discovery record |" in r)
+    assert "sre.google" in orphan and "| 4 | 4 |" in orphan
+    assert "deep dive records: 6" in report
+
+
+def test_group_dives_opens_a_new_dive_for_a_second_discovery_on_the_same_host():
+    discovery = {"record_type": "discovery", "host": "a.test", "ok": True, "total": 2, "by_source": {}, "failed_feeders": {}}
+    records = [
+        {**discovery, "ts": "2026-10-15T09:00:00Z"},
+        {"record_type": "scrape_round", "host": "a.test", "ts": "2026-10-15T09:01:00Z", "run_id": "r1", "urls_requested": 2, "files_written": 2},
+        {**discovery, "ts": "2026-10-15T10:00:00Z"},
+    ]
+
+    dives = group_dives(records)
+
+    assert [len(d["rounds"]) for d in dives] == [1, 0]
