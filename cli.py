@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import atexit
+import json
 import logging
 import sys
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from src.config import LOG_DIR
+from src.crawler.deep_dive_closing import deep_dive_closing_workflow
+from src.crawler.deep_dive_records import log_discovery_record
 from src.crawler.discovery import discover_urls_workflow
 from src.log_janitor import get_retention_days
 from src.pdf.assemble import assemble_workflow
@@ -49,6 +52,8 @@ def main():
         _dispatch_scrape_url_chromium(args)
     elif args.cmd == "discover_urls":
         _dispatch_discover_urls(args)
+    elif args.cmd == "deep_dive_record":
+        _dispatch_deep_dive_record(args)
     elif args.cmd == "index_scrapes":
         _dispatch_index_scrapes(args)
     elif args.cmd == "pdf":
@@ -77,7 +82,7 @@ def register_exit_hook() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = NoHelpParser(
         prog="cli.py",
-        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls, index_scrapes, pdf."
+        description="websearch CLI — search_web, search_engine_drilldown, scrape_url_chromium, discover_urls, deep_dive_record, index_scrapes, pdf."
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -107,6 +112,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("seed_url", help="Seed URL to start discovery from")
     p.add_argument("--url-file", required=True,
                    help="Path to write the discovered URL list (one per line, for pipe_scraper --url-file)")
+
+    p = sub.add_parser(
+        "deep_dive_record",
+        help="Write the closing record of a deep dive: counts read from the /tmp working files and the collection."
+    )
+    p.add_argument("--domain", required=True, help="Domain exactly as used in the /tmp file names of the deep dive")
+    p.add_argument("--seed-url", required=True, help="Seed URL of the deep dive")
+    p.add_argument("--collection", required=True, help="Target RAG collection")
+    p.add_argument("--info-need", required=True, help="The information need of the deep dive")
+    p.add_argument("--index-log", default=None, help="Index log path, default /tmp/<collection>_index.log")
 
     p = sub.add_parser(
         "index_scrapes",
@@ -201,6 +216,7 @@ def _dispatch_scrape_url_chromium(args) -> None:
 
 def _dispatch_discover_urls(args) -> None:
     result = asyncio.run(discover_urls_workflow(args.seed_url))
+    log_discovery_record(args.seed_url, args.url_file, result)
     _write_discovery_output(result, args.url_file)
 
 
@@ -242,6 +258,13 @@ def _run_pdf_command(args):
     if args.pdf_cmd == "assemble":
         return assemble_workflow(args.batch_dir, args.out_dir)
     return stats_workflow(args.since)
+
+
+def _dispatch_deep_dive_record(args) -> None:
+    record = deep_dive_closing_workflow(
+        args.domain, args.seed_url, args.collection, args.info_need, args.index_log,
+    )
+    print(json.dumps(record, ensure_ascii=False, indent=2))
 
 
 def _dispatch_index_scrapes(args) -> None:
