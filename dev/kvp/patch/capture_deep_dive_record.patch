@@ -1,25 +1,25 @@
-diff --git skills/websearch-capture-and-index/SKILL.md skills/websearch-capture-and-index/SKILL.md
-index 63c6726..234680f 100644
---- skills/websearch-capture-and-index/SKILL.md
-+++ skills/websearch-capture-and-index/SKILL.md
-@@ -162,7 +162,15 @@ description:
+--- /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch/skills/websearch-capture-and-index/SKILL.md	2026-10-14 20:21:23
++++ /tmp/pv/b/skills/websearch-capture-and-index/SKILL.md	2026-10-14 23:36:47
+@@ -162,9 +162,17 @@
  
  ## Step 6 — Report
  
 -1. Schreibe ausschließlich diese fünf Zeilen in den Chat, nichts davor und nichts danach.
 +1. Schreibe den Laufbericht in das Run-Log.
 +   - Der Befehl liest die Zahlen selbst aus `/tmp/` und der Collection, du rechnest nichts nach.
-+
+ 
 +   ```bash
 +   cd /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch
 +   ./venv/bin/python cli.py deep_dive_record --domain <domain> --seed-url "<seed_url>" --collection <collection> --info-need "<INFO_NEED>"
-+   ```
+    ```
 +
 +2. Schreibe ausschließlich diese fünf Zeilen in den Chat, nichts davor und nichts danach.
- 
-    ```
++
++   ```
     Deep Dive fertig: <domain>
-@@ -172,4 +180,4 @@ description:
+    Collection: <collection>
+    Indexiert: <Zahl> Seiten
+@@ -172,4 +180,4 @@
     Fehler: <jeder Fehler aus allen Steps oder "keine">
     ```
  

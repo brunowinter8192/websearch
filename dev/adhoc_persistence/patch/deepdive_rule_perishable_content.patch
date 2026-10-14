@@ -1,5 +1,5 @@
---- a/skills/websearch-web-research/SKILL.md
-+++ b/skills/websearch-web-research/SKILL.md
+--- /Users/brunowinter2000/Documents/ai/Meta/ClaudeCode/cli/websearch/skills/websearch-web-research/SKILL.md	2026-10-14 20:21:23
++++ /tmp/pv/b/skills/websearch-web-research/SKILL.md	2026-10-14 23:36:47
 @@ -87,6 +87,10 @@
  - Diese Typen kommen meist nicht infrage:
     - Blog, News, Forum, Produktseite, Changelog, Release Feed.
