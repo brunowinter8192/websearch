@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
+from src.code_version import code_version
 from src.config import SCRAPE_LOG_PATH
 from src.log_janitor import maybe_prune_jsonl, maybe_prune_sidecars
 
@@ -61,5 +62,5 @@ def log_scrape(record: dict) -> None:
     log_path = Path(env) if env else SCRAPE_LOG_PATH
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        f.write(json.dumps({**record, "code_version": code_version()}, ensure_ascii=False) + "\n")
     maybe_prune_jsonl(log_path)
