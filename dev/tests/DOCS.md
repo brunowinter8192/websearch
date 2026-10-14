@@ -155,6 +155,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts, google table per code version) and the scrape-to-drilldown attribution with rank.
 
+### test_deepdive_measurement.py (137 LOC)
+
+**Purpose:** The pure functions of `dev/adhoc_persistence/`: URL extraction from chained and quoted scrape commands, the invocation pattern against grep text, the scrape-to-call join window, era boundaries, skill-text era, grouping per session and host, offered-page window and the derivation of the deep-dive judgment.
+
 ### test_index_scrapes.py (162 LOC)
 
 **Purpose:** `src/scraper/index_scrapes.py`: sidecar resolution, collection file convention, missing-directory tripwire, rag-cli index paths.
