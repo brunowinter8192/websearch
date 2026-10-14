@@ -1,0 +1,13 @@
+--- a/skills/websearch-web-research/SKILL.md
++++ b/skills/websearch-web-research/SKILL.md
+@@ -87,6 +87,10 @@
+ - Diese Typen kommen meist nicht infrage:
+    - Blog, News, Forum, Produktseite, Changelog, Release Feed.
+ 
++**Starte keinen Deep Dive, wenn der Inhalt, den du brauchst, vergänglich ist.**
++- Preis, Bestand, Frist, Status und Suchergebnisseiten veralten, bevor ein Index sie wiederfindet.
++- Das gilt auch für Domains, die sonst infrage kommen.
++
+ ### Step 1 — Festlegen der Seed-URL
+ 
+ 1. Vorarbeit: Gehe über `search_web` und danach `search_engine_drilldown` zur gewünschten Seed-URL.
