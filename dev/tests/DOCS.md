@@ -11,9 +11,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ## Modules
 
-### conftest.py (63 LOC)
+### conftest.py (69 LOC)
 
-**Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name; also pins the process table the host facts read.
+**Purpose:** Suite-wide autouse tripwire replacing every real browser-launch primitive with a failing stand-in, so an unmocked launch fails the test by name; also pins the process table the host facts read and points the deep dive run log at a throwaway file.
 
 ### run_strands.sh (39 LOC)
 
@@ -151,9 +151,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Canary evaluation against real fixture records (expected verdict, content marker, missing record), the order of `run_cases`, the baseline comparison with volatile cases separate, and the sanity of the case list.
 
-### test_kvp_report.py (127 LOC)
+### test_kvp_report.py (165 LOC)
 
-**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts, google table per code version) and the scrape-to-drilldown attribution with rank.
+**Purpose:** The KVP report end to end on fixture logs (silent-failure list, counter-check, `--since`/`--until` window, collapse section with and without host facts, google table per code version, the run record per deep dive in its three states) and the scrape-to-drilldown attribution with rank.
 
 ### test_index_scrapes.py (162 LOC)
 
@@ -226,6 +226,14 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 ### test_seed_feeders.py (60 LOC)
 
 **Purpose:** Fixture-backed checks of the three seed feeders against the local fixture site.
+
+### test_deep_dive_records.py (93 LOC)
+
+**Purpose:** The deep dive run log writer, the discovery record and the scrape round record, including that a scrape round shares its `run_id` with the pipe records.
+
+### test_deep_dive_closing.py (132 LOC)
+
+**Purpose:** The closing record: parsers against real `cut_*` and rag-cli index log excerpts of the sre.google deep dive in `fixtures/deep_dive/`, missing sources as null, and one workflow run over a constructed `/tmp` tree.
 
 ### test_discovery.py (118 LOC)
 

@@ -1,0 +1,32 @@
+{
+  "generated": "2026-10-14T21:16:17Z",
+  "url": "https://dbis.ur.de/UBFM/results?q=JSTOR",
+  "marker": "JSTOR",
+  "label": "request3_results_route",
+  "status": 200,
+  "final_url": "https://dbis.ur.de/UBFM/results?q=JSTOR",
+  "redirect_chain": [],
+  "content_type": "text/html; charset=UTF-8",
+  "body_bytes": 2470,
+  "marker_in_body": false,
+  "marker_contexts": [],
+  "title": "Captcha",
+  "h1": [
+    "Sicherheitsprüfung"
+  ],
+  "div_open_close": [
+    1,
+    1
+  ],
+  "script_srcs": [
+    "/dist/altcha.0caabd0dd42c54be9b33.js"
+  ],
+  "inline_script_bytes": [],
+  "forms": [
+    "<form method=\"POST\">"
+  ],
+  "inputs": [
+    "<input class=\"absendebutton\"\n             type=\"submit\"\n             value=\"Ich&#x20;bin&#x20;ein&#x20;Mensch\" />"
+  ],
+  "body_dump": "/tmp/kvp55_probe_dbis_http_request3_results_route_20261014T211617.html"
+}

@@ -1,0 +1,38 @@
+{
+  "generated": "2026-10-14T21:17:44Z",
+  "html": "dev/kvp/html/dbis_search_UBFM_search_q_JSTOR.html.gz",
+  "url": "https://dbis.ur.de/UBFM/search?q=JSTOR",
+  "html_chars": 383462,
+  "div_tags_opened_closed": [
+    607,
+    227
+  ],
+  "runs": [
+    {
+      "huge_tree": false,
+      "parsed_text_chars": 95219,
+      "max_depth": 256,
+      "cleaned_html_chars": 125905,
+      "raw_markdown_chars": 15755,
+      "fit_markdown_chars": 1,
+      "in_raw_markdown": {
+        "Zürich": false,
+        "Erweiterte Suche": false,
+        "Suche über alles": false
+      }
+    },
+    {
+      "huge_tree": true,
+      "parsed_text_chars": 216829,
+      "max_depth": 399,
+      "cleaned_html_chars": 297758,
+      "raw_markdown_chars": 52326,
+      "fit_markdown_chars": 1,
+      "in_raw_markdown": {
+        "Zürich": true,
+        "Erweiterte Suche": true,
+        "Suche über alles": false
+      }
+    }
+  ]
+}

@@ -35,6 +35,7 @@ INTERSTITIAL_BODY_MAX_BYTES = 1000
 FILTERED_TO_NOTHING_MAX_BYTES = 1
 ANTI_BOT_MARKERS = (
     "sicherheitsüberprüfung",
+    "sicherheitsprüfung",
     "access denied",
     "verification required",
     "klicke auf die schaltfläche",

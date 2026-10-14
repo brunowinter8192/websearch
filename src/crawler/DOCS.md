@@ -2,7 +2,7 @@
 
 ## Role
 
-URL discovery and the batch scrape step of the capture-and-index workflow. Discovery merges robots, sitemap and navigation-tree feeders over plain HTTP; the batch scraper captures a URL list as raw markdown. Single-URL scraping lives in src/scraper. Only discovery backs a CLI subcommand.
+URL discovery and the batch scrape step of the capture-and-index workflow. Discovery merges robots, sitemap and navigation-tree feeders over plain HTTP; the batch scraper captures a URL list as raw markdown. Single-URL scraping lives in src/scraper. Discovery and the deep dive closing record back CLI subcommands.
 
 ## Public Interface
 
@@ -10,20 +10,21 @@ URL discovery and the batch scrape step of the capture-and-index workflow. Disco
 
 - pipe_scraper.py: batch scrape entry.
 - discovery.py: discovery entry used by cli.py.
+- deep_dive_closing.py: closing-record entry used by cli.py.
 - robots_feeder.py, sitemap_feeder.py, navtree_feeder.py: the three feeder entries.
 - seed_feeders_scope.py: shared feeder result type, URL normalization and host validation.
 
 ## Flow
 
-Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scoped and deduped, merged with the seed into a source-tagged URL set; failed feeders are reported, never treated as empty. Batch scrape: URL list in, per-domain paced raw crawl by one of two engines, out come markdown files, a report and an onward-links file in /tmp and a per-URL JSONL log. Batch scrape uses both engines from `src/scraper/`; the run log is pruned through `src/log_janitor.py`. The `pipe_scraper_*` modules split acquisition, pacing, records and constants; the `seed_feeders_*` modules split the three feeders, scope and constants.
+Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scoped and deduped, merged with the seed into a source-tagged URL set; failed feeders are reported, never treated as empty. Batch scrape: URL list in, per-domain paced raw crawl by one of two engines, out come markdown files, a report and an onward-links file in /tmp and a per-URL JSONL log. Every discovery run, every batch scrape run and the worker's closing call append one record to the deep dive run log. Batch scrape uses both engines from `src/scraper/`; the run log is pruned through `src/log_janitor.py`. The `pipe_scraper_*` modules split acquisition, pacing, records and constants; the `seed_feeders_*` modules split the three feeders, scope and constants.
 
 ## Modules
 
-### pipe_scraper.py (128 LOC)
+### pipe_scraper.py (134 LOC)
 
 **Purpose:** Entry point of the batch scrape step; dispatches a URL list per run to the chromium or camoufox engine and prints the summary.
 **Reads:** URL list from a file or the caller.
-**Writes:** console summary; report files via pipe_scraper_report.py.
+**Writes:** console summary; report files via pipe_scraper_report.py; one scrape round record per run via deep_dive_records.py.
 **Called by:** the capture-and-index skill; importable.
 **Calls out:** crawl4ai.
 
@@ -81,6 +82,30 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 **Reads:** the pipe-scrape log-path environment variable.
 **Writes:** the pipe scrape JSONL log under src/logs (gitignored), every record carrying `code_version`.
 **Called by:** pipe_scraper_records.py.
+**Calls out:** none.
+
+### deep_dive_logger.py (20 LOC)
+
+**Purpose:** Run-log writer for the deep dive lane, separate from the per-URL pipe log.
+**Reads:** the deep-dive log-path environment variable.
+**Writes:** the deep dive JSONL log under src/logs (gitignored), every record carrying `code_version`.
+**Called by:** deep_dive_records.py, deep_dive_closing.py.
+**Calls out:** none.
+
+### deep_dive_records.py (44 LOC)
+
+**Purpose:** Assembles the discovery record and the scrape round record and hands them to the run-log writer.
+**Reads:** discovery result, per-run scrape results.
+**Writes:** via deep_dive_logger.py.
+**Called by:** cli.py, pipe_scraper.py, deep_dive_closing.py.
+**Calls out:** none.
+
+### deep_dive_closing.py (120 LOC)
+
+**Purpose:** Closing record of a deep dive: counts read from the worker's `/tmp` working files, the cut files, the collection directory and the index log.
+**Reads:** `/tmp/<domain>*` files, `/tmp/<collection>_index.log` or the given log, the rag-cli collection directory.
+**Writes:** via deep_dive_logger.py; the record on stdout via cli.py.
+**Called by:** cli.py (`deep_dive_record`).
 **Calls out:** none.
 
 ### robots_feeder.py (23 LOC)
@@ -163,6 +188,6 @@ Discovery: seed URL in, three feeders run concurrently over HTTP, each host-scop
 
 ## State
 
-None in memory. Persistence is the pipe scrape JSONL log and the per-run files in /tmp and the chosen output directory.
+None in memory. Persistence is the pipe scrape JSONL log, the deep dive run log (`deep_dive_log.jsonl`: record types `discovery`, `scrape_round`, `closing`) and the per-run files in /tmp and the chosen output directory.
 
-Details, decisions and observed evidence: process-docs/url_discovery, process-docs/pipe_scraper_hardening, process-docs/scrape_pipeline and process-docs/refactor_sweep.
+Details, decisions and observed evidence: process-docs/kvp (run record), process-docs/url_discovery, process-docs/pipe_scraper_hardening, process-docs/scrape_pipeline and process-docs/refactor_sweep.

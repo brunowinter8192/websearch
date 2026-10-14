@@ -1,0 +1,59 @@
+{
+  "generated": "2026-10-14T21:16:08Z",
+  "url": "https://dbis.ur.de/UBFM/search?q=JSTOR",
+  "marker": "JSTOR",
+  "label": "request2_search_route",
+  "status": 200,
+  "final_url": "https://dbis.ur.de/UBFM/search?q=JSTOR",
+  "redirect_chain": [],
+  "content_type": "text/html; charset=UTF-8",
+  "body_bytes": 384903,
+  "marker_in_body": true,
+  "marker_contexts": [
+    "ss=\"input\" type=\"text\" placeholder=\"Suche über alles\" value=\"JSTOR\" aria-label=\"Suchfeld für die Suche nach Datenbanken\"> </p> </div>",
+    "<option value=\"Wixted, John T.\" > Wixted, John T. </option> <option value=\"JSTOR, ITHAKA (New York, NY)\" > JSTOR, ITHAKA (New York, NY) </option> <option value=\"Univerzitná kni",
+    "> Wixted, John T. </option> <option value=\"JSTOR, ITHAKA (New York, NY)\" > JSTOR, ITHAKA (New York, NY) </option> <option value=\"Univerzitná knižnica v Bratislave\" > Univerzitn"
+  ],
+  "title": "DBIS - Suche",
+  "h1": [
+    "Erweiterte Suche"
+  ],
+  "div_open_close": [
+    607,
+    227
+  ],
+  "script_srcs": [
+    "/dist/users_search.251b401f8c88dc40c326.js"
+  ],
+  "inline_script_bytes": [
+    205
+  ],
+  "forms": [
+    "<form action=\"/user/language\"\n                  id=\"switch-language\" class=\"language\"\n                  method=\"POST\">",
+    "<form method=\"POST\" action=\"/user/organization\">",
+    "<form class=\"field advanced-search-form search-loading-element\"\n                  id=\"query-form\"\n                  action=\"/UBFM/results\"\n                  method=\"get\">"
+  ],
+  "inputs": [
+    "<input type=\"text\" class=\"searchfield input dropdown-item has-text-grey-dark\" title=\"Suchfeld für die Suche nach Datenbanken\" aria-label=\"Suchfeld für die Suche nach Datenbanken\">",
+    "<input type=\"hidden\"\n                                   name=\"previousUbrId\"\n                                   value=\"UBFM\"/>",
+    "<input name=\"q\"\n                                 class=\"input\"\n                                 type=\"text\"\n                                 placeholder=\"Suche über alles\"\n                                 value=\"JSTOR\"\n                                 aria-label=\"Suchfeld für die Suche nach Datenbanken\">",
+    "<input name=\"search[]\"\n                               class=\"input\"\n                               type=\"text\"\n                               placeholder=\"\"\n                               aria-label=\"Suchfeld für die Suche nach Datenbanken\"\n                        value=\"\">",
+    "<input name=\"search[]\"\n                               class=\"input\"\n                               type=\"text\"\n                               placeholder=\"\"\n                               aria-label=\"Suchfeld für die Suche nach Datenbanken\"\n                               value=\"\">",
+    "<input type=\"checkbox\"\n                   class=\"mr-2\"\n                   name=\"availability-filter-free\"\n                    >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                   name=\"availability-filter-local\"\n            >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                   name=\"availability-filter-none\"\n                >",
+    "<input class=\"input jsonly search-field\"\n           placeholder=\"Suchen\" aria-label=\"Suchfeld für die Suche nach Datenbanken\"/>",
+    "<input name=\"keyword-search\" \n       class=\"search input jsonly dropdown-list-search\"\n       placeholder=\"Suchen\"\n       autocomplete=\"off\"\n         \n            aria-label=\"Suchfeld für die Suche nach Schlagwörtern\"\n               />",
+    "<input class=\"input jsonly search-field\"\n           placeholder=\"Suchen\" aria-label=\"Suchfeld für die Suche nach Datenbank-Typen\"/>",
+    "<input name=\"country-search\" \n       class=\"search input jsonly dropdown-list-search\"\n       placeholder=\"Suchen\"\n       autocomplete=\"off\"\n              />",
+    "<input class=\"input jsonly search-field\"\n           placeholder=\"Suchen\" aria-label=\"Suchfeld für die Suche nach Ländern\"/>",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"1\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"2\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"3\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"4\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"5\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-types[]\"\n                    value=\"6\" >",
+    "<input type=\"checkbox\"\n                    class=\"mr-2\"\n                    name=\"filter-license-forms[]\"\n                    value=\"1\" >"
+  ],
+  "body_dump": "/tmp/kvp55_probe_dbis_http_request2_search_route_20261014T211608.html"
+}

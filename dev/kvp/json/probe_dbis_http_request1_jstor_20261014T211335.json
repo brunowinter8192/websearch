@@ -1,0 +1,29 @@
+{
+  "generated": "2026-10-14T21:13:35Z",
+  "url": "https://dbis.ur.de/UBFM/resources?q=JSTOR",
+  "marker": "JSTOR",
+  "label": "request1_jstor",
+  "status": 200,
+  "final_url": "https://dbis.ur.de/UBFM/resources?q=JSTOR",
+  "redirect_chain": [],
+  "content_type": "text/html; charset=UTF-8",
+  "body_bytes": 215225,
+  "marker_in_body": false,
+  "marker_contexts": [],
+  "title": "DBIS - Fachgebiete",
+  "script_srcs": [
+    "/dist/users_base.bc366eedd3a9911ea3c4.js"
+  ],
+  "inline_script_bytes": [
+    204
+  ],
+  "forms": [
+    "<form action=\"/user/language\"\n                  id=\"switch-language\" class=\"language\"\n                  method=\"POST\">",
+    "<form method=\"POST\" action=\"/user/organization\">"
+  ],
+  "inputs": [
+    "<input type=\"text\" class=\"searchfield input dropdown-item has-text-grey-dark\" title=\"Suchfeld für die Suche nach Datenbanken\" aria-label=\"Suchfeld für die Suche nach Datenbanken\">",
+    "<input type=\"hidden\"\n                                   name=\"previousUbrId\"\n                                   value=\"ALL\"/>"
+  ],
+  "body_dump": "/tmp/kvp55_probe_dbis_http_request1_jstor_20261014T211335.html"
+}
