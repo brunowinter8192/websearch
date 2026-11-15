@@ -40,6 +40,11 @@ description:
 - Ein zweiter Aufruf, nachdem Worker schon gelaufen sind, vernichtet also deren Arbeit.
 - Hat das PDF keine Textebene, bricht `extract` mit Fehler ab. Notiere das für den Report und mach mit dem nächsten PDF weiter.
 
+**`extract` entscheidet je PDF, ob es eine Textebene hat, und schreibt das als `mode` ins Manifest.**
+- `mode` ist `text`, wenn das PDF eine Textebene hat. Der Worker bekommt dann zu den Seitenbildern einen Ankertext.
+- `mode` ist `scan`, wenn das PDF keine Textebene hat. Der Worker liest dann nur die Seitenbilder und überträgt Zeichen und Struktur vom Bild, einen Ankertext gibt es nicht.
+- Ein PDF hat immer genau einen `mode`, auch wenn nur einzelne Seiten gescannt sind.
+
 1. Rufe `extract` auf. Es teilt das PDF in Stapel zu je 50 Seiten und schreibt für jeden Stapel einen fertigen Prompt für einen Haiku-Worker nach BATCH_DIR.
    - Die Ausgabe landet in einer Datei, lies sie danach vollständig.
 
@@ -48,9 +53,13 @@ description:
    ```
 
 2. Lies `BATCH_DIR/manifest.json`. Dort stehen alle Stapel mit ihrem Seitenbereich, z. B. 1-50, 51-100, 101-150.
+2. Lies `BATCH_DIR/manifest.json`. Dort stehen der `mode` und alle Stapel mit ihrem Seitenbereich, z. B. 1-50, 51-100, 101-150.
    - Zu jedem Stapel gibt es die Datei `BATCH_DIR/prompt_<von>-<bis>.md`, das ist der Prompt für seinen Worker.
+   - Nur bei `mode` `scan` gibt es zusätzlich `BATCH_DIR/prompt_control.md`, das ist der Prompt für den Kontroll-Worker.
+       - `extract` lost dafür 10 % der Seiten aus, zufällig über alle Stapel verteilt. Die ausgelosten Seiten stehen im Manifest unter `control_pages`.
 
 ### Step 2 — Haiku-Worker, einer pro Stapel
+### Step 2 — Haiku-Worker, einer pro Stapel, bei Scans danach ein Kontroll-Worker
 
 **Es laufen nie mehr als 20 Worker gleichzeitig.**
 - `MODEL_SELECTION_FILE` vor dem Spawn sorgt dafür, dass der Worker mit Haiku statt mit Sonnet startet. Setze die Variable nur hier, bei allen anderen Workern nie.
@@ -71,12 +80,34 @@ description:
 
 3. Nur bei mehr als 20 Stapeln: Starte für jeden beendeten Worker den nächsten Stapel, der noch keinen Worker hatte.
 
+4. Nur bei `mode` `scan`: Starte den Kontroll-Worker, sobald alle Stapel ihre Datei `batch_<von>-<bis>.md` haben und ihre Worker gekillt sind.
+   - Es läuft ein einziger Kontroll-Worker für das ganze PDF.
+   - Er liest für jede ausgeloste Seite das Seitenbild und vergleicht es mit dem Text des Übertragungs-Workers.
+   - Er meldet je geprüfter Seite, ob der Text stimmt, und nennt jede Abweichung: fehlende Absätze, verlesene Zahlen, erfundenen Text, zerbrochene Tabellen.
+   - Er stuft jede Abweichung als gravierend oder nicht gravierend ein und schreibt seinen Befund nach `BATCH_DIR/control.json`.
+
+   ```bash
+   MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-control BATCH_DIR/prompt_control.md
+   ```
+
+5. Nur bei `mode` `scan`: Der Kontroll-Worker ist fertig, wenn er idle ist und `BATCH_DIR/control.json` existiert. Kille ihn dann.
+
+   ```bash
+   worker-cli kill pdf-<stem>-control
+   ```
+
 ### Step 3 — Zusammenführen und Inhaltskontrolle
 
 **`assemble` prüft jeden Stapel, bevor es etwas schreibt.**
 - Es zählt die Buchstaben und Ziffern im Text des Workers und vergleicht sie mit dem Text, der im PDF selbst steckt. Fehlt zu viel, gilt der Stapel als gescheitert.
 - Ein Stapel, zu dem es keine Datei `batch_<von>-<bis>.md` gibt, gilt ebenfalls als gescheitert.
 - Ist auch nur ein Stapel gescheitert, schreibt `assemble` keine Datei nach OUTPUT_DIR und nennt in seiner Ausgabe die gescheiterten Stapel. 
+- Ein Stapel, zu dem es keine Datei `batch_<von>-<bis>.md` gibt, gilt als gescheitert.
+- Bei `mode` `text` zählt es die Buchstaben und Ziffern im Text des Workers und vergleicht sie mit dem Text, der im PDF selbst steckt. Fehlt zu viel, gilt der Stapel als gescheitert.
+- Bei `mode` `scan` gibt es im PDF keinen Text zum Zählen. `assemble` wertet stattdessen den Befund des Kontroll-Workers in `BATCH_DIR/control.json` aus.
+    - Fehlt `control.json` oder fehlt darin eine ausgeloste Seite, gilt die Kontrolle als gescheitert.
+    - Hat auch nur eine geprüfte Seite einen gravierenden Fund, gilt die Kontrolle als gescheitert.
+- Ist auch nur ein Stapel oder die Kontrolle gescheitert, schreibt `assemble` keine Datei nach OUTPUT_DIR und nennt in seiner Ausgabe die gescheiterten Stapel und die Seiten mit Funden.
 - Vor dem Schreiben teilt `assemble` jeden zu langen Absatz in kürzere Absätze.
 
 1. Rufe `assemble` auf. Sind alle Stapel in Ordnung, schreibt es das ganze Buch als eine Datei `<OUTPUT_DIR>/<STEM>.md`.
@@ -87,11 +118,17 @@ description:
    ```
 
 2. Nennt `assemble` gescheiterte Stapel, finde für jeden Stapel selbst heraus, warum er gescheitert ist.
+2. Nur bei `mode` `scan`: Nennt `assemble` Seiten mit gravierenden Funden, wird das PDF nicht indexiert.
+   - Notiere die Seiten und die Funde für den Report und mach mit dem nächsten PDF weiter.
+   - Nicht gravierende Funde nennt `assemble` in seiner Ausgabe, notiere sie für den Report unter Funde der Stichprobe.
+
+3. Nur bei `mode` `text`: Nennt `assemble` gescheiterte Stapel, finde für jeden Stapel selbst heraus, warum er gescheitert ist.
    - Vergleiche dazu `BATCH_DIR/batch_<von>-<bis>.md` mit denselben Seiten im PDF.
    - Fehlt im Text des Workers wirklich Inhalt, oder stimmt etwas mit dem PDF selbst nicht?
    - Beispiel: In einem PDF können zwei Textebenen übereinanderliegen. Dann zählt `assemble` denselben Text doppelt, obwohl der Text des Workers vollständig ist.
 
 3. Entscheide danach, was zu tun ist.
+4. Nur bei `mode` `text`: Entscheide danach, was zu tun ist.
    - Fehlt beim Worker wirklich Inhalt, bessere `BATCH_DIR/batch_<von>-<bis>.md` selbst aus, anhand derselben Seiten im PDF. Starte dafür keinen neuen Worker.
        - Rufe danach erneut `assemble` auf.
        - Scheitert `assemble` auch nach deiner Ausbesserung, wird das PDF nicht indexiert.
