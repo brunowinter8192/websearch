@@ -79,7 +79,7 @@ def assemble_logged(manifest: dict, batch_dir: Path, out_dir: Path) -> Report:
 
 
 def assemble_batches(manifest: dict, batch_dir: Path, out_dir: Path) -> Report:
-    scan = manifest.get("mode") == MODE_SCAN
+    scan = manifest["mode"] == MODE_SCAN
     results = [check_batch(Path(manifest["pdf"]), batch_dir, batch, scan) for batch in ordered_batches(manifest)]
     failed = [result for result in results if result.status in FAILED_STATUSES]
     control = check_control(manifest, batch_dir) if scan else None
