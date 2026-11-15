@@ -2,7 +2,7 @@
 
 ## Role
 
-PDF to markdown tooling for the websearch-pdf skill: splits a PDF into fixed-size batches with anchor text and ready worker prompts, joins the worker output after a content check, and answers conversion statistics from an append-only log. No model runs here; the workers are spawned by the skill. Touch it when the batch protocol, the check or the log changes.
+PDF to markdown tooling for the websearch-pdf skill: decides per PDF between text mode and scan mode, splits it into fixed-size batches with ready worker prompts, joins the worker output after a content check, and answers conversion statistics from an append-only log. No model runs here; the workers are spawned by the skill. Touch it when the batch protocol, a check or the log changes.
 
 ## Public Interface
 
@@ -10,24 +10,24 @@ PDF to markdown tooling for the websearch-pdf skill: splits a PDF into fixed-siz
 
 ## Flow
 
-extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and worker prompt plus manifest out, start record logged. Skill spawns the workers. assemble: manifest and worker batch files in, per-batch comparison against the PDF text layer (pages with an outlier text layer are left out of the reference and named), one markdown file out only if every batch passes, with over-long paragraphs split after the check, end record logged. stats: log in, summary text out.
+extract: PDF in, mode decision from the text layer (`text` or `scan`, written to the manifest), start record logged. Text mode: one liteparse parse, per-batch anchor file and worker prompt. Scan mode: per-batch image-only worker prompt, a seeded draw of control pages (`control_pages` in the manifest) and one `prompt_control.md` for a single control worker. Skill spawns the workers. assemble: manifest and worker batch files in; text mode compares each batch against the PDF text layer (outlier pages left out and named); scan mode reads `control.json` of the control worker and fails on a missing file, a missing drawn page or a grave finding. One markdown file out only if everything passes, with over-long paragraphs split after the check, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (268 LOC)
+### extract.py (332 LOC)
 
-**Purpose:** Orchestrates the extract command: text-layer gate, anchors, worker prompts and manifest with the fixed worker count.
+**Purpose:** Orchestrates the extract command: mode decision, anchors and worker prompts (text) or scan prompts, control draw and control prompt (scan), manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
-**Writes:** anchors, prompts and manifest in the batch directory (removes its own stale files there); start record in the conversion log.
+**Writes:** anchors, prompts, `prompt_control.md` and manifest in the batch directory (removes its own stale files there, including `control.json`); start record in the conversion log.
 **Called by:** cli.py.
 **Calls out:** liteparse, poppler (via pdf_text.py).
 
 ---
 
-### assemble.py (283 LOC)
+### assemble.py (364 LOC)
 
-**Purpose:** Orchestrates the assemble command: content check per batch against the PDF text layer without outlier pages, all-or-nothing join, paragraph splitting for the embedder, atomic write of `<STEM>.md`.
-**Reads:** manifest and batch files in the batch directory, the PDF text layer.
+**Purpose:** Orchestrates the assemble command: per-batch content check (text layer recall in text mode, `control.json` findings in scan mode), all-or-nothing join, paragraph splitting, atomic write of `<STEM>.md`.
+**Reads:** manifest, batch files and `control.json` in the batch directory, the PDF text layer (text mode only).
 **Writes:** the markdown file in the output directory (atomic); end record in the conversion log.
 **Called by:** cli.py.
 **Calls out:** none.
@@ -78,4 +78,4 @@ extract: PDF in, text-layer gate, one liteparse parse, per-batch anchor file and
 
 None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory written by extract and completed by the workers.
 
-Prompt templates live in `prompts/`. Details, decisions and observed evidence: process-docs/pdf_workflow.
+Prompt templates live in `prompts/`: text worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`), scan worker (`scan_worker_prompt.md`, `scan_steps_single.md`, `scan_steps_split.md`) and control worker (`control_prompt.md`, `control_page_steps.md`). Details, decisions and observed evidence: process-docs/pdf_workflow (text mode) and process-docs/pdf_scan (scan mode).
