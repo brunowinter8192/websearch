@@ -111,19 +111,48 @@ def test_extract_removes_stale_batch_files_but_keeps_foreign_files(tmp_path, con
     assert (batch_dir / "notes.txt").read_text() == "stale"
 
 
-def test_pdf_without_text_layer_stops_with_an_error_and_an_end_record(tmp_path, conversion_log):
-    pdf = write_pdf(tmp_path / "Scan.pdf", numbered_pages(5, blank=(1, 2, 3, 4, 5)))
+def test_pdf_with_text_layer_gets_mode_text_and_no_control_pages(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", numbered_pages(45))
+    batch_dir = tmp_path / "batches"
+    run_extract(pdf, batch_dir)
+    manifest = json.loads((batch_dir / "manifest.json").read_text())
+    assert manifest["mode"] == "text"
+    assert "control_pages" not in manifest
+    assert not (batch_dir / "prompt_control.md").exists()
+    (start,) = read_log(conversion_log)
+    assert start["mode"] == "text"
+    assert start["config"]["control_share"] == 0.1
+
+
+def test_pdf_without_text_layer_gets_mode_scan_with_control_prompt_instead_of_anchors(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Scan.pdf", numbered_pages(9, blank=tuple(range(1, 10))))
     batch_dir = tmp_path / "batches"
     report = run_extract(pdf, batch_dir)
-    assert not report.ok
-    assert "no_text_layer" in report.text
-    assert not (batch_dir / "manifest.json").exists()
-    start, end = read_log(conversion_log)
-    assert start["record_type"] == "start"
-    assert end["record_type"] == "end"
-    assert end["run_id"] == start["run_id"]
-    assert end["outcome"] == "failed"
-    assert end["failure_class"] == "no_text_layer"
+    assert report.ok
+    assert "mode=scan" in report.text
+    manifest = json.loads((batch_dir / "manifest.json").read_text())
+    assert manifest["mode"] == "scan"
+    assert [(b["from"], b["to"]) for b in manifest["batches"]] == [(1, 9)]
+    assert manifest["batches"][0]["anchor"] is None
+    assert len(manifest["control_pages"]) == 1
+    assert 1 <= manifest["control_pages"][0] <= 9
+    assert not list(batch_dir.glob("anchor_*.md"))
+    prompt = (batch_dir / "prompt_1-9.md").read_text()
+    assert "Anchor text:" not in prompt and "anchor_" not in prompt
+    assert "There is no anchor text" in prompt
+    assert 'pages parameter "1-9"' in prompt
+    assert (batch_dir / "prompt_control.md").is_file()
+    (start,) = read_log(conversion_log)
+    assert start["mode"] == "scan"
+
+
+def test_second_extract_of_a_scan_removes_the_stale_control_file(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Scan.pdf", numbered_pages(9, blank=tuple(range(1, 10))))
+    batch_dir = tmp_path / "batches"
+    batch_dir.mkdir()
+    (batch_dir / "control.json").write_text("stale")
+    run_extract(pdf, batch_dir)
+    assert not (batch_dir / "control.json").exists()
 
 
 def test_missing_pdf_raises_before_any_log_record(tmp_path, conversion_log):

@@ -7,13 +7,20 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.config import CONTENT_CHECK_THRESHOLD, MANIFEST_FILE_NAME, OUTLIER_PAGE_FACTOR, PARAGRAPH_LIMIT_BYTES
+from src.config import (
+    CONTENT_CHECK_THRESHOLD, CONTROL_FILE_NAME, MANIFEST_FILE_NAME, MODE_SCAN, OUTLIER_PAGE_FACTOR, PARAGRAPH_LIMIT_BYTES,
+)
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
 from src.pdf.pdf_text import latin_char_counts, pdftotext_pages
 from src.pdf.report import Report, WorkflowError
 
 MIN_REFERENCE_CHARS = 200
 FAILED_STATUSES = ("missing_file", "low_recall")
+CONTROL_FAILURE_CLASSES = {
+    "control_missing": "failed",
+    "control_incomplete": "failed",
+    "control_grave": "content_check_failed",
+}
 PARAGRAPH_SEPARATOR = re.compile(r"(\n{2,})")
 SENTENCE_END = re.compile(r"(?<=[.!?:;])\s+(?=\S)")
 TABLE_RULE_CHARS = set("-: ")
@@ -40,6 +47,15 @@ class BatchResult:
 
 
 @dataclass(frozen=True)
+class ControlResult:
+    status: str
+    checked: tuple[int, ...]
+    missing: tuple[int, ...]
+    grave: tuple[tuple[int, str, str], ...]
+    minor: tuple[tuple[int, str, str], ...]
+
+
+@dataclass(frozen=True)
 class SplitResult:
     text: str
     paragraphs_split: int
@@ -63,26 +79,30 @@ def assemble_logged(manifest: dict, batch_dir: Path, out_dir: Path) -> Report:
 
 
 def assemble_batches(manifest: dict, batch_dir: Path, out_dir: Path) -> Report:
-    results = [check_batch(Path(manifest["pdf"]), batch_dir, batch) for batch in ordered_batches(manifest)]
+    scan = manifest["mode"] == MODE_SCAN
+    results = [check_batch(Path(manifest["pdf"]), batch_dir, batch, scan) for batch in ordered_batches(manifest)]
     failed = [result for result in results if result.status in FAILED_STATUSES]
-    if failed:
-        return report_failure(manifest, results, failed)
-    return write_book(manifest, batch_dir, out_dir, results)
+    control = check_control(manifest, batch_dir) if scan else None
+    if failed or (control is not None and control.status != "ok"):
+        return report_failure(manifest, results, failed, control)
+    return write_book(manifest, batch_dir, out_dir, results, control)
 
 
 def ordered_batches(manifest: dict) -> list[dict]:
     return sorted(manifest["batches"], key=lambda batch: batch["from"])
 
 
-def check_batch(pdf: Path, batch_dir: Path, batch: dict) -> BatchResult:
+def check_batch(pdf: Path, batch_dir: Path, batch: dict, scan: bool = False) -> BatchResult:
     first, last = batch["from"], batch["to"]
-    reference, outliers = judged_reference(reference_pages(pdf, first, last))
+    reference, outliers = (Counter(), ()) if scan else judged_reference(reference_pages(pdf, first, last))
     ref_chars = sum(reference.values())
     output = batch_dir / batch["output"]
     if not output.is_file():
         return BatchResult(first, last, "missing_file", None, ref_chars, 0, outliers)
     produced = latin_char_counts(output.read_text(encoding="utf-8"))
     out_chars = sum(produced.values())
+    if scan:
+        return BatchResult(first, last, "ok", None, 0, out_chars)
     if ref_chars < MIN_REFERENCE_CHARS:
         return BatchResult(first, last, "unjudged", None, ref_chars, out_chars, outliers)
     recall = sum(min(count, produced.get(char, 0)) for char, count in reference.items()) / ref_chars
@@ -106,23 +126,56 @@ def judged_reference(pages: dict[int, Counter]) -> tuple[Counter, tuple[int, ...
     return reference, outliers
 
 
-def report_failure(manifest: dict, results: list[BatchResult], failed: list[BatchResult]) -> Report:
-    outcome, failure_class = classify_failure(failed)
+def check_control(manifest: dict, batch_dir: Path) -> ControlResult:
+    drawn = tuple(manifest["control_pages"])
+    path = batch_dir / CONTROL_FILE_NAME
+    if not path.is_file():
+        return ControlResult("control_missing", (), drawn, (), ())
+    pages = parse_control(path)
+    checked = tuple(sorted(pages))
+    missing = tuple(page for page in drawn if page not in pages)
+    findings = [finding for page in checked for finding in control_findings(page, pages[page])]
+    grave = tuple(finding for finding in findings if finding[2] == "grave")
+    minor = tuple(finding for finding in findings if finding[2] == "minor")
+    status = "control_incomplete" if missing else "control_grave" if grave else "ok"
+    return ControlResult(status, checked, missing, grave, minor)
+
+
+def parse_control(path: Path) -> dict[int, dict]:
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))["pages"]
+        return {int(entry["page"]): entry for entry in entries}
+    except (ValueError, KeyError, TypeError) as error:
+        raise WorkflowError("control_unreadable", f"{path} is not the expected control JSON: {error}") from error
+
+
+def control_findings(page: int, entry: dict) -> list[tuple[int, str, str]]:
+    return [
+        (page, f"{finding.get('kind', 'other')}: {finding.get('detail', '')}", "grave" if finding.get("grave") else "minor")
+        for finding in entry.get("findings", [])
+    ]
+
+
+def report_failure(manifest: dict, results: list[BatchResult], failed: list[BatchResult], control: ControlResult | None) -> Report:
+    outcome, failure_class = classify_failure(failed, control)
     append_record(build_end_record(
         manifest["run_id"], manifest["ts_start"], outcome, failure_class,
         failed_batches=[failed_batch_entry(result) for result in failed],
-        **totals(results),
+        **totals(results), **control_fields(manifest, control),
     ))
     lines = [f"assemble FAILED ({failure_class}): {len(failed)} of {len(results)} batches, nothing written"]
     lines += [describe_failure(result) for result in failed]
     lines += describe_unjudged_pages(results)
+    lines += describe_control(control)
     return Report("\n".join(lines), False)
 
 
-def classify_failure(failed: list[BatchResult]) -> tuple[str, str]:
+def classify_failure(failed: list[BatchResult], control: ControlResult | None) -> tuple[str, str]:
     if any(result.status == "missing_file" for result in failed):
         return "failed", "missing_batch"
-    return "content_check_failed", "low_recall"
+    if failed:
+        return "content_check_failed", "low_recall"
+    return CONTROL_FAILURE_CLASSES[control.status], control.status
 
 
 def failed_batch_entry(result: BatchResult) -> dict:
@@ -148,15 +201,40 @@ def totals(results: list[BatchResult]) -> dict:
     }
 
 
-def write_book(manifest: dict, batch_dir: Path, out_dir: Path, results: list[BatchResult]) -> Report:
+def control_fields(manifest: dict, control: ControlResult | None) -> dict:
+    if control is None:
+        return {}
+    return {
+        "control_pages": manifest["control_pages"],
+        "control_checked": list(control.checked),
+        "control_missing": list(control.missing),
+        "control_grave": sorted({page for page, _, _ in control.grave}),
+        "control_minor": sorted({page for page, _, _ in control.minor}),
+    }
+
+
+def describe_control(control: ControlResult | None) -> list[str]:
+    if control is None:
+        return []
+    if control.status == "control_missing":
+        return [f"control: {CONTROL_FILE_NAME} missing, drawn pages " + " ".join(str(page) for page in control.missing)]
+    lines = [f"control: {len(control.checked)} pages checked, {len(control.grave)} grave and {len(control.minor)} minor findings"]
+    if control.missing:
+        lines.append("control pages missing in control.json: " + " ".join(str(page) for page in control.missing))
+    lines += [f"  page {page} grave: {text}" for page, text, _ in control.grave]
+    lines += [f"  page {page} minor: {text}" for page, text, _ in control.minor]
+    return lines
+
+
+def write_book(manifest: dict, batch_dir: Path, out_dir: Path, results: list[BatchResult], control: ControlResult | None) -> Report:
     split = split_long_paragraphs(join_batches(manifest, batch_dir))
     target = out_dir / f"{manifest['stem']}.md"
     write_atomically(target, split.text + "\n")
     append_record(build_end_record(
         manifest["run_id"], manifest["ts_start"], "ok", None,
-        md=str(target), **totals(results), **split_counts(split),
+        md=str(target), **totals(results), **split_counts(split), **control_fields(manifest, control),
     ))
-    return Report(format_success(manifest, target, results, split), True)
+    return Report(format_success(manifest, target, results, split, control), True)
 
 
 def join_batches(manifest: dict, batch_dir: Path) -> str:
@@ -253,19 +331,22 @@ def write_atomically(target: Path, content: str) -> None:
     os.replace(temporary, target)
 
 
-def format_success(manifest: dict, target: Path, results: list[BatchResult], split: SplitResult) -> str:
+def format_success(manifest: dict, target: Path, results: list[BatchResult], split: SplitResult, control: ControlResult | None) -> str:
+    lines = [f"assemble ok: {target}"]
+    lines += describe_control(control) if control is not None else describe_recall(manifest, results)
+    lines.append(describe_split(split))
+    return "\n".join(lines)
+
+
+def describe_recall(manifest: dict, results: list[BatchResult]) -> list[str]:
     judged = [result for result in results if result.recall is not None]
     unjudged = [result for result in results if result.status == "unjudged"]
     lowest = min(judged, key=lambda result: result.recall)
-    lines = [
-        f"assemble ok: {target}",
-        f"batches={len(results)} pages={manifest['pages']} lowest recall={lowest.recall:.3f} at {lowest.first}-{lowest.last}",
-    ]
+    lines = [f"batches={len(results)} pages={manifest['pages']} lowest recall={lowest.recall:.3f} at {lowest.first}-{lowest.last}"]
     if unjudged:
         lines.append("unjudged batches (too little reference text): " + " ".join(f"{r.first}-{r.last}" for r in unjudged))
     lines += describe_unjudged_pages(results)
-    lines.append(describe_split(split))
-    return "\n".join(lines)
+    return lines
 
 
 def describe_split(split: SplitResult) -> str:

@@ -379,9 +379,21 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule.
 
-### test_pdf_extract.py (133 LOC)
+### test_pdf_extract.py (162 LOC)
 
-**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, no RAM measurement, 1 050 pages, log start record and attempt counter, stale-file cleanup, no-text-layer stop.
+**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, no RAM measurement, 1 050 pages, log start record and attempt counter, stale-file cleanup, mode text versus mode scan with control prompt and control pages.
+
+### test_pdf_control_draw.py (34 LOC)
+
+**Purpose:** `src/pdf/extract.py` control draw: ceil of ten percent per batch, one page for a nine-page scan, every batch covered in a full wave, same seed same draw.
+
+### test_pdf_scan_prompt.py (58 LOC)
+
+**Purpose:** Rendered scan worker prompts (no anchor, numbering from step one, chunking) and the control prompt (page steps with their batch files, control.json path, only batch files holding a control page).
+
+### test_pdf_assemble_scan.py (131 LOC)
+
+**Purpose:** `assemble` in scan mode on a generated blank PDF: clean control writes the book without character counting, minor findings named, grave finding or missing or incomplete control.json writes nothing, extra pages tolerated, missing batch file, retry of the same run.
 
 ### test_pdf_assemble.py (181 LOC)
 
