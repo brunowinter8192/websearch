@@ -1,17 +1,16 @@
 # INFRASTRUCTURE
 import hashlib
 import json
-import re
 from pathlib import Path
 
 from src.config import SAMPLES_DIR_NAME
+from src.pdf.pieces import page_markers
 from src.pdf.report import WorkflowError
 
 RUN_FILE_NAME = "run.json"
 FINDINGS_FILE_NAME = "findings.md"
 RUN_DIR_PREFIX = "run_"
 STATUS_OPEN = "open"
-PAGE_MARKER = re.compile(r"^<!-- page (\d+) -->$", re.MULTILINE)
 
 
 # FUNCTIONS
@@ -47,10 +46,6 @@ def open_run_of(runs: list[dict]) -> dict:
 
 def text_sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def page_markers(text: str) -> list[tuple[int, int]]:
-    return [(int(match[1]), match.start()) for match in PAGE_MARKER.finditer(text)]
 
 
 def findings_path(batch_dir: Path, run: dict) -> Path:

@@ -6,39 +6,49 @@ PDF to markdown tooling for the websearch-pdf skill: splits a PDF into page-rang
 
 ## Public Interface
 
-`__init__.py` is empty. Entry path is `python cli.py pdf split|resplit|merge|sample|sample-report|sample-close|publish|stats`; cli.py imports the eight workflow functions. Other modules are internal.
+`__init__.py` is empty. Entry path is `python cli.py pdf split|resplit|status|merge|sample|sample-report|sample-close|publish|stats`; cli.py imports the nine workflow functions. Other modules are internal.
 
 ## Flow
 
-split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50-page piece and the manifest out. Workers write the piece files. resplit: one blocked piece in the manifest is replaced by smaller pieces with new prompts. merge: all piece files joined in page order into `<STEM>.md` in the batch directory. sample loop: `sample` draws new pages and cuts excerpts, the sampling worker corrects excerpts, `sample-report` shows every correction, `sample-close` writes the accepted ones back. publish: after the loop ended, paragraphs split to the embedder limit, `<STEM>.md` written to the output directory, end record logged. stats: log in, summary text out.
+split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50-page piece and the manifest out. Workers write the piece files. status: each piece judged complete, incomplete or missing by its page marker lines. resplit: one blocked, not complete piece in the manifest is replaced by smaller pieces with new prompts, its leftover files set aside. merge: all pieces complete, joined in page order into `<STEM>.md` in the batch directory. sample loop: `sample` draws new pages and cuts excerpts, the sampling worker corrects excerpts, `sample-report` shows every correction, `sample-close` writes the accepted ones back. publish: after the loop ended, paragraphs split to the embedder limit, `<STEM>.md` written to the output directory, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### split.py (154 LOC)
+### split.py (155 LOC)
 
 **Purpose:** Orchestrates the split command: page count, start record, 50-page pieces with their prompts, manifest, cleanup of its own stale files.
 **Reads:** the PDF (sha256 and `pdfinfo` page count only), `config/pdf_models.json`, `prompts/`.
-**Writes:** prompts and manifest in the batch directory (removes its own stale files there, the merged book and `samples/`); start record in the conversion log.
+**Writes:** prompts and manifest in the batch directory (removes its own stale files there, the merged book, `samples/` and `blocked/`); start record in the conversion log.
 **Called by:** cli.py.
 **Calls out:** poppler (`pdfinfo`).
 
 ---
 
-### resplit.py (62 LOC)
+### resplit.py (73 LOC)
 
-**Purpose:** Orchestrates the resplit command: replaces one blocked, unfinished piece by pieces of the next smaller size and writes their prompts.
+**Purpose:** Orchestrates the resplit command: replaces one blocked, not complete piece by pieces of the next smaller size, writes their prompts, sets its leftover files aside.
 **Reads:** manifest and piece files in the batch directory.
-**Writes:** manifest, new prompts; removes the prompt of the replaced piece.
+**Writes:** manifest, new prompts; removes the prompt of the replaced piece; moves its incomplete piece file and part files into `blocked/`.
 **Called by:** cli.py.
 **Calls out:** none.
 
 ---
 
-### merge.py (64 LOC)
+### status.py (34 LOC)
 
-**Purpose:** Orchestrates the merge command: presence of every piece file, join in page order into the working book.
+**Purpose:** Orchestrates the status command: per piece complete, incomplete with the pages whose marker is missing, or missing.
+**Reads:** manifest and piece files.
+**Writes:** none.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### merge.py (74 LOC)
+
+**Purpose:** Orchestrates the merge command: every piece complete, join in page order into the working book.
 **Reads:** manifest, piece files, `samples/` (refuses once sampling started).
-**Writes:** `<STEM>.md` in the batch directory; an end record in the conversion log when a piece is missing or merge fails.
+**Writes:** `<STEM>.md` in the batch directory; an end record in the conversion log when a piece is missing or incomplete or merge fails.
 **Called by:** cli.py.
 **Calls out:** none.
 
@@ -84,9 +94,9 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ---
 
-### sample_runs.py (77 LOC)
+### sample_runs.py (72 LOC)
 
-**Purpose:** Run files of the sample loop: loading, writing, sampled pages, loop end rule, page markers, changed excerpts.
+**Purpose:** Run files of the sample loop: loading, writing, sampled pages, loop end rule, changed excerpts and their marker check.
 **Reads:** `samples/run_<k>/` files.
 **Writes:** `run.json`.
 **Called by:** sample.py, sample_report.py, sample_close.py, publish.py, merge.py.
@@ -94,12 +104,12 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ---
 
-### pieces.py (74 LOC)
+### pieces.py (93 LOC)
 
-**Purpose:** Piece planning and the rendered transcription worker prompt with its part files and concatenation command.
-**Reads:** `prompts/`.
+**Purpose:** Piece planning, the rendered transcription worker prompt with its part files and concatenation command, page markers and the completeness state of a piece file.
+**Reads:** `prompts/`, piece files.
 **Writes:** prompt files.
-**Called by:** split.py, resplit.py, sample.py.
+**Called by:** split.py, resplit.py, status.py, merge.py, sample.py, sample_runs.py.
 **Calls out:** none.
 
 ---
@@ -109,7 +119,7 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 **Purpose:** Manifest read and write, path of the working book.
 **Reads:** `manifest.json`.
 **Writes:** `manifest.json`.
-**Called by:** split.py, resplit.py, merge.py, sample.py, sample_close.py, publish.py.
+**Called by:** split.py, resplit.py, status.py, merge.py, sample.py, sample_close.py, publish.py.
 **Calls out:** none.
 
 ---
@@ -156,6 +166,6 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ## State
 
-None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: manifest and prompts written by split and resplit, piece files by the workers, the working book by merge and sample-close, `samples/run_<k>/` by sample and the sampling worker.
+None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: manifest and prompts written by split and resplit, piece files by the workers, `blocked/` by resplit, the working book by merge and sample-close, `samples/run_<k>/` by sample and the sampling worker.
 
 Prompt templates live in `prompts/`: transcription worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`) and sampling worker (`sample_prompt.md`, `sample_excerpt_steps.md`). Details, decisions and observed evidence: process-docs/pdf_image_flow (this design), process-docs/pdf_form (form rules), process-docs/pdf_workflow and process-docs/pdf_scan (the earlier text and scan modes).

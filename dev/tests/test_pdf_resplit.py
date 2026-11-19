@@ -92,3 +92,34 @@ def test_unknown_piece_is_refused(split_dir):
         with pytest.raises(WorkflowError) as raised:
             resplit_workflow(str(split_dir), piece)
         assert raised.value.failure_class == "piece_unknown"
+
+
+def test_a_blocked_piece_with_an_incomplete_file_is_split_and_its_file_set_aside(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Brennan_2012.pdf", numbered_pages(12))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    left = worker_output(1, 4) + "\n<!-- page 5 -->\n\nThe difference between the\n"
+    (batch_dir / "piece_1-12.md").write_text(left)
+    report = resplit_workflow(str(batch_dir), "1-12")
+    assert report.ok
+    assert spans(batch_dir) == [(1, 10), (11, 12)]
+    assert "set aside: blocked/piece_1-12.md" in report.text
+    assert not (batch_dir / "piece_1-12.md").exists()
+    assert (batch_dir / "blocked" / "piece_1-12.md").read_text() == left
+
+
+def test_part_files_left_by_a_blocked_split_worker_are_set_aside(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Hayek_1939.pdf", numbered_pages(23))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    (batch_dir / "part1_1-23.md").write_text(worker_output(1, 20))
+    report = resplit_workflow(str(batch_dir), "1-23")
+    assert "set aside: blocked/part1_1-23.md" in report.text
+    assert not (batch_dir / "part1_1-23.md").exists()
+    assert (batch_dir / "blocked" / "part1_1-23.md").is_file()
+    assert spans(batch_dir) == [(1, 20), (21, 23)]
+
+
+def test_a_blocked_piece_without_any_file_sets_nothing_aside(split_dir):
+    report = resplit_workflow(str(split_dir), "51-85")
+    assert "set aside: none" in report.text

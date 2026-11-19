@@ -52,7 +52,7 @@ def test_missing_piece_is_named_logged_and_nothing_is_written(split_dir, convers
     (split_dir / "piece_71-85.md").unlink()
     report = merge_workflow(str(split_dir))
     assert not report.ok
-    assert "merge FAILED (missing_piece): 1 of 3 pieces, nothing written" in report.text
+    assert "merge FAILED (missing_piece): 1 of 3 pieces unfinished, nothing written" in report.text
     assert "piece 71-85: missing_file piece_71-85.md" in report.text
     assert not (split_dir / "Book.md").exists()
     end = read_log(conversion_log)[-1]
@@ -73,3 +73,19 @@ def test_merge_without_manifest_raises(tmp_path):
     with pytest.raises(WorkflowError) as raised:
         merge_workflow(str(tmp_path))
     assert raised.value.failure_class == "manifest_missing"
+
+
+def test_piece_file_left_by_a_blocked_worker_without_its_last_pages_is_not_merged(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Brennan_2012.pdf", numbered_pages(12))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    (batch_dir / "piece_1-12.md").write_text(worker_output(1, 4) + "\n<!-- page 5 -->\n\nThe difference between the\n")
+    report = merge_workflow(str(batch_dir))
+    assert not report.ok
+    assert "merge FAILED (incomplete_piece): 1 of 1 pieces unfinished, nothing written" in report.text
+    assert "piece 1-12: incomplete, no page marker for pages 6 7 8 9 10 11 12" in report.text
+    assert not (batch_dir / "Brennan_2012.md").exists()
+    end = read_log(conversion_log)[-1]
+    assert (end["outcome"], end["failure_class"]) == ("failed", "incomplete_piece")
+    assert end["incomplete_pieces"] == [{"from": 1, "to": 12, "missing_pages": [6, 7, 8, 9, 10, 11, 12]}]
+    assert end["missing_pieces"] == []

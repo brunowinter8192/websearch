@@ -94,10 +94,12 @@ def test_split_removes_its_stale_files_and_keeps_foreign_files(tmp_path, convers
     batch_dir = tmp_path / "batches"
     (batch_dir / "samples" / "run_1").mkdir(parents=True)
     (batch_dir / "samples" / "run_1" / "run.json").write_text("{}")
+    (batch_dir / "blocked").mkdir()
+    (batch_dir / "blocked" / "piece_1-12.md").write_text("stale")
     for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "outline.md", "notes.txt"):
         (batch_dir / name).write_text("stale")
     run_split(pdf, batch_dir)
-    for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "samples"):
+    for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "samples", "blocked"):
         assert not (batch_dir / name).exists()
     assert (batch_dir / "outline.md").read_text() == "stale"
     assert (batch_dir / "notes.txt").read_text() == "stale"

@@ -1,9 +1,14 @@
 # INFRASTRUCTURE
+import re
 from pathlib import Path
 
 from src.pdf.templates import page_range, read_template, require_filled, substitute
 
 READ_PAGES_LIMIT = 20
+PAGE_MARKER = re.compile(r"^<!-- page (\d+) -->$", re.MULTILINE)
+STATE_COMPLETE = "complete"
+STATE_INCOMPLETE = "incomplete"
+STATE_MISSING = "missing"
 
 
 # FUNCTIONS
@@ -72,3 +77,17 @@ def cat_command(parts: list[str], output: str) -> str:
     joined = "; echo; ".join(f'cat "{part}"' for part in parts)
     removals = " ".join(f'"{part}"' for part in parts)
     return f'{{ {joined}; }} > "{output}" && rm {removals}'
+
+
+def piece_state(batch_dir: Path, piece: dict) -> tuple[str, list[int]]:
+    path = batch_dir / piece["output"]
+    pages = list(range(piece["from"], piece["to"] + 1))
+    if not path.is_file():
+        return STATE_MISSING, pages
+    found = {page for page, _ in page_markers(path.read_text(encoding="utf-8"))}
+    missing = [page for page in pages if page not in found]
+    return (STATE_INCOMPLETE, missing) if missing else (STATE_COMPLETE, [])
+
+
+def page_markers(text: str) -> list[tuple[int, int]]:
+    return [(int(match[1]), match.start()) for match in PAGE_MARKER.finditer(text)]
