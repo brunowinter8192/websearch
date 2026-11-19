@@ -26,11 +26,10 @@ def marker_positions(book, pages):
 def test_merge_joins_pieces_of_mixed_sizes_in_page_order(split_dir, conversion_log):
     resplit_workflow(str(split_dir), "1-50")
     resplit_workflow(str(split_dir), "21-40")
-    resplit_workflow(str(split_dir), "21-30")
     write_pieces(split_dir)
     report = merge_workflow(str(split_dir))
     assert report.ok
-    assert "pieces=6: 1-20 21-25 26-30 31-40 41-50 51-85" in report.text
+    assert "pieces=5: 1-20 21-30 31-40 41-50 51-85" in report.text
     book = (split_dir / "Book.md").read_text()
     positions = marker_positions(book, range(1, 86))
     assert positions == sorted(positions)

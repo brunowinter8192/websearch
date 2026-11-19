@@ -26,7 +26,7 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ### resplit.py (73 LOC)
 
-**Purpose:** Orchestrates the resplit command: replaces one blocked, not complete piece by pieces of the next smaller size, writes their prompts, sets its leftover files aside.
+**Purpose:** Orchestrates resplit: one blocked, not complete piece becomes pieces of the next smaller size with prompts, leftovers set aside; no smaller size means refusal.
 **Reads:** manifest and piece files in the batch directory.
 **Writes:** manifest, new prompts; removes the prompt of the replaced piece; moves its incomplete piece file and part files into `blocked/`.
 **Called by:** cli.py.

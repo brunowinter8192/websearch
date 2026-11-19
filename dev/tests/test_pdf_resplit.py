@@ -33,35 +33,22 @@ def test_blocked_fifty_page_piece_becomes_twenty_twenty_and_ten(split_dir):
     assert "prompts: prompt_1-20.md prompt_21-40.md prompt_41-50.md" in report.text
 
 
-def test_each_further_block_steps_down_twenty_ten_five(split_dir):
-    resplit_workflow(str(split_dir), "1-50")
-    resplit_workflow(str(split_dir), "1-20")
-    assert spans(split_dir)[:3] == [(1, 10), (11, 20), (21, 40)]
-    resplit_workflow(str(split_dir), "11-20")
-    assert spans(split_dir)[:4] == [(1, 10), (11, 15), (16, 20), (21, 40)]
-
-
-def test_each_further_block_steps_down_to_one_page_and_one_page_cannot_be_split(split_dir):
-    for piece in ("1-50", "1-20", "1-10", "1-5"):
-        resplit_workflow(str(split_dir), piece)
-    assert spans(split_dir)[:4] == [(1, 2), (3, 4), (5, 5), (6, 10)]
-    report = resplit_workflow(str(split_dir), "1-2")
-    assert "into 2 pieces of at most 1 page" in report.text
-    assert spans(split_dir)[:3] == [(1, 1), (2, 2), (3, 4)]
+def assert_refused_as_minimal(batch_dir, piece):
+    before = read_manifest(batch_dir)
     with pytest.raises(WorkflowError) as raised:
-        resplit_workflow(str(split_dir), "1-1")
+        resplit_workflow(str(batch_dir), piece)
     assert raised.value.failure_class == "piece_minimal"
+    assert read_manifest(batch_dir) == before
+    assert (batch_dir / f"prompt_{piece}.md").is_file()
 
 
-def test_the_two_page_piece_refused_on_2026_11_19_now_splits_into_single_pages(tmp_path, conversion_log):
-    pdf = write_pdf(tmp_path / "Jensen_2001.pdf", numbered_pages(17))
-    batch_dir = tmp_path / "batches"
-    split_workflow(str(pdf), str(batch_dir))
-    resplit_workflow(str(batch_dir), "1-17")
-    resplit_workflow(str(batch_dir), "11-17")
-    assert spans(batch_dir) == [(1, 10), (11, 15), (16, 17)]
-    resplit_workflow(str(batch_dir), "16-17")
-    assert spans(batch_dir) == [(1, 10), (11, 15), (16, 16), (17, 17)]
+def test_a_twenty_page_piece_becomes_two_ten_page_pieces_and_ten_pages_is_final(split_dir):
+    resplit_workflow(str(split_dir), "1-50")
+    report = resplit_workflow(str(split_dir), "1-20")
+    assert "into 2 pieces of at most 10 pages" in report.text
+    assert spans(split_dir)[:3] == [(1, 10), (11, 20), (21, 40)]
+    for piece in ("1-10", "11-20", "41-50"):
+        assert_refused_as_minimal(split_dir, piece)
 
 
 def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
@@ -69,39 +56,34 @@ def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
     assert spans(split_dir)[1:] == [(51, 70), (71, 85)]
     resplit_workflow(str(split_dir), "71-85")
     assert spans(split_dir)[2:] == [(71, 80), (81, 85)]
-    resplit_workflow(str(split_dir), "81-85")
-    assert spans(split_dir)[3:] == [(81, 82), (83, 84), (85, 85)]
-    resplit_workflow(str(split_dir), "83-84")
-    assert spans(split_dir)[4:] == [(83, 83), (84, 84), (85, 85)]
-    for page in ("83-83", "85-85"):
-        with pytest.raises(WorkflowError) as raised:
-            resplit_workflow(str(split_dir), page)
-        assert raised.value.failure_class == "piece_minimal"
+    for piece in ("71-80", "81-85"):
+        assert_refused_as_minimal(split_dir, piece)
 
 
-@pytest.mark.parametrize("pages, blocked, expected", [
-    (25, "21-25", [(21, 22), (23, 24), (25, 25)]),
-    (23, "21-23", [(21, 22), (23, 23)]),
-])
-def test_blocked_pieces_refused_on_2026_11_19_now_split_into_two_page_pieces(tmp_path, conversion_log, pages, blocked, expected):
-    pdf = write_pdf(tmp_path / "Article.pdf", numbered_pages(pages))
-    batch_dir = tmp_path / "batches"
-    split_workflow(str(pdf), str(batch_dir))
-    resplit_workflow(str(batch_dir), f"1-{pages}")
-    report = resplit_workflow(str(batch_dir), blocked)
-    assert report.ok
-    assert "pieces of at most 2 pages" in report.text
-    assert spans(batch_dir)[1:] == expected
-
-
-def test_an_eighteen_page_piece_starts_with_ten_and_an_eight_page_piece_with_five(tmp_path, conversion_log):
+def test_an_eighteen_page_piece_becomes_ten_and_eight_and_the_eight_is_final(tmp_path, conversion_log):
     pdf = write_pdf(tmp_path / "Short.pdf", numbered_pages(18))
     batch_dir = tmp_path / "batches"
     split_workflow(str(pdf), str(batch_dir))
     resplit_workflow(str(batch_dir), "1-18")
     assert spans(batch_dir) == [(1, 10), (11, 18)]
-    resplit_workflow(str(batch_dir), "11-18")
-    assert spans(batch_dir) == [(1, 10), (11, 15), (16, 18)]
+    assert_refused_as_minimal(batch_dir, "11-18")
+
+
+@pytest.mark.parametrize("name, pages, chain, final", [
+    ("Schelling_1981", 25, ["1-25", "1-20"], [(1, 10), (11, 20), (21, 25)]),
+    ("Jensen_2001", 17, ["1-17"], [(1, 10), (11, 17)]),
+    ("Brennan_2012", 12, ["1-12"], [(1, 10), (11, 12)]),
+    ("Hayek_1939", 23, ["1-23", "1-20"], [(1, 10), (11, 20), (21, 23)]),
+])
+def test_the_articles_blocked_on_2026_11_19_end_at_pieces_of_ten_pages_or_fewer(tmp_path, conversion_log, name, pages, chain, final):
+    pdf = write_pdf(tmp_path / f"{name}.pdf", numbered_pages(pages))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    for piece in chain:
+        assert resplit_workflow(str(batch_dir), piece).ok
+    assert spans(batch_dir) == final
+    for first, last in final:
+        assert_refused_as_minimal(batch_dir, f"{first}-{last}")
 
 
 def test_a_finished_piece_is_never_split(split_dir):
