@@ -67,7 +67,7 @@ def set_aside(batch_dir: Path, piece: dict) -> list[str]:
 
 def format_summary(piece: dict, size: int, entries: list[dict], moved: list[str]) -> str:
     return "\n".join([
-        f"resplit ok: piece {piece['from']}-{piece['to']} into {len(entries)} pieces of at most {size} {'page' if size == 1 else 'pages'}",
+        f"resplit ok: piece {piece['from']}-{piece['to']} into {len(entries)} pieces of at most {size} pages",
         "prompts: " + " ".join(entry["prompt"] for entry in entries),
         "set aside: " + (" ".join(moved) or "none"),
     ])

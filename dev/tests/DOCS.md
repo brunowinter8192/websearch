@@ -379,9 +379,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup including `samples/` and `blocked/`, missing PDF.
 
-### test_pdf_resplit.py (161 LOC)
+### test_pdf_resplit.py (143 LOC)
 
-**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, 2, 1, remainders of 18, 8, 5, 3 and 2 pages (the pieces refused on 2026-11-19), refusal only at 1 page, of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
+**Purpose:** `resplit`: 50 into 20, 20, 10, the only stages 20 and 10, remainders of 18 and 15 pages, refusal of every piece of 10 pages or fewer with manifest and prompt unchanged (including the four articles blocked on 2026-11-19), of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
 
 ### test_pdf_status.py (32 LOC)
 
@@ -391,7 +391,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Rendered transcription prompts: one Read and one part file per 20 pages, step numbering from one, no anchor, single-read pieces, bare page number, form rules.
 
-### test_pdf_merge.py (91 LOC)
+### test_pdf_merge.py (90 LOC)
 
 **Purpose:** `merge`: pieces of mixed sizes in page order, no paragraph splitting, missing piece and incomplete piece (pages 1 to 5 of 12) logged and nothing written, refusal after sampling started, missing manifest.
 
