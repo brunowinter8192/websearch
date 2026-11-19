@@ -34,7 +34,7 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ---
 
-### merge.py (65 LOC)
+### merge.py (64 LOC)
 
 **Purpose:** Orchestrates the merge command: presence of every piece file, join in page order into the working book.
 **Reads:** manifest, piece files, `samples/` (refuses once sampling started).
@@ -74,7 +74,7 @@ split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50
 
 ---
 
-### publish.py (157 LOC)
+### publish.py (156 LOC)
 
 **Purpose:** Orchestrates the publish command: refuses before the sample loop ended, splits over-long paragraphs, atomic write of `<STEM>.md` to the output directory.
 **Reads:** manifest, run files, the working book.

@@ -14,7 +14,7 @@ code_version.py: the three log writers stamp its result into every record they w
 
 ## Modules
 
-### config.py (42 LOC)
+### config.py (43 LOC)
 
 **Purpose:** Constants shared by two or more modules with identical meaning; single-module constants stay in their module.
 **Reads:** nothing.

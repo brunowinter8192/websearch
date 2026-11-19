@@ -1,12 +1,11 @@
 # INFRASTRUCTURE
 from pathlib import Path
 
+from src.config import NEW_PARAGRAPH
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import load_runs
-
-NEW_PARAGRAPH = "\n\n"
 
 
 # ORCHESTRATOR

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.config import PARAGRAPH_LIMIT_BYTES
+from src.config import NEW_PARAGRAPH, PARAGRAPH_LIMIT_BYTES
 from src.pdf.conversion_log import append_record, build_end_record
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
@@ -13,7 +13,6 @@ from src.pdf.sample_runs import STATUS_OPEN, load_runs, loop_ended, sampled_page
 PARAGRAPH_SEPARATOR = re.compile(r"(\n{2,})")
 SENTENCE_END = re.compile(r"(?<=[.!?:;])\s+(?=\S)")
 TABLE_RULE_CHARS = set("-: ")
-NEW_PARAGRAPH = "\n\n"
 
 
 # ORCHESTRATOR
