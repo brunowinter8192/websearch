@@ -78,3 +78,24 @@ pdf publish --batch-dir ... --out-dir <OUTPUT_DIR>      only after the loop ende
 - Hermetic tests: eleven `dev/tests/test_pdf_*.py` files plus `test_cli_bootstrap.py` pass; full suite `PYTHON=../../../venv/bin/python bash dev/tests/run_strands.sh` from the worktree: 91 strands, 1 skipped (browser), 0 failed.
 - CLI smoke on a generated 23-page PDF with a scratch log (`WEBSEARCH_CONVERSION_LOG_PATH`): split 1 piece; resplit 1-23 -> 1-20, 21-23; resplit 21-23 refused with `piece_minimal`; merge with no piece files failed and named both; after writing simulated piece files merge ok; sample run 1 drew pages 9 10 20 (excerpts `excerpt_9-10.md`, `excerpt_20.md`); an appended footnote showed in `report.md`; publish refused with `run_open`; close applied 1 and said "loop continues"; run 2 drew 3 6 16, closed with no correction, "loop ended"; publish wrote the book; `stats` showed 1 run ok, "recovered by retry: 1" (the failed merge record followed by the ok publish record).
 - Not verified: no real worker has run any of the new prompts. Open questions for the first real run: whether Haiku edits excerpt files with the Edit tool without breaking marker lines, whether it writes `findings.md` in the given line format, and whether the content filter also blocks the sampling worker (not observed, unhandled).
+
+## Review fix (2026-11-19)
+
+The orchestrator's review found one violation: `NEW_PARAGRAPH = "\n\n"` was defined in both `merge.py` (join of pieces) and `publish.py` (join of split paragraph chunks). It moved to `src/config.py` and both modules import it. A scan of all upper-case module constants in `src/pdf/` found no other name defined twice. The PDF tests and `test_cli_bootstrap.py` pass after the change (78 tests in 11 files). The skill patch was left unchanged; the orchestrator applies it.
+
+## Recap (2026-11-19): how the work ran, what to reuse, what went wrong
+
+Order of work: (1) read every file named in the task and answered with a plan before touching anything; (2) the orchestrator answered with decision 7 (the sampling worker corrects and the loop repeats) and replies to the open gaps; (3) built code, then tests, then a CLI smoke; (4) DOCS.md, process-docs, the skill patch; (5) the review fix above.
+
+What to reuse:
+- Running the PDF tests in parallel from the worktree: one `../../../venv/bin/python -m pytest -x -q -p no:cacheprovider --basetemp=/tmp/<dir>/<name> <file> &` per file, then `wait`. The parent of `--basetemp` must exist; without it every file fails with `FileNotFoundError` in the conftest fixture `deepdivelog`, which looks like a code failure but is not.
+- Full suite: `PYTHON=../../../venv/bin/python STRAND_OUT_DIR=/tmp/<dir> bash dev/tests/run_strands.sh` (91 files, about a minute).
+- CLI smoke without workers: generate a PDF with `write_pdf` and `numbered_pages` from `dev/tests/_pdf_fakes.py`, write the piece files with `worker_output`, simulate the sampling worker by appending to an excerpt file and writing `findings.md`, and point `WEBSEARCH_CONVERSION_LOG_PATH` at a scratch log.
+- A real run of the skill has to apply `dev/pdf_image_flow/patch/websearch-pdf_SKILL.patch` first; the skill on the branch describes the removed flow.
+
+Mistakes made, so that they are not repeated:
+- Hooks on this machine block two kinds of Write: a `dev/` helper module (`_pdf_fakes.py`) that imports from `src/` ("dev/ scripts may not import from src/"), and any edit of `skills/` ("rules and skills are user-owned"). Test files `test_*.py` under `dev/tests/` may import from `src/`. Therefore the split runner moved from `_pdf_fakes.py` into each test file, and the skill change is a patch.
+- The shell is zsh: a command stored in a variable (`W="python cli.py pdf"; $W split ...`) is not word-split and fails with "no such file or directory". Use a shell function.
+- A constant used by two modules was first defined twice (the review finding). Before committing, list the module constants of the package and look for duplicates: `grep -h -E "^[A-Z_]+ = " src/pdf/*.py | awk -F' = ' '{print $1}' | sort | uniq -d`.
+- One test expectation was computed wrongly the first time (the number of pieces after three resplits, 6 not 7); the code was right.
+- The first excerpt diff in `report.md` showed an empty "before" for a pure insertion; context lines were added so that the place of an insertion is visible.
