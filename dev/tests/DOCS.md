@@ -375,9 +375,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/pdf/extract.py` batch ranges for 50-page batches, the one-wave boundary at 1 000 pages and the fixed worker count.
 
-### test_pdf_worker_prompt.py (71 LOC)
+### test_pdf_worker_prompt.py (86 LOC)
 
-**Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule.
+**Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule, form rules in text and scan prompt.
 
 ### test_pdf_extract.py (162 LOC)
 

@@ -78,4 +78,4 @@ extract: PDF in, mode decision from the text layer (`text` or `scan`, written to
 
 None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory written by extract and completed by the workers.
 
-Prompt templates live in `prompts/`: text worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`), scan worker (`scan_worker_prompt.md`, `scan_steps_single.md`, `scan_steps_split.md`) and control worker (`control_prompt.md`, `control_page_steps.md`). Details, decisions and observed evidence: process-docs/pdf_workflow (text mode) and process-docs/pdf_scan (scan mode).
+Prompt templates live in `prompts/`: text worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`), scan worker (`scan_worker_prompt.md`, `scan_steps_single.md`, `scan_steps_split.md`) and control worker (`control_prompt.md`, `control_page_steps.md`). Details, decisions and observed evidence: process-docs/pdf_workflow (text mode), process-docs/pdf_scan (scan mode) and process-docs/pdf_form (form rules of the output).

@@ -1,6 +1,7 @@
 # INFRASTRUCTURE
 from pathlib import Path
 
+from src.config import MODE_SCAN, MODE_TEXT
 from src.pdf.extract import batch_entry, render_prompt
 
 PDF = Path("/data/pdf/Book.pdf")
@@ -69,3 +70,17 @@ def test_prompt_asks_for_figure_descriptions_and_keeps_no_placeholder_rule():
     assert "every label and every box text" in prompt
     assert "Never drop a figure" in prompt
     assert "image placeholders" not in prompt
+
+
+def test_text_and_scan_prompt_carry_the_same_form_rules():
+    for mode in (MODE_TEXT, MODE_SCAN):
+        prompt = render_prompt(PDF, BATCH_DIR, batch_entry(1, 50, mode), mode)
+        assert "stays one paragraph" in prompt
+        assert "never inside a sentence" in prompt
+        assert "title of the work #, chapter ##, subchapter ###" in prompt
+        assert "outline.md" in prompt
+        assert "**Figure description (not source text):**" in prompt
+        assert "footnote mark in the text as [^N]" in prompt
+        assert "Never write a Markdown image link" in prompt
+        assert "Never mix straight and typographic quotation marks" in prompt
+        assert "For a page without content write only this line" in prompt
