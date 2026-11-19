@@ -157,3 +157,17 @@ Blocked pieces are also split into pieces of 2 pages. The stages are 20, then 10
 ### Skill
 
 Third patch `dev/pdf_image_flow/patch/websearch-pdf_SKILL_two_page_stage.patch` against the text after the second patch. Checked: the three patches applied in order to the skill on integration (ea634f4, still unpatched) reproduce the intended text byte for byte.
+
+## One-page stage (2026-11-19, user decision)
+
+### Decision
+
+The smallest stage is always one page. The stages are 20, then 10, then 5, then 2, then 1 page. A blocked piece of one page is the only piece `resplit` refuses as minimal. This supersedes the section "Two-page stage" wherever it says that a piece of 2 pages is refused, and the statement there that 1 page is not a stage.
+
+### What changed
+
+- `RESPLIT_PIECE_PAGES = (20, 10, 5, 2, 1)` in `src/config.py`. The rule stays the largest stage strictly smaller than the blocked piece, so a 2-page piece becomes two 1-page pieces and only a 1-page piece has no smaller stage (`piece_minimal`). No code path besides the constant was needed for the refusal.
+- The case that motivated it: Jensen 16-17 (2 pages, blocked at the first write on 2026-11-19, refused under the two-page ladder) now resplits into 16 and 17. Whether a single page gets past the content filter is not observed (hypothesis).
+- Logged config `resplit_piece_pages` is `[20, 10, 5, 2, 1]`, a new `config_hash`. The `resplit` CLI help names the five stages. The `resplit` output says "page" for size 1 ("into 2 pieces of at most 1 page").
+- Tests: 5 -> 2, 2, 1 then 1-2 -> 1, 2 and refusal of 1-1; the remainder 81-85 down to single pages with refusal of 83-83 and 85-85; the observed Jensen chain 1-17 -> 1-10, 11-17 -> 11-15, 16-17 -> 16, 17. 12 test files, 87 tests pass.
+- No skill patch this time: the orchestrator writes the skill text. The skill sentences that depend on this constant are the stage line ("in vier Stufen ... dann 2 Seiten"), the examples line and the `piece_minimal` line ("2 Seiten oder weniger") of the third patch in `dev/pdf_image_flow/patch/`; those three patch files were left unchanged.
