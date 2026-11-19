@@ -19,8 +19,9 @@ description:
 ## Formregeln
 
 **Das fertige Markdown hat über alle Stapel hinweg dieselbe Form.**
-- Jeder Worker sieht nur seinen Stapel und entscheidet die Form allein, deshalb weichen die Stapel eines PDFs voneinander ab.
-- Du bist der Einzige, der alle Stapel sieht, die Einheitlichkeit ist deshalb deine Aufgabe.
+- Der Prompt gibt jedem Worker die Formregeln mit.
+- Jeder Worker sieht aber nur seinen Stapel, deshalb können die Stapel eines PDFs trotzdem voneinander abweichen.
+- Du bist der Einzige, der alle Stapel sieht, die Einheitlichkeit über die Stapel hinweg ist deshalb deine Aufgabe.
 - Die Formregeln sind der Maßstab der Formkontrolle in Step 3.
 
 **Überschriften folgen der Gliederung des PDFs, nicht der Schriftgröße auf der Seite.**
@@ -125,6 +126,54 @@ description:
 
 3. Nur bei mehr als 20 Stapeln: Führe für jeden fertigen Stapel sofort Step 3 aus, kille seinen Worker und starte dann den nächsten Stapel, der noch keinen Worker hatte.
 
+#### Ein Worker wird von Anthropic geblockt
+
+**Einen geblockten Stapel teilst du in kleinere Stücke, jedes Stück bekommt einen eigenen Haiku-Worker.**
+- Du erkennst den Block an drei Dingen zusammen: Der Worker ist idle, seine Datei `batch_<von>-<bis>.md` fehlt, und `worker-cli response pdf-<stem>-<von> 1` zeigt `API Error: Output blocked by content filtering policy`.
+- Derselbe Stapel noch einmal oder ein anderes Modell hilft nicht.
+    - Beobachtet: Zwei Aufsätze wurden je dreimal versucht, einmal mit Haiku und zweimal ohne `MODEL_SELECTION_FILE`, alle sechs Versuche wurden geblockt.
+- Die Übertragung bleibt Sache der Worker, du schreibst einen geblockten Stapel nie selbst ab.
+
+**Die Stücke werden in drei Stufen kleiner: 20 Seiten, dann 10 Seiten, dann 5 Seiten.**
+- In jeder Stufe teilst du nur, was geblockt wurde. Ein Stück, dessen Datei existiert, bleibt wie es ist.
+- Ist das geblockte Stück nicht größer als die Stückgröße der nächsten Stufe, überspringst du diese Stufe.
+    - Beispiel: Ein geblockter Stapel von 18 Seiten beginnt mit Stücken zu 10 Seiten.
+- Wird auch ein Stück von 5 Seiten geblockt, wird das PDF nicht indexiert. Notiere das PDF und die Seiten des Stücks für den Report.
+- Es laufen auch hier nie mehr als 20 Worker gleichzeitig.
+
+1. Kille den geblockten Worker.
+
+2. Schreibe für jedes Stück den Prompt `BATCH_DIR/prompt_piece_<a>-<b>.md`, `<a>` ist die erste Seite des Stücks, `<b>` die letzte.
+   - Der Prompt ist eine Kopie von `BATCH_DIR/prompt_<von>-<bis>.md` mit genau drei Änderungen, alles andere bleibt Wort für Wort gleich.
+   - Die Zeile `Pages of this batch:` nennt `<a>-<b>`.
+   - Die Zeile `Output file:` nennt `BATCH_DIR/piece_<a>-<b>.md`.
+   - Unter `Steps:` stehen nur diese Schritte, die erste Zeile nur bei `mode` `text`:
+
+   ```
+   1. Read the anchor text file completely. It covers more pages than your piece, use only the pages <a>-<b>.
+   2. Read the PDF pages <a>-<b> with the Read tool (pages parameter "<a>-<b>"), so you see every page as an image.
+   3. Write the Markdown for the pages <a>-<b> to the output file with the Write tool in one call.
+   4. When the file is written, reply with one line: done, number of pages written, and anything you could not transcribe.
+   ```
+
+3. Starte für jedes Stück einen Haiku-Worker.
+
+   ```bash
+   MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-p<a> BATCH_DIR/prompt_piece_<a>-<b>.md
+   ```
+
+4. Ein Stück ist fertig, wenn sein Worker idle ist und `BATCH_DIR/piece_<a>-<b>.md` existiert. Ein geblocktes Stück geht in die nächste Stufe.
+
+5. Sind alle Stücke des Stapels fertig, füge sie in der Reihenfolge der Seiten zur Datei des Stapels zusammen.
+
+   ```bash
+   cd BATCH_DIR && { cat piece_<a1>-<b1>.md; echo; cat piece_<a2>-<b2>.md; echo; cat piece_<a3>-<b3>.md; } > batch_<von>-<bis>.md
+   ```
+
+6. Für die Formkontrolle in Step 3 gilt jede Grenze zwischen zwei Stücken wie eine Grenze zwischen zwei Stapeln.
+   - Kein Worker sieht beide Seiten der Grenze, einen Absatz über die Grenze fügst du selbst zusammen.
+   - Die Funde eines Stücks schickst du an den Worker dieses Stücks, er korrigiert `piece_<a>-<b>.md`. Füge die Stücke danach erneut zusammen.
+
 ### Step 3 — Formkontrolle
 
 **Die Formkontrolle läuft auf den Dateien `BATCH_DIR/batch_<von>-<bis>.md`, also vor dem Zusammenführen.**
@@ -225,11 +274,7 @@ description:
    - Fehlt beim Worker wirklich Inhalt, bessere `BATCH_DIR/batch_<von>-<bis>.md` selbst aus, anhand derselben Seiten im PDF. Starte dafür keinen neuen Worker.
        - Rufe danach erneut `assemble` auf.
        - Scheitert `assemble` auch nach deiner Ausbesserung, wird das PDF nicht indexiert.
-   - Blockt Anthropic den Worker, z. B. mit `API Error: Output blocked by content filtering policy`, übernimmst du den Stapel.
-       - Entscheide, ob du ihn selbst 1:1 abschreibst.
-       - Falls nein: Erzeuge `batch_<von>-<bis>.md` mit `pdftotext`, je Seite mit `<!-- page N -->` davor, und korrigiere anhand der Seitenbilder gezielt Erkennungsfehler, Überschriften, Zitate und Bildbeschreibungen.
-       - Die Datei folgt den Formregeln, führe für sie Step 3 Punkt 1 und 2 aus.
-       - Rufe danach erneut `assemble` auf.
+   - Ein von Anthropic geblockter Worker gehört nicht hierher, ihn behandelst du in Step 2 mit kleineren Stücken.
 
 ### Step 6 — Stichprobe
 
