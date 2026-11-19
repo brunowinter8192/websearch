@@ -58,3 +58,17 @@ The skill text is `skills/websearch-pdf/SKILL.md`, committed by the user on `int
 Statements in the earlier process-docs file of this area that no longer hold (not edited there): every instruction to apply the patches ("Apply from the repo root with `patch -p1 < ...`", "A real run of the skill has to apply ... first"), "the skill on the branch still describes `extract`, `assemble`, the control worker", and "The skill on integration at ea634f4 still had neither patch applied" as a description of the skill today.
 
 Not removed, outside this task: `dev/pdf_scan/patch/websearch-pdf_SKILL.patch`, which area pdf_image_flow already recorded as describing the removed scan flow and as not to be applied. It does not apply to 9356d06 either.
+
+## Recap (2026-11-19): how the work ran, what to reuse, what went wrong
+
+Order of work: (1) read every file named in the task in full, plus `test_pdf_split.py` and `test_pdf_merge.py`, which a search for `RESPLIT_PIECE_PAGES`, `resplit_piece_pages` and `resplit_workflow` under `src/`, `cli.py` and `dev/tests/` showed to depend on the stages; (2) changed the constant, the CLI help, the output wording, the tests; (3) ran the 12 test files in parallel, fixed the one test that resplit a 10-page piece, ran again (87 pass); (4) DOCS.md line counts and descriptions, this file; commit e42a9b5, merged as a83d146; (5) follow-up: fast-forward to integration, read the user's skill 9356d06 in full, removed `dev/pdf_image_flow/patch/`, updated `dev/DOCS.md`, commit 85bdff4.
+
+What to reuse:
+- To change the stages, `RESPLIT_PIECE_PAGES` in `src/config.py` is the only code knob; the refusal follows from the rule "largest stage strictly smaller". Tests that name stage sizes: `test_pdf_resplit.py`, `test_pdf_merge.py` (mixed-size merge), `test_pdf_split.py` (logged config list). The `resplit` help in `cli.py` spells the stages out by hand.
+- Parallel test run from the worktree: `mkdir -p /tmp/<dir>` first, then per file `../../../venv/bin/python -m pytest -x -q -p no:cacheprovider --basetemp=/tmp/<dir>/<name> <file> > /tmp/<dir>/<name>.log 2>&1 &`, `wait`, and read the last line of every log.
+- After the files touched by a task are merged, `git diff integration --name-only` only lists the follow-up's files; the LOC values of the earlier files were checked against `wc -l` again anyway (all match).
+
+Mistakes made, so that they are not repeated:
+- zsh on this machine: `echo =====` fails with "==== not found" (`=word` expansion), which aborted chained `cat` commands. Use a separator without a leading `=`.
+- A recursive `grep -rn` without `--include` is blocked by a hook ("recursive grep needs scope"); pass `--include='*.py'` and the like.
+- The first test run missed that `test_pdf_merge.py` resplits a 10-page piece; searching for `resplit_workflow` in all test files before running would have found it.
