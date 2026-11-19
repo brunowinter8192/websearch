@@ -2,7 +2,7 @@
 import re
 
 from src.config import PARAGRAPH_LIMIT_BYTES
-from src.pdf.assemble import split_long_paragraphs
+from src.pdf.publish import split_long_paragraphs
 
 PARAGRAPH_BREAK = re.compile(r"\n{2,}")
 

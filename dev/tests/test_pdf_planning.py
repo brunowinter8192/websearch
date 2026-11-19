@@ -1,7 +1,9 @@
 # INFRASTRUCTURE
 import pytest
 
-from src.pdf.extract import PARALLEL_WORKERS, plan_batches
+from src.config import PIECE_PAGES
+from src.pdf.pieces import plan_ranges
+from src.pdf.split import PARALLEL_WORKERS
 
 
 # FUNCTIONS
@@ -15,19 +17,20 @@ from src.pdf.extract import PARALLEL_WORKERS, plan_batches
     (51, 2, (1, 50), (51, 51)),
     (100, 2, (1, 50), (51, 100)),
 ])
-def test_plan_batches_covers_every_page_in_fifties(pages, count, first, last):
-    batches = plan_batches(pages)
-    assert len(batches) == count
-    assert batches[0] == first
-    assert batches[-1] == last
-    covered = [page for start, end in batches for page in range(start, end + 1)]
+def test_plan_ranges_covers_every_page_in_fifties(pages, count, first, last):
+    pieces = plan_ranges(1, pages, PIECE_PAGES)
+    assert len(pieces) == count
+    assert pieces[0] == first
+    assert pieces[-1] == last
+    covered = [page for start, end in pieces for page in range(start, end + 1)]
     assert covered == list(range(1, pages + 1))
 
 
-def test_a_book_of_one_thousand_pages_fits_one_wave_of_workers():
-    assert len(plan_batches(1000)) <= PARALLEL_WORKERS
-    assert len(plan_batches(1001)) > PARALLEL_WORKERS
+def test_plan_ranges_inside_a_piece_starts_at_its_first_page():
+    assert plan_ranges(51, 100, 20) == [(51, 70), (71, 90), (91, 100)]
 
 
-def test_parallel_workers_are_twenty():
+def test_a_book_of_one_thousand_pages_fits_one_wave_of_twenty_workers():
     assert PARALLEL_WORKERS == 20
+    assert len(plan_ranges(1, 1000, PIECE_PAGES)) <= PARALLEL_WORKERS
+    assert len(plan_ranges(1, 1001, PIECE_PAGES)) > PARALLEL_WORKERS

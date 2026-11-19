@@ -17,9 +17,14 @@ from src.crawler.deep_dive_closing import deep_dive_closing_workflow
 from src.crawler.deep_dive_records import log_discovery_record
 from src.crawler.discovery import discover_urls_workflow
 from src.log_janitor import get_retention_days
-from src.pdf.assemble import assemble_workflow
-from src.pdf.extract import extract_workflow
+from src.pdf.merge import merge_workflow
+from src.pdf.publish import publish_workflow
 from src.pdf.report import WorkflowError
+from src.pdf.resplit import resplit_workflow
+from src.pdf.sample import sample_workflow
+from src.pdf.sample_close import sample_close_workflow
+from src.pdf.sample_report import sample_report_workflow
+from src.pdf.split import split_workflow
 from src.pdf.stats import stats_workflow
 from src.scraper.chromium_scrape import scrape_url_chromium_workflow
 from src.scraper.index_scrapes import index_scrapes_workflow
@@ -130,15 +135,32 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("collection", help="Target RAG collection name")
     p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
 
-    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, assemble, stats.")
+    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: split, resplit, merge, sample, sample-report, sample-close, publish, stats.")
     pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
 
-    pp = pdf_sub.add_parser("extract", help="Split a PDF into 50-page batches with anchor text, worker prompts and manifest.")
+    pp = pdf_sub.add_parser("split", help="Split a PDF into 50-page pieces with worker prompts and manifest, from the page count alone.")
     pp.add_argument("--pdf", required=True, help="Path to the PDF")
-    pp.add_argument("--batch-dir", required=True, help="Directory for anchors, prompts, manifest and worker output")
+    pp.add_argument("--batch-dir", required=True, help="Directory for prompts, manifest, worker output and samples")
 
-    pp = pdf_sub.add_parser("assemble", help="Join worker batches into one markdown file after a content check.")
-    pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
+    pp = pdf_sub.add_parser("resplit", help="Split one blocked piece into smaller pieces (20, then 10, then 5 pages).")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+    pp.add_argument("--piece", required=True, help="Page span of the blocked piece, e.g. 51-100")
+
+    pp = pdf_sub.add_parser("merge", help="Join all piece files in page order into <STEM>.md in the batch directory.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+
+    pp = pdf_sub.add_parser("sample", help="Open the next sample run: draw 10 percent new pages, write excerpts and the sampling prompt.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+
+    pp = pdf_sub.add_parser("sample-report", help="Write the report of the open sample run: pages, findings, every correction before and after.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+
+    pp = pdf_sub.add_parser("sample-close", help="Close the open sample run: write the accepted corrections into <STEM>.md.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+    pp.add_argument("--reject", type=int, action="append", default=[], help="Sampled page whose correction is not applied (repeatable)")
+
+    pp = pdf_sub.add_parser("publish", help="After the sample loop ended: split long paragraphs and write <STEM>.md to the output directory.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
     pp.add_argument("--out-dir", required=True, help="Directory for the finished <STEM>.md")
 
     pp = pdf_sub.add_parser("stats", help="Conversion statistics from the conversion log.")
@@ -253,10 +275,20 @@ def _dispatch_pdf(args) -> None:
 
 
 def _run_pdf_command(args):
-    if args.pdf_cmd == "extract":
-        return extract_workflow(args.pdf, args.batch_dir)
-    if args.pdf_cmd == "assemble":
-        return assemble_workflow(args.batch_dir, args.out_dir)
+    if args.pdf_cmd == "split":
+        return split_workflow(args.pdf, args.batch_dir)
+    if args.pdf_cmd == "resplit":
+        return resplit_workflow(args.batch_dir, args.piece)
+    if args.pdf_cmd == "merge":
+        return merge_workflow(args.batch_dir)
+    if args.pdf_cmd == "sample":
+        return sample_workflow(args.batch_dir)
+    if args.pdf_cmd == "sample-report":
+        return sample_report_workflow(args.batch_dir)
+    if args.pdf_cmd == "sample-close":
+        return sample_close_workflow(args.batch_dir, args.reject)
+    if args.pdf_cmd == "publish":
+        return publish_workflow(args.batch_dir, args.out_dir)
     return stats_workflow(args.since)
 
 
