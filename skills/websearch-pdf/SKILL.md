@@ -16,11 +16,53 @@ description:
 
 ---
 
+## Formregeln
+
+**Das fertige Markdown hat über alle Stapel hinweg dieselbe Form.**
+- Jeder Worker sieht nur seinen Stapel und entscheidet die Form allein, deshalb weichen die Stapel eines PDFs voneinander ab.
+- Du bist der Einzige, der alle Stapel sieht, die Einheitlichkeit ist deshalb deine Aufgabe.
+- Die Formregeln sind der Maßstab der Formkontrolle in Step 3.
+
+**Überschriften folgen der Gliederung des PDFs, nicht der Schriftgröße auf der Seite.**
+- Der Titel des Werks steht als `#`, jedes Kapitel als `##`, jedes Unterkapitel als `###`, jede Ebene darunter als `####`.
+- Derselbe Rang hat in allen Stapeln dieselbe Ebene.
+    - Beobachteter Fehler: Kapitel 1, 2, 6 und 7 standen als `#`, die Kapitel 3 bis 5 und 8 bis 11 als `##`.
+- Hat das PDF kein Inhaltsverzeichnis, z. B. ein Aufsatz oder ein Foliensatz, steht der Titel als `#` und jeder Abschnitt oder jede Folienüberschrift als `##`.
+
+**Ein Absatz, der über eine Seitengrenze läuft, bleibt ein Absatz.**
+- Der Absatz steht vollständig auf der Seite, auf der er beginnt.
+- Die Zeile `<!-- page N -->` der Folgeseite steht erst hinter seinem Ende, nie mitten in einem Satz.
+    - Beobachteter Fehler: „…killed annually in the United States by“, dann der Seitenmarker, dann „terrorists…“.
+- Dasselbe gilt an der Grenze zwischen zwei Stapeln.
+
+**Fußnoten haben in allen Stapeln dasselbe Format.**
+- Das Fußnotenzeichen im Text steht als `[^N]`.
+- Der Fußnotentext steht als `[^N]: <Text>` am Ende der Seite, auf der er gedruckt ist.
+- Nie eine angehängte Ziffer wie `dignity.1`, nie `<sup>14</sup>`.
+
+**Anführungszeichen stehen so, wie sie gedruckt sind.**
+- Gerade und typografische Anführungszeichen werden innerhalb eines PDFs nie gemischt.
+
+**Jede Abbildung hat eine Beschreibung in einem festen Format.**
+- Die Beschreibung ist ein eigener Absatz und steht nie mitten in einem Absatz des Fließtextes.
+- Sie beginnt in allen Stapeln mit `**Figure description (not source text):**`.
+    - Die Beschreibung stammt vom Worker und nicht vom Autor, sie darf deshalb nie als Zitat aus dem Werk gelesen werden.
+- Die gedruckte Bildunterschrift bleibt normaler Text und steht direkt unter der Beschreibung.
+
+**Im Markdown steht kein Verweis auf eine Bilddatei.**
+- Der Workflow erzeugt keine Bilddateien, ein Verweis wie `![](img_p218_1.png)` zeigt deshalb ins Leere.
+- An seiner Stelle steht die Beschreibung der Abbildung.
+
+**Eine leere Seite ist kein Fund.**
+- Eine Seite, die nur aus ihrer Zeile `<!-- page N -->` besteht, bleibt so stehen.
+
+---
+
 ## Workflow
 
-**Step 1 bis 4 führst du für jedes PDF getrennt aus, Step 5 und 6 nur einmal am Ende für die ganze Collection.**
-- Starte Step 5 erst, wenn alle PDFs Step 4 hinter sich haben.
-- Nach Step 0 läuft der Skill ohne Rückfrage an den User bis zum Report in Step 6 durch.
+**Step 1 bis 6 führst du für jedes PDF getrennt aus, Step 7 und 8 nur einmal am Ende für die ganze Collection.**
+- Starte Step 7 erst, wenn alle PDFs Step 6 hinter sich haben.
+- Nach Step 0 läuft der Skill ohne Rückfrage an den User bis zum Report in Step 8 durch.
 - Scheitert ein PDF, notierst du es für den Report und machst mit den übrigen PDFs weiter.
 
 ### Step 0 — PDFs festlegen
@@ -36,35 +78,42 @@ description:
 ### Step 1 — Extraktion
 
 **Rufe `extract` für jedes PDF nur ein einziges Mal auf.**
-- `extract` löscht beim Start alle Dateien in BATCH_DIR, auch die fertigen Texte der Haiku-Worker.
+- `extract` löscht beim Start alle Dateien in BATCH_DIR, auch die fertigen Texte der Worker.
 - Ein zweiter Aufruf, nachdem Worker schon gelaufen sind, vernichtet also deren Arbeit.
-- Hat das PDF keine Textebene, bricht `extract` mit Fehler ab. Notiere das für den Report und mach mit dem nächsten PDF weiter.
 
 **`extract` entscheidet je PDF, ob es eine Textebene hat, und schreibt das als `mode` ins Manifest.**
 - `mode` ist `text`, wenn das PDF eine Textebene hat. Der Worker bekommt dann zu den Seitenbildern einen Ankertext.
 - `mode` ist `scan`, wenn das PDF keine Textebene hat. Der Worker liest dann nur die Seitenbilder und überträgt Zeichen und Struktur vom Bild, einen Ankertext gibt es nicht.
 - Ein PDF hat immer genau einen `mode`, auch wenn nur einzelne Seiten gescannt sind.
 
-1. Rufe `extract` auf. Es teilt das PDF in Stapel zu je 50 Seiten und schreibt für jeden Stapel einen fertigen Prompt für einen Haiku-Worker nach BATCH_DIR.
+1. Rufe `extract` auf. Es teilt das PDF in Stapel zu je 50 Seiten und schreibt für jeden Stapel einen fertigen Prompt für einen Worker nach BATCH_DIR.
    - Die Ausgabe landet in einer Datei, lies sie danach vollständig.
 
    ```bash
    WORKFLOW extract --pdf "PDF_DIR/<Projekt>/<STEM>.pdf" --batch-dir BATCH_DIR > /tmp/pdf_<STEM>_extract.txt 2>&1
    ```
 
-2. Lies `BATCH_DIR/manifest.json`. Dort stehen alle Stapel mit ihrem Seitenbereich, z. B. 1-50, 51-100, 101-150.
 2. Lies `BATCH_DIR/manifest.json`. Dort stehen der `mode` und alle Stapel mit ihrem Seitenbereich, z. B. 1-50, 51-100, 101-150.
    - Zu jedem Stapel gibt es die Datei `BATCH_DIR/prompt_<von>-<bis>.md`, das ist der Prompt für seinen Worker.
    - Nur bei `mode` `scan` gibt es zusätzlich `BATCH_DIR/prompt_control.md`, das ist der Prompt für den Kontroll-Worker.
        - `extract` lost dafür 10 % der Seiten aus, zufällig über alle Stapel verteilt. Die ausgelosten Seiten stehen im Manifest unter `control_pages`.
 
-### Step 2 — Haiku-Worker, einer pro Stapel
-### Step 2 — Haiku-Worker, einer pro Stapel, bei Scans danach ein Kontroll-Worker
+3. Schreibe die Gliederung des PDFs nach `BATCH_DIR/outline.md`.
+   - Die Quelle ist das Inhaltsverzeichnis des PDFs. Lies dazu die Seiten des Inhaltsverzeichnisses mit dem Read-Tool.
+   - Je Zeile stehen die Ebene nach den Formregeln und der Wortlaut der Überschrift, z. B. `## 3 Risk and Uncertainty`.
+   - Hat das PDF kein Inhaltsverzeichnis, steht in `outline.md` nur die Zeile mit dem Titel als `#` und der Satz `no table of contents, every section heading is ##`.
+   - `outline.md` ist in Step 3 der Maßstab für die Überschriften aller Stapel.
+
+### Step 2 — Übertragungs-Worker, einer pro Stapel
 
 **Es laufen nie mehr als 20 Worker gleichzeitig.**
 - `MODEL_SELECTION_FILE` vor dem Spawn sorgt dafür, dass der Worker mit Haiku statt mit Sonnet startet. Setze die Variable nur hier, bei allen anderen Workern nie.
 
-1. Starte für jeden Stapel einen Haiku-Worker, alle direkt nacheinander, aber nie mehr als 20 gleichzeitig.
+**Ein fertiger Worker bleibt am Leben, bis sein Stapel die Formkontrolle in Step 3 bestanden hat.**
+- Der Worker hat die Seiten seines Stapels noch im Kontext und kann seine Datei deshalb selbst korrigieren.
+- Ein gekillter Worker kann das nicht mehr, dann bleibt die Korrektur an dir hängen.
+
+1. Starte für jeden Stapel einen Worker, alle direkt nacheinander, aber nie mehr als 20 gleichzeitig.
    - `<von>` ist die erste Seite des Stapels, `<bis>` die letzte.
    - Starte einen Spawn erst, wenn der vorige zurückgekehrt ist, nie mehrere parallel im Hintergrund mit `&`.
 
@@ -72,15 +121,64 @@ description:
    MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-<von> BATCH_DIR/prompt_<von>-<bis>.md
    ```
 
-2. Ein Worker ist fertig, wenn er idle ist und seine Datei `BATCH_DIR/batch_<von>-<bis>.md` existiert. Kille ihn dann.
+2. Ein Worker ist fertig, wenn er idle ist und seine Datei `BATCH_DIR/batch_<von>-<bis>.md` existiert.
+
+3. Nur bei mehr als 20 Stapeln: Führe für jeden fertigen Stapel sofort Step 3 aus, kille seinen Worker und starte dann den nächsten Stapel, der noch keinen Worker hatte.
+
+### Step 3 — Formkontrolle
+
+**Die Formkontrolle läuft auf den Dateien `BATCH_DIR/batch_<von>-<bis>.md`, also vor dem Zusammenführen.**
+- `assemble` liest genau diese Dateien, jede Korrektur dort landet deshalb im fertigen Markdown.
+- `assemble` prüft nur den Inhalt, die Form prüft niemand außer dir.
+
+1. Erzeuge die Prüfliste für alle Stapel des PDFs und lies sie vollständig.
+
+   ```bash
+   cd BATCH_DIR
+   echo '== Überschriften =='; grep -n '^#' batch_*.md
+   echo '== letzte Textzeile vor jedem Seitenmarker =='; grep -n -B2 '^<!-- page' batch_*.md
+   echo '== Fußnoten nicht als [^N] =='; grep -n -E '<sup>|[[:alpha:].,;:!?”"’)][0-9]{1,3}([[:space:]]|$)' batch_*.md
+   echo '== gerade Anführungszeichen =='; grep -c '"' batch_*.md
+   echo '== typografische Anführungszeichen =='; grep -c '[„“”]' batch_*.md
+   echo '== Abbildungen =='; grep -n -i -E 'figure|abbildung' batch_*.md
+   echo '== Bildverweise =='; grep -n '!\[' batch_*.md
+   ```
+
+2. Prüfe die Liste gegen die Formregeln.
+   - Überschriften: Jede Überschrift hat die Ebene, die `outline.md` für ihren Rang nennt.
+   - Seitenmarker: Die letzte Textzeile vor einem Seitenmarker endet mit einem Satzende. Endet sie mitten im Satz, läuft der Absatz über die Seitengrenze.
+   - Fußnoten: Jeder Treffer ist ein Fußnotenzeichen im falschen Format oder eine gewöhnliche Zahl. Unterscheide das an der Stelle im Text.
+   - Anführungszeichen: Haben beide Zählungen Treffer, sind die Zeichen gemischt.
+   - Abbildungen: Jede Beschreibung ist ein eigener Absatz und beginnt mit `**Figure description (not source text):**`.
+   - Bildverweise: Jeder Treffer ist ein Fund.
+
+3. Schicke jedem Worker die Funde seines Stapels, er korrigiert seine Datei `batch_<von>-<bis>.md` selbst.
+   - Nenne je Fund die Formregel im Wortlaut, die Zahl der Stellen und bis zu fünf Stellen mit Seite als Beispiel.
+   - Nenne bei Überschriften den Pfad `BATCH_DIR/outline.md`.
+   - Nach jedem `send` folgt ein `worker-cli wait`.
+
+   ```bash
+   worker-cli send pdf-<stem>-<von> "<Funde>"
+   ```
+
+4. Führe die Prüfliste nach der Korrektur genau ein weiteres Mal aus.
+   - Es gibt eine einzige Korrekturrunde je Stapel.
+   - Was danach noch abweicht, notierst du für den Report unter Funde der Formkontrolle.
+   - Ein Fund der Formkontrolle verhindert die Indexierung nicht, das tut nur ein Fund am Inhalt.
+
+5. Korrigiere selbst, was kein Worker korrigieren kann.
+   - Ein Absatz, der vom letzten Blatt eines Stapels ins erste Blatt des nächsten läuft: Kein Worker sieht beide Stapel, füge den Absatz im vorderen Stapel zusammen.
+   - Der Worker des Stapels lebt nicht mehr, z. B. nach einem Block durch Anthropic: Korrigiere die Datei mit dem Edit-Tool.
+
+6. Kille jeden Worker, dessen Stapel die Formkontrolle hinter sich hat.
 
    ```bash
    worker-cli kill pdf-<stem>-<von>
    ```
 
-3. Nur bei mehr als 20 Stapeln: Starte für jeden beendeten Worker den nächsten Stapel, der noch keinen Worker hatte.
+### Step 4 — Kontroll-Worker, nur bei `mode` `scan`
 
-4. Nur bei `mode` `scan`: Starte den Kontroll-Worker, sobald alle Stapel ihre Datei `batch_<von>-<bis>.md` haben und ihre Worker gekillt sind.
+1. Starte den Kontroll-Worker, sobald alle Stapel die Formkontrolle hinter sich haben und ihre Worker gekillt sind.
    - Es läuft ein einziger Kontroll-Worker für das ganze PDF.
    - Er liest für jede ausgeloste Seite das Seitenbild und vergleicht es mit dem Text des Übertragungs-Workers.
    - Er meldet je geprüfter Seite, ob der Text stimmt, und nennt jede Abweichung: fehlende Absätze, verlesene Zahlen, erfundenen Text, zerbrochene Tabellen.
@@ -90,18 +188,15 @@ description:
    MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-control BATCH_DIR/prompt_control.md
    ```
 
-5. Nur bei `mode` `scan`: Der Kontroll-Worker ist fertig, wenn er idle ist und `BATCH_DIR/control.json` existiert. Kille ihn dann.
+2. Der Kontroll-Worker ist fertig, wenn er idle ist und `BATCH_DIR/control.json` existiert. Kille ihn dann.
 
    ```bash
    worker-cli kill pdf-<stem>-control
    ```
 
-### Step 3 — Zusammenführen und Inhaltskontrolle
+### Step 5 — Zusammenführen und Inhaltskontrolle
 
 **`assemble` prüft jeden Stapel, bevor es etwas schreibt.**
-- Es zählt die Buchstaben und Ziffern im Text des Workers und vergleicht sie mit dem Text, der im PDF selbst steckt. Fehlt zu viel, gilt der Stapel als gescheitert.
-- Ein Stapel, zu dem es keine Datei `batch_<von>-<bis>.md` gibt, gilt ebenfalls als gescheitert.
-- Ist auch nur ein Stapel gescheitert, schreibt `assemble` keine Datei nach OUTPUT_DIR und nennt in seiner Ausgabe die gescheiterten Stapel. 
 - Ein Stapel, zu dem es keine Datei `batch_<von>-<bis>.md` gibt, gilt als gescheitert.
 - Bei `mode` `text` zählt es die Buchstaben und Ziffern im Text des Workers und vergleicht sie mit dem Text, der im PDF selbst steckt. Fehlt zu viel, gilt der Stapel als gescheitert.
 - Bei `mode` `scan` gibt es im PDF keinen Text zum Zählen. `assemble` wertet stattdessen den Befund des Kontroll-Workers in `BATCH_DIR/control.json` aus.
@@ -117,7 +212,6 @@ description:
    WORKFLOW assemble --batch-dir BATCH_DIR --out-dir <OUTPUT_DIR> > /tmp/pdf_<STEM>_assemble.txt 2>&1
    ```
 
-2. Nennt `assemble` gescheiterte Stapel, finde für jeden Stapel selbst heraus, warum er gescheitert ist.
 2. Nur bei `mode` `scan`: Nennt `assemble` Seiten mit gravierenden Funden, wird das PDF nicht indexiert.
    - Notiere die Seiten und die Funde für den Report und mach mit dem nächsten PDF weiter.
    - Nicht gravierende Funde nennt `assemble` in seiner Ausgabe, notiere sie für den Report unter Funde der Stichprobe.
@@ -127,23 +221,23 @@ description:
    - Fehlt im Text des Workers wirklich Inhalt, oder stimmt etwas mit dem PDF selbst nicht?
    - Beispiel: In einem PDF können zwei Textebenen übereinanderliegen. Dann zählt `assemble` denselben Text doppelt, obwohl der Text des Workers vollständig ist.
 
-3. Entscheide danach, was zu tun ist.
 4. Nur bei `mode` `text`: Entscheide danach, was zu tun ist.
    - Fehlt beim Worker wirklich Inhalt, bessere `BATCH_DIR/batch_<von>-<bis>.md` selbst aus, anhand derselben Seiten im PDF. Starte dafür keinen neuen Worker.
        - Rufe danach erneut `assemble` auf.
        - Scheitert `assemble` auch nach deiner Ausbesserung, wird das PDF nicht indexiert.
-    - Blockt Anthropic den Worker, z. B. mit `API Error: Output blocked by content filtering policy`, übernimmst du den Stapel.
+   - Blockt Anthropic den Worker, z. B. mit `API Error: Output blocked by content filtering policy`, übernimmst du den Stapel.
        - Entscheide, ob du ihn selbst 1:1 abschreibst.
        - Falls nein: Erzeuge `batch_<von>-<bis>.md` mit `pdftotext`, je Seite mit `<!-- page N -->` davor, und korrigiere anhand der Seitenbilder gezielt Erkennungsfehler, Überschriften, Zitate und Bildbeschreibungen.
+       - Die Datei folgt den Formregeln, führe für sie Step 3 Punkt 1 und 2 aus.
        - Rufe danach erneut `assemble` auf.
- 
-### Step 4 — Stichprobe
+
+### Step 6 — Stichprobe
 
 1. Vergleiche je eine Stelle aus Anfang, Mitte und Ende von `<OUTPUT_DIR>/<STEM>.md` mit derselben Stelle im PDF.
    - Achte auf fehlende Absätze, erfundenen Text, zerbrochene Tabellen und Formeln, Abbildungen ohne Beschreibung.
        - Bei Funden entscheidest du, ob sie so gravierend sind, dass das PDF nicht indexiert werden kann.
-       
-### Step 5 — Index
+
+### Step 7 — Index
 
 1. Indexiere die Collection und geh idle, bis der Lauf fertig ist.
    - Polle nicht, du wirst benachrichtigt.
@@ -155,7 +249,7 @@ description:
 2. Lies `/tmp/<collection>_index.log` vollständig und notiere jeden Fehler für den Report.
    - Zum Beispiel eine Datei, die rag-cli nicht chunken oder embedden konnte.
 
-### Step 6 — Report
+### Step 8 — Report
 
 1. Schreibe den Report in diesem Format in den Chat.
 
@@ -164,6 +258,7 @@ description:
    Collection: <collection>
    Indexiert: <Zahl> PDFs, <Zahl> Chunks
    Nicht indexiert: <PDF mit Grund, oder "keine">
+   Funde der Formkontrolle: <PDF, Formregel, Zahl der Stellen, oder "keine">
    Funde der Stichprobe: <PDF, Seite, Fund, oder "keine">
    Fehler: <jeder Fehler aus allen Steps, oder "keine">
    ```
