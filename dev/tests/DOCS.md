@@ -371,49 +371,49 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_planning.py (33 LOC)
+### test_pdf_planning.py (36 LOC)
 
-**Purpose:** `src/pdf/extract.py` batch ranges for 50-page batches, the one-wave boundary at 1 000 pages and the fixed worker count.
+**Purpose:** `src/pdf/pieces.py` range planning for 50-page pieces and inside a piece, the one-wave boundary at 1 000 pages and the fixed worker count.
 
-### test_pdf_worker_prompt.py (86 LOC)
+### test_pdf_split.py (110 LOC)
 
-**Purpose:** Rendered worker prompts: one Read and one part file per 20 pages, step numbering, single concatenation command, bare page number for a one-page chunk, figure-description rule, form rules in text and scan prompt.
+**Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup, missing PDF.
 
-### test_pdf_extract.py (162 LOC)
+### test_pdf_resplit.py (94 LOC)
 
-**Purpose:** `extract` on generated PDFs: anchors, prompts, manifest, fixed worker count, no RAM measurement, 1 050 pages, log start record and attempt counter, stale-file cleanup, mode text versus mode scan with control prompt and control pages.
+**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, remainders of 18 and 8 pages, refusal at 5 pages, of a finished piece and of an unknown span, finished pieces untouched.
 
-### test_pdf_control_draw.py (34 LOC)
+### test_pdf_worker_prompt.py (80 LOC)
 
-**Purpose:** `src/pdf/extract.py` control draw: ceil of ten percent per batch, one page for a nine-page scan, every batch covered in a full wave, same seed same draw.
+**Purpose:** Rendered transcription prompts: one Read and one part file per 20 pages, step numbering from one, no anchor, single-read pieces, bare page number, form rules.
 
-### test_pdf_scan_prompt.py (58 LOC)
+### test_pdf_merge.py (75 LOC)
 
-**Purpose:** Rendered scan worker prompts (no anchor, numbering from step one, chunking) and the control prompt (page steps with their batch files, control.json path, only batch files holding a control page).
+**Purpose:** `merge`: pieces of mixed sizes in page order, no paragraph splitting, missing piece logged and nothing written, refusal after sampling started, missing manifest.
 
-### test_pdf_assemble_scan.py (131 LOC)
+### test_pdf_sample.py (121 LOC)
 
-**Purpose:** `assemble` in scan mode on a generated blank PDF: clean control writes the book without character counting, minor findings named, grave finding or missing or incomplete control.json writes nothing, extra pages tolerated, missing batch file, retry of the same run.
+**Purpose:** `sample`: 10 percent per 50-page block, only never-sampled pages, exhaustion after every page, seeded draw, excerpt boundaries (page before, book ends, neighbours, missing marker), run directory and prompt, one open run at a time.
 
-### test_pdf_assemble.py (181 LOC)
+### test_pdf_sample_loop.py (166 LOC)
 
-**Purpose:** `assemble` on generated PDFs with simulated worker output: page order, missing batch, content-check threshold, missing page marker, retry of the same run, a superimposed text-layer page (named as unjudged, real loss still caught), outlier boundary, splitting wired into the write with its log count.
+**Purpose:** The sample loop end to end: report with findings and before and after text, close writes corrections back, loop end without correction or after every page, rejected corrections, publish refusals and the published book with a long correction split to the limit and its end record.
 
 ### test_pdf_split_paragraphs.py (120 LOC)
 
-**Purpose:** `src/pdf/assemble.py` paragraph splitting: byte limit with umlauts, sentence and space boundaries, list blocks, tables with repeated head, unsplittable leftovers, counts, untouched text.
+**Purpose:** `src/pdf/publish.py` paragraph splitting: byte limit with umlauts, sentence and space boundaries, list blocks, tables with repeated head, unsplittable leftovers, counts, untouched text.
 
 ### test_pdf_stats.py (68 LOC)
 
 **Purpose:** `stats` over a handwritten conversion log: runs, failures by reason, unfinished, retry recovery, averages, `--since`, per config.
 
-### test_pdf_cli.py (33 LOC)
+### test_pdf_cli.py (49 LOC)
 
-**Purpose:** Argument parsing of the `pdf` subcommands and rejection of a malformed `--since` date.
+**Purpose:** Argument parsing of the `pdf` subcommands including repeated `--reject`, rejection of the removed `extract` and `assemble` and of a malformed `--since` date.
 
-### _pdf_fakes.py (95 LOC)
+### _pdf_fakes.py (83 LOC)
 
-**Purpose:** Shared helper: raw-PDF writer for generated text pages, superimposed text layers, simulated worker output, log reader, extract runner, conversion-log fixture.
+**Purpose:** Shared helper: raw-PDF writer for generated text pages, simulated worker output and piece files, log and manifest readers, conversion-log fixture.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.
