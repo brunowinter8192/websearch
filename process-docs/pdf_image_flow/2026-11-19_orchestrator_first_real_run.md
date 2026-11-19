@@ -67,4 +67,4 @@ Collection wise2627-reference, prefix SGSC: 14 articles and 4 slide decks. The f
 
 - Two spawns failed with "CC did not reach input-ready state within 30s" and left a worktree and a branch that `worker-cli` does not know: `pdf-sgsc-hayek-21-22` and `pdf-sgsc-jensen-16-16`. A hook blocks removing them by hand.
 - `dev/pdf_scan/patch/websearch-pdf_SKILL.patch` is a stale skill patch.
-- The skill does not say what to do when the sampling worker reports a finding without a correction and then the loop ends; the orchestrator sent such cases back before closing the run.
+- Nothing on `main`, nothing pushed, plugin not published as of the end of the run. All commits of this area are on `integration`.
