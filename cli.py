@@ -143,7 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--pdf", required=True, help="Path to the PDF")
     pp.add_argument("--batch-dir", required=True, help="Directory for prompts, manifest, worker output and samples")
 
-    pp = pdf_sub.add_parser("resplit", help="Split one blocked piece into smaller pieces (20, then 10, then 5 pages).")
+    pp = pdf_sub.add_parser("resplit", help="Split one blocked piece into smaller pieces (20, then 10, then 5, then 2 pages).")
     pp.add_argument("--batch-dir", required=True, help="Directory written by split")
     pp.add_argument("--piece", required=True, help="Page span of the blocked piece, e.g. 51-100")
 

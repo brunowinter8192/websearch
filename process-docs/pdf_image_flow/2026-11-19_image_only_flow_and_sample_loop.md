@@ -133,3 +133,27 @@ The changed sentences are in a second patch `dev/pdf_image_flow/patch/websearch-
 ### Verification
 
 Hermetic tests from the two observed cases: a 12-page piece file holding pages 1 to 4 plus the start of page 5 (status, merge refusal with the end record, resplit to 1-10 and 11-12 with the file kept in `blocked/`); a 23-page piece with only `part1_1-23.md` left (resplit sets it aside, pieces 1-20 and 21-23); a blank page with its marker counts as complete. PDF and CLI tests: 12 files (11 `test_pdf_*.py` plus `test_cli_bootstrap.py`), 84 tests; full suite 92 strands, 1 skipped, 0 failed. CLI smoke of the Brennan case through `cli.py` with a scratch log: status `incomplete (no page marker for pages 6 7 8 9 10 11 12)`, merge `FAILED (incomplete_piece)`, resplit `set aside: blocked/piece_1-12.md`, status afterwards `1-10 missing`, `11-12 missing`.
+
+## Two-page stage (2026-11-19, user decision)
+
+### Decision
+
+Blocked pieces are also split into pieces of 2 pages. The stages are 20, then 10, then 5, then 2 pages. This supersedes the ladder "20, 10, 5" in decision 5 and every statement above that a piece of 5 pages or fewer is final.
+
+### Observed in the real run on 2026-11-19 (relayed by the orchestrator)
+
+- Blocked at the first write and refused by `resplit` with `piece_minimal` under the old ladder: Schelling 21-25 (5 pages), Hayek 21-23 (3 pages), Jensen 11-15 (5 pages), Jensen 16-17 (2 pages).
+- Also blocked, at larger sizes: Jensen 1-10, Schelling 1-20.
+- Passed after a block: Brennan 11-12 (2 pages), after Brennan 1-12 had been blocked.
+- So the hypothesis "smaller pieces get past the filter" has one supporting case (Brennan 11-12) and one case against it at the new floor (Jensen 16-17, 2 pages, blocked). Under the new ladder Jensen 16-17 is still refused with `piece_minimal`, and Jensen is still not indexed unless that piece passes on another attempt. Nothing shows that a 1-page piece would pass; 1 page is not a stage by decision.
+
+### What changed
+
+- `RESPLIT_PIECE_PAGES = (20, 10, 5, 2)` in `src/config.py`. The rule is unchanged: the largest stage strictly smaller than the blocked piece. Consequences: 5 pages -> 2, 2, 1 (Schelling 21-25 -> 21-22, 23-24, 25); 3 pages -> 2, 1 (Hayek 21-23 -> 21-22, 23); 4 pages -> 2, 2. A blocked piece of 2 pages or 1 page (a remainder such as 25 or 23) is refused with `piece_minimal`.
+- The logged config field `resplit_piece_pages` is now `[20, 10, 5, 2]`, so runs from this build have a new `config_hash`.
+- The `resplit` CLI help names the four stages.
+- Tests: the two refused 2026-11-19 cases (5 and 3 pages) as a parametrized test, the step from 5 to 2, 2, 1 with the refusal at 2 pages, the remainder 81-85 -> 81-82, 83-84, 85 with the refusal at the 1-page piece 85. 12 test files, 86 tests pass.
+
+### Skill
+
+Third patch `dev/pdf_image_flow/patch/websearch-pdf_SKILL_two_page_stage.patch` against the text after the second patch. Checked: the three patches applied in order to the skill on integration (ea634f4, still unpatched) reproduce the intended text byte for byte.

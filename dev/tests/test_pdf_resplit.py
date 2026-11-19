@@ -41,11 +41,12 @@ def test_each_further_block_steps_down_twenty_ten_five(split_dir):
     assert spans(split_dir)[:4] == [(1, 10), (11, 15), (16, 20), (21, 40)]
 
 
-def test_a_piece_of_five_pages_cannot_be_split_further(split_dir):
-    for piece in ("1-50", "1-20", "1-10"):
+def test_each_further_block_steps_down_to_two_pages_and_two_pages_cannot_be_split(split_dir):
+    for piece in ("1-50", "1-20", "1-10", "1-5"):
         resplit_workflow(str(split_dir), piece)
+    assert spans(split_dir)[:4] == [(1, 2), (3, 4), (5, 5), (6, 10)]
     with pytest.raises(WorkflowError) as raised:
-        resplit_workflow(str(split_dir), "1-5")
+        resplit_workflow(str(split_dir), "1-2")
     assert raised.value.failure_class == "piece_minimal"
 
 
@@ -54,8 +55,26 @@ def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
     assert spans(split_dir)[1:] == [(51, 70), (71, 85)]
     resplit_workflow(str(split_dir), "71-85")
     assert spans(split_dir)[2:] == [(71, 80), (81, 85)]
-    with pytest.raises(WorkflowError):
-        resplit_workflow(str(split_dir), "81-85")
+    resplit_workflow(str(split_dir), "81-85")
+    assert spans(split_dir)[3:] == [(81, 82), (83, 84), (85, 85)]
+    with pytest.raises(WorkflowError) as raised:
+        resplit_workflow(str(split_dir), "85-85")
+    assert raised.value.failure_class == "piece_minimal"
+
+
+@pytest.mark.parametrize("pages, blocked, expected", [
+    (25, "21-25", [(21, 22), (23, 24), (25, 25)]),
+    (23, "21-23", [(21, 22), (23, 23)]),
+])
+def test_blocked_pieces_refused_on_2026_11_19_now_split_into_two_page_pieces(tmp_path, conversion_log, pages, blocked, expected):
+    pdf = write_pdf(tmp_path / "Article.pdf", numbered_pages(pages))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    resplit_workflow(str(batch_dir), f"1-{pages}")
+    report = resplit_workflow(str(batch_dir), blocked)
+    assert report.ok
+    assert "pieces of at most 2 pages" in report.text
+    assert spans(batch_dir)[1:] == expected
 
 
 def test_an_eighteen_page_piece_starts_with_ten_and_an_eight_page_piece_with_five(tmp_path, conversion_log):

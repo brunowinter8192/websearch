@@ -1,0 +1,21 @@
+--- a/skills/websearch-pdf/SKILL.md
++++ b/skills/websearch-pdf/SKILL.md
+@@ -151,14 +151,15 @@
+ - Dasselbe Stück noch einmal oder ein anderes Modell hilft nicht.
+     - Beobachtet: Zwei Aufsätze wurden je dreimal versucht, einmal mit Haiku und zweimal ohne `MODEL_SELECTION_FILE`, alle sechs Versuche wurden geblockt.
+ 
+-**Die Stücke werden in drei Stufen kleiner: 20 Seiten, dann 10 Seiten, dann 5 Seiten.**
++**Die Stücke werden in vier Stufen kleiner: 20 Seiten, dann 10 Seiten, dann 5 Seiten, dann 2 Seiten.**
+ - `resplit` wählt die größte dieser Stückgrößen, die kleiner ist als das geblockte Stück.
+-    - Beispiel: Ein Stück von 50 Seiten wird zu 20, 20 und 10 Seiten, ein Stück von 18 Seiten zu 10 und 8 Seiten.
++    - Beispiel: Ein Stück von 50 Seiten wird zu 20, 20 und 10 Seiten, ein Stück von 18 Seiten zu 10 und 8 Seiten, ein Stück von 5 Seiten zu 2, 2 und 1 Seite.
+ - `resplit` teilt nur das genannte Stück. Alle anderen Stücke bleiben im Manifest und auf der Platte, wie sie sind.
+ - `resplit` verweigert ein Stück, das `status` als `complete` meldet.
+ - Eine unvollständige Datei `piece_<a>-<b>.md` und übrig gebliebene Teildateien `part<n>_<a>-<b>.md` des geblockten Stücks legt `resplit` nach `BATCH_DIR/blocked/`. Es löscht keine davon.
+     - Beobachtet: Ein geblockter Worker des Stücks 1-23 hinterließ `part1_1-23.md`.
+-- Hat das geblockte Stück 5 Seiten oder weniger, verweigert `resplit` die Teilung mit `piece_minimal`. Das PDF wird dann nicht indexiert. Notiere das PDF und die Seiten des Stücks für den Report.
++- Hat das geblockte Stück 2 Seiten oder weniger, verweigert `resplit` die Teilung mit `piece_minimal`. Das PDF wird dann nicht indexiert. Notiere das PDF und die Seiten des Stücks für den Report.
++    - Beobachtet: Ein Stück von 2 Seiten wurde schon geblockt, ein anderes Stück von 2 Seiten lief durch, nachdem sein Stück von 12 Seiten geblockt worden war.
+ 
+ 1. Kille den geblockten Worker.
+ 
