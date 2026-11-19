@@ -70,7 +70,7 @@ def test_split_logs_a_start_record_without_text_extraction_fields(tmp_path, conv
     assert start["run_id"] == read_manifest(tmp_path / "batches")["run_id"]
     assert (start["pages"], start["attempt"]) == (45, 1)
     assert start["config"]["piece_pages"] == 50
-    assert start["config"]["resplit_piece_pages"] == [20, 10, 5, 2]
+    assert start["config"]["resplit_piece_pages"] == [20, 10, 5, 2, 1]
     assert start["config"]["workers"] == 20
     assert start["config"]["sample_share"] == 0.1
     assert start["config"]["paragraph_limit_bytes"] == 900

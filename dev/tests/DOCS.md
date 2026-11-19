@@ -379,9 +379,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup including `samples/` and `blocked/`, missing PDF.
 
-### test_pdf_resplit.py (144 LOC)
+### test_pdf_resplit.py (161 LOC)
 
-**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, 2, remainders of 18, 8, 5 and 3 pages (the pieces refused on 2026-11-19), refusal at 2 pages and at 1 page, of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
+**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, 2, 1, remainders of 18, 8, 5, 3 and 2 pages (the pieces refused on 2026-11-19), refusal only at 1 page, of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
 
 ### test_pdf_status.py (32 LOC)
 

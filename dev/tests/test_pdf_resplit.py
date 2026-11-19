@@ -41,13 +41,27 @@ def test_each_further_block_steps_down_twenty_ten_five(split_dir):
     assert spans(split_dir)[:4] == [(1, 10), (11, 15), (16, 20), (21, 40)]
 
 
-def test_each_further_block_steps_down_to_two_pages_and_two_pages_cannot_be_split(split_dir):
+def test_each_further_block_steps_down_to_one_page_and_one_page_cannot_be_split(split_dir):
     for piece in ("1-50", "1-20", "1-10", "1-5"):
         resplit_workflow(str(split_dir), piece)
     assert spans(split_dir)[:4] == [(1, 2), (3, 4), (5, 5), (6, 10)]
+    report = resplit_workflow(str(split_dir), "1-2")
+    assert "into 2 pieces of at most 1 page" in report.text
+    assert spans(split_dir)[:3] == [(1, 1), (2, 2), (3, 4)]
     with pytest.raises(WorkflowError) as raised:
-        resplit_workflow(str(split_dir), "1-2")
+        resplit_workflow(str(split_dir), "1-1")
     assert raised.value.failure_class == "piece_minimal"
+
+
+def test_the_two_page_piece_refused_on_2026_11_19_now_splits_into_single_pages(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Jensen_2001.pdf", numbered_pages(17))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    resplit_workflow(str(batch_dir), "1-17")
+    resplit_workflow(str(batch_dir), "11-17")
+    assert spans(batch_dir) == [(1, 10), (11, 15), (16, 17)]
+    resplit_workflow(str(batch_dir), "16-17")
+    assert spans(batch_dir) == [(1, 10), (11, 15), (16, 16), (17, 17)]
 
 
 def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
@@ -57,9 +71,12 @@ def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
     assert spans(split_dir)[2:] == [(71, 80), (81, 85)]
     resplit_workflow(str(split_dir), "81-85")
     assert spans(split_dir)[3:] == [(81, 82), (83, 84), (85, 85)]
-    with pytest.raises(WorkflowError) as raised:
-        resplit_workflow(str(split_dir), "85-85")
-    assert raised.value.failure_class == "piece_minimal"
+    resplit_workflow(str(split_dir), "83-84")
+    assert spans(split_dir)[4:] == [(83, 83), (84, 84), (85, 85)]
+    for page in ("83-83", "85-85"):
+        with pytest.raises(WorkflowError) as raised:
+            resplit_workflow(str(split_dir), page)
+        assert raised.value.failure_class == "piece_minimal"
 
 
 @pytest.mark.parametrize("pages, blocked, expected", [
