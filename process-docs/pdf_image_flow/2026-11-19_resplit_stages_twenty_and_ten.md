@@ -34,9 +34,27 @@ What this says about the hypothesis "smaller pieces get past the content filter"
 
 ### Not changed
 
-- No file under `skills/` was touched (task instruction). The skill sentences that name the stages and the `piece_minimal` size still describe the older ladders, as do the three patch files in `dev/pdf_image_flow/patch/`; the orchestrator writes the skill text.
+- No file under `skills/` was touched (task instruction). At commit e42a9b5 the skill sentences that named the stages and the `piece_minimal` size still described the older ladders, as did the three patch files in `dev/pdf_image_flow/patch/`; see the section "Skill text and the removed patch files" below.
 - The model choice is not in this code: `split` writes the worker model from `config/pdf_models.json` into the manifest, which was already Haiku (`claude-haiku-5-5[1m]`).
 
 ### Verification
 
 All `dev/tests/test_pdf_*.py` (11 files) and `dev/tests/test_cli_bootstrap.py` run in parallel, one pytest per file with its own `--basetemp`: 87 tests pass. The first run failed in `test_pdf_merge.py` only, because its mixed-size case resplit the 10-page piece 21-30, which is now refused as minimal; the test was adjusted, not the code.
+
+## Skill text and the removed patch files (2026-11-19)
+
+### Where the skill text lives
+
+The skill text is `skills/websearch-pdf/SKILL.md`, committed by the user on `integration` as 9356d06 ("docs: pdf skill for image-only flow, stages 20 and 10"), after the merge of e42a9b5 into integration as a83d146. That file is the only source of the skill text; agents never write it (a hook blocks every write under `skills/`). Checked on 2026-11-19 by reading the file in full, it describes:
+- the image-only flow `split`, `status`, `resplit`, `merge`, `sample`, `sample-report`, `sample-close`, `publish`, with the done rule "idle and `status` says `complete`";
+- the stages "20 Seiten, dann 10 Seiten. Kleiner wird nie geteilt", refusal with `piece_minimal` at 10 pages or fewer;
+- "Ein PDF wird ganz oder gar nicht indexiert";
+- Haiku for every worker via `MODEL_SELECTION_FILE`, never another model, not even as a last attempt.
+
+### Removed
+
+`dev/pdf_image_flow/patch/` with its three files `websearch-pdf_SKILL.patch`, `websearch-pdf_SKILL_incomplete_pieces.patch` and `websearch-pdf_SKILL_two_page_stage.patch`. They were diffs against earlier skill texts (the chain started at the unpatched skill on integration ea634f4) and do not apply to the file of 9356d06; their content is superseded by that file. That was the only content of `dev/pdf_image_flow/`, so the directory is gone and `pdf_image_flow` was removed from the list of area subdirectories in `dev/DOCS.md`. No other DOCS.md named the patch files.
+
+Statements in the earlier process-docs file of this area that no longer hold (not edited there): every instruction to apply the patches ("Apply from the repo root with `patch -p1 < ...`", "A real run of the skill has to apply ... first"), "the skill on the branch still describes `extract`, `assemble`, the control worker", and "The skill on integration at ea634f4 still had neither patch applied" as a description of the skill today.
+
+Not removed, outside this task: `dev/pdf_scan/patch/websearch-pdf_SKILL.patch`, which area pdf_image_flow already recorded as describing the removed scan flow and as not to be applied. It does not apply to 9356d06 either.
