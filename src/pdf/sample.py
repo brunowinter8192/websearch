@@ -5,10 +5,10 @@ from pathlib import Path
 
 from src.config import PIECE_PAGES, SAMPLE_SHARE
 from src.pdf.manifest import book_path, load_manifest
-from src.pdf.pieces import plan_ranges
+from src.pdf.pieces import page_markers, plan_ranges
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import (
-    STATUS_OPEN, findings_path, load_runs, loop_ended, page_markers, run_dir, sampled_pages, text_sha, write_run,
+    STATUS_OPEN, findings_path, load_runs, loop_ended, run_dir, sampled_pages, text_sha, write_run,
 )
 from src.pdf.templates import page_range, read_template, require_filled, substitute
 

@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from src.config import (
-    MANIFEST_FILE_NAME, PARAGRAPH_LIMIT_BYTES, PIECE_PAGES, PROJECT_ROOT, RESPLIT_PIECE_PAGES, SAMPLE_SHARE,
+    BLOCKED_DIR_NAME, MANIFEST_FILE_NAME, PARAGRAPH_LIMIT_BYTES, PIECE_PAGES, PROJECT_ROOT, RESPLIT_PIECE_PAGES, SAMPLE_SHARE,
     SAMPLES_DIR_NAME,
 )
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
@@ -142,6 +142,7 @@ def prepare_batch_dir(batch_dir: Path, manifest: dict) -> None:
             stale.unlink()
     book_path(batch_dir, manifest).unlink(missing_ok=True)
     shutil.rmtree(batch_dir / SAMPLES_DIR_NAME, ignore_errors=True)
+    shutil.rmtree(batch_dir / BLOCKED_DIR_NAME, ignore_errors=True)
 
 
 def format_summary(manifest: dict, batch_dir: Path) -> str:

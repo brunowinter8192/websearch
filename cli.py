@@ -26,6 +26,7 @@ from src.pdf.sample_close import sample_close_workflow
 from src.pdf.sample_report import sample_report_workflow
 from src.pdf.split import split_workflow
 from src.pdf.stats import stats_workflow
+from src.pdf.status import status_workflow
 from src.scraper.chromium_scrape import scrape_url_chromium_workflow
 from src.scraper.index_scrapes import index_scrapes_workflow
 from src.search.browser import kill_own_chrome_atexit
@@ -135,18 +136,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("collection", help="Target RAG collection name")
     p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
 
-    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: split, resplit, merge, sample, sample-report, sample-close, publish, stats.")
+    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: split, resplit, status, merge, sample, sample-report, sample-close, publish, stats.")
     pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
 
     pp = pdf_sub.add_parser("split", help="Split a PDF into 50-page pieces with worker prompts and manifest, from the page count alone.")
     pp.add_argument("--pdf", required=True, help="Path to the PDF")
     pp.add_argument("--batch-dir", required=True, help="Directory for prompts, manifest, worker output and samples")
 
-    pp = pdf_sub.add_parser("resplit", help="Split one blocked piece into smaller pieces (20, then 10, then 5 pages).")
+    pp = pdf_sub.add_parser("resplit", help="Split one blocked piece into smaller pieces (20, then 10, then 5, then 2 pages).")
     pp.add_argument("--batch-dir", required=True, help="Directory written by split")
     pp.add_argument("--piece", required=True, help="Page span of the blocked piece, e.g. 51-100")
 
-    pp = pdf_sub.add_parser("merge", help="Join all piece files in page order into <STEM>.md in the batch directory.")
+    pp = pdf_sub.add_parser("status", help="Per piece: complete, incomplete (page markers missing) or missing.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by split")
+
+    pp = pdf_sub.add_parser("merge", help="Join all complete piece files in page order into <STEM>.md in the batch directory.")
     pp.add_argument("--batch-dir", required=True, help="Directory written by split")
 
     pp = pdf_sub.add_parser("sample", help="Open the next sample run: draw 10 percent new pages, write excerpts and the sampling prompt.")
@@ -279,6 +283,8 @@ def _run_pdf_command(args):
         return split_workflow(args.pdf, args.batch_dir)
     if args.pdf_cmd == "resplit":
         return resplit_workflow(args.batch_dir, args.piece)
+    if args.pdf_cmd == "status":
+        return status_workflow(args.batch_dir)
     if args.pdf_cmd == "merge":
         return merge_workflow(args.batch_dir)
     if args.pdf_cmd == "sample":

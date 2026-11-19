@@ -375,21 +375,25 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `src/pdf/pieces.py` range planning for 50-page pieces and inside a piece, the one-wave boundary at 1 000 pages and the fixed worker count.
 
-### test_pdf_split.py (110 LOC)
+### test_pdf_split.py (112 LOC)
 
-**Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup, missing PDF.
+**Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup including `samples/` and `blocked/`, missing PDF.
 
-### test_pdf_resplit.py (94 LOC)
+### test_pdf_resplit.py (144 LOC)
 
-**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, remainders of 18 and 8 pages, refusal at 5 pages, of a finished piece and of an unknown span, finished pieces untouched.
+**Purpose:** `resplit`: 50 into 20, 20, 10, the steps 20, 10, 5, 2, remainders of 18, 8, 5 and 3 pages (the pieces refused on 2026-11-19), refusal at 2 pages and at 1 page, of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
+
+### test_pdf_status.py (32 LOC)
+
+**Purpose:** `status`: complete, incomplete with its missing pages, and missing pieces; a page without content counts when its marker is there.
 
 ### test_pdf_worker_prompt.py (80 LOC)
 
 **Purpose:** Rendered transcription prompts: one Read and one part file per 20 pages, step numbering from one, no anchor, single-read pieces, bare page number, form rules.
 
-### test_pdf_merge.py (75 LOC)
+### test_pdf_merge.py (91 LOC)
 
-**Purpose:** `merge`: pieces of mixed sizes in page order, no paragraph splitting, missing piece logged and nothing written, refusal after sampling started, missing manifest.
+**Purpose:** `merge`: pieces of mixed sizes in page order, no paragraph splitting, missing piece and incomplete piece (pages 1 to 5 of 12) logged and nothing written, refusal after sampling started, missing manifest.
 
 ### test_pdf_sample.py (121 LOC)
 
@@ -409,7 +413,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### test_pdf_cli.py (49 LOC)
 
-**Purpose:** Argument parsing of the `pdf` subcommands including repeated `--reject`, rejection of the removed `extract` and `assemble` and of a malformed `--since` date.
+**Purpose:** Argument parsing of the `pdf` subcommands including `status` and repeated `--reject`, rejection of the removed `extract` and `assemble` and of a malformed `--since` date.
 
 ### _pdf_fakes.py (83 LOC)
 

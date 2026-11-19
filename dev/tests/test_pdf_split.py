@@ -70,7 +70,7 @@ def test_split_logs_a_start_record_without_text_extraction_fields(tmp_path, conv
     assert start["run_id"] == read_manifest(tmp_path / "batches")["run_id"]
     assert (start["pages"], start["attempt"]) == (45, 1)
     assert start["config"]["piece_pages"] == 50
-    assert start["config"]["resplit_piece_pages"] == [20, 10, 5]
+    assert start["config"]["resplit_piece_pages"] == [20, 10, 5, 2]
     assert start["config"]["workers"] == 20
     assert start["config"]["sample_share"] == 0.1
     assert start["config"]["paragraph_limit_bytes"] == 900
@@ -94,10 +94,12 @@ def test_split_removes_its_stale_files_and_keeps_foreign_files(tmp_path, convers
     batch_dir = tmp_path / "batches"
     (batch_dir / "samples" / "run_1").mkdir(parents=True)
     (batch_dir / "samples" / "run_1" / "run.json").write_text("{}")
+    (batch_dir / "blocked").mkdir()
+    (batch_dir / "blocked" / "piece_1-12.md").write_text("stale")
     for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "outline.md", "notes.txt"):
         (batch_dir / name).write_text("stale")
     run_split(pdf, batch_dir)
-    for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "samples"):
+    for name in ("piece_1-40.md", "part1_1-40.md", "prompt_1-20.md", "Book.md", "samples", "blocked"):
         assert not (batch_dir / name).exists()
     assert (batch_dir / "outline.md").read_text() == "stale"
     assert (batch_dir / "notes.txt").read_text() == "stale"

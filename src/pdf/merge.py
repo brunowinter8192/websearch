@@ -4,6 +4,7 @@ from pathlib import Path
 from src.config import NEW_PARAGRAPH
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
 from src.pdf.manifest import book_path, load_manifest
+from src.pdf.pieces import STATE_COMPLETE, STATE_MISSING, piece_state
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import load_runs
 
@@ -32,9 +33,10 @@ def merge_logged(manifest: dict, batch_dir: Path) -> Report:
 
 def merge_pieces(manifest: dict, batch_dir: Path) -> Report:
     pieces = ordered_pieces(manifest)
-    missing = [piece for piece in pieces if not (batch_dir / piece["output"]).is_file()]
-    if missing:
-        return report_missing(manifest, pieces, missing)
+    states = [(piece, *piece_state(batch_dir, piece)) for piece in pieces]
+    unfinished = [entry for entry in states if entry[1] != STATE_COMPLETE]
+    if unfinished:
+        return report_unfinished(manifest, pieces, unfinished)
     return write_book(manifest, batch_dir, pieces)
 
 
@@ -46,13 +48,21 @@ def ordered_pieces(manifest: dict) -> list[dict]:
     return pieces
 
 
-def report_missing(manifest: dict, pieces: list[dict], missing: list[dict]) -> Report:
+def report_unfinished(manifest: dict, pieces: list[dict], unfinished: list[tuple[dict, str, list[int]]]) -> Report:
+    missing = [piece for piece, state, _ in unfinished if state == STATE_MISSING]
+    incomplete = [(piece, pages) for piece, state, pages in unfinished if state != STATE_MISSING]
+    failure_class = "missing_piece" if missing else "incomplete_piece"
     append_record(build_end_record(
-        manifest["run_id"], manifest["ts_start"], "failed", "missing_piece",
+        manifest["run_id"], manifest["ts_start"], "failed", failure_class,
         missing_pieces=[{"from": piece["from"], "to": piece["to"]} for piece in missing],
+        incomplete_pieces=[{"from": piece["from"], "to": piece["to"], "missing_pages": pages} for piece, pages in incomplete],
     ))
-    lines = [f"merge FAILED (missing_piece): {len(missing)} of {len(pieces)} pieces, nothing written"]
+    lines = [f"merge FAILED ({failure_class}): {len(unfinished)} of {len(pieces)} pieces unfinished, nothing written"]
     lines += [f"  piece {piece['from']}-{piece['to']}: missing_file {piece['output']}" for piece in missing]
+    lines += [
+        f"  piece {piece['from']}-{piece['to']}: incomplete, no page marker for pages " + " ".join(str(page) for page in pages)
+        for piece, pages in incomplete
+    ]
     return Report("\n".join(lines), False)
 
 

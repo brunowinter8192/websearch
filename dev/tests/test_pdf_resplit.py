@@ -41,11 +41,12 @@ def test_each_further_block_steps_down_twenty_ten_five(split_dir):
     assert spans(split_dir)[:4] == [(1, 10), (11, 15), (16, 20), (21, 40)]
 
 
-def test_a_piece_of_five_pages_cannot_be_split_further(split_dir):
-    for piece in ("1-50", "1-20", "1-10"):
+def test_each_further_block_steps_down_to_two_pages_and_two_pages_cannot_be_split(split_dir):
+    for piece in ("1-50", "1-20", "1-10", "1-5"):
         resplit_workflow(str(split_dir), piece)
+    assert spans(split_dir)[:4] == [(1, 2), (3, 4), (5, 5), (6, 10)]
     with pytest.raises(WorkflowError) as raised:
-        resplit_workflow(str(split_dir), "1-5")
+        resplit_workflow(str(split_dir), "1-2")
     assert raised.value.failure_class == "piece_minimal"
 
 
@@ -54,8 +55,26 @@ def test_a_remainder_skips_the_sizes_it_is_not_larger_than(split_dir):
     assert spans(split_dir)[1:] == [(51, 70), (71, 85)]
     resplit_workflow(str(split_dir), "71-85")
     assert spans(split_dir)[2:] == [(71, 80), (81, 85)]
-    with pytest.raises(WorkflowError):
-        resplit_workflow(str(split_dir), "81-85")
+    resplit_workflow(str(split_dir), "81-85")
+    assert spans(split_dir)[3:] == [(81, 82), (83, 84), (85, 85)]
+    with pytest.raises(WorkflowError) as raised:
+        resplit_workflow(str(split_dir), "85-85")
+    assert raised.value.failure_class == "piece_minimal"
+
+
+@pytest.mark.parametrize("pages, blocked, expected", [
+    (25, "21-25", [(21, 22), (23, 24), (25, 25)]),
+    (23, "21-23", [(21, 22), (23, 23)]),
+])
+def test_blocked_pieces_refused_on_2026_11_19_now_split_into_two_page_pieces(tmp_path, conversion_log, pages, blocked, expected):
+    pdf = write_pdf(tmp_path / "Article.pdf", numbered_pages(pages))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    resplit_workflow(str(batch_dir), f"1-{pages}")
+    report = resplit_workflow(str(batch_dir), blocked)
+    assert report.ok
+    assert "pieces of at most 2 pages" in report.text
+    assert spans(batch_dir)[1:] == expected
 
 
 def test_an_eighteen_page_piece_starts_with_ten_and_an_eight_page_piece_with_five(tmp_path, conversion_log):
@@ -92,3 +111,34 @@ def test_unknown_piece_is_refused(split_dir):
         with pytest.raises(WorkflowError) as raised:
             resplit_workflow(str(split_dir), piece)
         assert raised.value.failure_class == "piece_unknown"
+
+
+def test_a_blocked_piece_with_an_incomplete_file_is_split_and_its_file_set_aside(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Brennan_2012.pdf", numbered_pages(12))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    left = worker_output(1, 4) + "\n<!-- page 5 -->\n\nThe difference between the\n"
+    (batch_dir / "piece_1-12.md").write_text(left)
+    report = resplit_workflow(str(batch_dir), "1-12")
+    assert report.ok
+    assert spans(batch_dir) == [(1, 10), (11, 12)]
+    assert "set aside: blocked/piece_1-12.md" in report.text
+    assert not (batch_dir / "piece_1-12.md").exists()
+    assert (batch_dir / "blocked" / "piece_1-12.md").read_text() == left
+
+
+def test_part_files_left_by_a_blocked_split_worker_are_set_aside(tmp_path, conversion_log):
+    pdf = write_pdf(tmp_path / "Hayek_1939.pdf", numbered_pages(23))
+    batch_dir = tmp_path / "batches"
+    split_workflow(str(pdf), str(batch_dir))
+    (batch_dir / "part1_1-23.md").write_text(worker_output(1, 20))
+    report = resplit_workflow(str(batch_dir), "1-23")
+    assert "set aside: blocked/part1_1-23.md" in report.text
+    assert not (batch_dir / "part1_1-23.md").exists()
+    assert (batch_dir / "blocked" / "part1_1-23.md").is_file()
+    assert spans(batch_dir) == [(1, 20), (21, 23)]
+
+
+def test_a_blocked_piece_without_any_file_sets_nothing_aside(split_dir):
+    report = resplit_workflow(str(split_dir), "51-85")
+    assert "set aside: none" in report.text

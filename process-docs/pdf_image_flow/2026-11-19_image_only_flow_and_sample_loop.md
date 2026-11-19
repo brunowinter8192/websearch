@@ -99,3 +99,61 @@ Mistakes made, so that they are not repeated:
 - A constant used by two modules was first defined twice (the review finding). Before committing, list the module constants of the package and look for duplicates: `grep -h -E "^[A-Z_]+ = " src/pdf/*.py | awk -F' = ' '{print $1}' | sort | uniq -d`.
 - One test expectation was computed wrongly the first time (the number of pieces after three resplits, 6 not 7); the code was right.
 - The first excerpt diff in `report.md` showed an empty "before" for a pure insertion; context lines were added so that the place of an insertion is visible.
+
+## Incomplete piece files (2026-11-19, after the merge into integration)
+
+### Observed in the first real run (relayed by the orchestrator)
+
+- Brennan 2012, piece 1-12, single-read prompt. The Haiku worker wrote `piece_1-12.md` with one Write call, then kept changing it with Edit calls (adding footnotes page by page), and was then blocked with `API Error: Output blocked by content filtering policy`. The file left behind: 17 074 bytes, page markers 1 to 5 only, page 5 holds 37 characters, pages 6 to 12 absent. An earlier conversion of the same 12 pages had about 60 000 bytes.
+- Consequences in the code of the first build: the skill's rule "finished = idle and the file exists" called the piece finished; `resplit` refused it with `piece_finished` until the orchestrator moved the file away by hand; `merge` would have joined it, because it only checked that the file exists.
+- A blocked worker of piece 1-23 (split prompt) left `part1_1-23.md` behind. This contradicts the first build's statement above that no part file was observed after a block; that statement held for the six blocked attempts before the first real run.
+- The statement "a block hits the first write" (area pdf_form) does not hold in general: in Brennan the block came after a Write and several Edits.
+
+### What was built
+
+- **Completeness of a piece file = the line `<!-- page N -->` is present for every page N of the piece.** Computed from the worker's Markdown only, never from the PDF. `piece_state` in `pieces.py` returns `complete`, `incomplete` with the pages whose marker is missing, or `missing`. Order, duplicates and extra markers are not checked (not observed). Brennan's file is `incomplete` with pages 6 to 12.
+- **New command `pdf status --batch-dir`**: one line per piece in page order plus `pieces complete: X of Y`. It replaces "the file exists" as the done signal in the skill.
+- **`merge` requires every piece complete.** Failure class `missing_piece` if any file is absent, otherwise `incomplete_piece`; the end record carries `missing_pieces` and `incomplete_pieces` (`from`, `to`, `missing_pages`); nothing is written.
+- **`resplit` refuses only a complete piece** (`piece_finished`). For an incomplete or missing piece it splits as before and then moves the piece file and every part file named in the manifest entry (`part<n>_<a>-<b>.md`) into `BATCH_DIR/blocked/`, keeping their names; the output line `set aside:` lists them. Nothing is deleted, so the evidence of a block survives. `split` removes `blocked/` together with its other stale files. `BLOCKED_DIR_NAME` sits in `src/config.py` (used by `split.py` and `resplit.py`). The page-marker regex and `page_markers` moved from `sample_runs.py` to `pieces.py`, because the completeness check needs them too; `sample_runs.py` and `sample.py` import them from there.
+- No command or flag to force a resplit of a complete piece was added: not needed for anything observed.
+
+### Trade-off of the marker criterion, recorded so it is not rediscovered
+
+Area pdf_workflow observed on 2026-10-11 a batch with complete content and one lost marker (batch 661-680, marker 675 missing, old prompt). Under the new rule such a piece is `incomplete`. The skill tells the orchestrator to send the missing pages to the living worker (it adds the marker or the text) or, if the worker is gone, to resplit the piece, which redoes correct work. That costs a re-transcription, never a silent gap in the book. A stricter content criterion would need the PDF and is ruled out by decision 1.
+
+### Not changed, open
+
+- The transcription prompt still allows Edit calls after the Write. Whether forbidding them would have avoided the Brennan truncation is unknown (hypothesis); no prompt change was requested.
+- A worker that is still running while its file is incomplete is also reported `incomplete`. The skill's done rule needs both idle and `complete`; `resplit` must only follow the kill of the worker (skill step 1 of the block procedure).
+
+### Skill
+
+The changed sentences are in a second patch `dev/pdf_image_flow/patch/websearch-pdf_SKILL_incomplete_pieces.patch`, made against the skill text produced by the first patch `dev/pdf_image_flow/patch/websearch-pdf_SKILL.patch`. Checked: applying both patches in order to the skill on integration (ea634f4) reproduces the intended text byte for byte. The skill on integration at ea634f4 still had neither patch applied.
+
+### Verification
+
+Hermetic tests from the two observed cases: a 12-page piece file holding pages 1 to 4 plus the start of page 5 (status, merge refusal with the end record, resplit to 1-10 and 11-12 with the file kept in `blocked/`); a 23-page piece with only `part1_1-23.md` left (resplit sets it aside, pieces 1-20 and 21-23); a blank page with its marker counts as complete. PDF and CLI tests: 12 files (11 `test_pdf_*.py` plus `test_cli_bootstrap.py`), 84 tests; full suite 92 strands, 1 skipped, 0 failed. CLI smoke of the Brennan case through `cli.py` with a scratch log: status `incomplete (no page marker for pages 6 7 8 9 10 11 12)`, merge `FAILED (incomplete_piece)`, resplit `set aside: blocked/piece_1-12.md`, status afterwards `1-10 missing`, `11-12 missing`.
+
+## Two-page stage (2026-11-19, user decision)
+
+### Decision
+
+Blocked pieces are also split into pieces of 2 pages. The stages are 20, then 10, then 5, then 2 pages. This supersedes the ladder "20, 10, 5" in decision 5 and every statement above that a piece of 5 pages or fewer is final.
+
+### Observed in the real run on 2026-11-19 (relayed by the orchestrator)
+
+- Blocked at the first write and refused by `resplit` with `piece_minimal` under the old ladder: Schelling 21-25 (5 pages), Hayek 21-23 (3 pages), Jensen 11-15 (5 pages), Jensen 16-17 (2 pages).
+- Also blocked, at larger sizes: Jensen 1-10, Schelling 1-20.
+- Passed after a block: Brennan 11-12 (2 pages), after Brennan 1-12 had been blocked.
+- So the hypothesis "smaller pieces get past the filter" has one supporting case (Brennan 11-12) and one case against it at the new floor (Jensen 16-17, 2 pages, blocked). Under the new ladder Jensen 16-17 is still refused with `piece_minimal`, and Jensen is still not indexed unless that piece passes on another attempt. Nothing shows that a 1-page piece would pass; 1 page is not a stage by decision.
+
+### What changed
+
+- `RESPLIT_PIECE_PAGES = (20, 10, 5, 2)` in `src/config.py`. The rule is unchanged: the largest stage strictly smaller than the blocked piece. Consequences: 5 pages -> 2, 2, 1 (Schelling 21-25 -> 21-22, 23-24, 25); 3 pages -> 2, 1 (Hayek 21-23 -> 21-22, 23); 4 pages -> 2, 2. A blocked piece of 2 pages or 1 page (a remainder such as 25 or 23) is refused with `piece_minimal`.
+- The logged config field `resplit_piece_pages` is now `[20, 10, 5, 2]`, so runs from this build have a new `config_hash`.
+- The `resplit` CLI help names the four stages.
+- Tests: the two refused 2026-11-19 cases (5 and 3 pages) as a parametrized test, the step from 5 to 2, 2, 1 with the refusal at 2 pages, the remainder 81-85 -> 81-82, 83-84, 85 with the refusal at the 1-page piece 85. 12 test files, 86 tests pass.
+
+### Skill
+
+Third patch `dev/pdf_image_flow/patch/websearch-pdf_SKILL_two_page_stage.patch` against the text after the second patch. Checked: the three patches applied in order to the skill on integration (ea634f4, still unpatched) reproduce the intended text byte for byte.
