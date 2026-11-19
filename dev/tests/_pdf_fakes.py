@@ -4,10 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from src.pdf.extract import extract_workflow
-
 LINES_PER_PAGE = 20
-LAYER_SHIFT_PT = 3
 
 
 # FUNCTIONS
@@ -15,12 +12,11 @@ def page_lines(number: int) -> list[str]:
     return [f"Kapitel {number} Zeile {line} Kostenrechnung Deckungsbeitrag Gemeinkosten" for line in range(1, LINES_PER_PAGE + 1)]
 
 
-def write_pdf(path: Path, page_texts: list) -> Path:
+def write_pdf(path: Path, page_texts: list[list[str]]) -> Path:
     objects: list[bytes] = [b"", b"", b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
     page_ids = []
-    for page in page_texts:
-        lines, layers = page if isinstance(page, tuple) else (page, 1)
-        stream = content_stream(lines, layers)
+    for lines in page_texts:
+        stream = content_stream(lines)
         content_id = len(objects) + 2
         page_ids.append(len(objects) + 1)
         objects.append(
@@ -35,14 +31,10 @@ def write_pdf(path: Path, page_texts: list) -> Path:
     return path
 
 
-def content_stream(lines: list[str], layers: int = 1) -> bytes:
+def content_stream(lines: list[str]) -> bytes:
     if not lines:
         return b""
-    body = []
-    for layer in range(layers):
-        body += ["BT", "/F1 11 Tf", "14 TL", f"{50 + layer * LAYER_SHIFT_PT} 750 Td"]
-        body += [f"({escape(line)}) Tj T*" for line in lines]
-        body.append("ET")
+    body = ["BT", "/F1 11 Tf", "14 TL", "50 750 Td"] + [f"({escape(line)}) Tj T*" for line in lines] + ["ET"]
     return "\n".join(body).encode("latin-1")
 
 
@@ -63,29 +55,25 @@ def serialize(objects: list[bytes]) -> bytes:
     return bytes(out)
 
 
-def numbered_pages(count: int, blank: tuple[int, ...] = (), layered: dict[int, int] | None = None) -> list:
-    layered = layered or {}
-    return [
-        [] if number in blank else (page_lines(number), layered.get(number, 1))
-        for number in range(1, count + 1)
-    ]
+def numbered_pages(count: int, blank: tuple[int, ...] = ()) -> list[list[str]]:
+    return [[] if number in blank else page_lines(number) for number in range(1, count + 1)]
 
 
-def worker_output(first: int, last: int, dropped_lines: int = 0, blank: tuple[int, ...] = ()) -> str:
-    parts = []
-    for number in range(first, last + 1):
-        lines = [] if number in blank else page_lines(number)
-        kept = lines[:len(lines) - dropped_lines] if lines else lines
-        parts.append(f"<!-- page {number} -->\n\n" + "\n".join(kept) + "\n")
-    return "\n".join(parts)
+def worker_output(first: int, last: int) -> str:
+    return "\n".join(f"<!-- page {number} -->\n\n" + "\n".join(page_lines(number)) + "\n" for number in range(first, last + 1))
 
 
 def read_log(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def run_extract(pdf: Path, batch_dir: Path):
-    return extract_workflow(str(pdf), str(batch_dir))
+def read_manifest(batch_dir: Path) -> dict:
+    return json.loads((batch_dir / "manifest.json").read_text(encoding="utf-8"))
+
+
+def write_pieces(batch_dir: Path) -> None:
+    for piece in read_manifest(batch_dir)["pieces"]:
+        (batch_dir / piece["output"]).write_text(worker_output(piece["from"], piece["to"]), encoding="utf-8")
 
 
 @pytest.fixture

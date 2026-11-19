@@ -2,34 +2,124 @@
 
 ## Role
 
-PDF to markdown tooling for the websearch-pdf skill: decides per PDF between text mode and scan mode, splits it into fixed-size batches with ready worker prompts, joins the worker output after a content check, and answers conversion statistics from an append-only log. No model runs here; the workers are spawned by the skill. Touch it when the batch protocol, a check or the log changes.
+PDF to markdown tooling for the websearch-pdf skill: splits a PDF into page-range pieces with ready worker prompts, splits a blocked piece further, merges the piece files, runs the sample loop in which a sampling worker corrects excerpts, and publishes the book. No model runs here and no PDF text layer is read; the skill spawns the workers. Touch it when the piece protocol, the sample loop or the log changes.
 
 ## Public Interface
 
-`__init__.py` is empty. Entry path is `python cli.py pdf extract|assemble|stats`; cli.py imports the three workflow functions. Other modules are internal.
+`__init__.py` is empty. Entry path is `python cli.py pdf split|resplit|merge|sample|sample-report|sample-close|publish|stats`; cli.py imports the eight workflow functions. Other modules are internal.
 
 ## Flow
 
-extract: PDF in, mode decision from the text layer (`text` or `scan`, written to the manifest), start record logged. Text mode: one liteparse parse, per-batch anchor file and worker prompt. Scan mode: per-batch image-only worker prompt, a seeded draw of control pages (`control_pages` in the manifest) and one `prompt_control.md` for a single control worker. Skill spawns the workers. assemble: manifest and worker batch files in; text mode compares each batch against the PDF text layer (outlier pages left out and named); scan mode reads `control.json` of the control worker and fails on a missing file, a missing drawn page or a grave finding. One markdown file out only if everything passes, with over-long paragraphs split after the check, end record logged. stats: log in, summary text out.
+split: PDF in, page count from `pdfinfo`, start record logged, one prompt per 50-page piece and the manifest out. Workers write the piece files. resplit: one blocked piece in the manifest is replaced by smaller pieces with new prompts. merge: all piece files joined in page order into `<STEM>.md` in the batch directory. sample loop: `sample` draws new pages and cuts excerpts, the sampling worker corrects excerpts, `sample-report` shows every correction, `sample-close` writes the accepted ones back. publish: after the loop ended, paragraphs split to the embedder limit, `<STEM>.md` written to the output directory, end record logged. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (332 LOC)
+### split.py (154 LOC)
 
-**Purpose:** Orchestrates the extract command: mode decision, anchors and worker prompts (text) or scan prompts, control draw and control prompt (scan), manifest.
-**Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
-**Writes:** anchors, prompts, `prompt_control.md` and manifest in the batch directory (removes its own stale files there, including `control.json`); start record in the conversion log.
+**Purpose:** Orchestrates the split command: page count, start record, 50-page pieces with their prompts, manifest, cleanup of its own stale files.
+**Reads:** the PDF (sha256 and `pdfinfo` page count only), `config/pdf_models.json`, `prompts/`.
+**Writes:** prompts and manifest in the batch directory (removes its own stale files there, the merged book and `samples/`); start record in the conversion log.
 **Called by:** cli.py.
-**Calls out:** liteparse, poppler (via pdf_text.py).
+**Calls out:** poppler (`pdfinfo`).
 
 ---
 
-### assemble.py (364 LOC)
+### resplit.py (62 LOC)
 
-**Purpose:** Orchestrates the assemble command: per-batch content check (text layer recall in text mode, `control.json` findings in scan mode), all-or-nothing join, paragraph splitting, atomic write of `<STEM>.md`.
-**Reads:** manifest, batch files and `control.json` in the batch directory, the PDF text layer (text mode only).
-**Writes:** the markdown file in the output directory (atomic); end record in the conversion log.
+**Purpose:** Orchestrates the resplit command: replaces one blocked, unfinished piece by pieces of the next smaller size and writes their prompts.
+**Reads:** manifest and piece files in the batch directory.
+**Writes:** manifest, new prompts; removes the prompt of the replaced piece.
 **Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### merge.py (64 LOC)
+
+**Purpose:** Orchestrates the merge command: presence of every piece file, join in page order into the working book.
+**Reads:** manifest, piece files, `samples/` (refuses once sampling started).
+**Writes:** `<STEM>.md` in the batch directory; an end record in the conversion log when a piece is missing or merge fails.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### sample.py (125 LOC)
+
+**Purpose:** Orchestrates the sample command: draws the pages of the next run among pages never sampled, cuts excerpts, writes the run file and the sampling prompt.
+**Reads:** manifest, the working book, earlier run files.
+**Writes:** `samples/run_<k>/` with excerpt files, `run.json` and `prompt.md`.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### sample_report.py (79 LOC)
+
+**Purpose:** Orchestrates the sample-report command: report of the open run with sampled pages, worker findings and every correction before and after.
+**Reads:** the open run file, its excerpt files and `findings.md`.
+**Writes:** `report.md` in the run directory.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### sample_close.py (77 LOC)
+
+**Purpose:** Orchestrates the sample-close command: writes accepted excerpt corrections into the working book, closes the run, states whether the loop continues.
+**Reads:** manifest, the open run file, its excerpt files and `findings.md`, the working book.
+**Writes:** the working book, the run file.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### publish.py (156 LOC)
+
+**Purpose:** Orchestrates the publish command: refuses before the sample loop ended, splits over-long paragraphs, atomic write of `<STEM>.md` to the output directory.
+**Reads:** manifest, run files, the working book.
+**Writes:** the markdown file in the output directory (atomic); the ok end record in the conversion log.
+**Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### sample_runs.py (77 LOC)
+
+**Purpose:** Run files of the sample loop: loading, writing, sampled pages, loop end rule, page markers, changed excerpts.
+**Reads:** `samples/run_<k>/` files.
+**Writes:** `run.json`.
+**Called by:** sample.py, sample_report.py, sample_close.py, publish.py, merge.py.
+**Calls out:** none.
+
+---
+
+### pieces.py (74 LOC)
+
+**Purpose:** Piece planning and the rendered transcription worker prompt with its part files and concatenation command.
+**Reads:** `prompts/`.
+**Writes:** prompt files.
+**Called by:** split.py, resplit.py, sample.py.
+**Calls out:** none.
+
+---
+
+### manifest.py (22 LOC)
+
+**Purpose:** Manifest read and write, path of the working book.
+**Reads:** `manifest.json`.
+**Writes:** `manifest.json`.
+**Called by:** split.py, resplit.py, merge.py, sample.py, sample_close.py, publish.py.
+**Calls out:** none.
+
+---
+
+### templates.py (27 LOC)
+
+**Purpose:** Prompt template reading, placeholder filling and its tripwire, page-range notation.
+**Reads:** `prompts/`.
+**Writes:** none.
+**Called by:** pieces.py, sample.py, split.py.
 **Calls out:** none.
 
 ---
@@ -49,18 +139,8 @@ extract: PDF in, mode decision from the text layer (`text` or `scan`, written to
 **Purpose:** Append-only JSONL conversion log: path, record writer and reader, end-record builder, failure logging.
 **Reads:** `WEBSEARCH_CONVERSION_LOG_PATH` from the environment; the log file.
 **Writes:** `src/logs/conversions.jsonl` (gitignored, not pruned by the janitor).
-**Called by:** extract.py, assemble.py, stats.py.
+**Called by:** split.py, merge.py, publish.py, stats.py.
 **Calls out:** none.
-
----
-
-### pdf_text.py (40 LOC)
-
-**Purpose:** Poppler wrappers (page count, text of a page range, text per page) and the character count used by the gate and the content check.
-**Reads:** the PDF.
-**Writes:** none.
-**Called by:** extract.py, assemble.py.
-**Calls out:** poppler (`pdfinfo`, `pdftotext`).
 
 ---
 
@@ -69,13 +149,13 @@ extract: PDF in, mode decision from the text layer (`text` or `scan`, written to
 **Purpose:** Result type of the workflows and the error type that carries a failure class.
 **Reads:** none.
 **Writes:** none.
-**Called by:** extract.py, assemble.py, stats.py, pdf_text.py, conversion_log.py, cli.py.
+**Called by:** every workflow module, templates.py, manifest.py, sample_runs.py, conversion_log.py, cli.py.
 **Calls out:** none.
 
 ---
 
 ## State
 
-None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory written by extract and completed by the workers.
+None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: manifest and prompts written by split and resplit, piece files by the workers, the working book by merge and sample-close, `samples/run_<k>/` by sample and the sampling worker.
 
-Prompt templates live in `prompts/`: text worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`), scan worker (`scan_worker_prompt.md`, `scan_steps_single.md`, `scan_steps_split.md`) and control worker (`control_prompt.md`, `control_page_steps.md`). Details, decisions and observed evidence: process-docs/pdf_workflow (text mode), process-docs/pdf_scan (scan mode) and process-docs/pdf_form (form rules of the output).
+Prompt templates live in `prompts/`: transcription worker (`worker_prompt.md`, `steps_single.md`, `steps_split.md`, `chunk_steps.md`) and sampling worker (`sample_prompt.md`, `sample_excerpt_steps.md`). Details, decisions and observed evidence: process-docs/pdf_image_flow (this design), process-docs/pdf_form (form rules), process-docs/pdf_workflow and process-docs/pdf_scan (the earlier text and scan modes).

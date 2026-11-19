@@ -14,7 +14,7 @@ File logging is configured as the first step of main, before argparse runs; no s
 
 ## Modules
 
-### cli.py (288 LOC)
+### cli.py (320 LOC)
 
 **Purpose:** CLI entry point: main sets up rotating file logging and the browser at-exit cleanup, then dispatches the seven subcommands to their workflows in src/search, src/scraper, src/crawler and src/pdf.
 **Reads:** CLI arguments, the disk cache of search pools (drilldown path).
