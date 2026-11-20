@@ -70,8 +70,17 @@ Tests: `dev/tests/test_pdf_sample_duplicates.py`, 2 tests parametrized over the 
 
 ## Statements elsewhere that no longer hold (recorded here, not edited there)
 
-- `src/pdf/prompts/sample_prompt.md` says an excerpt begins with the page before the checked page because a paragraph that continues on the checked page stands completely there. Both observed cases contradict it: with a table or figure page between, the paragraph stands two pages before. The prompt was not changed (out of scope).
+- `src/pdf/prompts/sample_prompt.md` said an excerpt begins with the page before the checked page because a paragraph that continues on the checked page stands completely there. Both observed cases contradict it: with a table or figure page between, the paragraph stands two pages before. Corrected after review, see the next section.
 - Area pdf_image_flow: "That covers the text of page N that stands in page N-1's section under the paragraph rule". It does not cover text joined over a whole table or figure page.
+
+## Follow-up after review: sampling prompt corrected (2026-11-20, user request)
+
+Commit b41fa7d ("fix: sampling prompt on continuations from several pages earlier"), `src/pdf/prompts/sample_prompt.md` only:
+- Intro, before: "An excerpt begins with the page before the page you check, because a paragraph that begins on that page and continues on the checked page stands completely on the page where it begins."
+- Intro, after: "An excerpt begins with the page before the page you check. A paragraph that continues on the checked page stands completely on the page where it begins. That page can be several pages earlier when table or figure pages lie between, and then the paragraph is not in the excerpt. Continuation text at the top of a checked page that is missing from the excerpt for this reason is not a finding: do not add it."
+- "Not findings" bullet, before: "text of a checked page that stands before its line <!-- page N --> because its paragraph began on the page before"; after: "... stands before its line <!-- page N --> or before the excerpt, because its paragraph began on an earlier page".
+
+Prevention and safety net together: the prompt should keep the worker from inserting the continuation; if it still does, `sample-close` rejects the insertion as before. Whether Haiku follows the new sentence is not verified, because no sampling worker ran with it. The prompt files are hashed into `prompt_sha` of the extract start record, so the next extract has a new `config_hash`. Existing batches keep their already written `samples/run_<k>/prompt.md`; only runs opened after this commit get the new text. Tests: `test_pdf_sample.py` 11, `test_pdf_sample_loop.py` 8, `test_pdf_extract.py` 20 passed.
 
 ## How the work ran, what to reuse
 
