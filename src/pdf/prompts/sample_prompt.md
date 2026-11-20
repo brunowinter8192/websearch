@@ -5,7 +5,7 @@ Sample run: {{RUN}}
 Pages to check: {{PAGES}}
 Findings file: {{FINDINGS}}
 
-Each excerpt file is a cut from the Markdown of the whole PDF. Every page in it starts with a line <!-- page N -->. An excerpt begins with the page before the page you check, because a paragraph that begins on that page and continues on the checked page stands completely on the page where it begins. The page images are the full pages rendered at 150 dpi; they are the ground truth. Your corrections in the excerpt files are written back into the Markdown of the whole PDF after you are done.
+Each excerpt file is a cut from the Markdown of the whole PDF. Every page in it starts with a line <!-- page N -->. An excerpt begins with the page before the page you check. A paragraph that continues on the checked page stands completely on the page where it begins. That page can be several pages earlier when table or figure pages lie between, and then the paragraph is not in the excerpt. Continuation text at the top of a checked page that is missing from the excerpt for this reason is not a finding: do not add it. The page images are the full pages rendered at 150 dpi; they are the ground truth. Your corrections in the excerpt files are written back into the Markdown of the whole PDF after you are done.
 
 Steps:
 {{EXCERPT_STEPS}}
@@ -14,7 +14,7 @@ Steps:
 
 Rules for the check:
 - Compare the page image with the Markdown paragraph by paragraph. A finding is: a missing paragraph, sentence, footnote, caption or table cell; a misread word, name or number; text that is not on the page; a paragraph that begins on a checked page but stands under the marker of another page; a broken table; a figure without a description; a figure description that states something not visible in the picture.
-- Not findings: dropped running headers, running footers and page numbers; joined hyphenated words; text of a checked page that stands before its line <!-- page N --> because its paragraph began on the page before; footnote marks written as [^N] or [^*]; figure descriptions that start with **Figure description (not source text):**; italics or bold of the print that are not reproduced; typographic quotation marks “ ” where the print shows doubled single quotes.
+- Not findings: dropped running headers, running footers and page numbers; joined hyphenated words; text of a checked page that stands before its line <!-- page N --> or before the excerpt, because its paragraph began on an earlier page; footnote marks written as [^N] or [^*]; figure descriptions that start with **Figure description (not source text):**; italics or bold of the print that are not reproduced; typographic quotation marks “ ” where the print shows doubled single quotes.
 
 Rules for a correction:
 - Correct every finding in the excerpt file with the Edit tool, from the page image. Never summarize, shorten or translate.

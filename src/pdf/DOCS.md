@@ -10,7 +10,7 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
 
 ## Modules
 
@@ -64,22 +64,32 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### sample_report.py (79 LOC)
+### sample_report.py (101 LOC)
 
-**Purpose:** Orchestrates the sample-report command: report of the open run with sampled pages, worker findings and every correction before and after.
-**Reads:** the open run file, its excerpt files and `findings.md`.
+**Purpose:** Orchestrates the sample-report command: report of the open run with sampled pages, worker findings, every correction before and after, duplicate insertions marked.
+**Reads:** manifest, the working book, the open run file, its excerpt files and `findings.md`.
 **Writes:** `report.md` in the run directory.
 **Called by:** cli.py.
 **Calls out:** none.
 
 ---
 
-### sample_close.py (77 LOC)
+### sample_close.py (96 LOC)
 
-**Purpose:** Orchestrates the sample-close command: writes accepted excerpt corrections into the working book, closes the run, states whether the loop continues.
+**Purpose:** Orchestrates the sample-close command: rejects duplicate insertions, writes accepted excerpt corrections into the working book, closes the run, states whether the loop continues.
 **Reads:** manifest, the open run file, its excerpt files and `findings.md`, the working book.
 **Writes:** the working book, the run file.
 **Called by:** cli.py.
+**Calls out:** none.
+
+---
+
+### sample_duplicates.py (69 LOC)
+
+**Purpose:** Judges each changed excerpt: correction, duplicate (every change inserts text ending a paragraph before the excerpt) or mixed, with the source pages.
+**Reads:** none (book text and excerpts passed in).
+**Writes:** none.
+**Called by:** sample_report.py, sample_close.py.
 **Calls out:** none.
 
 ---
@@ -109,7 +119,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 **Purpose:** Text layer coverage of the extracted pages: stops extract on words missing outside regions, returns words missing inside table and figure regions.
 **Reads:** the converted PDF pages.
 **Writes:** none.
-**Called by:** extract.py, assemble.py.
+**Called by:** extract.py, assemble.py, sample_duplicates.py.
 **Calls out:** pymupdf.
 
 ---
@@ -139,7 +149,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 **Purpose:** Page marker lines and run files of the sample loop: loading, writing, sampled pages, loop end rule, changed excerpts and their marker check.
 **Reads:** `samples/run_<k>/` files.
 **Writes:** `run.json`.
-**Called by:** sample.py, sample_report.py, sample_close.py, publish.py, assemble.py.
+**Called by:** sample.py, sample_report.py, sample_close.py, sample_duplicates.py, publish.py, assemble.py.
 **Calls out:** none.
 
 ---
@@ -149,7 +159,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 **Purpose:** Manifest read and write, path of the working book.
 **Reads:** `manifest.json`.
 **Writes:** `manifest.json`.
-**Called by:** extract.py, status.py, apply_outline.py, assemble.py, sample.py, sample_close.py, publish.py.
+**Called by:** extract.py, status.py, apply_outline.py, assemble.py, sample.py, sample_report.py, sample_close.py, publish.py.
 **Calls out:** none.
 
 ---

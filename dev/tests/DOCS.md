@@ -395,6 +395,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** The sample loop end to end: report with findings and before and after text, close writes corrections back, loop end without correction or after every page, rejected corrections, publish refusals and the published book with a long correction split to the limit and its end record.
 
+### test_pdf_sample_duplicates.py (81 LOC)
+
+**Purpose:** The sample loop on the two observed duplicate insertions (continuation joined over a table or figure page and added again by the sampling worker): report marks them, close rejects them and the loop ends.
+
 ### test_pdf_split_paragraphs.py (120 LOC)
 
 **Purpose:** `src/pdf/publish.py` paragraph splitting: byte limit with umlauts, sentence and space boundaries, list blocks, tables with repeated head, unsplittable leftovers, counts, untouched text.
