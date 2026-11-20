@@ -1,6 +1,6 @@
 # 2026-11-20 - Second batch: drop cap, table box over the text column, hidden text, bottom footnote continuations
 
-Area: pdf_repair_flow. Worker branch `pdf-batch2`, base `integration` (44e3701). Code commit 68ab230 ("fix: drop caps, column tables, hidden text and bottom footnote joins"). Builds on the page join and text coverage work recorded earlier in this area.
+Area: pdf_repair_flow. Worker branch `pdf-batch2`, base `integration` (44e3701). Code commits 68ab230 ("fix: drop caps, column tables, hidden text and bottom footnote joins") and the follow-up "fix: page-1 running boxes and e-mail endings close page joins". Builds on the page join and text coverage work recorded earlier in this area.
 
 ## Starting point (2026-11-20)
 
@@ -97,7 +97,7 @@ Schrage, copy of the batch: `assemble ok`, 9 joins:
 
 | join | end of page | start of next | judgement |
 |---|---|---|---|
-| 1->2 body | `**JCC 18** _Summer 2005_` | `Reports of slave labour on cocoa farms surfaced as early as ` | wrong |
+| 1->2 body | `**JCC 18** _Summer 2005_` | `Reports of slave labour on cocoa farms surfaced as early as ` | wrong, removed by the follow-up below |
 | 4->5 body | `ld labour under this Convention.[^14] Growing cocoa involves` | `long hours in the sun performing physically demanding work. ` | right |
 | 4->5 footnote | ` ‘likely to jeopardize the health, safety or morals of young` | `> persons’ the minimum age is 18 years also; ILO C138, art. ` | right, `> ` dropped |
 | 5->6 footnote | ` children rescued in 2002; however, all anti-trafficking law` | `enforcement efforts in Côte d’Ivoire have ceased since the c` | right |
@@ -107,11 +107,36 @@ Schrage, copy of the batch: `assemble ok`, 9 joins:
 | 9->10 body | `adopted a Declaration and Plan of Action against Trafficking` | `in Persons calling on member states to criminalise trafficki` | right |
 | 12->13 body | `ake local law the default minimum standard (Ewing 2004). The` | `CIP participants represent substantial leverage within the g` | right |
 
-1->2 is wrong and not fixed. Page 1 ends, after `[^*]:`, with the page-1 footer `**JCC 18** _Summer 2005_`, which extract keeps because running boxes on page 1 are kept unless they are a bare page number. Page 2 starts a new section with the drop cap `R`. Without the footer, the target would still be wrong: the body paragraph before the footnote is `! aewing@law.columbia.edu`, an author address without a full stop. Possible rules, none built:
+1->2 was wrong and was left unfixed in 68ab230. Page 1 ends, after `[^*]:`, with the page-1 footer `**JCC 18** _Summer 2005_`, which extract keeps because running boxes on page 1 are kept unless they are a bare page number. Page 2 starts a new section with the drop cap `R`. Without the footer, the target would still be wrong: the body paragraph before the footnote is `! aewing@law.columbia.edu`, an author address without a full stop. Two candidate rules, both built in the follow-up below at the user's request:
 - A paragraph ending in an e-mail address is closed. Observed twice: here, and in the Moura page 1 footnotes.
 - Mark page-1 running boxes so that assemble can skip them, for example their texts in the manifest, compared after `normalized`.
 
 Regression, assemble on copies with `samples/` removed: Scholtens 9, Hayek 23, Conley 22, Contreras 13, Heilmayr 9 and Moura 6 joins. The join list and the joined text of every join (60 characters each side) are identical before (code of 44e3701) and after. The extract side was simulated over a cached converter output of all nine PDFs (`build_page` plus `require_coverage`). All page texts, regions, headings and missing-word lists are identical for Scholtens, Hayek, Conley, Contreras, Heilmayr, Moura and Schrage. Only Schouten page 9 changed, and Wright now passes.
+
+## Follow-up: Schrage 1->2, page-1 running boxes and e-mail endings (user decision)
+
+The user ordered both candidate rules, because both conditions are observed on Schrage page 1, and either one alone leaves a wrong join:
+- With only the e-mail rule, the target is the footer. Checked on a copy with an empty `running` list: `1->2(body)` `**JCC 18** _Summer 2005_` + `Reports ...`.
+- With only the footer rule, the target is `! aewing@law.columbia.edu` + `Reports ...`. This was observed in the rejected experiment above, where the footer was excluded by its position after the footnote.
+
+Built:
+1. extract writes the spans of the running boxes it keeps on page 1 into the manifest under `running`, in page order. A bare page number or an empty span is dropped as before and is not listed. Values from the re-extracted batches:
+    - Schrage `**JCC 18** _Summer 2005_`.
+    - Scholtens: the `World Development Vol. 35 ...` header line.
+    - Conley `LAW & POLICY, Vol. 33 ...` and `ISSN 0265–8240`.
+    - Contreras `World Development 122 (2019) 306–324`.
+    - Heilmayr: three cover-sheet lines.
+    - Moura: four lines including `_13_`.
+    - Hayek: none.
+2. assemble: on page 1, a paragraph whose `normalized` form (casefolded, alphanumerics only) equals that of a listed span is no body target. It is not made skippable in general, because it only matters as a target on page 1. The page worker may change the markup: `JCC 18 *Summer 2005*` still matches.
+3. assemble: a paragraph whose text, after the trailing footnote marks and closing characters are stripped, ends in an e-mail address (`local@domain.tld`) is closed.
+
+Batches extracted before this change have no `running` key and keep the old behaviour (`manifest.get("running", [])`). The original Schrage batch therefore still joins 1->2 until it is extracted again.
+
+Verification (2026-11-20). All seven PDFs (Schrage plus the six regression PDFs) were extracted again with `cli.py pdf extract` into `/tmp/b2/re/<stem>/`. Every `pages/p<N>.md`, every region `_current.md` and `headings.json` were byte-identical to the original batches. The original worker outputs (`_fixed` files, `headings_fixed.json`) were then copied in, and `apply-outline` and `assemble` ran.
+- Schrage: `assemble ok`, 8 joins: the 8 judged right in the table above; 1->2 is gone. In the book, page 1 ends with `[^*]: Original research ...` and `**JCC 18** _Summer 2005_`, and page 2 starts with `Reports of slave labour on cocoa farms surfaced as early as 1998, ...`. Page 2 opens a new section with the drop cap `R`, and the page 1 body before it ends with the closed abstract and the author block. No join is the right result.
+- Scholtens 9, Hayek 23, Conley 22, Contreras 13, Heilmayr 9, Moura 6 joins. The join lists and joined texts are identical to the traces of the code of 44e3701, now with the manifest `running` lists in effect.
+- Tests: 3 new: the manifest list in extract, the reformatted page-1 footer, the e-mail ending. Each fails on the code of 34ab6ce: `KeyError: 'running'`, and `1->2(body)` twice. Full `run_strands.sh`: 90 strands, 1 skipped, 0 failed.
 
 ## Hypotheses, not observed, nothing built
 
@@ -119,6 +144,8 @@ Regression, assemble on copies with `samples/` removed: Scholtens 9, Hayek 23, C
 - A drop cap of two rows' height (one spanned bottom) is not recognised.
 - In the Schrage layout, a footnote continuation that starts with an uppercase letter, or a terminated body before it, falls back to the first paragraph of the next page.
 - A word of letters plus digits that the converter really lost passes coverage when both parts occur elsewhere on the page.
+- A page-1 body paragraph whose text equals a kept running box (after normalization) would be excluded as a target.
+- A sentence that really continues on the next page after an e-mail address would not be joined.
 
 ## How the work ran, what to reuse, what went wrong
 
