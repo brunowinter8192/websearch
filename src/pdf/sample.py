@@ -3,16 +3,17 @@ import math
 import random
 from pathlib import Path
 
-from src.config import PIECE_PAGES, SAMPLE_SHARE
+from src.config import SAMPLE_SHARE
+from src.pdf.batch_files import page_png
 from src.pdf.manifest import book_path, load_manifest
-from src.pdf.pieces import page_markers, plan_ranges
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import (
-    STATUS_OPEN, findings_path, load_runs, loop_ended, run_dir, sampled_pages, text_sha, write_run,
+    STATUS_OPEN, findings_path, load_runs, loop_ended, page_markers, run_dir, sampled_pages, text_sha, write_run,
 )
 from src.pdf.templates import page_range, read_template, require_filled, substitute
 
 PROMPT_FILE_NAME = "prompt.md"
+SAMPLE_BLOCK_PAGES = 50
 
 
 # ORCHESTRATOR
@@ -39,7 +40,8 @@ def draw_sample_pages(manifest: dict, runs: list[dict]) -> list[int]:
     rng = random.Random(f"{manifest['pdf_sha256']}:{len(runs) + 1}")
     done = sampled_pages(runs)
     drawn = []
-    for first, last in plan_ranges(1, manifest["pages"], PIECE_PAGES):
+    for first in range(1, manifest["pages"] + 1, SAMPLE_BLOCK_PAGES):
+        last = min(first + SAMPLE_BLOCK_PAGES - 1, manifest["pages"])
         fresh = [page for page in range(first, last + 1) if page not in done]
         drawn += rng.sample(fresh, min(math.ceil(SAMPLE_SHARE * (last - first + 1)), len(fresh)))
     return sorted(drawn)
@@ -89,7 +91,10 @@ def write_new_run(manifest: dict, batch_dir: Path, runs: list[dict], pages: list
 
 def render_sample_prompt(manifest: dict, batch_dir: Path, run: dict) -> str:
     directory = run_dir(batch_dir, run["run"])
-    steps = [excerpt_steps(1 + 3 * index, directory / excerpt["file"], excerpt) for index, excerpt in enumerate(run["excerpts"])]
+    steps = [
+        excerpt_steps(1 + 3 * index, batch_dir, directory / excerpt["file"], excerpt)
+        for index, excerpt in enumerate(run["excerpts"])
+    ]
     write_number = 1 + 3 * len(run["excerpts"])
     values = {
         "PDF": manifest["pdf"],
@@ -103,12 +108,14 @@ def render_sample_prompt(manifest: dict, batch_dir: Path, run: dict) -> str:
     return require_filled(substitute(read_template("sample_prompt.md"), values))
 
 
-def excerpt_steps(read_number: int, path: Path, excerpt: dict) -> str:
+def excerpt_steps(read_number: int, batch_dir: Path, path: Path, excerpt: dict) -> str:
+    images = [str(batch_dir / page_png(page)) for page in excerpt["pages"]]
     values = {
         "READ_NUMBER": str(read_number),
         "IMAGE_NUMBER": str(read_number + 1),
         "EDIT_NUMBER": str(read_number + 2),
         "EXCERPT": str(path),
+        "IMAGES": " ".join(images),
         "CHECK_PAGES": page_range(excerpt["pages"][0], excerpt["pages"][-1]),
     }
     return substitute(read_template("sample_excerpt_steps.md").rstrip("\n"), values)

@@ -3,11 +3,9 @@ import json
 
 import pytest
 
-from dev.tests._pdf_fakes import conversion_log, numbered_pages, write_pdf, write_pieces
-from src.pdf.merge import merge_workflow
+from dev.tests._pdf_fakes import write_book_batch
 from src.pdf.report import WorkflowError
 from src.pdf.sample import cut_excerpts, draw_sample_pages, sample_workflow
-from src.pdf.split import split_workflow
 
 SHA = "a" * 64
 
@@ -15,12 +13,7 @@ SHA = "a" * 64
 # FUNCTIONS
 
 def merged(tmp_path, pages):
-    pdf = write_pdf(tmp_path / "Book.pdf", numbered_pages(pages))
-    batch_dir = tmp_path / "batches"
-    split_workflow(str(pdf), str(batch_dir))
-    write_pieces(batch_dir)
-    merge_workflow(str(batch_dir))
-    return batch_dir
+    return write_book_batch(tmp_path / "batches", pages)
 
 
 def manifest_of(pages):
@@ -92,7 +85,7 @@ def test_a_sample_page_without_its_marker_gets_the_text_between_its_neighbours()
     assert excerpt["original"] == "<!-- page 2 -->\n\nText 2.\n\n"
 
 
-def test_sample_opens_a_run_with_excerpt_files_run_file_and_prompt(tmp_path, conversion_log):
+def test_sample_opens_a_run_with_excerpt_files_run_file_and_prompt(tmp_path):
     batch_dir = merged(tmp_path, 85)
     report = sample_workflow(str(batch_dir))
     assert report.ok
@@ -108,12 +101,13 @@ def test_sample_opens_a_run_with_excerpt_files_run_file_and_prompt(tmp_path, con
     assert f"Findings file: {run_dir / 'findings.md'}" in prompt
     first = run["excerpts"][0]
     assert f"1. Read the excerpt file {run_dir / first['file']} completely" in prompt
-    assert f'pages parameter "{first["pages"][0]}' in prompt
+    assert f"Read the page images {batch_dir / 'page_png' / ('p' + str(first['pages'][0]) + '.png')}" in prompt
+    assert "[unreadable]" in prompt and "[^*]" in prompt
     assert "Never change, add or remove a line <!-- page N -->" in prompt
     assert "pages sampled after this run: 9 of 85" in report.text
 
 
-def test_a_second_run_cannot_be_opened_while_one_is_open(tmp_path, conversion_log):
+def test_a_second_run_cannot_be_opened_while_one_is_open(tmp_path):
     batch_dir = merged(tmp_path, 20)
     sample_workflow(str(batch_dir))
     with pytest.raises(WorkflowError) as raised:

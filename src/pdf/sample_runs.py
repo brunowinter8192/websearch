@@ -1,19 +1,28 @@
 # INFRASTRUCTURE
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from src.config import SAMPLES_DIR_NAME
-from src.pdf.pieces import page_markers
 from src.pdf.report import WorkflowError
 
 RUN_FILE_NAME = "run.json"
 FINDINGS_FILE_NAME = "findings.md"
 RUN_DIR_PREFIX = "run_"
 STATUS_OPEN = "open"
+PAGE_MARKER = re.compile(r"^<!-- page (\d+) -->$", re.MULTILINE)
 
 
 # FUNCTIONS
+def page_marker(number: int) -> str:
+    return f"<!-- page {number} -->"
+
+
+def page_markers(text: str) -> list[tuple[int, int]]:
+    return [(int(match[1]), match.start()) for match in PAGE_MARKER.finditer(text)]
+
+
 def run_dir(batch_dir: Path, number: int) -> Path:
     return batch_dir / SAMPLES_DIR_NAME / f"{RUN_DIR_PREFIX}{number}"
 
