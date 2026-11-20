@@ -10,7 +10,7 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
 
 ## Modules
 
@@ -44,7 +44,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### assemble.py (324 LOC)
+### assemble.py (348 LOC)
 
 **Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, region `_missing.txt` files, `samples/` (refuses once sampling started).
