@@ -337,7 +337,7 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 ### test_cli_bootstrap.py (68 LOC)
 
-**Purpose:** `cli.py` import has no side effects; main configures logging and the exit hook before parsing.
+**Purpose:** `cli.py` import registers no exit hook of its own and installs no log handler; main configures logging and the exit hook before parsing.
 
 ### test_coindesk_browser_feed.py (122 LOC)
 
@@ -371,35 +371,27 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_planning.py (36 LOC)
+### test_pdf_extract.py (170 LOC)
 
-**Purpose:** `src/pdf/pieces.py` range planning for 50-page pieces and inside a piece, the one-wave boundary at 1 000 pages and the fixed worker count.
+**Purpose:** `extract`: real converter run on a generated PDF (files, workers, prompts, bookmarks, start record, clean stdout), and with a fake converter on real pages: indented line splits a glued paragraph, no split on an OCR page, placeholders, crops and region workers, unknown box class, stale-file cleanup, missing PDF.
 
-### test_pdf_split.py (112 LOC)
+### test_pdf_status.py (68 LOC)
 
-**Purpose:** `split` on generated PDFs: pieces, prompts and manifest, only `pdfinfo` runs, 1 050 pages, no RAM measurement, start record without text-extraction fields, attempt counter, stale-file cleanup including `samples/` and `blocked/`, missing PDF.
+**Purpose:** `status`: every worker complete, workers with no or partial files incomplete with the missing files, outline file invalid or lacking a heading id.
 
-### test_pdf_resplit.py (143 LOC)
+### test_pdf_apply_outline.py (85 LOC)
 
-**Purpose:** `resplit`: 50 into 20, 20, 10, the only stages 20 and 10, remainders of 18 and 15 pages, refusal of every piece of 10 pages or fewer with manifest and prompt unchanged (including the four articles blocked on 2026-11-19), of a complete piece and of an unknown span, finished pieces untouched, an incomplete piece file and leftover part files set aside into `blocked/`.
+**Purpose:** `apply-outline`: levels replace heading placeholders, level 0 keeps the line without marks, a missed line with trailing space, rerun gives the same result, missed line not found, incomplete outline refused.
 
-### test_pdf_status.py (32 LOC)
+### test_pdf_assemble.py (172 LOC)
 
-**Purpose:** `status`: complete, incomplete with its missing pages, and missing pieces; a page without content counts when its marker is there.
+**Purpose:** `assemble` on the observed page boundary cases: paragraph completed before its page's footnotes, new paragraph stays, hyphen join, footnote continuation, skipped table pages, captions and notes, skipped figure and caption, page numbers, no join after a finished paragraph or before a heading; incomplete worker, lost placeholder, missing outline, sampling started.
 
-### test_pdf_worker_prompt.py (80 LOC)
+### test_pdf_sample.py (115 LOC)
 
-**Purpose:** Rendered transcription prompts: one Read and one part file per 20 pages, step numbering from one, no anchor, single-read pieces, bare page number, form rules.
+**Purpose:** `sample`: 10 percent per 50-page block, only never-sampled pages, exhaustion after every page, seeded draw, excerpt boundaries (page before, book ends, neighbours, missing marker), run directory and prompt with page images, one open run at a time.
 
-### test_pdf_merge.py (90 LOC)
-
-**Purpose:** `merge`: pieces of mixed sizes in page order, no paragraph splitting, missing piece and incomplete piece (pages 1 to 5 of 12) logged and nothing written, refusal after sampling started, missing manifest.
-
-### test_pdf_sample.py (121 LOC)
-
-**Purpose:** `sample`: 10 percent per 50-page block, only never-sampled pages, exhaustion after every page, seeded draw, excerpt boundaries (page before, book ends, neighbours, missing marker), run directory and prompt, one open run at a time.
-
-### test_pdf_sample_loop.py (166 LOC)
+### test_pdf_sample_loop.py (158 LOC)
 
 **Purpose:** The sample loop end to end: report with findings and before and after text, close writes corrections back, loop end without correction or after every page, rejected corrections, publish refusals and the published book with a long correction split to the limit and its end record.
 
@@ -411,13 +403,13 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `stats` over a handwritten conversion log: runs, failures by reason, unfinished, retry recovery, averages, `--since`, per config.
 
-### test_pdf_cli.py (49 LOC)
+### test_pdf_cli.py (51 LOC)
 
-**Purpose:** Argument parsing of the `pdf` subcommands including `status` and repeated `--reject`, rejection of the removed `extract` and `assemble` and of a malformed `--since` date.
+**Purpose:** Argument parsing of the `pdf` subcommands including `extract`, `apply-outline`, `assemble` and repeated `--reject`, rejection of the removed `split`, `resplit` and `merge` and of a malformed `--since` date.
 
-### _pdf_fakes.py (83 LOC)
+### _pdf_fakes.py (86 LOC)
 
-**Purpose:** Shared helper: raw-PDF writer for generated text pages, simulated worker output and piece files, log and manifest readers, conversion-log fixture.
+**Purpose:** Shared helper: pymupdf writer for generated text pages with optional bookmarks, prose rows with an indented first line, manifest and book batch writers, log and manifest readers, conversion-log fixture.
 
 ## State
 No module owns shared mutable state. `conftest.py` patches the browser-launch names per test via an autouse fixture, redirects the temp dir to a per-test path, and traps osascript calls. All other state is reset per test through `monkeypatch` and `tmp_path`. Gotchas: process-docs area tests.
