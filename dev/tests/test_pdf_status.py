@@ -66,20 +66,3 @@ def test_an_outline_file_that_is_not_json_or_lacks_a_heading_id_is_incomplete(tm
     for content in ('{"headings": [', outline([("h1_0", 1)]), json.dumps({"headings": []})):
         (batch_dir / "headings_fixed.json").write_text(content)
         assert "  outline: incomplete (missing: headings_fixed.json)" in status_workflow(str(batch_dir)).text
-
-
-def test_a_pre_filled_page_file_still_holding_the_pending_line_is_incomplete(tmp_path):
-    batch_dir = batch(tmp_path)
-    write(batch_dir, "tables/p9_0_fixed.md", "tables/p10_0_fixed.md", "pages/p6_fixed.md", "pages/p7_fixed.md")
-    (batch_dir / "headings_fixed.json").write_text(outline([("h1_0", 1), ("h2_0", 0)]))
-    for number in range(1, 6):
-        (batch_dir / "pages" / f"p{number}_fixed.md").write_text("<!-- REPAIR PENDING -->\n\ndistri **b** uti **on** o **f** the costs\n")
-    for number in (1, 2, 3):
-        (batch_dir / "pages" / f"p{number}_fixed.md").write_text("distribution of the costs\n")
-    assert status_workflow(str(batch_dir)).text.splitlines() == [
-        "workers complete: 3 of 4",
-        "  tables: complete",
-        "  outline: complete",
-        "  pages-1-5: incomplete (missing: pages/p4_fixed.md pages/p5_fixed.md)",
-        "  pages-6-7: complete",
-    ]

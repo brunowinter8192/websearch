@@ -15,7 +15,7 @@ import pymupdf4llm
 from src.config import MANIFEST_FILE_NAME, NEW_PARAGRAPH, PARAGRAPH_LIMIT_BYTES, PROJECT_ROOT, SAMPLE_SHARE, SAMPLES_DIR_NAME
 from src.pdf.batch_files import (
     BARE_PAGE_NUMBER, BOOKMARKS_FILE, FIGURES_DIR, FORMULAS_DIR, HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_FIGURE,
-    KIND_FORMULA, KIND_HEADING, KIND_TABLE, PAGE_PNG_DIR, PAGES_DIR, REPAIR_PENDING, TABLES_DIR, WORKER_OUTLINE, fixed_page_md,
+    KIND_FORMULA, KIND_HEADING, KIND_TABLE, PAGE_PNG_DIR, PAGES_DIR, TABLES_DIR, WORKER_OUTLINE, fixed_page_md, outlined_md,
     page_md, page_png, placeholder, region_current, region_dir, region_fixed, region_missing, region_png,
 )
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
@@ -593,8 +593,8 @@ def page_worker(pdf: Path, batch_dir: Path, first: int, last: int) -> dict:
         "FROM": str(first),
         "TO": str(last),
         "PNG_PATTERN": str(batch_dir / page_png("N")),
+        "MD_PATTERN": str(batch_dir / outlined_md("N")),
         "FIXED_PATTERN": str(batch_dir / fixed_page_md("N")),
-        "PENDING": REPAIR_PENDING,
     }
     write_prompt(batch_dir, entry, "pages_prompt.md", values)
     return entry

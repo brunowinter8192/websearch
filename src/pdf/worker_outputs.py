@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from src.pdf.batch_files import HEADINGS_FILE, HEADINGS_FIXED_FILE, REPAIR_PENDING, read_json
+from src.pdf.batch_files import HEADINGS_FILE, HEADINGS_FIXED_FILE, read_json
 
 STATE_COMPLETE = "complete"
 STATE_INCOMPLETE = "incomplete"
@@ -24,7 +24,7 @@ def output_complete(batch_dir: Path, name: str) -> bool:
         return False
     if name == HEADINGS_FIXED_FILE:
         return outline_complete(batch_dir, path)
-    return REPAIR_PENDING not in (line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+    return True
 
 
 def outline_complete(batch_dir: Path, path: Path) -> bool:
