@@ -14,9 +14,9 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ## Modules
 
-### extract.py (568 LOC)
+### extract.py (609 LOC)
 
-**Purpose:** Orchestrates extract: start record, converter run, rotated-table repair, formula detection, coverage check, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
+**Purpose:** Orchestrates extract: start record, converter run, rotated-table and column-table repair, formula detection, coverage check, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
 **Writes:** the batch directory (removes its own stale files there, `samples/` and the working book), including `<id>_missing.txt` for table and figure regions; `extract_log.txt` with the converter stdout; start record or failure end record in the conversion log.
 **Called by:** cli.py.
@@ -44,7 +44,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### assemble.py (264 LOC)
+### assemble.py (291 LOC)
 
 **Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, region `_missing.txt` files, `samples/` (refuses once sampling started).
@@ -104,7 +104,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### coverage.py (127 LOC)
+### coverage.py (141 LOC)
 
 **Purpose:** Text layer coverage of the extracted pages: stops extract on words missing outside regions, returns words missing inside table and figure regions.
 **Reads:** the converted PDF pages.
