@@ -3,7 +3,8 @@ import re
 from pathlib import Path
 
 from src.pdf.batch_files import (
-    HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_HEADING, PLACEHOLDER, WORKER_OUTLINE, outlined_md, page_md, read_json,
+    HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_HEADING, PLACEHOLDER, REPAIR_PENDING, WORKER_OUTLINE, fixed_page_md, outlined_md, page_md,
+    read_json,
 )
 from src.pdf.manifest import load_manifest
 from src.pdf.report import Report, WorkflowError
@@ -22,6 +23,7 @@ def apply_outline_workflow(batch_dir: str) -> Report:
     outline = read_json(batch_path, HEADINGS_FIXED_FILE)
     lines = heading_lines(read_json(batch_path, HEADINGS_FILE), outline["headings"])
     pages, moved = marked_pages(headed_pages(batch_path, manifest["pages"], lines), outline["missed"])
+    require_no_repair_started(batch_path, pages)
     write_outlined(batch_path, pages)
     return Report(format_summary(pages, lines, outline["missed"], moved), True)
 
@@ -96,9 +98,24 @@ def matching_rows(text: str, line: str) -> list[int]:
     return [index for index, row in enumerate(text.split("\n")) if row.rstrip() == line.rstrip()]
 
 
+def require_no_repair_started(batch_dir: Path, pages: dict[int, str]) -> None:
+    for number in pages:
+        fixed, outlined = batch_dir / fixed_page_md(number), batch_dir / outlined_md(number)
+        if fixed.is_file() and not (outlined.is_file() and fixed.read_text(encoding="utf-8") == prefilled(outlined.read_text(encoding="utf-8"))):
+            raise WorkflowError(
+                "page_repair_started",
+                f"{fixed_page_md(number)} differs from its pre-filled form, a page worker has edited it and apply-outline would discard the edits",
+            )
+
+
+def prefilled(text: str) -> str:
+    return f"{REPAIR_PENDING}\n\n{text}"
+
+
 def write_outlined(batch_dir: Path, pages: dict[int, str]) -> None:
     for number, text in pages.items():
         (batch_dir / outlined_md(number)).write_text(text, encoding="utf-8")
+        (batch_dir / fixed_page_md(number)).write_text(prefilled(text), encoding="utf-8")
 
 
 def format_summary(pages: dict[int, str], lines: dict[str, str], missed: list[dict], moved: list[str]) -> str:
@@ -107,6 +124,7 @@ def format_summary(pages: dict[int, str], lines: dict[str, str], missed: list[di
     return "\n".join([
         f"apply-outline ok: {len(lines)} headings, {dropped} set to level 0, {len(missed)} missed headings added",
         "missed headings found on another page than named: " + ("; ".join(moved) or "none"),
+        f"pre-filled for the page workers: {fixed_page_md(min(pages))} to {fixed_page_md(max(pages))}, each starting with {REPAIR_PENDING}",
         "outline:",
         *[f"  {row}" for row in outline],
     ])

@@ -70,6 +70,15 @@ def test_the_extracted_page_files_stay_untouched_so_a_second_run_gives_the_same_
     assert (batch_dir / "pages" / "p2.md").read_text() == PAGES[2]
 
 
+def test_each_page_file_for_the_page_workers_is_pre_filled_with_the_outlined_text_under_the_pending_line(tmp_path):
+    batch_dir = batch(tmp_path)
+    report = apply_outline_workflow(str(batch_dir))
+    for number in (1, 2):
+        fixed = (batch_dir / "pages" / f"p{number}_fixed.md").read_text()
+        assert fixed == "<!-- REPAIR PENDING -->\n\n" + outlined(batch_dir, number)
+    assert "pre-filled for the page workers: pages/p1_fixed.md to pages/p2_fixed.md, each starting with <!-- REPAIR PENDING -->" in report.text
+
+
 def test_a_missed_line_that_is_not_in_the_page_file_fails_with_page_and_line(tmp_path):
     outline = dict(OUTLINE, missed=[{"page": 2, "line": "APPENDIX A. LIST OF BANKS", "level": 2}])
     with pytest.raises(WorkflowError) as raised:

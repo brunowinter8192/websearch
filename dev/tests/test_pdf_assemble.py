@@ -152,6 +152,17 @@ def test_an_incomplete_worker_stops_assemble_with_the_missing_files_and_logs_it(
     assert end["incomplete_workers"] == [{"name": "pages", "missing": ["pages/p2_fixed.md"]}]
 
 
+def test_a_page_still_holding_the_pending_line_stops_assemble_and_never_reaches_the_book(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, ["a.\n", "b.\n"])
+    (batch_dir / "pages" / "p2_fixed.md").write_text("<!-- REPAIR PENDING -->\n\nb.\n")
+    report = assemble_workflow(str(batch_dir))
+    assert report.text.splitlines() == [
+        "assemble FAILED (incomplete_worker): 1 of 4 workers incomplete, nothing written",
+        "  pages: incomplete (missing: pages/p2_fixed.md)",
+    ]
+    assert not (batch_dir / "Book.md").exists()
+
+
 def test_a_page_worker_that_dropped_a_table_placeholder_fails_assemble(tmp_path, conversion_log):
     batch_dir = batch(tmp_path, ["Table 1.\n\n<!-- TABLE p1_0 -->\n"], tables=("p1_0",))
     (batch_dir / "pages" / "p1_fixed.md").write_text("Table 1.\n")

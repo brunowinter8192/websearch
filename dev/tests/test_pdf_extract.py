@@ -63,7 +63,11 @@ def test_extract_on_a_generated_pdf_writes_pages_prompts_manifest_and_start_reco
     assert json.loads((batch_dir / "headings.json").read_text()) == []
     prompt = (batch_dir / "prompt_pages_6-7.md").read_text()
     assert "{{" not in prompt and "pages 6 to 7" in prompt
-    assert f"{batch_dir}/page_png/pN.png" in prompt and f"{batch_dir}/pages/pN_outlined.md" in prompt
+    assert f"{batch_dir}/page_png/pN.png" in prompt and f"{batch_dir}/pages/pN_fixed.md: the extracted Markdown of the page. This is the file you repair, in place." in prompt
+    assert "_outlined.md" not in prompt and "Its first line is <!-- REPAIR PENDING -->." in prompt
+    assert "only with the Edit tool, one small edit at a time" in prompt and "Never use the Write tool" in prompt
+    assert "remove the line <!-- REPAIR PENDING --> with one last Edit" in prompt
+    assert "You are not asked to reproduce, retype or rewrite any content" in prompt
     assert "Change nothing else" in prompt and "[unreadable]" in prompt and "[^*]" in prompt
     assert "Bookmarks can be incomplete or wrong" in (batch_dir / "prompt_outline.md").read_text()
     assert "Every entry on it gets level 0, also the title of the work printed there." in (batch_dir / "prompt_outline.md").read_text()
