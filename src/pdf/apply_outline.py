@@ -21,9 +21,9 @@ def apply_outline_workflow(batch_dir: str) -> Report:
     require_outline_complete(batch_path, manifest)
     outline = read_json(batch_path, HEADINGS_FIXED_FILE)
     lines = heading_lines(read_json(batch_path, HEADINGS_FILE), outline["headings"])
-    pages = outlined_pages(batch_path, manifest["pages"], lines, outline["missed"])
+    pages, moved = marked_pages(headed_pages(batch_path, manifest["pages"], lines), outline["missed"])
     write_outlined(batch_path, pages)
-    return Report(format_summary(pages, lines, outline["missed"]), True)
+    return Report(format_summary(pages, lines, outline["missed"], moved), True)
 
 
 # FUNCTIONS
@@ -46,35 +46,54 @@ def heading_lines(headings: list[dict], levels: list[dict]) -> dict[str, str]:
     return lines
 
 
-def outlined_pages(batch_dir: Path, pages: int, lines: dict[str, str], missed: list[dict]) -> dict[int, str]:
-    result = {}
-    for number in range(1, pages + 1):
-        text = PLACEHOLDER.sub(lambda match: replace_heading(match, lines), (batch_dir / page_md(number)).read_text(encoding="utf-8"))
-        for entry in [entry for entry in missed if entry["page"] == number]:
-            text = mark_missed(text, entry)
-        result[number] = text
-    unknown = [entry for entry in missed if entry["page"] not in result]
-    if unknown:
-        raise WorkflowError("missed_heading_not_found", f"missed heading on page {unknown[0]['page']}, which does not exist")
-    return result
+def headed_pages(batch_dir: Path, pages: int, lines: dict[str, str]) -> dict[int, str]:
+    return {
+        number: PLACEHOLDER.sub(lambda match: replace_heading(match, lines), (batch_dir / page_md(number)).read_text(encoding="utf-8"))
+        for number in range(1, pages + 1)
+    }
 
 
 def replace_heading(match: re.Match, lines: dict[str, str]) -> str:
     return lines[match[2]] if match[1] == KIND_HEADING else match[0]
 
 
-def mark_missed(text: str, entry: dict) -> str:
+def marked_pages(pages: dict[int, str], missed: list[dict]) -> tuple[dict[int, str], list[str]]:
+    result, moved = dict(pages), []
+    for entry in missed:
+        require_missed_entry(result, entry)
+        number, index = missed_row(result, entry)
+        if number != entry["page"]:
+            moved.append(f"{entry['line'].strip()!r} named page {entry['page']}, found on page {number}")
+        rows = result[number].split("\n")
+        rows[index] = f"{'#' * entry['level']} {rows[index].strip()}"
+        result[number] = "\n".join(rows)
+    return result, moved
+
+
+def require_missed_entry(pages: dict[int, str], entry: dict) -> None:
     if entry["level"] not in MISSED_LEVELS:
         raise WorkflowError("outline_level", f"missed heading on page {entry['page']} has level {entry['level']!r}, allowed are 1 to 4")
-    rows = text.split("\n")
-    hits = [index for index, row in enumerate(rows) if row.rstrip() == entry["line"].rstrip()]
-    if len(hits) != 1:
+    if entry["page"] not in pages:
+        raise WorkflowError("missed_heading_not_found", f"missed heading on page {entry['page']}, which does not exist")
+
+
+def missed_row(pages: dict[int, str], entry: dict) -> tuple[int, int]:
+    named = matching_rows(pages[entry["page"]], entry["line"])
+    if len(named) == 1:
+        return entry["page"], named[0]
+    elsewhere = [(number, index) for number in sorted(pages) if number != entry["page"] for index in matching_rows(pages[number], entry["line"])]
+    if named or len(elsewhere) != 1:
         raise WorkflowError(
             "missed_heading_not_found",
-            f"page {entry['page']}: the line {entry['line']!r} occurs {len(hits)} times in {page_md(entry['page'])}, it must occur once",
+            f"page {entry['page']}: the line {entry['line']!r} occurs {len(named)} times in {page_md(entry['page'])} and "
+            f"{len(elsewhere)} times in the other page files, it must occur once in {page_md(entry['page'])} or, absent there, "
+            "once in the other page files",
         )
-    rows[hits[0]] = f"{'#' * entry['level']} {rows[hits[0]].strip()}"
-    return "\n".join(rows)
+    return elsewhere[0]
+
+
+def matching_rows(text: str, line: str) -> list[int]:
+    return [index for index, row in enumerate(text.split("\n")) if row.rstrip() == line.rstrip()]
 
 
 def write_outlined(batch_dir: Path, pages: dict[int, str]) -> None:
@@ -82,11 +101,12 @@ def write_outlined(batch_dir: Path, pages: dict[int, str]) -> None:
         (batch_dir / outlined_md(number)).write_text(text, encoding="utf-8")
 
 
-def format_summary(pages: dict[int, str], lines: dict[str, str], missed: list[dict]) -> str:
+def format_summary(pages: dict[int, str], lines: dict[str, str], missed: list[dict], moved: list[str]) -> str:
     outline = [row for number in sorted(pages) for row in pages[number].split("\n") if row.startswith("#")]
     dropped = sum(1 for line in lines.values() if not line.startswith("#"))
     return "\n".join([
         f"apply-outline ok: {len(lines)} headings, {dropped} set to level 0, {len(missed)} missed headings added",
+        "missed headings found on another page than named: " + ("; ".join(moved) or "none"),
         "outline:",
         *[f"  {row}" for row in outline],
     ])

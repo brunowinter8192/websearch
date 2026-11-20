@@ -79,6 +79,19 @@ def test_a_missed_line_that_is_not_in_the_page_file_fails_with_page_and_line(tmp
     assert not (tmp_path / "batch" / "pages" / "p1_outlined.md").exists()
 
 
+def test_a_missed_line_absent_on_its_named_page_is_marked_on_the_one_page_that_holds_it(tmp_path):
+    outline = dict(OUTLINE, missed=[{"page": 1, "line": "(a) Descriptives and t-test of equality of means", "level": 3}])
+    batch_dir = batch(tmp_path, outline)
+    report = apply_outline_workflow(str(batch_dir))
+    assert report.ok, report.text
+    assert "\n\n### (a) Descriptives and t-test of equality of means\n\nThe hypotheses." in outlined(batch_dir, 2)
+    assert "###" not in outlined(batch_dir, 1)
+    assert (
+        "missed headings found on another page than named: '(a) Descriptives and t-test of equality of means' named page 1, found on page 2"
+        in report.text.splitlines()
+    )
+
+
 def test_without_a_complete_outline_nothing_is_applied(tmp_path):
     with pytest.raises(WorkflowError) as raised:
         apply_outline_workflow(str(batch(tmp_path, outline=None)))

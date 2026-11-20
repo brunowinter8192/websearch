@@ -59,6 +59,7 @@ LEFT_TOLERANCE_PT = 1.0
 NEEDLE_WORDS = 3
 NONE_LISTED = "none"
 DIRECTION_TOLERANCE = 0.01
+INVISIBLE_TEXT = 3
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
 MARKUP = "[*_]*"
 REGION_DIRS = (TABLES_DIR, FIGURES_DIR, FORMULAS_DIR)
@@ -207,7 +208,7 @@ def read_ocr_pages(log_file: Path) -> set[int]:
 def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
     result = {
         "number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "dropped": [], "running": [],
-        "paragraph_starts": 0,
+        "paragraph_starts": 0, "invisible_layer": invisible_text_layer(page),
     }
     boxes = [{**box, "span": chunk["text"][box["pos"][0]:box["pos"][1]].strip()} for box in chunk["page_boxes"]]
     require_known_classes(number, boxes)
@@ -224,6 +225,10 @@ def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
             parts.append(part)
     result["text"] = NEW_PARAGRAPH.join(parts) + "\n" if parts else ""
     return result
+
+
+def invisible_text_layer(page: pymupdf.Page) -> bool:
+    return {trace["type"] for trace in page.get_texttrace()} == {INVISIBLE_TEXT}
 
 
 def require_known_classes(number: int, boxes: list[dict]) -> None:
@@ -400,7 +405,7 @@ def box_part(number: int, box: dict, span: str, page: pymupdf.Page, result: dict
         heading_id = f"h{number}_{len(result['headings'])}"
         result["headings"].append({"id": heading_id, "page": number, "text": span})
         return placeholder(KIND_HEADING, heading_id)
-    if kind == CLASS_TEXT and not result["ocr"]:
+    if kind == CLASS_TEXT and not result["ocr"] and not result["invisible_layer"]:
         return split_at_paragraph_starts(number, span, text_rows(page, box["bbox"]), result)
     return span
 
@@ -604,7 +609,8 @@ def format_summary(manifest: dict, batch_dir: Path, pages: list[dict], ocr_pages
     return "\n".join([
         f"extract ok: {manifest['stem']}",
         f"pages={manifest['pages']} ocr_pages={len(ocr_pages)} tables={len(manifest['tables'])} figures={len(manifest['figures'])} "
-        f"formulas={len(manifest['formulas'])} headings={len(manifest['headings'])} paragraph_starts_split={sum(page['paragraph_starts'] for page in pages)}",
+        f"formulas={len(manifest['formulas'])} headings={len(manifest['headings'])} paragraph_starts_split={sum(page['paragraph_starts'] for page in pages)} "
+        f"invisible_text_pages={sum(page['invisible_layer'] for page in pages)}",
         "formulas: " + (" ".join(manifest["formulas"]) or "none"),
         "region words missing from the converter text: " + (" ".join(f"{region_id}={len(words)}" for region_id, words in missing.items()) or NONE_LISTED),
         f"batch dir: {batch_dir}",

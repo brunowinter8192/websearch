@@ -447,6 +447,53 @@ def test_a_note_mark_the_converter_moved_before_its_word_still_covers_the_word(t
     assert report.ok, report.text
 
 
+SCHELLING_ROWS = [
+    (LEFT + 10, "I have often been glad that I wasn't in charge. It is easy enough to"),
+    (LEFT, "see plainly that there is too much inequality, and to help reduce it"),
+    (LEFT, "more than a sense of direction."),
+    (LEFT + 10, "Discomfort also arises when, intent on speeding toward an ever-"),
+    (LEFT, "receding goal, the goal suddenly stops receding and we threaten"),
+]
+SCHELLING_SPAN = (
+    "I have **o** ften been glad that I wasn't in charge. It is easy en **o** ugh t **o** see plainly that there is t **oo** much "
+    "inequality _,_ and t **o** help reduce it m **o** re than a sense **o** f directi **o** n. Disc **o** mf **o** rt als **o** arises "
+    "when _,_ intent **o** n speeding t **o** ward an everreceding g **o** al _,_ the goal suddenly st **op** s receding and we threaten"
+)
+BAUMOL_ROWS = [
+    (LEFT + 14, "That is why a businessperson who really favors effective action"),
+    (LEFT + 14, "to cure the environmental damage caused by the industry can con-"),
+    (LEFT + 14, "tribute most effectively toward that goal not by attempts to"),
+    (LEFT + 14, "institute a voluntary program within her own firm, but by"),
+    (LEFT + 14, "supporting well-designed legislation that will impose such behavior."),
+]
+BAUMOL_SPAN = (
+    "That is why a businessperson who really favors effective action to cure the environmental damage caused by the industry can "
+    "contribute most effectively toward that goal _not_ by attempts to \\, institute a voluntary program within her own firm, but by "
+    "supporting well-designed legislation that will impose such behavior."
+)
+
+
+def scan_with_text_layer(path, rows, speck_row=None):
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    for index, (x, text) in enumerate(rows):
+        page.insert_text((x, 80 + index * 14), text, fontsize=11, render_mode=3)
+    if speck_row is not None:
+        page.insert_text((LEFT, 80 + speck_row * 14), "\\,", fontsize=8, render_mode=3)
+    document.save(path)
+    return path
+
+
+@pytest.mark.parametrize("rows, span, speck_row", [(SCHELLING_ROWS, SCHELLING_SPAN, None), (BAUMOL_ROWS, BAUMOL_SPAN, 3)], ids=["schelling", "baumol"])
+def test_a_page_whose_text_layer_is_invisible_ocr_over_a_scan_is_not_split(tmp_path, monkeypatch, conversion_log, rows, span, speck_row):
+    pdf = scan_with_text_layer(tmp_path / "Book.pdf", rows, speck_row)
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, span)])])
+    report = extract_workflow(str(pdf), str(tmp_path / "batch"))
+    assert report.ok, report.text
+    assert "ocr_pages=0" in report.text and "paragraph_starts_split=0 invisible_text_pages=1" in report.text
+    assert (tmp_path / "batch" / "pages" / "p1.md").read_text() == span + "\n"
+
+
 def test_running_boxes_kept_on_page_one_are_listed_in_the_manifest(tmp_path, monkeypatch, conversion_log):
     pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page text"), (LEFT, "JCC 18 Summer 2005")], [(LEFT, "Second page text"), (LEFT, "JCC 18 Summer 2005")]])
     fake_converter(monkeypatch, [
