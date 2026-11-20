@@ -212,7 +212,7 @@ def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
 
 
 def joined(head: str, tail: str) -> str:
-    head = head.rstrip()
+    head, tail = head.rstrip(), LIST_ITEM.sub("", tail.lstrip(), count=1)
     if HYPHENATED_END.search(head):
         return head[:-1] + tail.lstrip()
     return f"{head} {tail.lstrip()}"

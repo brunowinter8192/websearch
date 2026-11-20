@@ -95,7 +95,7 @@ def test_an_ocr_page_is_not_split_and_the_converter_output_goes_to_the_log(tmp_p
 
 
 def test_boxes_become_placeholders_crops_headings_and_region_workers(tmp_path, monkeypatch, conversion_log):
-    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page")], [(LEFT, "Second page")]])
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page")], [(LEFT, "Table 1. Descriptive statistics")]])
     fake_converter(monkeypatch, [
         chunk(1, [
             ("page-header", [254, 37, 443, 63], "World Development Vol. 35, No. 8, pp. 1307–1328, 2007"),
@@ -173,7 +173,7 @@ def test_missing_pdf_raises_before_any_log_record(tmp_path, conversion_log):
 
 
 def test_formulas_become_placeholders_crops_and_a_formulas_worker_title_is_a_heading_footnote_is_text(tmp_path, monkeypatch, conversion_log):
-    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page")], [(LEFT, "Second page")]])
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "where the hazard is estimated:")], [(LEFT, "4. Results")]])
     fake_converter(monkeypatch, [
         chunk(1, [
             ("text", [48, 60, 284, 70], "where the hazard is estimated:"),
@@ -274,6 +274,7 @@ def test_page_images_and_crops_come_from_the_pdf_as_printed_not_from_the_convert
         for page in document:
             page.remove_rotation()
         document[0].insert_text((LEFT, 82), "OCR TEXT DRAWN OVER THE SCAN", fontsize=11)
+        print("OCR on page.number=0/2.", flush=True)
         return [chunk(1, [("table", [LEFT - 2, 60, 400, 100], "|a|")]), chunk(2, [("text", BOX, "A landscape table page")])]
     monkeypatch.setattr(extract.pymupdf4llm, "to_markdown", to_markdown)
     batch_dir = tmp_path / "batch"
@@ -284,3 +285,78 @@ def test_page_images_and_crops_come_from_the_pdf_as_printed_not_from_the_convert
         assert pymupdf.Pixmap(str(batch_dir / "page_png" / f"p{number}.png")).samples == expected.samples
     crop = printed[0].get_pixmap(dpi=200, clip=pymupdf.Rect(LEFT - 2, 60, 400, 100))
     assert pymupdf.Pixmap(str(batch_dir / "tables" / "p1_0.png")).samples == crop.samples
+
+
+def coverage_pdf(path, second_page_line):
+    document = pymupdf.open()
+    first = document.new_page(width=595, height=842)
+    for (x, y), text in [
+        ((LEFT, 80), "Banking on the Equator"), ((LEFT, 120), "the market for project fi-"), ((LEFT, 134), "nance is large today."),
+        ((LEFT, 160), "Carlson3,4and Benedict"), ((LEFT, 175), "of deforestation \u02c6Pi,t. We"), ((LEFT, 200), "s=1 Sg"), ((LEFT, 260), "prices and prices"),
+    ]:
+        first.insert_text((x, y), text, fontsize=11)
+    second = document.new_page(width=595, height=842)
+    for (x, y), text in [((LEFT, 40), "BANKING ON THE EQUATOR"), ((LEFT, 80), second_page_line), ((LEFT, 300), "BANKING ON THE EQUATOR")]:
+        second.insert_text((x, y), text, fontsize=11)
+    document.save(path)
+    return path
+
+
+def coverage_chunks():
+    return [
+        chunk(1, [
+            ("text", [60, 60, 560, 100], "**Banking** on the<br>Equator"),
+            ("text", [60, 105, 560, 140], "the market for project finance is large today."),
+            ("text", [60, 145, 560, 168], "Carlson<sup>3,4</sup> and Benedict"),
+            ("text", [60, 168, 560, 180], "of deforestation _P_<sup>\u02c6</sup> _i,t_ . We"),
+            ("formula", [60, 185, 200, 205], "<!-- Start of picture text -->\nSs = g 1<br><!-- End of picture text -->"),
+            ("table", [60, 245, 560, 265], "|prices and|"),
+        ]),
+        chunk(2, [
+            ("page-header", [60, 25, 560, 45], "BANKING ON THE EQUATOR"),
+            ("text", [60, 60, 560, 100], "Second page."),
+            ("text", [60, 285, 560, 305], ""),
+        ]),
+    ]
+
+
+def test_extract_stops_when_words_of_the_text_layer_are_missing_but_accepts_the_converters_normal_changes(tmp_path, monkeypatch, conversion_log):
+    fake_converter(monkeypatch, coverage_chunks())
+    covered = coverage_pdf(tmp_path / "Covered.pdf", "Second page.")
+    report = extract_workflow(str(covered), str(tmp_path / "covered"))
+    assert report.ok, report.text
+    lost = coverage_pdf(tmp_path / "Lost.pdf", "Second page text continues here.")
+    report = extract_workflow(str(lost), str(tmp_path / "lost"))
+    assert report.text == (
+        "extract FAILED (text_not_covered): page 2: 3 words of the PDF text layer are missing from the extracted page, "
+        "for example: continues text here."
+    )
+    assert read_log(conversion_log)[-1]["failure_class"] == "text_not_covered"
+
+
+def test_a_rotated_table_box_spanning_the_other_column_gives_its_text_back_to_the_page(tmp_path, monkeypatch, conversion_log):
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    rotated = ["Table 9 Correlation table.", "EPi 1", "EPj 0.057*** 1", "Market Size 0.069***", "Controversial Deals 0.211***",
+               "Exposure 0.304***", "p < 0.10, ** p < 0.05"]
+    for index, text in enumerate(rotated):
+        page.insert_text((90 + index * 15, 700), text, fontsize=9, rotate=90)
+    for y, text in [(100, "some light to our findings."), (250, "6.2. Sub-sample analyses"), (330, "When discussing the external pres-"),
+                    (344, "sure we argue."), (500, "Table 7 presents the results."), (650, "7. Conclusion")]:
+        page.insert_text((320, y), text, fontsize=11)
+    document.save(tmp_path / "Book.pdf")
+    fake_converter(monkeypatch, [chunk(1, [
+        ("text", [310, 88, 560, 104], "some light to our findings."),
+        ("table", [50, 50, 560, 800], "|some light|EPi<br>garbled cells|"),
+        ("text", [310, 488, 560, 504], "Table 7 presents the results."),
+    ])])
+    batch_dir = tmp_path / "batch"
+    report = extract_workflow(str(tmp_path / "Book.pdf"), str(batch_dir))
+    assert report.ok, report.text
+    assert (batch_dir / "pages" / "p1.md").read_text().split("\n\n") == [
+        "some light to our findings.", "<!-- TABLE p1_0 -->", "6.2. Sub-sample analyses",
+        "When discussing the external pressure we argue.", "Table 7 presents the results.", "7. Conclusion\n",
+    ]
+    assert sorted((batch_dir / "tables" / "p1_0_current.md").read_text().split("\n")[:-1]) == sorted(rotated)
+    width, _ = png_size(batch_dir / "tables" / "p1_0.png")
+    assert width < (310 - 50) * 200 / 72

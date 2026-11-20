@@ -241,7 +241,7 @@ def test_a_reference_list_item_is_not_continued_by_the_next_item_but_a_footnote_
     assert second.startswith("- [7] Alix-Garcia")
     assert third.split("\n\n")[0] == "## NOTES"
     assert third.split("\n\n")[1].startswith("[^10]: Several")
-    assert third.endswith("corporations for human rights abuses abroad under the 1798 Alien Tort Statute (Gibeaut 2011).")
+    assert third.endswith("to sue corporations for human rights abuses abroad under the 1798 Alien Tort Statute (Gibeaut 2011).")
     assert fourth == "## REFERENCES"
 
 
