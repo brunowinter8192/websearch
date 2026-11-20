@@ -371,17 +371,17 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_extract.py (460 LOC)
+### test_pdf_extract.py (507 LOC)
 
-**Purpose:** `extract`: real converter run on a generated PDF (files, workers, prompts, bookmarks, start record, clean stdout), and with a fake converter on real pages: indented line splits a glued paragraph, no split on an OCR page, placeholders, crops and region workers, formulas in their observed shapes with title and footnote classes, lone equation number, bracket row, hanging-indent references, images and crops from the unmodified PDF, unknown box class, stale-file cleanup, missing PDF, text layer coverage (normal converter changes pass, a lost sentence stops), rotated table giving the other column back, table box reaching into the text column, drop cap, tiny hidden text, moved note mark, page-1 running boxes listed in the manifest, words missing in a table listed for its worker.
+**Purpose:** `extract`: real converter run on a generated PDF (files, workers, prompts, bookmarks, start record, clean stdout), and with a fake converter on real pages: indented line splits a glued paragraph, no split on an OCR page or on a page whose text layer is invisible OCR over a scan, placeholders, crops and region workers, formulas in their observed shapes with title and footnote classes, lone equation number, bracket row, hanging-indent references, images and crops from the unmodified PDF, unknown box class, stale-file cleanup, missing PDF, text layer coverage (normal converter changes pass, a lost sentence stops), rotated table giving the other column back, table box reaching into the text column, drop cap, tiny hidden text, moved note mark, page-1 running boxes listed in the manifest, words missing in a table listed for its worker.
 
 ### test_pdf_status.py (68 LOC)
 
 **Purpose:** `status`: every worker complete, workers with no or partial files incomplete with the missing files, outline file invalid or lacking a heading id.
 
-### test_pdf_apply_outline.py (85 LOC)
+### test_pdf_apply_outline.py (98 LOC)
 
-**Purpose:** `apply-outline`: levels replace heading placeholders, level 0 keeps the line without marks, a missed line with trailing space, rerun gives the same result, missed line not found, incomplete outline refused.
+**Purpose:** `apply-outline`: levels replace heading placeholders, level 0 keeps the line without marks, a missed line with trailing space, rerun gives the same result, missed line not found, missed line absent on its named page marked on the one page holding it, incomplete outline refused.
 
 ### test_pdf_assemble.py (630 LOC)
 

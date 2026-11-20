@@ -10,11 +10,11 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; paragraph starts split except on OCR pages and invisible OCR text layers over scans; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (613 LOC)
+### extract.py (619 LOC)
 
 **Purpose:** Orchestrates extract: start record, converter run, rotated-table and column-table repair, formula detection, coverage check, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
@@ -34,9 +34,9 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### apply_outline.py (92 LOC)
+### apply_outline.py (112 LOC)
 
-**Purpose:** Orchestrates apply-outline: heading levels and missed headings of the outline worker into the outlined page files.
+**Purpose:** Orchestrates apply-outline: heading levels and missed headings into outlined page files; a missed line absent on its named page is looked up in all pages.
 **Reads:** manifest, `headings.json`, `headings_fixed.json`, the extracted page files.
 **Writes:** `pages/p<N>_outlined.md`.
 **Called by:** cli.py.
