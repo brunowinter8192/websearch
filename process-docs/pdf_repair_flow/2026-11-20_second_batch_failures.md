@@ -211,7 +211,7 @@ Body joins that cross a page whose bottom is footnotes, checked:
 - 80->81, 110->111, 129->130, 206->207, 208->209: right.
 
 Among the 136 body joins:
-- 128 continuations start lowercase. The 23 that start uppercase were read one by one: proper-noun or citation continuations such as `National Contact` + `Points ...`, `(Khanna` + `2009). ...`, `Publish What` + `You Pay ...`, `ANZ Investment Bank of` + `Australia ...`.
+- 116 continuations start lowercase. The 20 that start uppercase were read one by one: proper-noun or citation continuations such as `National Contact` + `Points ...`, `(Khanna` + `2009). ...`, `Publish What` + `You Pay ...`, `ANZ Investment Bank of` + `Australia ...`.
 - Wrong: 123->124 `... and the origins of the Equator Principles` + `_Type of Institution (...)_ ...`. The print itself has no full stop there (page_png/p123.png), and the next paragraph starts with an italic run-in heading. Not fixed.
 - Debatable, text order kept: 59->60 `... stated that` + the block quote `The right to development is ...`; 114->115 `... Rules state that` + `i) The EPFIs and Associates recognise ...` (the first item of a list joins its lead-in sentence).
 
