@@ -1,6 +1,6 @@
 # 2026-11-20 - Second batch: drop cap, table box over the text column, hidden text, bottom footnote continuations
 
-Area: pdf_repair_flow. Worker branch `pdf-batch2`, base `integration` (44e3701). Code commits 68ab230 ("fix: drop caps, column tables, hidden text and bottom footnote joins") and the follow-up "fix: page-1 running boxes and e-mail endings close page joins". Builds on the page join and text coverage work recorded earlier in this area.
+Area: pdf_repair_flow. Worker branch `pdf-batch2`, base `integration` (44e3701). Code commits 68ab230 ("fix: drop caps, column tables, hidden text and bottom footnote joins") the follow-up "fix: page-1 running boxes and e-mail endings close page joins", and the Meyerstein follow-up a82e64a ("fix: footnote areas and continuations, list items, closed endings"). Builds on the page join and text coverage work recorded earlier in this area.
 
 ## Starting point (2026-11-20)
 
@@ -138,6 +138,100 @@ Verification (2026-11-20). All seven PDFs (Schrage plus the six regression PDFs)
 - Scholtens 9, Hayek 23, Conley 22, Contreras 13, Heilmayr 9, Moura 6 joins. The join lists and joined texts are identical to the traces of the code of 44e3701, now with the manifest `running` lists in effect.
 - Tests: 3 new: the manifest list in extract, the reformatted page-1 footer, the e-mail ending. Each fails on the code of 34ab6ce: `KeyError: 'running'`, and `1->2(body)` twice. Full `run_strands.sh`: 90 strands, 1 skipped, 0 failed.
 
+## Follow-up: Meyerstein 2011, footnote layout of a 234-page dissertation (assemble)
+
+Starting point: the batch `/tmp/pdf_SGSC_Literatur_MeyersteinEffectivenessEquatorPrinciples_2011/` had all 50 workers complete and failed with `assemble FAILED (ambiguous_page_join): page 80`. It was never modified; all work ran on the copy `/tmp/b2/mey` with `samples/` removed.
+
+### What page 80 and 81 contain
+
+- `p80_fixed.md`: the body ends `... (and this despite the signing in September 2007 of the United` (open). The last footnote ends `... Philippines, and Thailand. _See (Iocca 2010)_`. It has no full stop, but it is a closed citation note: the print (`page_png/p80.png`) ends the note with the italic `See (Iocca 2010)`.
+- `p81_fixed.md` and `page_png/p81.png`: page 81 has no footnotes at all. It holds the body continuation `Nations Declaration ... (Iocca 2010).`, the heading `Summary` and one paragraph. It ends the chapter.
+- The both-open rule required a footnote definition on the next page and raised.
+
+### What fixing p80 alone would have left
+
+With only the p80 fix, assemble ran through and showed many wrong joins in the same book. The first trace (old rules) up to page 80 already had wrong joins:
+- 4->5: `... ―compliance.‖` + `Improvements, ...`. The converter's glyph `‖` is the closing double quote of this PDF, and it was not a closing character.
+- 14->15: a closed footnote `complete.‖)` swallowed the body paragraph `Other ―problem projects‖ ...`.
+- 44->45: the enumeration `(4) ...;` + `(5) ...` + `(6) ...` + `Particular emphasis ...` was chained into one paragraph.
+- 49->50: the footnote `[^42]: Available at http://...brundtland.php` swallowed the body paragraph `Project finance refers to ...`.
+- 63->64: the footnote text `... adopting the term` got the next page's first body paragraph `The second Rio Declaration norm ...`.
+- 70->71: footnote 86 swallowed the body continuation `notes that several US agreements ...` of `... obligations.[^86] Mann`.
+- 77->78: `(213).</mark>` + `<mark>Indeed, ...` and `(Kagan 2001).</mark>` + `The dual ...`. The page worker wrapped text in `<mark>` tags.
+- After page 80: `... Principles.‖` footnotes and body paragraphs, footnote block quotes taken as body (p83), and footnote continuations at the end of footnote-free pages (p84, p130, p140). The appendix panel titles `**Panel C: ...**` were chained over pages 224 to 232, and the roman items `vi) ... vii) ... viii) ... ix)` were chained on 174->175.
+
+### Rules built, each from an observed Meyerstein case
+
+1. **Footnote area.** Every paragraph after a footnote definition, up to the next heading, belongs to that footnote. It is never a body target, and the footnote target is the last paragraph of the area.
+    - Observed: p83 footnote 102 with three block-quote paragraphs, p50 footnote 43 with a `>` quote and a source line, p61 footnote 65 with numbered items, p63 footnote 72 with a quote paragraph, p70 footnote 85 with a second paragraph.
+    - The heading stop keeps Contreras page 3 working: two columns, footnotes 2 to 5 in the left column, then `## 3. Hypotheses` and body text in the right column.
+2. **Footnote continuation on a page without footnote definitions.** It is the first paragraph after the body continuation that is text and either starts lowercase (after an optional `> ` or `- `) or follows an open body paragraph.
+    - p84 `least 120 days prior ...` (lowercase).
+    - p130 `unassailable; in contrast ...` (lowercase).
+    - p140 `Chartered, (also an EPFI) ...`: it follows `... did pose risks to their`. An open body paragraph cannot be followed by more body text, so the next paragraph is footnote text.
+    - p81 has none, because `The goal of this chapter ...` follows a heading. Its absence leaves the footnote unjoined.
+3. **Both open.** When the next page has footnotes, the paragraph before its first footnote definition continues the footnote; any case is accepted, as before (Hayek, Meyerstein 110->111 `Social Action Plans, ...`). There is no footnote join when that paragraph is the body continuation itself (p61->62, `[cite]` note), and none when no candidate exists on a footnote-free page (p80->81). A candidate that is not text (heading, placeholder, imprint) still raises `ambiguous_page_join`, now worded `page N: its last footnote runs on, but page N+1 has no text before its first footnote`. The footnote join is only planned when the body continuation is on the very next page (see rule 5).
+4. **Only the footnote open.** The paragraph before the next page's first footnote definition must start lowercase, as before. The fallback "first paragraph of the next page" now also must start lowercase (after `- `/`> `), with the Conley `- corporations ...` still passing.
+    - Observed: p63->64 `The second Rio Declaration norm ...` and p89->90 `The WCD introduced ...` were wrong joins.
+5. **A page left with only footnotes is skipped by the body continuation.** This happens when its body was moved to the page before.
+    - p69's paragraph ends `... obligations.[^86] Mann` after page 70's only body paragraph was joined to it, and it continues with `notes that several US agreements ...` on page 71 (join `69->71`).
+    - p61->63: `... the concept enshrined in` + `Principle 10 of the Rio Declaration ...`.
+6. **Closed endings** in `terminated`:
+    - the closing glyph `‖` added to the closing characters;
+    - trailing HTML tags (`</mark>`) stripped before the check;
+    - a paragraph ending in a URL (`http(s)://` or `www.`, five Meyerstein footnotes such as p49, p167, p89) is closed — no page in Meyerstein starts with a `(last visited` remainder;
+    - a paragraph ending in an author-year citation in parentheses `(Name 2006)` / `(A 2006; B 2009)` is closed (p80 note, p128 `(Wright and Rwabizambuga 2006)` + `Offering ...`, p164 `(Wright 2006; Sarfaty 2009)` + `There was evidence ...`);
+    - a paragraph that is bold from start to end (`**...**`) is closed, i.e. a title (appendix panels, pages 224 to 232).
+7. **Enumerated items** count as list items for the "item not continued by the next item" rule: `(4) `, `vii) `, `a) `.
+
+### Result on the Meyerstein copy (2026-11-20)
+
+`assemble ok`, 234 pages, 46 tables, 3 figures, 147 joins: 136 body and 11 footnote. Trace in `/tmp/b2/mey_t6.txt` (temporary).
+
+Footnote joins, all checked against the pages and right:
+
+| join | end | start |
+|---|---|---|
+| 56->57 | `would go to ―low carbon‖` | `investments by 2011. _See World Bank clings ...` |
+| 62->63 | `Six articles in the Declaration make explicit reference` | `to FPIC, although only two, Articles 10 ...` |
+| 70->71 | `it does link` | `human rights to investment. _See_ Art. 7.2 ...` |
+| 72->73 | `determines the scope of` | `liability under the ATCA ...` |
+| 83->84 | `the general public for at` | `least 120 days prior to the approval date ...` (last paragraph of a footnote-free page) |
+| 110->111 | `Environmental and` | `Social Action Plans, Corrective Action Plans ...` |
+| 111->112 | `between NGOs/EPFIs and project` | `sponsors for the purpose of reaching ...` |
+| 129->130 | `its commitment to the environmental issues` | `unassailable; in contrast, the European banks ...` (footnote-free page) |
+| 139->140 | `a subsidiary of Standard` | `Chartered, (also an EPFI) ...` (footnote-free page, after an open body paragraph) |
+| 206->207 | `through the conversion of preference shares,` | `and increased further to 84.4% ...` |
+| 208->209 | `fewer than 15 clients and does not` | `generally hold itself out to the public ...` |
+
+Body joins that cross a page whose bottom is footnotes, checked:
+- 69->71 `Mann` + `notes that several US agreements ...`: right.
+- 61->63 `the concept enshrined in` + `Principle 10 of the Rio Declaration ...`: right.
+- 83->84 `This pressure led the Bank in 1984 to` + `elaborate further ...`: right, the target only exists because of the footnote area.
+- 80->81, 110->111, 129->130, 206->207, 208->209: right.
+
+Among the 136 body joins:
+- 128 continuations start lowercase. The 23 that start uppercase were read one by one: proper-noun or citation continuations such as `National Contact` + `Points ...`, `(Khanna` + `2009). ...`, `Publish What` + `You Pay ...`, `ANZ Investment Bank of` + `Australia ...`.
+- Wrong: 123->124 `... and the origins of the Equator Principles` + `_Type of Institution (...)_ ...`. The print itself has no full stop there (page_png/p123.png), and the next paragraph starts with an italic run-in heading. Not fixed.
+- Debatable, text order kept: 59->60 `... stated that` + the block quote `The right to development is ...`; 114->115 `... Rules state that` + `i) The EPFIs and Associates recognise ...` (the first item of a list joins its lead-in sentence).
+
+Footnote continuations still missed (footnote text stays as a body paragraph of the next page; no wrong join):
+- p63->64: footnote 72 continues with `―FPIConsent,‖ however, ...` and `_See International Financial Corporation ..._`. These are the two paragraphs before the first footnote of page 64, and the first one starts with an opening quote.
+- p100->101: footnote 129 ends `... through a non-`; it continues with `OECD country. ...` after Table 4.3 and `(Watchman 2007).` on page 101.
+
+### Regression (2026-11-20)
+
+- Scholtens 9, Hayek 23, Conley 22, Contreras 13, Heilmayr 9, Moura 6 and Schrage 8 joins, all on the re-extracted copies under `/tmp/b2/re/` with manifest `running`, plus Schouten 6 on `/tmp/b2/schouten_fresh`. Join lists and joined texts are identical to the runs before this change.
+- Tests: 12 new or changed in `test_pdf_assemble.py`. All fail on 156dd4f. The former test "open paragraph and open footnote with a continuation still fail as ambiguous" described a layout that is now observed (p80, a next page without footnotes) and handled. It became the tripwire test for a non-text paragraph before the next page's first footnote.
+- Full `run_strands.sh`: 90 strands, 1 skipped, 0 failed.
+
+### How the work ran, what to reuse
+
+- A second trace wrapper around `planned_joins` labels each join with source page, target page and kind (`/tmp/b2/tools/trace2.py`). The trace around `joined` alone cannot tell footnote from body joins.
+- A leftover script runs `join_pages` and lists every page that still has an open target afterwards (9 on Meyerstein). That is where missed joins show up.
+- The first fix, for page 80 alone, produced 164 joins with more than 25 wrong ones. On a long book, read the whole join list after every rule change, not only the reported failure.
+- A rule tried and dropped: "a footnote candidate directly after a heading is no continuation" (for p50). The URL ending rule covers p50 and also p168. The heading rule alone missed p168 `The survey asked: ...` (body text taken by a URL footnote).
+
 ## Hypotheses, not observed, nothing built
 
 - A converter text box crossing a table from the left (a text column left of the table) hits the `table_column_unclear` tripwire.
@@ -146,6 +240,10 @@ Verification (2026-11-20). All seven PDFs (Schrage plus the six regression PDFs)
 - A word of letters plus digits that the converter really lost passes coverage when both parts occur elsewhere on the page.
 - A page-1 body paragraph whose text equals a kept running box (after normalization) would be excluded as a target.
 - A sentence that really continues on the next page after an e-mail address would not be joined.
+- A body sentence that continues after a URL or an author-year citation at the page end would not be joined.
+- A fully bold body paragraph that runs on over the page would not be joined.
+- Body text placed by a page worker after a footnote definition without a heading in between would be treated as footnote text (Contreras-like two-column pages without a heading after the footnotes).
+- A footnote-free page whose body contains an open paragraph followed by a quote or list (not footnote text) while the previous page has an open footnote: the quote would be taken as the footnote continuation.
 
 ## How the work ran, what to reuse, what went wrong
 

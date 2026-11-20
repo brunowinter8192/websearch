@@ -44,7 +44,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### assemble.py (292 LOC)
+### assemble.py (324 LOC)
 
 **Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, region `_missing.txt` files, `samples/` (refuses once sampling started).
