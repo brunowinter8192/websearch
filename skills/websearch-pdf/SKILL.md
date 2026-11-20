@@ -151,6 +151,8 @@ description:
 5. Prüfe jede Korrektur und jeden Fund gegen die Seite im PDF. Lies dazu die Seite mit dem Read-Tool.
    - Echt ist eine Korrektur, wenn der Text vorher vom Seitenbild abweicht und der Text nachher dem Seitenbild entspricht.
    - Ist eine Korrektur echt, aber selbst fehlerhaft, oder steht ein Fund ohne Korrektur in `findings.md`, schicke ihn dem Worker. Danach erzeugst du den Bericht erneut.
+   - Eine Korrektur, die der Bericht mit `DUPLICATE` kennzeichnet, prüfst du nicht. `sample-close` verwirft sie selbst.
+   - Steht bei einer Korrektur `WARNING: an inserted text already ends a paragraph`, nenne die Seite mit `--reject`.
 
 6. Schließe den Lauf. Nenne mit `--reject` jede Seite, deren Korrektur nicht echt ist.
 
