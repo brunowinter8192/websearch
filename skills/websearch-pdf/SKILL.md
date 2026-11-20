@@ -60,12 +60,13 @@ description:
 2. Lies `BATCH_DIR/manifest.json`. Dort steht jeder Worker dieses PDFs mit seinem Prompt:
    - `tables` — `BATCH_DIR/prompt_tables.md`, fehlt, wenn das PDF keine Tabelle hat.
    - `figures` — `BATCH_DIR/prompt_figures.md`, fehlt, wenn das PDF keine Abbildung hat.
+   - `formulas` — `BATCH_DIR/prompt_formulas.md`, fehlt, wenn das PDF keine Formel hat.
    - `outline` — `BATCH_DIR/prompt_outline.md`.
    - `pages-<a>-<b>` — `BATCH_DIR/prompt_pages_<a>-<b>.md`, ein Prompt je Seitenbereich.
 
-### Step 2 — Tabellen, Abbildungen und Gliederung
+### Step 2 — Tabellen, Abbildungen, Formeln und Gliederung
 
-1. Starte die Worker `tables`, `figures` und `outline` direkt nacheinander.
+1. Starte die Worker `tables`, `figures`, `formulas` und `outline` direkt nacheinander.
 
    ```bash
    MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-<worker> BATCH_DIR/prompt_<worker>.md
@@ -196,3 +197,4 @@ description:
    ```
 
 2. Geh idle.
+
