@@ -224,3 +224,159 @@ def test_an_open_paragraph_and_an_open_footnote_with_a_continuation_still_fail_a
     batch_dir = batch(tmp_path, ["the extent of externalized\n\n[^1]: IFC uses a set of policies for\n", "costs or avoid conflicts.\n"])
     report = assemble_workflow(str(batch_dir))
     assert report.text == "assemble FAILED (ambiguous_page_join): page 1: its last paragraph and its last footnote both run on"
+
+
+def test_a_reference_list_item_is_not_continued_by_the_next_item_but_a_footnote_is_continued_by_a_dash_line(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "## References\n\n- [5] Andam K S 2008 Measuring the effectiveness _Proc. Natl Acad. Sci._ **105** 16089\n\n"
+        "- [6] Jayachandran S 2017 Cash for carbon _Science_ **357** 267–73\n",
+        "- [7] Alix-Garcia J M and Gibbs H K 2017 Forest conservation effects\n\n- [8] Pfaff A and Robalino J 2017 Spillovers\n",
+        "## NOTES\n\n[^10]: Several recent decisions made it more difficult for plaintiffs to use the U.S. federal courts to sue\n",
+        "- corporations for human rights abuses abroad under the 1798 Alien Tort Statute (Gibeaut 2011).\n\n## REFERENCES\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 3->4(footnote)" in report.text
+    first, second, third, fourth = book_pages(batch_dir)
+    assert first.endswith("- [6] Jayachandran S 2017 Cash for carbon _Science_ **357** 267–73")
+    assert second.startswith("- [7] Alix-Garcia")
+    assert third.split("\n\n")[0] == "## NOTES"
+    assert third.split("\n\n")[1].startswith("[^10]: Several")
+    assert third.endswith("to sue corporations for human rights abuses abroad under the 1798 Alien Tort Statute (Gibeaut 2011).")
+    assert fourth == "## REFERENCES"
+
+
+def test_caption_labels_their_titles_and_table_notes_are_skipped_and_a_page_of_only_tables_is_no_target(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "For the average pairwise collaboration, adopters i tend to collaborate as the significantly lower average\n",
+        "Table 2\n\nRegional distribution of adopters of the Equator Principles.\n\n<!-- TABLE p2_0 -->\n\n"
+        "This distribution concerns our sample of lead arrangers.\n\nTable 3\n\nSummary statistics.\n\n<!-- TABLE p2_1 -->\n\n"
+        "Unit of observation: pairwise collaborations.\n\n(%) for adopters – our measure for peer pressure – shows.\n",
+        "Table 8\n\nAdoption of the Equator Principles using Cox regression models.\n\n<!-- TABLE p3_0 -->\n",
+        "Table 8 (continued)\n\n<!-- TABLE p4_0 -->\n\nExponentiated coefficients.\n\n"
+        "The variable Initial adopter takes the value of one.\n",
+    ], tables=("p2_0", "p2_1", "p3_0", "p4_0"))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 1->2(body)" in report.text
+    first, second, third, fourth = book_pages(batch_dir)
+    assert first == "For the average pairwise collaboration, adopters i tend to collaborate as the significantly lower average (%) for adopters – our measure for peer pressure – shows."
+    assert second.endswith("Unit of observation: pairwise collaborations.")
+    assert third == f"Table 8\n\nAdoption of the Equator Principles using Cox regression models.\n\n{TABLE}"
+    assert fourth.endswith("The variable Initial adopter takes the value of one.")
+
+
+def test_body_text_directly_before_a_table_without_caption_continues_the_page_before(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "Research in bandwagon effects may shed\n",
+        "some light to our findings. The initial group consists of 14 banks.\n\n<!-- TABLE p2_0 -->\n\n"
+        "Table 7 presents the results from these additional analyses.\n\nTo determine the validity of our results, we perform a validation.\n",
+    ], tables=("p2_0",))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 1->2(body)" in report.text
+    first, second = book_pages(batch_dir)
+    assert first == "Research in bandwagon effects may shed some light to our findings. The initial group consists of 14 banks."
+    assert second.startswith(f"{TABLE}\n\nTable 7 presents")
+
+
+def test_lowercase_text_directly_after_a_table_continues_the_page_before(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "However, where their non-certified concessions overlapped with the forest\n",
+        "**Table 2.** Average partial effects of direct and indirect exposure.\n\n<!-- TABLE p2_0 -->\n\n"
+        "estate, greater exposure to within-company certification was associated with reduced deforestation.\n\n"
+        "### 4.3. Local market spillovers\n",
+    ], tables=("p2_0",))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 1->2(body)" in report.text
+    first, second = book_pages(batch_dir)
+    assert first.endswith("overlapped with the forest estate, greater exposure to within-company certification was associated with reduced deforestation.")
+    assert second == f"**Table 2.** Average partial effects of direct and indirect exposure.\n\n{TABLE}\n\n### 4.3. Local market spillovers"
+
+
+def test_a_paragraph_ending_in_a_semicolon_runs_on_past_a_captioned_table(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "where $EP_j$ is a dummy variable equal to one if lead arranger j is an adopter and zero otherwise;\n",
+        "Table 1\n\nVariable description.\n\n<!-- TABLE p2_0 -->\n\n"
+        "$\\text{Concentration}_{ji}$ is the share of syndicated project finance loans.\n\nThe second key variable is Susceptibility.\n",
+    ], tables=("p2_0",))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 1->2(body)" in report.text
+    first, _ = book_pages(batch_dir)
+    assert first == "where $EP_j$ is a dummy variable equal to one if lead arranger j is an adopter and zero otherwise; $\\text{Concentration}_{ji}$ is the share of syndicated project finance loans."
+
+
+def test_a_paragraph_and_a_footnote_both_running_on_take_the_first_paragraph_and_the_one_before_the_first_footnote(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "how, if the central purpose of intervention is to be achieved, intervention must expand\n\n"
+        "[^11]: \"I have no doubt that this statement will be contradicted, and, therefor, the nature of the needs\n",
+        "until it becomes a comprehensive system of planning.[^12] But it is relevant.\n\n## III\n\n"
+        "The wide popularity which the idea enjoys today.\n\n[19]\n\n"
+        "that are to be satisfied. A more detailed examination must be reserved for another occasion.\n\n"
+        "[^12]: Cf. L. V. Mises, Kritik des Interventionismus (Jena, 1929).\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 2: 1->2(body) 1->2(footnote)" in report.text
+    first, second = book_pages(batch_dir)
+    assert first.split("\n\n") == [
+        "how, if the central purpose of intervention is to be achieved, intervention must expand until it becomes a comprehensive system of planning.[^12] But it is relevant.",
+        "[^11]: \"I have no doubt that this statement will be contradicted, and, therefor, the nature of the needs that are to be satisfied. "
+        "A more detailed examination must be reserved for another occasion.",
+    ]
+    assert second.split("\n\n") == [
+        "## III", "The wide popularity which the idea enjoys today.", "[19]", "[^12]: Cf. L. V. Mises, Kritik des Interventionismus (Jena, 1929).",
+    ]
+
+
+def test_a_page_number_in_picture_text_markup_is_neither_joined_onto_nor_moved(tmp_path):
+    markup = "<!-- Start of picture text -->\n[31]<br><!-- End of picture text -->"
+    batch_dir = batch(tmp_path, [
+        f"The creation of the common creed becomes an indis-\n\n{markup}\n\n[^17]: America Must Choose (New York, 1934).\n",
+        "pensable instrument for the success of the planned system.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 1: 1->2(body)" in report.text
+    first, second = book_pages(batch_dir)
+    assert first == f"The creation of the common creed becomes an indispensable instrument for the success of the planned system.\n\n{markup}\n\n[^17]: America Must Choose (New York, 1934)."
+    assert second == ""
+
+
+@pytest.mark.parametrize("page_end, first_paragraph, second_page", [
+    (
+        "Banks have caused damage to people who did not trade financial instruments they did not understand,\n\n"
+        "> Address correspondence to John M. Conley, Chapel Hill, NC 27599-3380.\n\n"
+        "LAW & POLICY, Vol. 33, No. 4, October 2011 © 2011 The Authors Law & Policy © 2011 The University of Denver/Colorado Seminary\n\n"
+        "ISSN 0265–8240\n",
+        "Banks have caused damage to people who did not trade financial instruments they did not understand, "
+        "and did not distribute risk in ways that were opaque.",
+        "",
+    ),
+    (
+        "View the article online for updates and enhancements.\n\n"
+        "This content was downloaded from IP address 79.213.252.163 on 19/11/2026 at 22:09\n",
+        "View the article online for updates and enhancements.",
+        "and did not distribute risk in ways that were opaque.",
+    ),
+    (
+        "It may well mean the destruction of everything.\n\n[PRINTED IN USA]\n",
+        "It may well mean the destruction of everything.",
+        "and did not distribute risk in ways that were opaque.",
+    ),
+])
+def test_imprint_lines_at_the_end_of_a_page_are_no_join_target(tmp_path, page_end, first_paragraph, second_page):
+    batch_dir = batch(tmp_path, [page_end, "and did not distribute risk in ways that were opaque.\n"])
+    assemble_workflow(str(batch_dir))
+    first, second = book_pages(batch_dir)
+    assert first.split("\n\n")[0] == first_paragraph
+    assert second == second_page
+
+
+def test_a_word_listed_as_missing_for_a_table_must_appear_in_its_fixed_table(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, ["Table 1.\n\n<!-- TABLE p1_0 -->\n"], tables=("p1_0",))
+    (batch_dir / "tables" / "p1_0_missing.txt").write_text("during\ndroughts\n")
+    (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas during|2|\n")
+    report = assemble_workflow(str(batch_dir))
+    assert report.text == (
+        "assemble FAILED (region_word_missing): tables/p1_0_fixed.md lacks words printed in the region and listed in "
+        "tables/p1_0_missing.txt: droughts"
+    )
+    assert read_log(conversion_log)[-1]["failure_class"] == "region_word_missing"
+    (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas<br>during droughts|2|\n")
+    assert assemble_workflow(str(batch_dir)).ok

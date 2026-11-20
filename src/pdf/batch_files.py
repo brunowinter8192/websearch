@@ -55,6 +55,10 @@ def region_fixed(kind: str, region_id: str) -> str:
     return f"{region_dir(kind)}/{region_id}_fixed.md"
 
 
+def region_missing(kind: str, region_id: str) -> str:
+    return f"{region_dir(kind)}/{region_id}_missing.txt"
+
+
 def placeholder(kind: str, region_id: str) -> str:
     return f"<!-- {kind} {region_id} -->"
 

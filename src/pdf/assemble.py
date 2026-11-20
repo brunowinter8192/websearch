@@ -5,9 +5,10 @@ from pathlib import Path
 
 from src.config import NEW_PARAGRAPH
 from src.pdf.batch_files import (
-    BARE_PAGE_NUMBER, KIND_FIGURE, KIND_TABLE, PLACEHOLDER, fixed_page_md, outlined_md, placeholders, region_fixed,
+    BARE_PAGE_NUMBER, KIND_FIGURE, KIND_TABLE, PLACEHOLDER, fixed_page_md, outlined_md, placeholders, region_fixed, region_missing,
 )
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
+from src.pdf.coverage import normalized, tokens_of
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import load_runs, page_marker
@@ -18,9 +19,17 @@ FOOTNOTE_DEFINITION = re.compile(r"^\[\^[^\]]+\]:")
 TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
 HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
+LIST_ITEM = re.compile(r"^- ")
+CAPTION_LABEL = re.compile(r"^\**(Table|Fig\.|Figure) \d+(\.|—|\*| \(|$)")
+BARE_CAPTION_LABEL = re.compile(r"\**(Table|Fig\.|Figure) \d+\**")
+TABLE_NOTE_START = re.compile(r"^[A-Z(]")
+PICTURE_TEXT_MARKUP = re.compile(r"<!-- (Start|End) of picture text -->|<br>")
+BRACKETED_LINE = re.compile(r"\[[^\]^]+\]")
+IMPRINT_MARKS = ("ISSN", "©", "downloaded from IP address")
+BOX_QUOTE = ">"
 EMPHASIS_CHARS = "*_"
 CLOSING_CHARS = "”’\"')]»*_"
-SENTENCE_END_CHARS = ".!?:;"
+SENTENCE_END_CHARS = ".!?:"
 QUOTE_PAIRS = (("‘‘", "“"), ("’’", "”"))
 TARGET_BODY = "body"
 TARGET_FOOTNOTE = "footnote"
@@ -52,6 +61,7 @@ def assemble_book(manifest: dict, batch_dir: Path) -> Report:
     unfinished = [entry for entry in worker_states(batch_dir, manifest) if entry[1] != STATE_COMPLETE]
     if unfinished:
         return report_unfinished(manifest, unfinished)
+    require_region_words(batch_dir, manifest)
     pages = load_pages(batch_dir, manifest["pages"])
     joins = join_pages(pages)
     target = book_path(batch_dir, manifest)
@@ -66,6 +76,22 @@ def report_unfinished(manifest: dict, unfinished: list[tuple[dict, str, list[str
     ))
     lines = [f"assemble FAILED (incomplete_worker): {len(unfinished)} of {len(manifest['workers'])} workers incomplete, nothing written"]
     return Report("\n".join(lines + format_unfinished(unfinished)), False)
+
+
+def require_region_words(batch_dir: Path, manifest: dict) -> None:
+    for kind, key in ((KIND_TABLE, "tables"), (KIND_FIGURE, "figures")):
+        for region_id in manifest[key]:
+            listed = batch_dir / region_missing(kind, region_id)
+            if not listed.is_file():
+                continue
+            fixed = "".join(tokens_of([(batch_dir / region_fixed(kind, region_id)).read_text(encoding="utf-8")]))
+            absent = [word for word in listed.read_text(encoding="utf-8").split() if normalized(word) not in fixed]
+            if absent:
+                raise WorkflowError(
+                    "region_word_missing",
+                    f"{region_fixed(kind, region_id)} lacks words printed in the region and listed in "
+                    f"{region_missing(kind, region_id)}: {' '.join(absent)}",
+                )
 
 
 def load_pages(batch_dir: Path, pages: int) -> list[list[str]]:
@@ -113,12 +139,12 @@ def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
         while True:
             targets = open_targets(pages[index])
             found = continuation(pages, index + 1) if targets else None
-            if found is None:
+            if found is None or new_list_item(pages, index, targets[0], found):
                 break
-            kind, position = single_target(index + 1, targets)
-            page_index, paragraph_index = found
-            pages[index][position] = joined(pages[index][position], pages[page_index].pop(paragraph_index))
-            joins.append((index + 1, page_index + 1, kind))
+            planned = planned_joins(pages, index + 1, targets, found)
+            for (kind, position), (page_index, paragraph_index) in reversed(planned):
+                pages[index][position] = joined(pages[index][position], pages[page_index].pop(paragraph_index))
+            joins += [(index + 1, page_index + 1, kind) for (kind, _), (page_index, _) in planned]
     return joins
 
 
@@ -133,10 +159,26 @@ def open_targets(paragraphs: list[str]) -> list[tuple[str, int]]:
     return targets
 
 
-def single_target(number: int, targets: list[tuple[str, int]]) -> tuple[str, int]:
-    if len(targets) > 1:
+def new_list_item(pages: list[list[str]], index: int, target: tuple[str, int], found: tuple[int, int]) -> bool:
+    page_index, paragraph_index = found
+    return bool(LIST_ITEM.match(pages[index][target[1]]) and LIST_ITEM.match(pages[page_index][paragraph_index]))
+
+
+def planned_joins(
+    pages: list[list[str]], number: int, targets: list[tuple[str, int]], found: tuple[int, int],
+) -> list[tuple[tuple[str, int], tuple[int, int]]]:
+    if len(targets) == 1:
+        return [(targets[0], found)]
+    return [(targets[0], found), (targets[1], footnote_continuation(pages, number, found))]
+
+
+def footnote_continuation(pages: list[list[str]], number: int, found: tuple[int, int]) -> tuple[int, int]:
+    page_index, body_index = found
+    paragraphs = pages[page_index]
+    first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
+    if first_note is None or first_note - 1 <= body_index or not is_body(paragraphs, first_note - 1):
         raise WorkflowError("ambiguous_page_join", f"page {number}: its last paragraph and its last footnote both run on")
-    return targets[0]
+    return page_index, first_note - 1
 
 
 def is_body(paragraphs: list[str], index: int) -> bool:
@@ -145,18 +187,30 @@ def is_body(paragraphs: list[str], index: int) -> bool:
 
 
 def skippable(paragraphs: list[str], index: int) -> bool:
-    if paragraphs[index].startswith("#") or FOOTNOTE_DEFINITION.match(paragraphs[index]):
+    paragraph = paragraphs[index]
+    if paragraph.startswith("#") or FOOTNOTE_DEFINITION.match(paragraph):
         return False
-    if region_kind(paragraphs[index]) or BARE_PAGE_NUMBER.fullmatch(paragraphs[index].strip(EMPHASIS_CHARS)):
+    if region_kind(paragraph) or page_number(paragraph) or imprint(paragraph) or CAPTION_LABEL.match(paragraph):
         return True
-    before = region_kind(paragraphs[index - 1]) if index > 0 else None
-    after = region_kind(paragraphs[index + 1]) if index + 1 < len(paragraphs) else None
-    return before in (KIND_TABLE, KIND_FIGURE) or after == KIND_TABLE
+    before = paragraphs[index - 1] if index > 0 else ""
+    if BARE_CAPTION_LABEL.fullmatch(before) or region_kind(before) == KIND_FIGURE:
+        return True
+    return region_kind(before) == KIND_TABLE and bool(TABLE_NOTE_START.match(paragraph))
 
 
 def region_kind(paragraph: str) -> str | None:
     match = PLACEHOLDER.fullmatch(paragraph)
     return match[1] if match else None
+
+
+def page_number(paragraph: str) -> bool:
+    return bool(BARE_PAGE_NUMBER.fullmatch(PICTURE_TEXT_MARKUP.sub("", paragraph).strip().strip(EMPHASIS_CHARS)))
+
+
+def imprint(paragraph: str) -> bool:
+    if paragraph.startswith(BOX_QUOTE) or BRACKETED_LINE.fullmatch(paragraph):
+        return True
+    return any(mark in paragraph for mark in IMPRINT_MARKS)
 
 
 def terminated(paragraph: str) -> bool:
@@ -176,7 +230,7 @@ def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
 
 
 def joined(head: str, tail: str) -> str:
-    head = head.rstrip()
+    head, tail = head.rstrip(), LIST_ITEM.sub("", tail.lstrip(), count=1)
     if HYPHENATED_END.search(head):
         return head[:-1] + tail.lstrip()
     return f"{head} {tail.lstrip()}"

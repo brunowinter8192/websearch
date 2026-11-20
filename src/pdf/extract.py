@@ -16,9 +16,10 @@ from src.config import MANIFEST_FILE_NAME, NEW_PARAGRAPH, PARAGRAPH_LIMIT_BYTES,
 from src.pdf.batch_files import (
     BARE_PAGE_NUMBER, BOOKMARKS_FILE, FIGURES_DIR, FORMULAS_DIR, HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_FIGURE,
     KIND_FORMULA, KIND_HEADING, KIND_TABLE, PAGE_PNG_DIR, PAGES_DIR, TABLES_DIR, WORKER_OUTLINE, fixed_page_md, outlined_md,
-    page_md, page_png, placeholder, region_current, region_dir, region_fixed, region_png,
+    page_md, page_png, placeholder, region_current, region_dir, region_fixed, region_missing, region_png,
 )
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
+from src.pdf.coverage import require_coverage
 from src.pdf.manifest import book_path, write_manifest
 from src.pdf.report import Report, WorkflowError
 from src.pdf.templates import PROMPT_DIR, read_template, require_filled, substitute
@@ -55,6 +56,9 @@ INDENT_MIN_PT = 3.0
 INDENT_MAX_PT = 30.0
 LEFT_TOLERANCE_PT = 1.0
 NEEDLE_WORDS = 3
+NONE_LISTED = "none"
+DIRECTION_TOLERANCE = 0.01
+HYPHENATED_END = re.compile(r"[^\W\d_]-$")
 MARKUP = "[*_]*"
 REGION_DIRS = (TABLES_DIR, FIGURES_DIR, FORMULAS_DIR)
 STALE_DIRS = (PAGES_DIR, PAGE_PNG_DIR, *REGION_DIRS, SAMPLES_DIR_NAME)
@@ -152,13 +156,14 @@ def extract_batch(run: dict, pdf: Path, batch_dir: Path) -> Report:
     chunks = convert(document, batch_dir / CONVERTER_LOG_FILE)
     ocr_pages = read_ocr_pages(batch_dir / CONVERTER_LOG_FILE)
     pages = [build_page(number, chunk, document[number - 1], number in ocr_pages) for number, chunk in enumerate(chunks, start=1)]
-    write_pages(batch_dir, unrotated_original(pdf), pages)
+    missing = require_coverage(document, pages)
+    write_pages(batch_dir, unrotated_original(pdf), pages, missing)
     write_json(batch_dir / BOOKMARKS_FILE, bookmarks(document))
     write_json(batch_dir / HEADINGS_FILE, [heading for page in pages for heading in page["headings"]])
     manifest = build_manifest(run, pdf, pages)
-    manifest["workers"] = write_worker_prompts(pdf, batch_dir, manifest)
+    manifest["workers"] = write_worker_prompts(pdf, batch_dir, manifest, missing)
     write_manifest(batch_dir, manifest)
-    return Report(format_summary(manifest, batch_dir, pages, ocr_pages), True)
+    return Report(format_summary(manifest, batch_dir, pages, ocr_pages, missing), True)
 
 
 def prepare_batch_dir(batch_dir: Path, stem: str) -> None:
@@ -199,9 +204,13 @@ def read_ocr_pages(log_file: Path) -> set[int]:
 
 
 def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
-    result = {"number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "paragraph_starts": 0}
+    result = {
+        "number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "dropped": [], "paragraph_starts": 0,
+    }
     boxes = [{**box, "span": chunk["text"][box["pos"][0]:box["pos"][1]].strip()} for box in chunk["page_boxes"]]
     require_known_classes(number, boxes)
+    if not ocr:
+        boxes = split_rotated_tables(page, boxes)
     formulas = formula_regions(number, boxes)
     parts = []
     for index, box in enumerate(boxes):
@@ -219,6 +228,74 @@ def require_known_classes(number: int, boxes: list[dict]) -> None:
     for box in boxes:
         if box["class"] not in KNOWN_CLASSES:
             raise WorkflowError("unknown_box_class", f"page {number}: box class {box['class']!r} was never observed")
+
+
+def split_rotated_tables(page: pymupdf.Page, boxes: list[dict]) -> list[dict]:
+    blocks = page.get_text("dict", flags=ROW_FLAGS)["blocks"]
+    result = list(boxes)
+    for box in boxes:
+        inside = lines_inside(blocks, box["bbox"])
+        rotated = [line for line in inside if not horizontal(line)]
+        if box["class"] != CLASS_TABLE or len(rotated) * 2 <= len(inside):
+            continue
+        table = {**box, "bbox": list(union_of(rotated)), "span": "\n".join(line_text(line) for line in rotated)}
+        position = next(index for index, entry in enumerate(result) if entry is box)
+        result[position] = table
+        for orphan in orphan_blocks(blocks, box["bbox"], table["bbox"], result):
+            result.insert(insert_position(result, position, orphan), orphan)
+    return result
+
+
+def lines_inside(blocks: list[dict], bbox: list[float]) -> list[dict]:
+    rect = pymupdf.Rect(bbox)
+    return [line for block in blocks for line in block.get("lines", []) if rect.contains(line_center(line["bbox"]))]
+
+
+def horizontal(line: dict) -> bool:
+    return abs(line["dir"][0] - 1) < DIRECTION_TOLERANCE
+
+
+def union_of(lines: list[dict]) -> pymupdf.Rect:
+    rect = pymupdf.Rect(lines[0]["bbox"])
+    for line in lines[1:]:
+        rect.include_rect(line["bbox"])
+    return rect
+
+
+def line_text(line: dict) -> str:
+    return "".join(span["text"] for span in line["spans"])
+
+
+def orphan_blocks(blocks: list[dict], old_bbox: list[float], table_bbox: list[float], boxes: list[dict]) -> list[dict]:
+    old, table = pymupdf.Rect(old_bbox), pymupdf.Rect(table_bbox)
+    others = [pymupdf.Rect(box["bbox"]) for box in boxes if box["class"] != CLASS_TABLE]
+    orphans = []
+    for block in blocks:
+        lines = [line for line in block.get("lines", []) if horizontal(line)]
+        centers = [line_center(line["bbox"]) for line in lines]
+        if lines and all(old.contains(c) and not table.contains(c) and not any(o.contains(c) for o in others) for c in centers):
+            orphans.append({"class": CLASS_TEXT, "bbox": list(union_of(lines)), "span": block_text(lines)})
+    return sorted(orphans, key=lambda orphan: orphan["bbox"][1])
+
+
+def block_text(lines: list[dict]) -> str:
+    text = ""
+    for line in lines:
+        part = line_text(line).strip()
+        if text.endswith("-") and HYPHENATED_END.search(text):
+            text = text[:-1] + part
+        else:
+            text = f"{text} {part}" if text else part
+    return text
+
+
+def insert_position(boxes: list[dict], table_index: int, orphan: dict) -> int:
+    x0, y0, x1, _ = orphan["bbox"]
+    for index in range(table_index + 1, len(boxes)):
+        bbox = boxes[index]["bbox"]
+        if bbox[0] < x1 and x0 < bbox[2] and bbox[1] > y0:
+            return index
+    return len(boxes)
 
 
 def formula_regions(number: int, boxes: list[dict]) -> dict[int, dict | None]:
@@ -278,6 +355,7 @@ def formula_part(number: int, region: dict | None, result: dict) -> str:
 def box_part(number: int, box: dict, span: str, page: pymupdf.Page, result: dict) -> str:
     kind = box["class"]
     if kind in RUNNING_CLASSES and not kept_running_box(number, span):
+        result["dropped"].append((list(box["bbox"]), span))
         return ""
     if kind == CLASS_TABLE:
         return add_region(result, "tables", KIND_TABLE, number, box["bbox"], span)
@@ -374,7 +452,7 @@ def unrotated_original(pdf: Path) -> pymupdf.Document:
     return original
 
 
-def write_pages(batch_dir: Path, document: pymupdf.Document, pages: list[dict]) -> None:
+def write_pages(batch_dir: Path, document: pymupdf.Document, pages: list[dict], missing: dict[str, list[str]]) -> None:
     for page in pages:
         (batch_dir / page_md(page["number"])).write_text(page["text"], encoding="utf-8")
         source = document[page["number"] - 1]
@@ -384,6 +462,8 @@ def write_pages(batch_dir: Path, document: pymupdf.Document, pages: list[dict]) 
                 source.get_pixmap(dpi=REGION_DPI, clip=pymupdf.Rect(region["bbox"])).save(batch_dir / region_png(kind, region["id"]))
                 current = region["current"] + "\n" if region["current"] else ""
                 (batch_dir / region_current(kind, region["id"])).write_text(current, encoding="utf-8")
+                if region["id"] in missing:
+                    (batch_dir / region_missing(kind, region["id"])).write_text("\n".join(missing[region["id"]]) + "\n", encoding="utf-8")
 
 
 def bookmarks(document: pymupdf.Document) -> list[dict]:
@@ -411,22 +491,23 @@ def build_manifest(run: dict, pdf: Path, pages: list[dict]) -> dict:
     }
 
 
-def write_worker_prompts(pdf: Path, batch_dir: Path, manifest: dict) -> list[dict]:
+def write_worker_prompts(pdf: Path, batch_dir: Path, manifest: dict, missing: dict[str, list[str]]) -> list[dict]:
     workers = []
     if manifest["tables"]:
-        workers.append(region_worker(pdf, batch_dir, WORKER_TABLES, KIND_TABLE, manifest["tables"]))
+        workers.append(region_worker(pdf, batch_dir, WORKER_TABLES, KIND_TABLE, manifest["tables"], missing))
     if manifest["figures"]:
-        workers.append(region_worker(pdf, batch_dir, WORKER_FIGURES, KIND_FIGURE, manifest["figures"]))
+        workers.append(region_worker(pdf, batch_dir, WORKER_FIGURES, KIND_FIGURE, manifest["figures"], missing))
     if manifest["formulas"]:
-        workers.append(region_worker(pdf, batch_dir, WORKER_FORMULAS, KIND_FORMULA, manifest["formulas"]))
+        workers.append(region_worker(pdf, batch_dir, WORKER_FORMULAS, KIND_FORMULA, manifest["formulas"], missing))
     workers.append(outline_worker(pdf, batch_dir, manifest["pages"]))
     workers += [page_worker(pdf, batch_dir, first, last) for first, last in page_ranges(manifest["pages"])]
     return workers
 
 
-def region_worker(pdf: Path, batch_dir: Path, name: str, kind: str, ids: list[str]) -> dict:
+def region_worker(pdf: Path, batch_dir: Path, name: str, kind: str, ids: list[str], missing: dict[str, list[str]]) -> dict:
     entry = {"name": name, "prompt": f"prompt_{name}.md", "outputs": [region_fixed(kind, region_id) for region_id in ids]}
-    values = {"PDF": str(pdf), "DIR": str(batch_dir / region_dir(kind)), "IDS": " ".join(ids)}
+    listed = " ".join(region_id for region_id in ids if region_id in missing) or NONE_LISTED
+    values = {"PDF": str(pdf), "DIR": str(batch_dir / region_dir(kind)), "IDS": " ".join(ids), "MISSING_IDS": listed}
     write_prompt(batch_dir, entry, f"{name}_prompt.md", values)
     return entry
 
@@ -474,12 +555,13 @@ def write_prompt(batch_dir: Path, entry: dict, template: str, values: dict[str, 
     (batch_dir / entry["prompt"]).write_text(text, encoding="utf-8")
 
 
-def format_summary(manifest: dict, batch_dir: Path, pages: list[dict], ocr_pages: set[int]) -> str:
+def format_summary(manifest: dict, batch_dir: Path, pages: list[dict], ocr_pages: set[int], missing: dict[str, list[str]]) -> str:
     return "\n".join([
         f"extract ok: {manifest['stem']}",
         f"pages={manifest['pages']} ocr_pages={len(ocr_pages)} tables={len(manifest['tables'])} figures={len(manifest['figures'])} "
         f"formulas={len(manifest['formulas'])} headings={len(manifest['headings'])} paragraph_starts_split={sum(page['paragraph_starts'] for page in pages)}",
         "formulas: " + (" ".join(manifest["formulas"]) or "none"),
+        "region words missing from the converter text: " + (" ".join(f"{region_id}={len(words)}" for region_id, words in missing.items()) or NONE_LISTED),
         f"batch dir: {batch_dir}",
         f"manifest: {batch_dir / MANIFEST_FILE_NAME}",
         "workers: " + " ".join(worker["name"] for worker in manifest["workers"]),

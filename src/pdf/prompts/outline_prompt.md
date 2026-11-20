@@ -13,6 +13,7 @@ Heading rule:
 - The level follows the outline of the work, not the font size: title of the work 1, chapter 2, subchapter 3, every level below 4. A work without a table of contents (article, slide deck): title 1, every section heading or slide title 2, every subsection 3, anything below 4.
 - The same rank has the same level everywhere in the document.
 - An entry of {{HEADINGS}} that is not a heading at all, for example a formula, a figure label or a publisher name, gets level 0.
+- A cover sheet that a publisher or a download service put in front of the work (it shows lines like "To cite this article", "You may also like", "This content was downloaded from") is not part of the work. Every entry on it gets level 0, also the title of the work printed there. The title gets level 1 where the work itself begins.
 - The wording of a heading stays exactly as printed. Do not fix spelling, do not change case, do not shorten.
 
 Steps:
