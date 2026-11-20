@@ -18,18 +18,20 @@ FORMULA_REGION_KEY = "formulas"
 
 
 # FUNCTIONS
-def require_coverage(document: pymupdf.Document, pages: list[dict]) -> None:
+def require_coverage(document: pymupdf.Document, pages: list[dict]) -> dict[str, list[str]]:
     dropped_texts = {normalized(text) for page in pages for _, text in page["dropped"]}
+    region_missing: dict[str, list[str]] = {}
     for page in pages:
         if page["ocr"]:
             continue
-        missing = missing_words(document[page["number"] - 1], page, dropped_texts)
+        missing = missing_words(document[page["number"] - 1], page, dropped_texts, region_missing)
         if missing:
             raise WorkflowError(
                 "text_not_covered",
                 f"page {page['number']}: {len(missing)} words of the PDF text layer are missing from the extracted page, "
                 f"for example: {' '.join(missing[:MISSING_SAMPLE])}",
             )
+    return region_missing
 
 
 def normalized(text: str) -> str:
@@ -37,13 +39,19 @@ def normalized(text: str) -> str:
     return "".join(char for char in folded if char.isalnum() and unicodedata.category(char) != MODIFIER_LETTER)
 
 
-def missing_words(source: pymupdf.Page, page: dict, dropped_texts: set[str]) -> list[str]:
+def missing_words(source: pymupdf.Page, page: dict, dropped_texts: set[str], region_missing: dict[str, list[str]]) -> list[str]:
     body, missing = [], []
     for word, center in layer_words(source, page, dropped_texts):
-        kind, text = region_at(page, center)
+        kind, region = region_at(page, center)
         if kind is None:
             body.append(word)
-        elif not region_covers(kind, text, word):
+        elif region_covers(kind, "".join(tokens_of([region["current"]])), word):
+            continue
+        elif kind in TEXT_REGION_KEYS:
+            listed = region_missing.setdefault(region["id"], [])
+            if word not in listed:
+                listed.append(word)
+        else:
             missing.append(word)
     return missing + uncovered_body_words(body, output_tokens(page))
 
@@ -61,12 +69,12 @@ def layer_words(source: pymupdf.Page, page: dict, dropped_texts: set[str]) -> li
     ]
 
 
-def region_at(page: dict, center: pymupdf.Point) -> tuple[str | None, str]:
+def region_at(page: dict, center: pymupdf.Point) -> tuple[str | None, dict]:
     for key in (*TEXT_REGION_KEYS, FORMULA_REGION_KEY):
         for region in page[key]:
             if pymupdf.Rect(region["bbox"]).contains(center):
-                return key, "".join(tokens_of([region["current"]]))
-    return None, ""
+                return key, region
+    return None, {}
 
 
 def region_covers(kind: str, text: str, word: str) -> bool:

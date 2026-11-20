@@ -360,3 +360,23 @@ def test_a_rotated_table_box_spanning_the_other_column_gives_its_text_back_to_th
     assert sorted((batch_dir / "tables" / "p1_0_current.md").read_text().split("\n")[:-1]) == sorted(rotated)
     width, _ = png_size(batch_dir / "tables" / "p1_0.png")
     assert width < (310 - 50) * 200 / 72
+
+
+def test_words_missing_inside_a_table_are_listed_for_the_table_worker_instead_of_stopping_extract(tmp_path, monkeypatch, conversion_log):
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    for y, text in [(80, "Ecological links"), (200, "forest resilience within the RSPO certified areas"), (214, "during droughts")]:
+        page.insert_text((LEFT, y), text, fontsize=11)
+    document.save(tmp_path / "Book.pdf")
+    fake_converter(monkeypatch, [chunk(1, [
+        ("text", [60, 60, 560, 100], "Ecological links"),
+        ("table", [60, 185, 560, 220], "|forest resilience within the RSPO certified area|"),
+    ])])
+    batch_dir = tmp_path / "batch"
+    report = extract_workflow(str(tmp_path / "Book.pdf"), str(batch_dir))
+    assert report.ok, report.text
+    assert "region words missing from the converter text: p1_0=3" in report.text
+    assert (batch_dir / "tables" / "p1_0_missing.txt").read_text() == "areas\nduring\ndroughts\n"
+    prompt = (batch_dir / "prompt_tables.md").read_text()
+    assert "Tables with a missing-words file: p1_0" in prompt
+    assert "must appear in <id>_fixed.md at the place where the image shows it" in prompt

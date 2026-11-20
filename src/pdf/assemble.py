@@ -5,9 +5,10 @@ from pathlib import Path
 
 from src.config import NEW_PARAGRAPH
 from src.pdf.batch_files import (
-    BARE_PAGE_NUMBER, KIND_FIGURE, KIND_TABLE, PLACEHOLDER, fixed_page_md, outlined_md, placeholders, region_fixed,
+    BARE_PAGE_NUMBER, KIND_FIGURE, KIND_TABLE, PLACEHOLDER, fixed_page_md, outlined_md, placeholders, region_fixed, region_missing,
 )
 from src.pdf.conversion_log import append_record, build_end_record, log_failure
+from src.pdf.coverage import normalized, tokens_of
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_runs import load_runs, page_marker
@@ -60,6 +61,7 @@ def assemble_book(manifest: dict, batch_dir: Path) -> Report:
     unfinished = [entry for entry in worker_states(batch_dir, manifest) if entry[1] != STATE_COMPLETE]
     if unfinished:
         return report_unfinished(manifest, unfinished)
+    require_region_words(batch_dir, manifest)
     pages = load_pages(batch_dir, manifest["pages"])
     joins = join_pages(pages)
     target = book_path(batch_dir, manifest)
@@ -74,6 +76,22 @@ def report_unfinished(manifest: dict, unfinished: list[tuple[dict, str, list[str
     ))
     lines = [f"assemble FAILED (incomplete_worker): {len(unfinished)} of {len(manifest['workers'])} workers incomplete, nothing written"]
     return Report("\n".join(lines + format_unfinished(unfinished)), False)
+
+
+def require_region_words(batch_dir: Path, manifest: dict) -> None:
+    for kind, key in ((KIND_TABLE, "tables"), (KIND_FIGURE, "figures")):
+        for region_id in manifest[key]:
+            listed = batch_dir / region_missing(kind, region_id)
+            if not listed.is_file():
+                continue
+            fixed = "".join(tokens_of([(batch_dir / region_fixed(kind, region_id)).read_text(encoding="utf-8")]))
+            absent = [word for word in listed.read_text(encoding="utf-8").split() if normalized(word) not in fixed]
+            if absent:
+                raise WorkflowError(
+                    "region_word_missing",
+                    f"{region_fixed(kind, region_id)} lacks words printed in the region and listed in "
+                    f"{region_missing(kind, region_id)}: {' '.join(absent)}",
+                )
 
 
 def load_pages(batch_dir: Path, pages: int) -> list[list[str]]:

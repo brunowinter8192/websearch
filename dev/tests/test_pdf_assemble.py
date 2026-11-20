@@ -366,3 +366,17 @@ def test_imprint_lines_at_the_end_of_a_page_are_no_join_target(tmp_path, page_en
     first, second = book_pages(batch_dir)
     assert first.split("\n\n")[0] == first_paragraph
     assert second == second_page
+
+
+def test_a_word_listed_as_missing_for_a_table_must_appear_in_its_fixed_table(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, ["Table 1.\n\n<!-- TABLE p1_0 -->\n"], tables=("p1_0",))
+    (batch_dir / "tables" / "p1_0_missing.txt").write_text("during\ndroughts\n")
+    (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas during|2|\n")
+    report = assemble_workflow(str(batch_dir))
+    assert report.text == (
+        "assemble FAILED (region_word_missing): tables/p1_0_fixed.md lacks words printed in the region and listed in "
+        "tables/p1_0_missing.txt: droughts"
+    )
+    assert read_log(conversion_log)[-1]["failure_class"] == "region_word_missing"
+    (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas<br>during droughts|2|\n")
+    assert assemble_workflow(str(batch_dir)).ok
