@@ -10,13 +10,13 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with placeholders, table and figure crops, headings, bookmarks, page images, worker prompts and manifest out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, fixed pages joined over page boundaries, placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with placeholders, table, figure and formula crops, headings, bookmarks, page images, worker prompts and manifest out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, fixed pages joined over page boundaries, placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (387 LOC)
+### extract.py (486 LOC)
 
-**Purpose:** Orchestrates extract: start record, converter run, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
+**Purpose:** Orchestrates extract: start record, converter run, formula detection, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
 **Writes:** the batch directory (removes its own stale files there, `samples/` and the working book); `extract_log.txt` with the converter stdout; start record or failure end record in the conversion log.
 **Called by:** cli.py.
@@ -44,10 +44,10 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with
 
 ---
 
-### assemble.py (193 LOC)
+### assemble.py (210 LOC)
 
-**Purpose:** Orchestrates assemble: completeness and placeholder checks, page boundary join, placeholder replacement, quote normalization, the working book.
-**Reads:** manifest, outlined and fixed page files, fixed table and figure files, `samples/` (refuses once sampling started).
+**Purpose:** Orchestrates assemble: completeness, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
+**Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, `samples/` (refuses once sampling started).
 **Writes:** `<STEM>.md` in the batch directory; an end record in the conversion log when a worker is incomplete or assemble fails.
 **Called by:** cli.py.
 **Calls out:** none.
@@ -104,7 +104,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with
 
 ---
 
-### batch_files.py (68 LOC)
+### batch_files.py (70 LOC)
 
 **Purpose:** Names and paths of the batch layout, placeholder lines, the bare page number pattern, JSON reading.
 **Reads:** JSON files of the batch directory.
@@ -176,6 +176,6 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with
 
 ## State
 
-None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: extract writes the manifest, prompts, `pages/p<N>.md`, `page_png/`, `tables/` and `figures/` crops with `_current.md`, `headings.json`, `bookmarks.json`; workers write the `_fixed` files and `headings_fixed.json`; apply-outline writes `pages/p<N>_outlined.md`; assemble and sample-close write `<STEM>.md`; sample and the sampling worker write `samples/run_<k>/`.
+None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: extract writes the manifest, prompts, `pages/p<N>.md`, `page_png/`, `tables/`, `figures/` and `formulas/` crops with `_current.md`, `headings.json`, `bookmarks.json`; workers write the `_fixed` files and `headings_fixed.json`; apply-outline writes `pages/p<N>_outlined.md`; assemble and sample-close write `<STEM>.md`; sample and the sampling worker write `samples/run_<k>/`.
 
-Prompt templates live in `prompts/`: repair workers (`tables_prompt.md`, `figures_prompt.md`, `outline_prompt.md`, `pages_prompt.md`) and sampling worker (`sample_prompt.md`, `sample_excerpt_steps.md`). Details, decisions and observed evidence: process-docs/pdf_repair_flow (this design), process-docs/pdf_image_flow (the sample loop and the earlier image-only flow), process-docs/pdf_form (form rules).
+Prompt templates live in `prompts/`: repair workers (`tables_prompt.md`, `figures_prompt.md`, `formulas_prompt.md`, `outline_prompt.md`, `pages_prompt.md`) and sampling worker (`sample_prompt.md`, `sample_excerpt_steps.md`). Details, decisions and observed evidence: process-docs/pdf_repair_flow (this design), process-docs/pdf_image_flow (the sample loop and the earlier image-only flow), process-docs/pdf_form (form rules).

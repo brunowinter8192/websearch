@@ -2,6 +2,7 @@
 import json
 import struct
 
+import pymupdf
 import pytest
 
 from dev.tests._pdf_fakes import (
@@ -47,7 +48,7 @@ def test_extract_on_a_generated_pdf_writes_pages_prompts_manifest_and_start_reco
     batch_dir = tmp_path / "batch"
     report = extract_workflow(str(pdf), str(batch_dir))
     assert report.ok, report.text
-    assert "pages=7 ocr_pages=0 tables=0 figures=0 headings=0" in report.text
+    assert "pages=7 ocr_pages=0 tables=0 figures=0 formulas=0 headings=0" in report.text
     assert "workers: outline pages-1-5 pages-6-7" in report.text
     manifest = read_manifest(batch_dir)
     assert [worker["name"] for worker in manifest["workers"]] == ["outline", "pages-1-5", "pages-6-7"]
@@ -168,3 +169,117 @@ def test_missing_pdf_raises_before_any_log_record(tmp_path, conversion_log):
         extract_workflow(str(tmp_path / "absent.pdf"), str(tmp_path / "batch"))
     assert raised.value.failure_class == "pdf_not_found"
     assert not conversion_log.exists()
+
+
+def test_formulas_become_placeholders_crops_and_a_formulas_worker_title_is_a_heading_footnote_is_text(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page")], [(LEFT, "Second page")]])
+    fake_converter(monkeypatch, [
+        chunk(1, [
+            ("text", [48, 60, 284, 70], "where the hazard is estimated:"),
+            ("formula", [301, 115, 553, 139], "<!-- Start of picture text -->\nkiðtÞ ¼ k0ðtÞ ð1Þ<br><!-- End of picture text -->"),
+            ("text", [301, 719, 447, 729], "Peer Pressure ¼ EPj � Concentrationji;"),
+            ("formula", [541, 719, 553, 729], "<!-- Start of picture text -->\nð2Þ<br><!-- End of picture text -->"),
+            ("text", [32, 663, 284, 724], "left column text"),
+        ]),
+        chunk(2, [
+            ("section-header", [311, 708, 454, 718], "##### Susceptibility ¼ EPj � Concentrationij"),
+            ("page-footer", [551, 708, 563, 718], "ð3Þ"),
+            ("section-header", [48, 362, 136, 371], "#### 4. Results"),
+            ("title", [79, 101, 336, 134], "# **Global Banks as Global Sustainability Regulators?**"),
+            ("footnote", [46, 557, 370, 582], "> Address correspondence to John M. Conley."),
+        ]),
+    ])
+    batch_dir = tmp_path / "batch"
+    report = extract_workflow(str(pdf), str(batch_dir))
+    assert report.ok, report.text
+    assert "formulas=3 headings=2" in report.text and "formulas: p1_0 p1_1 p2_0" in report.text
+    assert (batch_dir / "pages" / "p1.md").read_text() == (
+        "where the hazard is estimated:\n\n<!-- FORMULA p1_0 -->\n\n<!-- FORMULA p1_1 -->\n\nleft column text\n"
+    )
+    assert (batch_dir / "pages" / "p2.md").read_text() == (
+        "<!-- FORMULA p2_0 -->\n\n<!-- HEADING h2_0 -->\n\n<!-- HEADING h2_1 -->\n\n> Address correspondence to John M. Conley.\n"
+    )
+    assert json.loads((batch_dir / "headings.json").read_text()) == [
+        {"id": "h2_0", "page": 2, "text": "#### 4. Results"},
+        {"id": "h2_1", "page": 2, "text": "# **Global Banks as Global Sustainability Regulators?**"},
+    ]
+    assert (batch_dir / "formulas" / "p1_1_current.md").read_text() == (
+        "Peer Pressure ¼ EPj � Concentrationji; <!-- Start of picture text -->\nð2Þ<br><!-- End of picture text -->\n"
+    )
+    assert (batch_dir / "formulas" / "p2_0_current.md").read_text() == "##### Susceptibility ¼ EPj � Concentrationij ð3Þ\n"
+    widths = {png_size(batch_dir / "formulas" / f"{name}.png")[0] for name in ("p1_0", "p1_1", "p2_0")}
+    assert len(widths) == 1 and widths.pop() > 252 * 200 / 72 - 2
+    manifest = read_manifest(batch_dir)
+    assert manifest["formulas"] == ["p1_0", "p1_1", "p2_0"]
+    workers = {worker["name"]: worker for worker in manifest["workers"]}
+    assert list(workers) == ["formulas", "outline", "pages-1-2"]
+    assert workers["formulas"]["outputs"] == ["formulas/p1_0_fixed.md", "formulas/p1_1_fixed.md", "formulas/p2_0_fixed.md"]
+    formulas_prompt = (batch_dir / "prompt_formulas.md").read_text()
+    assert "Formulas: p1_0 p1_1 p2_0" in formulas_prompt and f"Directory: {batch_dir / 'formulas'}" in formulas_prompt
+    assert "\\tag{1}" in formulas_prompt and "{{" not in formulas_prompt
+    pages_prompt = (batch_dir / "prompt_pages_1-2.md").read_text()
+    assert "<!-- FORMULA ... -->" in pages_prompt and "never add or remove one" in pages_prompt
+
+
+def test_an_equation_number_without_a_box_to_its_left_fails_extract(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "Page")]])
+    fake_converter(monkeypatch, [chunk(1, [("text", [48, 60, 284, 70], "Page"), ("page-footer", [551, 708, 563, 718], "ð3Þ")])])
+    report = extract_workflow(str(pdf), str(tmp_path / "batch"))
+    assert report.text == "extract FAILED (equation_number_alone): page 1: equation number 'ð3Þ' has no box to its left"
+    assert read_log(conversion_log)[-1]["failure_class"] == "equation_number_alone"
+
+
+def test_a_bracket_set_above_its_line_does_not_make_the_line_a_paragraph_start(tmp_path, monkeypatch, conversion_log):
+    pdf = tmp_path / "Book.pdf"
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    lines = ["variables representing direct exposure to certification", "(Di,t), indirect exposure through a corporate group",
+             "Gi,g,t), and indirect exposure through a local market", "(Li,t) equal to zero for all points in all years."]
+    for index, text in enumerate(lines):
+        page.insert_text((LEFT + (5 if index == 2 else 0), 80 + index * 14), text, fontsize=11)
+    page.insert_text((LEFT, 80 + 2 * 14 - 8), "(", fontsize=11)
+    document.save(pdf)
+    span = " ".join(lines[:2]) + " ( " + " ".join(lines[2:])
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, span)])])
+    report = extract_workflow(str(pdf), str(tmp_path / "batch"))
+    assert report.ok, report.text
+    assert "paragraph_starts_split=0" in report.text
+    assert (tmp_path / "batch" / "pages" / "p1.md").read_text() == span + "\n"
+
+
+def test_references_with_a_hanging_indent_are_split_before_each_reference(tmp_path, monkeypatch, conversion_log):
+    rows = [
+        (LEFT, "DiMaggio, P. (1991). Introduction. In W. W. Powell & P. J. Dimaggio (Eds.), The new"),
+        (LEFT + 12, "institutionalism in organizational analysis (pp. 1-38)."),
+        (LEFT, "DiMaggio, P., & Powell, W. (1983). The iron cage revisited: Institutional"),
+        (LEFT + 12, "isomorphism and collective rationality in organizational fields. American"),
+        (LEFT + 12, "Sociological Review, 48, 147-160."),
+    ]
+    pdf = write_pdf(tmp_path / "Book.pdf", [rows])
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, rows_text(rows))])])
+    report = extract_workflow(str(pdf), str(tmp_path / "batch"))
+    assert "paragraph_starts_split=1" in report.text
+    assert (tmp_path / "batch" / "pages" / "p1.md").read_text() == rows_text(rows[:2]) + "\n\n" + rows_text(rows[2:]) + "\n"
+
+
+def test_page_images_and_crops_come_from_the_pdf_as_printed_not_from_the_converted_document(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Scan.pdf", [[(LEFT, "all but economic matters. It is, however")], [(LEFT, "A landscape table page")]])
+    rotated = pymupdf.open(pdf)
+    rotated[1].set_rotation(90)
+    rotated.save(tmp_path / "Book.pdf")
+    pdf = tmp_path / "Book.pdf"
+
+    def to_markdown(document, page_chunks, ocr_function):
+        for page in document:
+            page.remove_rotation()
+        document[0].insert_text((LEFT, 82), "OCR TEXT DRAWN OVER THE SCAN", fontsize=11)
+        return [chunk(1, [("table", [LEFT - 2, 60, 400, 100], "|a|")]), chunk(2, [("text", BOX, "A landscape table page")])]
+    monkeypatch.setattr(extract.pymupdf4llm, "to_markdown", to_markdown)
+    batch_dir = tmp_path / "batch"
+    assert extract_workflow(str(pdf), str(batch_dir)).ok
+    printed = pymupdf.open(pdf)
+    for number in (1, 2):
+        expected = printed[number - 1].get_pixmap(dpi=150)
+        assert pymupdf.Pixmap(str(batch_dir / "page_png" / f"p{number}.png")).samples == expected.samples
+    crop = printed[0].get_pixmap(dpi=200, clip=pymupdf.Rect(LEFT - 2, 60, 400, 100))
+    assert pymupdf.Pixmap(str(batch_dir / "tables" / "p1_0.png")).samples == crop.samples

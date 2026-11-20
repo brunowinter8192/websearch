@@ -371,9 +371,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** Dropped items are reported: frameless document responses, unreadable lock sidecars raise, malformed links, RSC rows and JSON-LD blocks.
 
-### test_pdf_extract.py (170 LOC)
+### test_pdf_extract.py (285 LOC)
 
-**Purpose:** `extract`: real converter run on a generated PDF (files, workers, prompts, bookmarks, start record, clean stdout), and with a fake converter on real pages: indented line splits a glued paragraph, no split on an OCR page, placeholders, crops and region workers, unknown box class, stale-file cleanup, missing PDF.
+**Purpose:** `extract`: real converter run on a generated PDF (files, workers, prompts, bookmarks, start record, clean stdout), and with a fake converter on real pages: indented line splits a glued paragraph, no split on an OCR page, placeholders, crops and region workers, formulas in their observed shapes with title and footnote classes, lone equation number, bracket row, hanging-indent references, images and crops from the unmodified PDF, unknown box class, stale-file cleanup, missing PDF.
 
 ### test_pdf_status.py (68 LOC)
 
@@ -383,9 +383,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `apply-outline`: levels replace heading placeholders, level 0 keeps the line without marks, a missed line with trailing space, rerun gives the same result, missed line not found, incomplete outline refused.
 
-### test_pdf_assemble.py (172 LOC)
+### test_pdf_assemble.py (226 LOC)
 
-**Purpose:** `assemble` on the observed page boundary cases: paragraph completed before its page's footnotes, new paragraph stays, hyphen join, footnote continuation, skipped table pages, captions and notes, skipped figure and caption, page numbers, no join after a finished paragraph or before a heading; incomplete worker, lost placeholder, missing outline, sampling started.
+**Purpose:** `assemble` on the observed page boundary cases: paragraph completed before its page's footnotes, new paragraph stays, hyphen join, footnote continuation, skipped table pages, captions and notes, skipped figure and caption, page numbers, no join after a finished paragraph or before a heading, italic page number, open paragraph and footnote before a heading, real ambiguity; formula placeholder replaced; heading characters corrected versus heading marks changed; incomplete worker, lost placeholder, missing outline, sampling started.
 
 ### test_pdf_sample.py (115 LOC)
 

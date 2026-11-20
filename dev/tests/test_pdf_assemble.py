@@ -9,20 +9,22 @@ from src.pdf.report import WorkflowError
 
 TABLE = "|a|b|\n|---|---|\n|1|2|"
 FIGURE = "**Figure description (not source text):** Line chart of the CAR."
+FORMULA = "$$R_i = \\alpha + \\beta R_m + \\text{error}.$$"
 
 
 # FUNCTIONS
 
-def batch(tmp_path, pages, tables=(), figures=()):
+def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
     batch_dir = tmp_path / "batch"
     outputs = [f"pages/p{number}_fixed.md" for number in range(1, len(pages) + 1)]
     workers = [{"name": "pages", "prompt": "prompt_pages.md", "outputs": outputs}]
     workers += [{"name": "tables", "prompt": "prompt_tables.md", "outputs": [f"tables/{name}_fixed.md" for name in tables]}]
     workers += [{"name": "figures", "prompt": "prompt_figures.md", "outputs": [f"figures/{name}_fixed.md" for name in figures]}]
+    workers += [{"name": "formulas", "prompt": "prompt_formulas.md", "outputs": [f"formulas/{name}_fixed.md" for name in formulas]}]
     manifest = base_manifest(len(pages), workers=workers)
-    manifest["tables"], manifest["figures"] = list(tables), list(figures)
+    manifest["tables"], manifest["figures"], manifest["formulas"] = list(tables), list(figures), list(formulas)
     write_manifest(batch_dir, manifest)
-    for name in ("pages", "tables", "figures"):
+    for name in ("pages", "tables", "figures", "formulas"):
         (batch_dir / name).mkdir()
     for number, text in enumerate(pages, start=1):
         (batch_dir / "pages" / f"p{number}_outlined.md").write_text(text)
@@ -31,6 +33,8 @@ def batch(tmp_path, pages, tables=(), figures=()):
         (batch_dir / "tables" / f"{name}_fixed.md").write_text(TABLE + "\n")
     for name in figures:
         (batch_dir / "figures" / f"{name}_fixed.md").write_text(FIGURE + "\n")
+    for name in formulas:
+        (batch_dir / "formulas" / f"{name}_fixed.md").write_text(FORMULA + "\n")
     return batch_dir
 
 
@@ -138,7 +142,7 @@ def test_an_incomplete_worker_stops_assemble_with_the_missing_files_and_logs_it(
     report = assemble_workflow(str(batch_dir))
     assert not report.ok
     assert report.text.splitlines() == [
-        "assemble FAILED (incomplete_worker): 1 of 3 workers incomplete, nothing written",
+        "assemble FAILED (incomplete_worker): 1 of 4 workers incomplete, nothing written",
         "  pages: incomplete (missing: pages/p2_fixed.md)",
     ]
     assert not (batch_dir / "Book.md").exists()
@@ -170,3 +174,53 @@ def test_assemble_after_sampling_started_is_refused(tmp_path):
     with pytest.raises(WorkflowError) as raised:
         assemble_workflow(str(batch_dir))
     assert raised.value.failure_class == "sampling_started"
+
+
+def test_a_formula_placeholder_is_replaced_by_the_written_formula(tmp_path):
+    batch_dir = batch(tmp_path, ["The model specification is linear:\n\n<!-- FORMULA p1_0 -->\n\nHere, Ri is the daily return.\n"], formulas=("p1_0",))
+    report = assemble_workflow(str(batch_dir))
+    assert report.ok, report.text
+    assert "formulas=1" in report.text
+    assert book_pages(batch_dir) == [f"The model specification is linear:\n\n{FORMULA}\n\nHere, Ri is the daily return."]
+
+
+def test_a_heading_line_with_corrected_characters_passes_and_a_changed_number_of_marks_fails(tmp_path, conversion_log):
+    outlined = "## **1. Introduction**\n\nText.\n\n### Global Banks 542..575 Regulators?lapo_348\n"
+    batch_dir = batch(tmp_path, [outlined])
+    (batch_dir / "pages" / "p1_fixed.md").write_text("## 1. Introduction\n\nText.\n\n### Global Banks Regulators?\n")
+    assert assemble_workflow(str(batch_dir)).ok
+    assert book_pages(batch_dir) == ["## 1. Introduction\n\nText.\n\n### Global Banks Regulators?"]
+    (batch_dir / "pages" / "p1_fixed.md").write_text("# 1. Introduction\n\nText.\n\n### Global Banks Regulators?\n")
+    report = assemble_workflow(str(batch_dir))
+    assert not report.ok
+    assert report.text == (
+        "assemble FAILED (heading_marks_changed): page 1: pages/p1_fixed.md has heading marks ['#', '###'], "
+        "pages/p1_outlined.md has ['##', '###']"
+    )
+    assert read_log(conversion_log)[-1]["failure_class"] == "heading_marks_changed"
+
+
+def test_an_open_paragraph_and_an_open_footnote_before_a_heading_on_the_next_page_are_not_joined(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "We focus our analysis on one case study.\n\n_ISSN 1569-1829 print, DOI 10.3920/JCNS2012.x002_\n\n_13_\n\n"
+        "[^1]: _Institute for International Trade Negotiations; pmoura@iconebrasil.org.br_\n\n"
+        "[^2]: _University of Missouri, Columbia, MO 65211, USA; chaddadf@missouri.edu_\n",
+        "## **2. Literature review**\n\nThe literature on MSIs is growing.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert report.ok, report.text
+    assert "page joins: 0: none" in report.text
+
+
+def test_an_italic_page_number_is_neither_joined_onto_nor_moved(tmp_path):
+    batch_dir = batch(tmp_path, ["which reduce the extent of externalized\n\n_13_\n", "costs or avoid conflicts.\n"])
+    assemble_workflow(str(batch_dir))
+    first, second = book_pages(batch_dir)
+    assert first == "which reduce the extent of externalized costs or avoid conflicts.\n\n_13_"
+    assert second == ""
+
+
+def test_an_open_paragraph_and_an_open_footnote_with_a_continuation_still_fail_as_ambiguous(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, ["the extent of externalized\n\n[^1]: IFC uses a set of policies for\n", "costs or avoid conflicts.\n"])
+    report = assemble_workflow(str(batch_dir))
+    assert report.text == "assemble FAILED (ambiguous_page_join): page 1: its last paragraph and its last footnote both run on"

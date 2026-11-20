@@ -17,6 +17,8 @@ PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 FOOTNOTE_DEFINITION = re.compile(r"^\[\^[^\]]+\]:")
 TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
+HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
+EMPHASIS_CHARS = "*_"
 CLOSING_CHARS = "”’\"')]»*_"
 SENTENCE_END_CHARS = ".!?:;"
 QUOTE_PAIRS = (("‘‘", "“"), ("’’", "”"))
@@ -73,7 +75,9 @@ def load_pages(batch_dir: Path, pages: int) -> list[list[str]]:
         if not outlined.is_file():
             raise WorkflowError("outline_not_applied", f"{outlined} does not exist, run pdf apply-outline first")
         fixed = (batch_dir / fixed_page_md(number)).read_text(encoding="utf-8")
-        require_placeholders_kept(number, outlined.read_text(encoding="utf-8"), fixed)
+        outlined_text = outlined.read_text(encoding="utf-8")
+        require_placeholders_kept(number, outlined_text, fixed)
+        require_heading_marks_kept(number, outlined_text, fixed)
         loaded.append(paragraphs_of(fixed))
     return loaded
 
@@ -89,6 +93,15 @@ def require_placeholders_kept(number: int, outlined: str, fixed: str) -> None:
         )
 
 
+def require_heading_marks_kept(number: int, outlined: str, fixed: str) -> None:
+    expected, found = HEADING_LINE_MARKS.findall(outlined), HEADING_LINE_MARKS.findall(fixed)
+    if expected != found:
+        raise WorkflowError(
+            "heading_marks_changed",
+            f"page {number}: {fixed_page_md(number)} has heading marks {found}, {outlined_md(number)} has {expected}",
+        )
+
+
 def paragraphs_of(text: str) -> list[str]:
     blocks = PARAGRAPH_BREAK.split(text.strip())
     return [cleaned for cleaned in ("\n".join(line.rstrip() for line in block.strip("\n").split("\n")) for block in blocks) if cleaned]
@@ -98,29 +111,32 @@ def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
     joins = []
     for index in range(len(pages)):
         while True:
-            target = open_target(index + 1, pages[index])
-            found = continuation(pages, index + 1) if target else None
+            targets = open_targets(pages[index])
+            found = continuation(pages, index + 1) if targets else None
             if found is None:
                 break
-            kind, position = target
+            kind, position = single_target(index + 1, targets)
             page_index, paragraph_index = found
             pages[index][position] = joined(pages[index][position], pages[page_index].pop(paragraph_index))
             joins.append((index + 1, page_index + 1, kind))
     return joins
 
 
-def open_target(number: int, paragraphs: list[str]) -> tuple[str, int] | None:
+def open_targets(paragraphs: list[str]) -> list[tuple[str, int]]:
     body = [index for index in range(len(paragraphs)) if is_body(paragraphs, index)]
     notes = [index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)]
-    open_body = bool(body) and not terminated(paragraphs[body[-1]])
-    open_note = bool(notes) and not terminated(paragraphs[notes[-1]])
-    if open_body and open_note:
+    targets = []
+    if body and not terminated(paragraphs[body[-1]]):
+        targets.append((TARGET_BODY, body[-1]))
+    if notes and not terminated(paragraphs[notes[-1]]):
+        targets.append((TARGET_FOOTNOTE, notes[-1]))
+    return targets
+
+
+def single_target(number: int, targets: list[tuple[str, int]]) -> tuple[str, int]:
+    if len(targets) > 1:
         raise WorkflowError("ambiguous_page_join", f"page {number}: its last paragraph and its last footnote both run on")
-    if open_body:
-        return TARGET_BODY, body[-1]
-    if open_note:
-        return TARGET_FOOTNOTE, notes[-1]
-    return None
+    return targets[0]
 
 
 def is_body(paragraphs: list[str], index: int) -> bool:
@@ -131,7 +147,7 @@ def is_body(paragraphs: list[str], index: int) -> bool:
 def skippable(paragraphs: list[str], index: int) -> bool:
     if paragraphs[index].startswith("#") or FOOTNOTE_DEFINITION.match(paragraphs[index]):
         return False
-    if region_kind(paragraphs[index]) or BARE_PAGE_NUMBER.fullmatch(paragraphs[index]):
+    if region_kind(paragraphs[index]) or BARE_PAGE_NUMBER.fullmatch(paragraphs[index].strip(EMPHASIS_CHARS)):
         return True
     before = region_kind(paragraphs[index - 1]) if index > 0 else None
     after = region_kind(paragraphs[index + 1]) if index + 1 < len(paragraphs) else None
@@ -188,6 +204,7 @@ def format_summary(manifest: dict, target: Path, joins: list[tuple[int, int, str
     described = " ".join(f"{first}->{second}({kind})" for first, second, kind in joins) or "none"
     return "\n".join([
         f"assemble ok: {target}",
-        f"pages={manifest['pages']} tables={len(manifest['tables'])} figures={len(manifest['figures'])}",
+        f"pages={manifest['pages']} tables={len(manifest['tables'])} figures={len(manifest['figures'])} "
+        f"formulas={len(manifest.get('formulas', []))}",
         f"page joins: {len(joins)}: {described}",
     ])

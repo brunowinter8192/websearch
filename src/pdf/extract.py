@@ -14,9 +14,9 @@ import pymupdf4llm
 
 from src.config import MANIFEST_FILE_NAME, NEW_PARAGRAPH, PARAGRAPH_LIMIT_BYTES, PROJECT_ROOT, SAMPLE_SHARE, SAMPLES_DIR_NAME
 from src.pdf.batch_files import (
-    BARE_PAGE_NUMBER, BOOKMARKS_FILE, FIGURES_DIR, HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_FIGURE, KIND_HEADING,
-    KIND_TABLE, PAGE_PNG_DIR, PAGES_DIR, TABLES_DIR, WORKER_OUTLINE, fixed_page_md, outlined_md, page_md, page_png,
-    placeholder, region_current, region_dir, region_fixed, region_png,
+    BARE_PAGE_NUMBER, BOOKMARKS_FILE, FIGURES_DIR, FORMULAS_DIR, HEADINGS_FILE, HEADINGS_FIXED_FILE, KIND_FIGURE,
+    KIND_FORMULA, KIND_HEADING, KIND_TABLE, PAGE_PNG_DIR, PAGES_DIR, TABLES_DIR, WORKER_OUTLINE, fixed_page_md, outlined_md,
+    page_md, page_png, placeholder, region_current, region_dir, region_fixed, region_png,
 )
 from src.pdf.conversion_log import append_record, count_earlier_attempts, log_failure, new_run_id
 from src.pdf.manifest import book_path, write_manifest
@@ -37,8 +37,18 @@ CLASS_TEXT = "text"
 CLASS_TABLE = "table"
 CLASS_PICTURE = "picture"
 CLASS_HEADING = "section-header"
+CLASS_TITLE = "title"
+CLASS_FORMULA = "formula"
+HEADING_CLASSES = {CLASS_HEADING, CLASS_TITLE}
 RUNNING_CLASSES = {"page-header", "page-footer"}
-KNOWN_CLASSES = {CLASS_TEXT, CLASS_TABLE, CLASS_PICTURE, CLASS_HEADING, "list-item", "caption", "formula", *RUNNING_CLASSES}
+KNOWN_CLASSES = {
+    CLASS_TEXT, CLASS_TABLE, CLASS_PICTURE, CLASS_FORMULA, *HEADING_CLASSES, "list-item", "caption", "footnote", *RUNNING_CLASSES,
+}
+NUMBERED_FORMULA_CLASSES = {CLASS_TEXT, CLASS_HEADING, CLASS_FORMULA}
+FORMULA_HEADING_SIGN = "¼"
+EQUATION_NUMBER = re.compile(r"ð\d+Þ")
+PICTURE_TEXT_MARKUP = re.compile(r"<!-- (Start|End) of picture text -->|<br>")
+WORD_CHAR = re.compile(r"\w")
 ROW_FLAGS = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_LIGATURES
 ROW_TOLERANCE_PT = 2.0
 INDENT_MIN_PT = 3.0
@@ -46,11 +56,14 @@ INDENT_MAX_PT = 30.0
 LEFT_TOLERANCE_PT = 1.0
 NEEDLE_WORDS = 3
 MARKUP = "[*_]*"
-STALE_DIRS = (PAGES_DIR, PAGE_PNG_DIR, TABLES_DIR, FIGURES_DIR, SAMPLES_DIR_NAME)
+REGION_DIRS = (TABLES_DIR, FIGURES_DIR, FORMULAS_DIR)
+STALE_DIRS = (PAGES_DIR, PAGE_PNG_DIR, *REGION_DIRS, SAMPLES_DIR_NAME)
 STALE_FILES = (MANIFEST_FILE_NAME, HEADINGS_FILE, HEADINGS_FIXED_FILE, BOOKMARKS_FILE, CONVERTER_LOG_FILE)
 STALE_PATTERNS = ("prompt_*.md",)
 WORKER_TABLES = "tables"
 WORKER_FIGURES = "figures"
+WORKER_FORMULAS = "formulas"
+REGION_KINDS = ((KIND_TABLE, "tables"), (KIND_FIGURE, "figures"), (KIND_FORMULA, "formulas"))
 
 
 # ORCHESTRATOR
@@ -139,7 +152,7 @@ def extract_batch(run: dict, pdf: Path, batch_dir: Path) -> Report:
     chunks = convert(document, batch_dir / CONVERTER_LOG_FILE)
     ocr_pages = read_ocr_pages(batch_dir / CONVERTER_LOG_FILE)
     pages = [build_page(number, chunk, document[number - 1], number in ocr_pages) for number, chunk in enumerate(chunks, start=1)]
-    write_pages(batch_dir, document, pages)
+    write_pages(batch_dir, unrotated_original(pdf), pages)
     write_json(batch_dir / BOOKMARKS_FILE, bookmarks(document))
     write_json(batch_dir / HEADINGS_FILE, [heading for page in pages for heading in page["headings"]])
     manifest = build_manifest(run, pdf, pages)
@@ -158,7 +171,7 @@ def prepare_batch_dir(batch_dir: Path, stem: str) -> None:
         for stale in batch_dir.glob(pattern):
             stale.unlink()
     book_path(batch_dir, {"stem": stem}).unlink(missing_ok=True)
-    for name in (PAGES_DIR, PAGE_PNG_DIR, TABLES_DIR, FIGURES_DIR):
+    for name in (PAGES_DIR, PAGE_PNG_DIR, *REGION_DIRS):
         (batch_dir / name).mkdir()
 
 
@@ -186,30 +199,93 @@ def read_ocr_pages(log_file: Path) -> set[int]:
 
 
 def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
-    result = {"number": number, "ocr": ocr, "tables": [], "figures": [], "headings": [], "paragraph_starts": 0}
+    result = {"number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "paragraph_starts": 0}
+    boxes = [{**box, "span": chunk["text"][box["pos"][0]:box["pos"][1]].strip()} for box in chunk["page_boxes"]]
+    require_known_classes(number, boxes)
+    formulas = formula_regions(number, boxes)
     parts = []
-    for box in chunk["page_boxes"]:
-        span = chunk["text"][box["pos"][0]:box["pos"][1]].strip()
-        part = box_part(number, box, span, page, result)
+    for index, box in enumerate(boxes):
+        if index in formulas:
+            part = formula_part(number, formulas[index], result)
+        else:
+            part = box_part(number, box, box["span"], page, result)
         if part:
             parts.append(part)
     result["text"] = NEW_PARAGRAPH.join(parts) + "\n" if parts else ""
     return result
 
 
+def require_known_classes(number: int, boxes: list[dict]) -> None:
+    for box in boxes:
+        if box["class"] not in KNOWN_CLASSES:
+            raise WorkflowError("unknown_box_class", f"page {number}: box class {box['class']!r} was never observed")
+
+
+def formula_regions(number: int, boxes: list[dict]) -> dict[int, dict | None]:
+    regions: dict[int, dict | None] = {}
+    for index, box in enumerate(boxes):
+        if is_formula(box):
+            regions[index] = {"bbox": list(box["bbox"]), "spans": [box["span"]]}
+    for index, box in enumerate(boxes):
+        if EQUATION_NUMBER.fullmatch(unwrapped(box["span"])):
+            partner = row_partner(number, boxes, index)
+            region = regions.setdefault(partner, {"bbox": list(boxes[partner]["bbox"]), "spans": [boxes[partner]["span"]]})
+            region["bbox"] = union(region["bbox"], box["bbox"])
+            region["spans"].append(box["span"])
+            regions[index] = None
+    return regions
+
+
+def is_formula(box: dict) -> bool:
+    if box["class"] == CLASS_FORMULA:
+        content = unwrapped(box["span"])
+        return not (BARE_PAGE_NUMBER.fullmatch(content) or EQUATION_NUMBER.fullmatch(content))
+    return box["class"] == CLASS_HEADING and FORMULA_HEADING_SIGN in box["span"]
+
+
+def unwrapped(span: str) -> str:
+    return PICTURE_TEXT_MARKUP.sub("", span).strip()
+
+
+def row_partner(number: int, boxes: list[dict], index: int) -> int:
+    x0, y0, _, y1 = boxes[index]["bbox"]
+    middle = (y0 + y1) / 2
+    left = [
+        other for other, box in enumerate(boxes)
+        if other != index and box["bbox"][1] <= middle <= box["bbox"][3] and box["bbox"][2] <= x0 + LEFT_TOLERANCE_PT
+    ]
+    if not left:
+        raise WorkflowError("equation_number_alone", f"page {number}: equation number {boxes[index]['span']!r} has no box to its left")
+    partner = max(left, key=lambda other: boxes[other]["bbox"][2])
+    if boxes[partner]["class"] not in NUMBERED_FORMULA_CLASSES:
+        raise WorkflowError(
+            "equation_number_alone",
+            f"page {number}: equation number {boxes[index]['span']!r} stands next to a {boxes[partner]['class']!r} box",
+        )
+    return partner
+
+
+def union(first: list[float], second: list[float]) -> list[float]:
+    return [min(first[0], second[0]), min(first[1], second[1]), max(first[2], second[2]), max(first[3], second[3])]
+
+
+def formula_part(number: int, region: dict | None, result: dict) -> str:
+    if region is None:
+        return ""
+    return add_region(result, "formulas", KIND_FORMULA, number, region["bbox"], " ".join(region["spans"]))
+
+
 def box_part(number: int, box: dict, span: str, page: pymupdf.Page, result: dict) -> str:
     kind = box["class"]
-    if kind not in KNOWN_CLASSES:
-        raise WorkflowError("unknown_box_class", f"page {number}: box class {kind!r} was never observed")
     if kind in RUNNING_CLASSES and not kept_running_box(number, span):
         return ""
     if kind == CLASS_TABLE:
-        return add_region(result, "tables", KIND_TABLE, number, box, span)
+        return add_region(result, "tables", KIND_TABLE, number, box["bbox"], span)
     if kind == CLASS_PICTURE:
-        return add_region(result, "figures", KIND_FIGURE, number, box, span)
+        return add_region(result, "figures", KIND_FIGURE, number, box["bbox"], span)
     if not span:
         return ""
-    if kind == CLASS_HEADING:
+    if kind in HEADING_CLASSES:
         heading_id = f"h{number}_{len(result['headings'])}"
         result["headings"].append({"id": heading_id, "page": number, "text": span})
         return placeholder(KIND_HEADING, heading_id)
@@ -222,9 +298,9 @@ def kept_running_box(number: int, span: str) -> bool:
     return number == 1 and bool(span) and not BARE_PAGE_NUMBER.fullmatch(span)
 
 
-def add_region(result: dict, key: str, kind: str, number: int, box: dict, span: str) -> str:
+def add_region(result: dict, key: str, kind: str, number: int, bbox: list[float], span: str) -> str:
     region_id = f"p{number}_{len(result[key])}"
-    result[key].append({"id": region_id, "bbox": list(box["bbox"]), "current": span})
+    result[key].append({"id": region_id, "bbox": list(bbox), "current": span})
     return placeholder(kind, region_id)
 
 
@@ -241,7 +317,17 @@ def text_rows(page: pymupdf.Page, bbox: list[float]) -> list[tuple[float, str]]:
             rows[-1][1].append((line["bbox"][0], text))
         else:
             rows.append([line["bbox"][3], [(line["bbox"][0], text)]])
-    return [(min(x for x, _ in parts), " ".join(text for _, text in sorted(parts))) for _, parts in rows]
+    return merge_delimiter_rows([(min(x for x, _ in parts), " ".join(text for _, text in sorted(parts))) for _, parts in rows])
+
+
+def merge_delimiter_rows(rows: list[tuple[float, str]]) -> list[tuple[float, str]]:
+    merged, pending = [], []
+    for row in rows:
+        pending.append(row)
+        if WORD_CHAR.search(row[1]):
+            merged.append((min(x for x, _ in pending), " ".join(text for _, text in pending)))
+            pending = []
+    return merged + pending
 
 
 def line_center(bbox: tuple[float, float, float, float]) -> pymupdf.Point:
@@ -265,11 +351,13 @@ def paragraph_starts(rows: list[tuple[float, str]]) -> list[str]:
     if not rows:
         return []
     left = min(x for x, _ in rows)
-    return [
-        rows[index][1] for index in range(1, len(rows) - 1)
-        if INDENT_MIN_PT <= rows[index][0] - left <= INDENT_MAX_PT and rows[index + 1][0] - left <= LEFT_TOLERANCE_PT
-        and rows[index][1].split()
-    ]
+    indented = [INDENT_MIN_PT <= x - left <= INDENT_MAX_PT for x, _ in rows]
+    at_left = [x - left <= LEFT_TOLERANCE_PT for x, _ in rows]
+    if at_left[0] and sum(indented) >= sum(at_left):
+        starts = [index for index in range(1, len(rows)) if at_left[index] and indented[index - 1]]
+    else:
+        starts = [index for index in range(1, len(rows) - 1) if indented[index] and at_left[index + 1]]
+    return [rows[index][1] for index in starts if rows[index][1].split()]
 
 
 def locate_row(span: str, row_text: str, start: int) -> int | None:
@@ -279,12 +367,19 @@ def locate_row(span: str, row_text: str, start: int) -> int | None:
     return match.start() if match else None
 
 
+def unrotated_original(pdf: Path) -> pymupdf.Document:
+    original = pymupdf.open(pdf)
+    for page in original:
+        page.remove_rotation()
+    return original
+
+
 def write_pages(batch_dir: Path, document: pymupdf.Document, pages: list[dict]) -> None:
     for page in pages:
         (batch_dir / page_md(page["number"])).write_text(page["text"], encoding="utf-8")
         source = document[page["number"] - 1]
         source.get_pixmap(dpi=PAGE_DPI).save(batch_dir / page_png(page["number"]))
-        for kind, key in ((KIND_TABLE, "tables"), (KIND_FIGURE, "figures")):
+        for kind, key in REGION_KINDS:
             for region in page[key]:
                 source.get_pixmap(dpi=REGION_DPI, clip=pymupdf.Rect(region["bbox"])).save(batch_dir / region_png(kind, region["id"]))
                 current = region["current"] + "\n" if region["current"] else ""
@@ -310,6 +405,7 @@ def build_manifest(run: dict, pdf: Path, pages: list[dict]) -> dict:
         "worker_model": run["config"]["worker_model"],
         "tables": [region["id"] for page in pages for region in page["tables"]],
         "figures": [region["id"] for page in pages for region in page["figures"]],
+        "formulas": [region["id"] for page in pages for region in page["formulas"]],
         "headings": [heading["id"] for page in pages for heading in page["headings"]],
         "workers": [],
     }
@@ -321,6 +417,8 @@ def write_worker_prompts(pdf: Path, batch_dir: Path, manifest: dict) -> list[dic
         workers.append(region_worker(pdf, batch_dir, WORKER_TABLES, KIND_TABLE, manifest["tables"]))
     if manifest["figures"]:
         workers.append(region_worker(pdf, batch_dir, WORKER_FIGURES, KIND_FIGURE, manifest["figures"]))
+    if manifest["formulas"]:
+        workers.append(region_worker(pdf, batch_dir, WORKER_FORMULAS, KIND_FORMULA, manifest["formulas"]))
     workers.append(outline_worker(pdf, batch_dir, manifest["pages"]))
     workers += [page_worker(pdf, batch_dir, first, last) for first, last in page_ranges(manifest["pages"])]
     return workers
@@ -380,7 +478,8 @@ def format_summary(manifest: dict, batch_dir: Path, pages: list[dict], ocr_pages
     return "\n".join([
         f"extract ok: {manifest['stem']}",
         f"pages={manifest['pages']} ocr_pages={len(ocr_pages)} tables={len(manifest['tables'])} figures={len(manifest['figures'])} "
-        f"headings={len(manifest['headings'])} paragraph_starts_split={sum(page['paragraph_starts'] for page in pages)}",
+        f"formulas={len(manifest['formulas'])} headings={len(manifest['headings'])} paragraph_starts_split={sum(page['paragraph_starts'] for page in pages)}",
+        "formulas: " + (" ".join(manifest["formulas"]) or "none"),
         f"batch dir: {batch_dir}",
         f"manifest: {batch_dir / MANIFEST_FILE_NAME}",
         "workers: " + " ".join(worker["name"] for worker in manifest["workers"]),
