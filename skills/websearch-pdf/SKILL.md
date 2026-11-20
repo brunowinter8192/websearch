@@ -27,6 +27,20 @@ description:
 
 **Nach jedem `spawn` und jedem `send` folgt `worker-cli wait`.**
 
+**Es laufen nie mehr als 20 Worker gleichzeitig, über alle PDFs gezählt.**
+
+**Ein Worker, der idle ist und den `status` als `incomplete` meldet, bekommt seine fehlenden Dateien.**
+- Prüfe zuerst, ob er geblockt wurde, wie in Step 3 beschrieben.
+
+   ```bash
+   worker-cli send pdf-<stem>-<worker> "Write the missing files: <Dateien aus status>"
+   ```
+
+**Endet `apply-outline` oder `assemble` mit `FAILED`, wird das PDF nicht indexiert.**
+- Kille alle Worker dieses PDFs.
+- Notiere das PDF und die Meldung für den Report.
+- Mach mit dem nächsten PDF weiter.
+
 ### Step 0 — PDFs festlegen
 
 1. Frage den User nach den PDFs und der Collection, falls er sie nicht genannt hat.
@@ -74,8 +88,6 @@ description:
 
 **Starte die Seiten-Worker erst nach `apply-outline`.**
 
-**Es laufen nie mehr als 20 Worker gleichzeitig.**
-
 1. Starte für jeden Seitenbereich aus dem Manifest einen Worker, alle direkt nacheinander.
 
    ```bash
@@ -84,7 +96,7 @@ description:
 
 2. Rufe `status` auf, bis jeder Worker des PDFs `complete` ist.
    - `incomplete` nennt die Dateien, die noch fehlen.
-   - Nur bei mehr als 20 Seitenbereichen: Kille jeden Worker, der `complete` ist, und starte den nächsten Seitenbereich.
+   - Erreichst du die Grenze von 20 Workern: Kille jeden Worker, der `complete` ist, und starte den nächsten Seitenbereich.
 
 #### Ein Worker wird von Anthropic geblockt
 
