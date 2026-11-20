@@ -44,7 +44,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with
 
 ---
 
-### assemble.py (206 LOC)
+### assemble.py (210 LOC)
 
 **Purpose:** Orchestrates assemble: completeness, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, `samples/` (refuses once sampling started).

@@ -198,3 +198,29 @@ def test_a_heading_line_with_corrected_characters_passes_and_a_changed_number_of
         "pages/p1_outlined.md has ['##', '###']"
     )
     assert read_log(conversion_log)[-1]["failure_class"] == "heading_marks_changed"
+
+
+def test_an_open_paragraph_and_an_open_footnote_before_a_heading_on_the_next_page_are_not_joined(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "We focus our analysis on one case study.\n\n_ISSN 1569-1829 print, DOI 10.3920/JCNS2012.x002_\n\n_13_\n\n"
+        "[^1]: _Institute for International Trade Negotiations; pmoura@iconebrasil.org.br_\n\n"
+        "[^2]: _University of Missouri, Columbia, MO 65211, USA; chaddadf@missouri.edu_\n",
+        "## **2. Literature review**\n\nThe literature on MSIs is growing.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert report.ok, report.text
+    assert "page joins: 0: none" in report.text
+
+
+def test_an_italic_page_number_is_neither_joined_onto_nor_moved(tmp_path):
+    batch_dir = batch(tmp_path, ["which reduce the extent of externalized\n\n_13_\n", "costs or avoid conflicts.\n"])
+    assemble_workflow(str(batch_dir))
+    first, second = book_pages(batch_dir)
+    assert first == "which reduce the extent of externalized costs or avoid conflicts.\n\n_13_"
+    assert second == ""
+
+
+def test_an_open_paragraph_and_an_open_footnote_with_a_continuation_still_fail_as_ambiguous(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, ["the extent of externalized\n\n[^1]: IFC uses a set of policies for\n", "costs or avoid conflicts.\n"])
+    report = assemble_workflow(str(batch_dir))
+    assert report.text == "assemble FAILED (ambiguous_page_join): page 1: its last paragraph and its last footnote both run on"
