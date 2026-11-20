@@ -66,6 +66,7 @@ def test_extract_on_a_generated_pdf_writes_pages_prompts_manifest_and_start_reco
     assert f"{batch_dir}/page_png/pN.png" in prompt and f"{batch_dir}/pages/pN_outlined.md" in prompt
     assert "Change nothing else" in prompt and "[unreadable]" in prompt and "[^*]" in prompt
     assert "Bookmarks can be incomplete or wrong" in (batch_dir / "prompt_outline.md").read_text()
+    assert "Every entry on it gets level 0, also the title of the work printed there." in (batch_dir / "prompt_outline.md").read_text()
     (start,) = read_log(conversion_log)
     assert (start["record_type"], start["pages"], start["run_id"]) == ("start", 7, manifest["run_id"])
     assert start["config"]["page_worker_pages"] == 5 and start["config"]["ocr"] == "rapidocr"
