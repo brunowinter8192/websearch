@@ -105,9 +105,34 @@ description:
 - Der Worker ist idle, und `status` meldet ihn als `incomplete`.
 - `worker-cli response pdf-<stem>-<worker> 1` zeigt `API Error: Output blocked by content filtering policy`.
 
-1. Kille alle Worker dieses PDFs.
-2. Notiere das PDF, den Worker und die fehlenden Dateien für den Report.
-3. Mach mit dem nächsten PDF weiter.
+**Ein geblockter Seiten-Worker wird durch einen Fallback-Worker ersetzt, der die Seiten nur mit dem Edit-Tool repariert.**
+
+1. Kille den geblockten Worker.
+2. Bereite den Fallback vor und lies die Ausgabe vollständig.
+
+   ```bash
+   WORKFLOW fallback --batch-dir BATCH_DIR --worker <worker> > /tmp/pdf_<STEM>_fallback.txt 2>&1
+   ```
+
+3. Starte einen neuen Worker mit dem Fallback-Prompt.
+
+   ```bash
+   MODEL_SELECTION_FILE=PDF_MODELS worker-cli spawn pdf-<stem>-<worker>-fallback BATCH_DIR/prompt_fallback_<worker>.md
+   ```
+
+4. Rufe `status` auf, bis `<worker>` `complete` ist.
+   - Ist der Fallback-Worker idle und `<worker>` noch `incomplete`, schicke ihm die Dateien aus `status`.
+
+   ```bash
+   worker-cli send pdf-<stem>-<worker>-fallback "Repair these files as your prompt says: <Dateien aus status>"
+   ```
+
+5. Notiere das PDF und den Worker für den Report als geblockt und per Fallback repariert.
+
+**Wird auch der Fallback-Worker geblockt, oder endet `fallback` mit `FAILED`, wird das PDF nicht indexiert.**
+- Kille alle Worker dieses PDFs.
+- Notiere das PDF, den Worker und die fehlenden Dateien für den Report.
+- Mach mit dem nächsten PDF weiter.
 
 ### Step 4 — Zusammenführen
 
@@ -193,10 +218,12 @@ description:
    Collection: <collection>
    Indexiert: <Zahl> PDFs, <Zahl> Chunks
    Nicht indexiert: <PDF mit Grund, oder "keine">
-   Geblockte Worker: <PDF, Worker, oder "keine">
+   Geblockte Worker: <PDF, Worker, per Fallback repariert oder nicht indexiert, oder "keine">
    Stichprobe: <PDF, Zahl der Läufe, geprüfte Seiten, übernommene und verworfene Korrekturen mit Seite>
    Fehler: <jeder Fehler aus allen Steps, oder "keine">
    ```
 
 2. Geh idle.
+
+
 
