@@ -26,9 +26,12 @@ HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
 LIST_ITEM = re.compile(r"^(- |\(\d+\) |([a-z]|[ivxl]+)\) )")
 CONTINUATION_MARK = re.compile(r"^(- |> )")
 TRAILING_TAGS = re.compile(r"(</?[a-zA-Z][^<>]*>)+$")
-CAPTION_LABEL = re.compile(r"^\**(Table|Fig\.|Figure) \d+(\.|—|\*| \(|$)")
+CAPTION_LABEL = re.compile(r"^\**(Table|TABLE|Fig\.|Figure|FIGURE) \d+(\.|—|\*| \(|$)")
 BARE_CAPTION_LABEL = re.compile(r"\**(Table|Fig\.|Figure) \d+\**")
 TABLE_NOTE_START = re.compile(r"^[A-Z(]")
+UPPERCASE_START = re.compile(r"^[A-Z]")
+TABLE_MARK_NOTE = re.compile(r"^\[\^[^\]\d]+\]:")
+TABLE_NOTE_LABEL = re.compile(r"^[*_]+[A-Z]\w*[*_]+:")
 PICTURE_TEXT_MARKUP = re.compile(r"<!-- (Start|End) of picture text -->|<br>")
 BRACKETED_LINE = re.compile(r"\[[^\]^]+\]")
 IMPRINT_MARKS = ("ISSN", "©", "downloaded from IP address")
@@ -173,11 +176,32 @@ def footnote_area(paragraphs: list[str]) -> list[int]:
     for index, paragraph in enumerate(paragraphs):
         if paragraph.startswith("#"):
             inside = False
-        elif FOOTNOTE_DEFINITION.match(paragraph):
+        elif footnote_definition(paragraphs, index):
             inside = True
         if inside:
             area.append(index)
     return area
+
+
+def footnote_definition(paragraphs: list[str], index: int) -> bool:
+    return bool(FOOTNOTE_DEFINITION.match(paragraphs[index])) and not table_note(paragraphs, index)
+
+
+def table_note(paragraphs: list[str], index: int) -> bool:
+    if index == 0:
+        return False
+    paragraph, before = paragraphs[index], paragraphs[index - 1]
+    note_form = bool(TABLE_MARK_NOTE.match(paragraph) or TABLE_NOTE_LABEL.match(paragraph))
+    if region_kind(before) == KIND_TABLE:
+        return note_form or (bool(TABLE_NOTE_START.match(paragraph)) and not text_flow_after_table(paragraphs, index))
+    return note_form and bool(TABLE_MARK_NOTE.match(before)) and table_note(paragraphs, index - 1)
+
+
+def text_flow_after_table(paragraphs: list[str], index: int) -> bool:
+    if not UPPERCASE_START.match(paragraphs[index]):
+        return False
+    after = index + 1
+    return after == len(paragraphs) or (bool(UPPERCASE_START.match(paragraphs[after])) and is_body(paragraphs, after))
 
 
 def first_continuation(pages: list[list[str]], start: int, targets: list[tuple[str, int]]) -> tuple[int, int] | None:
@@ -195,7 +219,7 @@ def first_continuation(pages: list[list[str]], start: int, targets: list[tuple[s
 
 
 def footnote_candidate(number: int, paragraphs: list[str], after: int, alone: bool) -> int | None:
-    first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
+    first_note = next((index for index in range(len(paragraphs)) if footnote_definition(paragraphs, index)), None)
     if first_note is None:
         return next((index for index in range(after + 1, len(paragraphs)) if stranded_note_text(paragraphs, index)), None)
     candidate = first_note - 1
@@ -238,19 +262,19 @@ def footnote_text(paragraphs: list[str], index: int) -> bool:
 
 def is_body(paragraphs: list[str], index: int) -> bool:
     paragraph = paragraphs[index]
-    return not (paragraph.startswith("#") or FOOTNOTE_DEFINITION.match(paragraph) or skippable(paragraphs, index))
+    return not (paragraph.startswith("#") or footnote_definition(paragraphs, index) or skippable(paragraphs, index))
 
 
 def skippable(paragraphs: list[str], index: int) -> bool:
     paragraph = paragraphs[index]
-    if paragraph.startswith("#") or FOOTNOTE_DEFINITION.match(paragraph):
+    if paragraph.startswith("#") or footnote_definition(paragraphs, index):
         return False
     if region_kind(paragraph) or page_number(paragraph) or imprint(paragraph) or CAPTION_LABEL.match(paragraph):
         return True
     before = paragraphs[index - 1] if index > 0 else ""
-    if BARE_CAPTION_LABEL.fullmatch(before) or region_kind(before) == KIND_FIGURE:
+    if BARE_CAPTION_LABEL.fullmatch(before) or (region_kind(before) == KIND_FIGURE and not runs_on(paragraph)):
         return True
-    return region_kind(before) == KIND_TABLE and bool(TABLE_NOTE_START.match(paragraph))
+    return table_note(paragraphs, index)
 
 
 def region_kind(paragraph: str) -> str | None:
@@ -282,7 +306,7 @@ def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
         if area and all(index in area or skippable(paragraphs, index) for index in range(len(paragraphs))):
             continue
         for index, paragraph in enumerate(paragraphs):
-            if paragraph.startswith("#") or FOOTNOTE_DEFINITION.match(paragraph):
+            if paragraph.startswith("#") or footnote_definition(paragraphs, index):
                 return None
             if not skippable(paragraphs, index):
                 return page_index, index

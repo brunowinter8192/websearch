@@ -570,3 +570,61 @@ def test_an_enumerated_item_is_not_continued_by_the_next_item(tmp_path):
         "vii) hold any monies of the Association in a deposit account;\n\nix) do all such other things as will further the above.\n",
     ])
     assert joins_of(batch_dir) == "page joins: 0: none"
+
+
+def test_symbol_notes_and_a_notes_label_after_a_table_are_table_notes_and_the_body_runs_over_the_next_table(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, [
+        "**TABLE 1** Top 10 Mandated Arrangers of Global Project Finance Loans\n\n<!-- TABLE p1_0 -->\n\n"
+        "[^*]: Equator bank as of June 30, 2004.\n\n_Notes_: Data based on equal apportionment between mandated arrangers.\n\n"
+        "as more financial institutions adopt them.\n\n"
+        "For example, of the current financial institutions that have signed the statement on the environment and\n",
+        "**TABLE 2** Top 10 Mandated Arrangers of Latin American Project Finance Loans\n\n<!-- TABLE p2_0 -->\n\n"
+        "[^*]: Equator bank as of June 30, 2004.\n\n[^**]: Not formally an Equator bank, but the Equator Principles are based on the IFC’s policies.\n\n"
+        "sustainable development, 72 percent are from Europe.[^46]\n\n[^46]: Source.\n",
+    ], tables=("p1_0", "p2_0"))
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+    first, second = book_pages(batch_dir)
+    assert first.endswith("on the environment and sustainable development, 72 percent are from Europe.[^46]")
+    assert second == (
+        f"**TABLE 2** Top 10 Mandated Arrangers of Latin American Project Finance Loans\n\n{TABLE}\n\n"
+        "[^*]: Equator bank as of June 30, 2004.\n\n[^**]: Not formally an Equator bank, but the Equator Principles are based on the IFC’s policies.\n\n"
+        "[^46]: Source."
+    )
+
+
+def test_an_uppercase_continuation_after_a_table_followed_by_body_text_is_joined_and_the_body_after_it_runs_on(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, [
+        "For example, the regional league table covering\n",
+        "**TABLE 3** Top 10 Mandated Arrangers of African Project Finance Loans\n\n<!-- TABLE p2_0 -->\n\n"
+        "[^*]: Equator bank as of June 30, 2004.\n\n**TABLE 4** Top 10 Mandated Arrangers of Asian Project Finance Loans\n\n"
+        "<!-- TABLE p2_1 -->\n\nAfrica and the Middle East includes only five Western European banks (see Table 3).\n\n"
+        "These distributions suggest that regional environments produce different incentives for firms to adopt\n",
+        "voluntary codes of conduct.\n",
+    ], tables=("p2_0", "p2_1"))
+    assert joins_of(batch_dir) == "page joins: 2: 1->2(body) 2->3(body)"
+    first, second, third = book_pages(batch_dir)
+    assert first == "For example, the regional league table covering Africa and the Middle East includes only five Western European banks (see Table 3)."
+    assert second.endswith(f"{TABLE}\n\nThese distributions suggest that regional environments produce different incentives for firms to adopt voluntary codes of conduct.")
+    assert third == ""
+
+
+def test_an_uppercase_last_paragraph_after_a_table_is_body_text(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, [
+        "Table 7.1 – _Bank perception of extent of collective reputation_\n\n<!-- TABLE p1_0 -->\n\n"
+        "As Table 7.1 illustrates, 47.8% of those who agreed on individual reputation disagree or disagreed\n",
+        "strongly with the possibility of having a collective reputation.\n",
+    ], tables=("p1_0",))
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+    assert book_pages(batch_dir)[0].endswith("disagree or disagreed strongly with the possibility of having a collective reputation.")
+
+
+def test_lowercase_text_directly_after_a_figure_continues_the_page_before(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, [
+        "the strategic incentives they produce for firms shed light on the wide\n",
+        "**FIGURE 1** Governance Levels in Home Countries of Equator Banks\n\n<!-- FIGURE p2_0 -->\n\n"
+        "and rapid uptake of the Equator Principles among financial institutions headquartered there.\n",
+    ], figures=("p2_0",))
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+    first, second = book_pages(batch_dir)
+    assert first.endswith("shed light on the wide and rapid uptake of the Equator Principles among financial institutions headquartered there.")
+    assert second == f"**FIGURE 1** Governance Levels in Home Countries of Equator Banks\n\n{FIGURE}"
