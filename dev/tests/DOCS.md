@@ -387,6 +387,10 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `assemble` on the observed page boundary cases: paragraph completed before its page's footnotes, new paragraph stays, hyphen join, footnote continuation, skipped table pages, captions and notes, skipped figure and caption, page numbers, no join after a finished paragraph or before a heading, italic page number, open paragraph and footnote before a heading, ambiguity tripwire (no text before the next page's first footnote), reference list items, caption labels and titles, notes and text around tables, symbol-marked and labelled table notes, uppercase text after a table, lowercase text after a figure, semicolon, paragraph and footnote both running on, footnote continuation in a converter footnote box, open footnote continued before the next page's first footnote, page-1 running footer and e-mail address ending as no join target, paragraphs after a footnote definition as footnote text, footnote continuation on a page without footnotes, only lowercase fallback for an open footnote, body continuation past a page of only footnotes, closing quote glyph, trailing tag, citation, bold title and URL endings, enumerated items, picture-text page numbers, imprint lines; formula placeholder replaced; listed region words required in the fixed region; heading characters corrected versus heading marks changed; incomplete worker, lost placeholder, missing outline, sampling started.
 
+### test_pdf_fallback.py (71 LOC)
+
+**Purpose:** `fallback` on the observed Schelling block (pages-21-25 stopped after p23): missing pages pre-filled under the pending line with an edit-only prompt, status and assemble count them missing until the line is removed, non-page worker stops at the tripwire.
+
 ### test_pdf_sample.py (115 LOC)
 
 **Purpose:** `sample`: 10 percent per 50-page block, only never-sampled pages, exhaustion after every page, seeded draw, excerpt boundaries (page before, book ends, neighbours, missing marker), run directory and prompt with page images, one open run at a time.
@@ -407,9 +411,9 @@ Synthetic or captured inputs (JSON items, HTML fixtures, monkeypatched clients) 
 
 **Purpose:** `stats` over a handwritten conversion log: runs, failures by reason, unfinished, retry recovery, averages, `--since`, per config.
 
-### test_pdf_cli.py (51 LOC)
+### test_pdf_cli.py (53 LOC)
 
-**Purpose:** Argument parsing of the `pdf` subcommands including `extract`, `apply-outline`, `assemble` and repeated `--reject`, rejection of the removed `split`, `resplit` and `merge` and of a malformed `--since` date.
+**Purpose:** Argument parsing of the `pdf` subcommands including `extract`, `apply-outline`, `assemble`, `fallback --worker` and repeated `--reject`, rejection of the removed `split`, `resplit` and `merge` and of a malformed `--since` date.
 
 ### _pdf_fakes.py (86 LOC)
 
