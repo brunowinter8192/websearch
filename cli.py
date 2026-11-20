@@ -20,6 +20,7 @@ from src.log_janitor import get_retention_days
 from src.pdf.apply_outline import apply_outline_workflow
 from src.pdf.assemble import assemble_workflow
 from src.pdf.extract import extract_workflow
+from src.pdf.fallback import fallback_workflow
 from src.pdf.publish import publish_workflow
 from src.pdf.report import WorkflowError
 from src.pdf.sample import sample_workflow
@@ -136,7 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("collection", help="Target RAG collection name")
     p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
 
-    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, status, apply-outline, assemble, sample, sample-report, sample-close, publish, stats.")
+    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, status, apply-outline, assemble, fallback, sample, sample-report, sample-close, publish, stats.")
     pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
 
     pp = pdf_sub.add_parser("extract", help="Extract the text layer (OCR for scans) into page files, table and figure crops, headings, worker prompts and manifest.")
@@ -151,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     pp = pdf_sub.add_parser("assemble", help="Join the fixed pages, tables and figures in page order into <STEM>.md in the batch directory.")
     pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
+
+    pp = pdf_sub.add_parser("fallback", help="For a page worker blocked by the content filter: pre-fill its missing pages and write an edit-only prompt.")
+    pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
+    pp.add_argument("--worker", required=True, help="Name of the blocked worker as in the manifest, e.g. pages-21-25")
 
     pp = pdf_sub.add_parser("sample", help="Open the next sample run: draw 10 percent new pages, write excerpts and the sampling prompt.")
     pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
@@ -286,6 +291,8 @@ def _run_pdf_command(args):
         return apply_outline_workflow(args.batch_dir)
     if args.pdf_cmd == "assemble":
         return assemble_workflow(args.batch_dir)
+    if args.pdf_cmd == "fallback":
+        return fallback_workflow(args.batch_dir, args.worker)
     if args.pdf_cmd == "sample":
         return sample_workflow(args.batch_dir)
     if args.pdf_cmd == "sample-report":
