@@ -52,6 +52,7 @@ PICTURE_TEXT_MARKUP = re.compile(r"<!-- (Start|End) of picture text -->|<br>")
 WORD_CHAR = re.compile(r"\w")
 ROW_FLAGS = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_LIGATURES
 ROW_TOLERANCE_PT = 2.0
+DROP_CAP_ROWS = 2
 INDENT_MIN_PT = 3.0
 INDENT_MAX_PT = 30.0
 LEFT_TOLERANCE_PT = 1.0
@@ -210,7 +211,7 @@ def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
     boxes = [{**box, "span": chunk["text"][box["pos"][0]:box["pos"][1]].strip()} for box in chunk["page_boxes"]]
     require_known_classes(number, boxes)
     if not ocr:
-        boxes = split_rotated_tables(page, boxes)
+        boxes = split_column_tables(number, page, split_rotated_tables(page, boxes))
     formulas = formula_regions(number, boxes)
     parts = []
     for index, box in enumerate(boxes):
@@ -296,6 +297,35 @@ def insert_position(boxes: list[dict], table_index: int, orphan: dict) -> int:
         if bbox[0] < x1 and x0 < bbox[2] and bbox[1] > y0:
             return index
     return len(boxes)
+
+
+def split_column_tables(number: int, page: pymupdf.Page, boxes: list[dict]) -> list[dict]:
+    blocks = page.get_text("dict", flags=ROW_FLAGS)["blocks"]
+    result = list(boxes)
+    for box in boxes:
+        crossing = [other for other in boxes if box["class"] == CLASS_TABLE and crosses_table(box, other)]
+        if not crossing:
+            continue
+        edge = min(other["bbox"][0] for other in crossing)
+        inside = lines_inside(blocks, box["bbox"])
+        cells = [line for line in inside if line["bbox"][2] <= edge]
+        column = sorted((line for line in inside if line["bbox"][0] >= edge - LEFT_TOLERANCE_PT), key=lambda line: line["bbox"][3])
+        if not cells or not column or len(cells) + len(column) != len(inside):
+            raise WorkflowError("table_column_unclear", f"page {number}: a text box crosses table box {box['bbox']}, but its lines do not part at x {edge}")
+        position = next(index for index, entry in enumerate(result) if entry is box)
+        others = [pymupdf.Rect(entry["bbox"]) for entry in result if entry is not box]
+        returned = [line for line in column if not any(rect.contains(line_center(line["bbox"])) for rect in others)]
+        result[position] = {**box, "bbox": list(union_of(cells)), "span": "\n".join(line_text(line) for line in cells)}
+        if returned:
+            text = {"class": CLASS_TEXT, "bbox": list(union_of(returned)), "span": block_text(returned)}
+            result.insert(insert_position(result, position, text), text)
+    return result
+
+
+def crosses_table(table: dict, other: dict) -> bool:
+    if other["class"] != CLASS_TEXT or not other["span"]:
+        return False
+    return pymupdf.Rect(table["bbox"]).intersects(pymupdf.Rect(other["bbox"]))
 
 
 def formula_regions(number: int, boxes: list[dict]) -> dict[int, dict | None]:
@@ -388,14 +418,25 @@ def text_rows(page: pymupdf.Page, bbox: list[float]) -> list[tuple[float, str]]:
         line for block in page.get_text("dict", clip=rect, flags=ROW_FLAGS)["blocks"] for line in block.get("lines", [])
         if rect.contains(line_center(line["bbox"]))
     ]
+    caps = [line for line in lines if drop_cap(line, lines)]
     rows: list[list] = []
-    for line in sorted(lines, key=lambda item: (item["bbox"][3], item["bbox"][0])):
+    for line in sorted((line for line in lines if line not in caps), key=lambda item: (item["bbox"][3], item["bbox"][0])):
         text = "".join(span["text"] for span in line["spans"])
         if rows and abs(line["bbox"][3] - rows[-1][0]) <= ROW_TOLERANCE_PT:
             rows[-1][1].append((line["bbox"][0], text))
         else:
             rows.append([line["bbox"][3], [(line["bbox"][0], text)]])
-    return merge_delimiter_rows([(min(x for x, _ in parts), " ".join(text for _, text in sorted(parts))) for _, parts in rows])
+    return merge_delimiter_rows([
+        (min([x for x, _ in parts] + [cap["bbox"][0] for cap in caps if cap["bbox"][1] < bottom <= cap["bbox"][3]]),
+         " ".join(text for _, text in sorted(parts)))
+        for bottom, parts in rows
+    ])
+
+
+def drop_cap(line: dict, lines: list[dict]) -> bool:
+    top, bottom = line["bbox"][1], line["bbox"][3]
+    spanned = {round(other["bbox"][3]) for other in lines if top < other["bbox"][3] < bottom - ROW_TOLERANCE_PT}
+    return len(spanned) >= DROP_CAP_ROWS
 
 
 def merge_delimiter_rows(rows: list[tuple[float, str]]) -> list[tuple[float, str]]:

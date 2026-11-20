@@ -380,3 +380,48 @@ def test_a_word_listed_as_missing_for_a_table_must_appear_in_its_fixed_table(tmp
     assert read_log(conversion_log)[-1]["failure_class"] == "region_word_missing"
     (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas<br>during droughts|2|\n")
     assert assemble_workflow(str(batch_dir)).ok
+
+
+def test_a_footnote_continuation_left_in_a_converter_footnote_box_is_joined_without_its_quote_mark(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "may qualify as prohibited child labour under this Convention.[^14] Growing cocoa involves\n\n"
+        "[^14]: For any type of work that is ‘likely to jeopardize the health, safety or morals of young\n",
+        "long hours in the sun performing physically demanding work.\n\n### Trafficking in persons\n\n"
+        "Ivorian law does not prohibit trafficking in persons.[^18]\n\n"
+        "> persons’ the minimum age is 18 years also; ILO C138, art. 2.\n\n"
+        "[^15]: Trafficking is not solely a child labour issue.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 2: 1->2(body) 1->2(footnote)" in report.text, report.text
+    first, second = book_pages(batch_dir)
+    assert first.split("\n\n") == [
+        "may qualify as prohibited child labour under this Convention.[^14] Growing cocoa involves long hours in the sun performing physically demanding work.",
+        "[^14]: For any type of work that is ‘likely to jeopardize the health, safety or morals of young persons’ the minimum age is 18 years also; ILO C138, art. 2.",
+    ]
+    assert second.split("\n\n") == [
+        "### Trafficking in persons", "Ivorian law does not prohibit trafficking in persons.[^18]", "[^15]: Trafficking is not solely a child labour issue.",
+    ]
+
+
+def test_an_open_footnote_takes_the_lowercase_paragraph_before_the_first_footnote_of_the_next_page(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "Ivorian law does not prohibit trafficking in persons.[^18]\n\n"
+        "[^18]: At least nine traffickers were arrested in 2002; however, all anti-trafficking law\n",
+        "## Response of the global cocoa industry\n\nBefore Congress voted, the cocoa industry announced an initiative ‘to\n\n"
+        "enforcement efforts in Côte d’Ivoire have ceased since September 2002 (USDOS 2003).\n\n"
+        "[^19]: Trade Act of 1930, § 307.\n",
+        "address the workers’ rights issues recently identified’.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 2: 1->2(footnote) 2->3(body)" in report.text, report.text
+    first, second, third = book_pages(batch_dir)
+    assert first.endswith(
+        "[^18]: At least nine traffickers were arrested in 2002; however, all anti-trafficking law "
+        "enforcement efforts in Côte d’Ivoire have ceased since September 2002 (USDOS 2003)."
+    )
+    assert second.split("\n\n") == [
+        "## Response of the global cocoa industry",
+        "Before Congress voted, the cocoa industry announced an initiative ‘to address the workers’ rights issues recently identified’.",
+        "[^19]: Trade Act of 1930, § 307.",
+    ]
+    assert third == ""

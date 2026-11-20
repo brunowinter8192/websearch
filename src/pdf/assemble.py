@@ -20,6 +20,7 @@ TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
 HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
 LIST_ITEM = re.compile(r"^- ")
+CONTINUATION_MARK = re.compile(r"^(- |> )")
 CAPTION_LABEL = re.compile(r"^\**(Table|Fig\.|Figure) \d+(\.|—|\*| \(|$)")
 BARE_CAPTION_LABEL = re.compile(r"\**(Table|Fig\.|Figure) \d+\**")
 TABLE_NOTE_START = re.compile(r"^[A-Z(]")
@@ -138,7 +139,7 @@ def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
     for index in range(len(pages)):
         while True:
             targets = open_targets(pages[index])
-            found = continuation(pages, index + 1) if targets else None
+            found = first_continuation(pages, index + 1, targets)
             if found is None or new_list_item(pages, index, targets[0], found):
                 break
             planned = planned_joins(pages, index + 1, targets, found)
@@ -159,6 +160,28 @@ def open_targets(paragraphs: list[str]) -> list[tuple[str, int]]:
     return targets
 
 
+def first_continuation(pages: list[list[str]], start: int, targets: list[tuple[str, int]]) -> tuple[int, int] | None:
+    if not targets:
+        return None
+    if targets[0][0] == TARGET_FOOTNOTE and start < len(pages):
+        bottom = bottom_continuation(pages[start])
+        if bottom is not None:
+            return start, bottom
+    return continuation(pages, start)
+
+
+def bottom_continuation(paragraphs: list[str]) -> int | None:
+    first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
+    if not first_note or not footnote_text(paragraphs, first_note - 1):
+        return None
+    return first_note - 1 if runs_on(paragraphs[first_note - 1]) else None
+
+
+def runs_on(paragraph: str) -> bool:
+    text = paragraph.removeprefix(BOX_QUOTE).lstrip()
+    return bool(text) and text[0].islower()
+
+
 def new_list_item(pages: list[list[str]], index: int, target: tuple[str, int], found: tuple[int, int]) -> bool:
     page_index, paragraph_index = found
     return bool(LIST_ITEM.match(pages[index][target[1]]) and LIST_ITEM.match(pages[page_index][paragraph_index]))
@@ -176,9 +199,13 @@ def footnote_continuation(pages: list[list[str]], number: int, found: tuple[int,
     page_index, body_index = found
     paragraphs = pages[page_index]
     first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
-    if first_note is None or first_note - 1 <= body_index or not is_body(paragraphs, first_note - 1):
+    if first_note is None or first_note - 1 <= body_index or not footnote_text(paragraphs, first_note - 1):
         raise WorkflowError("ambiguous_page_join", f"page {number}: its last paragraph and its last footnote both run on")
     return page_index, first_note - 1
+
+
+def footnote_text(paragraphs: list[str], index: int) -> bool:
+    return is_body(paragraphs, index) or paragraphs[index].startswith(BOX_QUOTE)
 
 
 def is_body(paragraphs: list[str], index: int) -> bool:
@@ -230,7 +257,7 @@ def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
 
 
 def joined(head: str, tail: str) -> str:
-    head, tail = head.rstrip(), LIST_ITEM.sub("", tail.lstrip(), count=1)
+    head, tail = head.rstrip(), CONTINUATION_MARK.sub("", tail.lstrip(), count=1)
     if HYPHENATED_END.search(head):
         return head[:-1] + tail.lstrip()
     return f"{head} {tail.lstrip()}"
