@@ -206,7 +206,8 @@ def read_ocr_pages(log_file: Path) -> set[int]:
 
 def build_page(number: int, chunk: dict, page: pymupdf.Page, ocr: bool) -> dict:
     result = {
-        "number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "dropped": [], "paragraph_starts": 0,
+        "number": number, "ocr": ocr, "tables": [], "figures": [], "formulas": [], "headings": [], "dropped": [], "running": [],
+        "paragraph_starts": 0,
     }
     boxes = [{**box, "span": chunk["text"][box["pos"][0]:box["pos"][1]].strip()} for box in chunk["page_boxes"]]
     require_known_classes(number, boxes)
@@ -387,6 +388,8 @@ def box_part(number: int, box: dict, span: str, page: pymupdf.Page, result: dict
     if kind in RUNNING_CLASSES and not kept_running_box(number, span):
         result["dropped"].append((list(box["bbox"]), span))
         return ""
+    if kind in RUNNING_CLASSES:
+        result["running"].append(span)
     if kind == CLASS_TABLE:
         return add_region(result, "tables", KIND_TABLE, number, box["bbox"], span)
     if kind == CLASS_PICTURE:
@@ -528,6 +531,7 @@ def build_manifest(run: dict, pdf: Path, pages: list[dict]) -> dict:
         "figures": [region["id"] for page in pages for region in page["figures"]],
         "formulas": [region["id"] for page in pages for region in page["formulas"]],
         "headings": [heading["id"] for page in pages for heading in page["headings"]],
+        "running": [span for page in pages for span in page["running"]],
         "workers": [],
     }
 

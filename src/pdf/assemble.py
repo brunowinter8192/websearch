@@ -18,6 +18,7 @@ PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 FOOTNOTE_DEFINITION = re.compile(r"^\[\^[^\]]+\]:")
 TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
+EMAIL_END = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+$")
 HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
 LIST_ITEM = re.compile(r"^- ")
 CONTINUATION_MARK = re.compile(r"^(- |> )")
@@ -64,7 +65,7 @@ def assemble_book(manifest: dict, batch_dir: Path) -> Report:
         return report_unfinished(manifest, unfinished)
     require_region_words(batch_dir, manifest)
     pages = load_pages(batch_dir, manifest["pages"])
-    joins = join_pages(pages)
+    joins = join_pages(pages, {normalized(span) for span in manifest.get("running", [])})
     target = book_path(batch_dir, manifest)
     target.write_text(render_book(batch_dir, pages), encoding="utf-8")
     return Report(format_summary(manifest, target, joins), True)
@@ -134,11 +135,11 @@ def paragraphs_of(text: str) -> list[str]:
     return [cleaned for cleaned in ("\n".join(line.rstrip() for line in block.strip("\n").split("\n")) for block in blocks) if cleaned]
 
 
-def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
+def join_pages(pages: list[list[str]], running: set[str]) -> list[tuple[int, int, str]]:
     joins = []
     for index in range(len(pages)):
         while True:
-            targets = open_targets(pages[index])
+            targets = open_targets(pages[index], running if index == 0 else set())
             found = first_continuation(pages, index + 1, targets)
             if found is None or new_list_item(pages, index, targets[0], found):
                 break
@@ -149,8 +150,8 @@ def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
     return joins
 
 
-def open_targets(paragraphs: list[str]) -> list[tuple[str, int]]:
-    body = [index for index in range(len(paragraphs)) if is_body(paragraphs, index)]
+def open_targets(paragraphs: list[str], running: set[str]) -> list[tuple[str, int]]:
+    body = [index for index in range(len(paragraphs)) if is_body(paragraphs, index) and normalized(paragraphs[index]) not in running]
     notes = [index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)]
     targets = []
     if body and not terminated(paragraphs[body[-1]]):
@@ -242,7 +243,7 @@ def imprint(paragraph: str) -> bool:
 
 def terminated(paragraph: str) -> bool:
     text = TRAILING_FOOTNOTE_MARKS.sub("", paragraph.rstrip()).rstrip(CLOSING_CHARS)
-    return bool(text) and text[-1] in SENTENCE_END_CHARS
+    return bool(text) and (text[-1] in SENTENCE_END_CHARS or bool(EMAIL_END.search(text)))
 
 
 def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:

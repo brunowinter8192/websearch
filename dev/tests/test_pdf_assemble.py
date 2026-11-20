@@ -14,7 +14,7 @@ FORMULA = "$$R_i = \\alpha + \\beta R_m + \\text{error}.$$"
 
 # FUNCTIONS
 
-def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
+def batch(tmp_path, pages, tables=(), figures=(), formulas=(), running=()):
     batch_dir = tmp_path / "batch"
     outputs = [f"pages/p{number}_fixed.md" for number in range(1, len(pages) + 1)]
     workers = [{"name": "pages", "prompt": "prompt_pages.md", "outputs": outputs}]
@@ -23,6 +23,7 @@ def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
     workers += [{"name": "formulas", "prompt": "prompt_formulas.md", "outputs": [f"formulas/{name}_fixed.md" for name in formulas]}]
     manifest = base_manifest(len(pages), workers=workers)
     manifest["tables"], manifest["figures"], manifest["formulas"] = list(tables), list(figures), list(formulas)
+    manifest["running"] = list(running)
     write_manifest(batch_dir, manifest)
     for name in ("pages", "tables", "figures", "formulas"):
         (batch_dir / name).mkdir()
@@ -425,3 +426,26 @@ def test_an_open_footnote_takes_the_lowercase_paragraph_before_the_first_footnot
         "[^19]: Trade Act of 1930, § 307.",
     ]
     assert third == ""
+
+
+def test_a_running_footer_kept_on_page_one_is_no_join_target_even_reformatted_by_the_worker(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "This case also demonstrates that pressure on consumer brands facilitates collaborative action.\n\nJCC 18 *Summer 2005*\n",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.\n",
+    ], running=("**JCC 18** _Summer 2005_",))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 0: none" in report.text, report.text
+    assert book_pages(batch_dir) == [
+        "This case also demonstrates that pressure on consumer brands facilitates collaborative action.\n\nJCC 18 *Summer 2005*",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.",
+    ]
+
+
+def test_a_paragraph_ending_in_an_email_address_is_closed(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "**Anthony P. Ewing** is a lawyer.\n\n451 Walton Road, Maplewood, NJ 07040, USA\n\n! aewing@law.columbia.edu\n",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 0: none" in report.text, report.text
+    assert book_pages(batch_dir)[1] == "Reports of slave labour on cocoa farms surfaced as early as 1998."

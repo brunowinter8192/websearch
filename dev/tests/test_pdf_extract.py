@@ -445,3 +445,16 @@ def test_a_note_mark_the_converter_moved_before_its_word_still_covers_the_word(t
     fake_converter(monkeypatch, [chunk(1, [("text", BOX, "on different signals and informational 21 cues. As such, the composition")])])
     report = extract_workflow(str(pdf), str(tmp_path / "batch"))
     assert report.ok, report.text
+
+
+def test_running_boxes_kept_on_page_one_are_listed_in_the_manifest(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page text"), (LEFT, "JCC 18 Summer 2005")], [(LEFT, "Second page text"), (LEFT, "JCC 18 Summer 2005")]])
+    fake_converter(monkeypatch, [
+        chunk(1, [("text", [60, 60, 560, 85], "First page text"), ("page-footer", [60, 88, 560, 100], "**JCC 18** _Summer 2005_"),
+                  ("page-footer", [500, 88, 560, 100], "99")]),
+        chunk(2, [("text", [60, 60, 560, 85], "Second page text"), ("page-footer", [60, 88, 560, 100], "**JCC 18** _Summer 2005_")]),
+    ])
+    batch_dir = tmp_path / "batch"
+    assert extract_workflow(str(pdf), str(batch_dir)).ok
+    assert read_manifest(batch_dir)["running"] == ["**JCC 18** _Summer 2005_"]
+    assert (batch_dir / "pages" / "p1.md").read_text() == "First page text\n\n**JCC 18** _Summer 2005_\n"
