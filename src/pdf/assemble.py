@@ -17,6 +17,7 @@ PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 FOOTNOTE_DEFINITION = re.compile(r"^\[\^[^\]]+\]:")
 TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
+HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
 CLOSING_CHARS = "”’\"')]»*_"
 SENTENCE_END_CHARS = ".!?:;"
 QUOTE_PAIRS = (("‘‘", "“"), ("’’", "”"))
@@ -73,7 +74,9 @@ def load_pages(batch_dir: Path, pages: int) -> list[list[str]]:
         if not outlined.is_file():
             raise WorkflowError("outline_not_applied", f"{outlined} does not exist, run pdf apply-outline first")
         fixed = (batch_dir / fixed_page_md(number)).read_text(encoding="utf-8")
-        require_placeholders_kept(number, outlined.read_text(encoding="utf-8"), fixed)
+        outlined_text = outlined.read_text(encoding="utf-8")
+        require_placeholders_kept(number, outlined_text, fixed)
+        require_heading_marks_kept(number, outlined_text, fixed)
         loaded.append(paragraphs_of(fixed))
     return loaded
 
@@ -86,6 +89,15 @@ def require_placeholders_kept(number: int, outlined: str, fixed: str) -> None:
         raise WorkflowError(
             "placeholder_changed",
             f"page {number}: {fixed_page_md(number)} lost placeholders [{lost}] and has extra placeholders [{added}]",
+        )
+
+
+def require_heading_marks_kept(number: int, outlined: str, fixed: str) -> None:
+    expected, found = HEADING_LINE_MARKS.findall(outlined), HEADING_LINE_MARKS.findall(fixed)
+    if expected != found:
+        raise WorkflowError(
+            "heading_marks_changed",
+            f"page {number}: {fixed_page_md(number)} has heading marks {found}, {outlined_md(number)} has {expected}",
         )
 
 
@@ -188,6 +200,7 @@ def format_summary(manifest: dict, target: Path, joins: list[tuple[int, int, str
     described = " ".join(f"{first}->{second}({kind})" for first, second, kind in joins) or "none"
     return "\n".join([
         f"assemble ok: {target}",
-        f"pages={manifest['pages']} tables={len(manifest['tables'])} figures={len(manifest['figures'])}",
+        f"pages={manifest['pages']} tables={len(manifest['tables'])} figures={len(manifest['figures'])} "
+        f"formulas={len(manifest.get('formulas', []))}",
         f"page joins: {len(joins)}: {described}",
     ])

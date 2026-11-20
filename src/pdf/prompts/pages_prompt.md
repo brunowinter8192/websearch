@@ -12,13 +12,14 @@ Steps:
 
 {{FIXED_PATTERN}} is the page Markdown with only these corrections:
 - Characters: every character must match the image. Wrong or broken characters, signs, accents and symbols are corrected. Check every number, date, name and abbreviation against the image.
-- Formulas: a formula is written in LaTeX, inline as $...$, on its own line as $$...$$.
+- Formulas: a formula inside a text line is written in LaTeX as $...$. A display formula that still stands as text on its own line is written as $$...$$.
 - Footnotes: the footnote marker in the text is written as [^N], the footnote text as [^N]: <text> at the end of the page on which it is printed. A note marked with a symbol such as * is written [^*]. Never a superscript like <sup>1</sup>, never an appended digit. Text that continues a footnote of the previous page has no marker: leave it where it is and add none.
+- Heading lines (lines starting with #): every character after the # marks must match the image. Remove characters that are not printed in the image and bold or italic markers such as ** and _. Keep the # marks exactly as they are, never add or remove one.
 - Paragraphs: a paragraph that is split inside the page, for example by a column break or a footnote block, is joined back into one paragraph. A word hyphenated at that break is joined. Two paragraphs stay separate where the image shows a new paragraph, for example by an indented first line.
 
 Do not touch:
-- Lines <!-- TABLE ... --> and <!-- FIGURE ... --> stay exactly as they are, at the same position.
-- Lines starting with # stay exactly as they are.
+- Lines <!-- TABLE ... -->, <!-- FIGURE ... --> and <!-- FORMULA ... --> stay exactly as they are, at the same position. A FORMULA line stands for a display formula that another step writes; do not write that formula again.
+- Lines starting with # stay lines starting with the same # marks. Never turn a line into a heading or a heading into a plain line.
 - A paragraph that runs over to the next page or comes from the previous page stays split at the page boundary; another step joins it.
 - Quotation marks stay as they are in the Markdown.
 - Change nothing else: no added or removed text, no rewording, no italics, no bold, no indents, no headings. Never summarize, shorten or translate. Never write a Markdown image link.

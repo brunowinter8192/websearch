@@ -9,15 +9,17 @@ PAGES_DIR = "pages"
 PAGE_PNG_DIR = "page_png"
 TABLES_DIR = "tables"
 FIGURES_DIR = "figures"
+FORMULAS_DIR = "formulas"
 HEADINGS_FILE = "headings.json"
 HEADINGS_FIXED_FILE = "headings_fixed.json"
 BOOKMARKS_FILE = "bookmarks.json"
 KIND_TABLE = "TABLE"
 KIND_FIGURE = "FIGURE"
+KIND_FORMULA = "FORMULA"
 KIND_HEADING = "HEADING"
 WORKER_OUTLINE = "outline"
 BARE_PAGE_NUMBER = re.compile(r"\[?(\d+|[ivxlcdm]+)\]?", re.IGNORECASE)
-PLACEHOLDER = re.compile(r"^<!-- (TABLE|FIGURE|HEADING) (\S+) -->$", re.MULTILINE)
+PLACEHOLDER = re.compile(r"^<!-- (TABLE|FIGURE|FORMULA|HEADING) (\S+) -->$", re.MULTILINE)
 
 
 # FUNCTIONS
@@ -38,7 +40,7 @@ def page_png(number: int | str) -> str:
 
 
 def region_dir(kind: str) -> str:
-    return TABLES_DIR if kind == KIND_TABLE else FIGURES_DIR
+    return {KIND_TABLE: TABLES_DIR, KIND_FIGURE: FIGURES_DIR, KIND_FORMULA: FORMULAS_DIR}[kind]
 
 
 def region_png(kind: str, region_id: str) -> str:

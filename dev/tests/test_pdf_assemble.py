@@ -9,20 +9,22 @@ from src.pdf.report import WorkflowError
 
 TABLE = "|a|b|\n|---|---|\n|1|2|"
 FIGURE = "**Figure description (not source text):** Line chart of the CAR."
+FORMULA = "$$R_i = \\alpha + \\beta R_m + \\text{error}.$$"
 
 
 # FUNCTIONS
 
-def batch(tmp_path, pages, tables=(), figures=()):
+def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
     batch_dir = tmp_path / "batch"
     outputs = [f"pages/p{number}_fixed.md" for number in range(1, len(pages) + 1)]
     workers = [{"name": "pages", "prompt": "prompt_pages.md", "outputs": outputs}]
     workers += [{"name": "tables", "prompt": "prompt_tables.md", "outputs": [f"tables/{name}_fixed.md" for name in tables]}]
     workers += [{"name": "figures", "prompt": "prompt_figures.md", "outputs": [f"figures/{name}_fixed.md" for name in figures]}]
+    workers += [{"name": "formulas", "prompt": "prompt_formulas.md", "outputs": [f"formulas/{name}_fixed.md" for name in formulas]}]
     manifest = base_manifest(len(pages), workers=workers)
-    manifest["tables"], manifest["figures"] = list(tables), list(figures)
+    manifest["tables"], manifest["figures"], manifest["formulas"] = list(tables), list(figures), list(formulas)
     write_manifest(batch_dir, manifest)
-    for name in ("pages", "tables", "figures"):
+    for name in ("pages", "tables", "figures", "formulas"):
         (batch_dir / name).mkdir()
     for number, text in enumerate(pages, start=1):
         (batch_dir / "pages" / f"p{number}_outlined.md").write_text(text)
@@ -31,6 +33,8 @@ def batch(tmp_path, pages, tables=(), figures=()):
         (batch_dir / "tables" / f"{name}_fixed.md").write_text(TABLE + "\n")
     for name in figures:
         (batch_dir / "figures" / f"{name}_fixed.md").write_text(FIGURE + "\n")
+    for name in formulas:
+        (batch_dir / "formulas" / f"{name}_fixed.md").write_text(FORMULA + "\n")
     return batch_dir
 
 
@@ -138,7 +142,7 @@ def test_an_incomplete_worker_stops_assemble_with_the_missing_files_and_logs_it(
     report = assemble_workflow(str(batch_dir))
     assert not report.ok
     assert report.text.splitlines() == [
-        "assemble FAILED (incomplete_worker): 1 of 3 workers incomplete, nothing written",
+        "assemble FAILED (incomplete_worker): 1 of 4 workers incomplete, nothing written",
         "  pages: incomplete (missing: pages/p2_fixed.md)",
     ]
     assert not (batch_dir / "Book.md").exists()
@@ -170,3 +174,27 @@ def test_assemble_after_sampling_started_is_refused(tmp_path):
     with pytest.raises(WorkflowError) as raised:
         assemble_workflow(str(batch_dir))
     assert raised.value.failure_class == "sampling_started"
+
+
+def test_a_formula_placeholder_is_replaced_by_the_written_formula(tmp_path):
+    batch_dir = batch(tmp_path, ["The model specification is linear:\n\n<!-- FORMULA p1_0 -->\n\nHere, Ri is the daily return.\n"], formulas=("p1_0",))
+    report = assemble_workflow(str(batch_dir))
+    assert report.ok, report.text
+    assert "formulas=1" in report.text
+    assert book_pages(batch_dir) == [f"The model specification is linear:\n\n{FORMULA}\n\nHere, Ri is the daily return."]
+
+
+def test_a_heading_line_with_corrected_characters_passes_and_a_changed_number_of_marks_fails(tmp_path, conversion_log):
+    outlined = "## **1. Introduction**\n\nText.\n\n### Global Banks 542..575 Regulators?lapo_348\n"
+    batch_dir = batch(tmp_path, [outlined])
+    (batch_dir / "pages" / "p1_fixed.md").write_text("## 1. Introduction\n\nText.\n\n### Global Banks Regulators?\n")
+    assert assemble_workflow(str(batch_dir)).ok
+    assert book_pages(batch_dir) == ["## 1. Introduction\n\nText.\n\n### Global Banks Regulators?"]
+    (batch_dir / "pages" / "p1_fixed.md").write_text("# 1. Introduction\n\nText.\n\n### Global Banks Regulators?\n")
+    report = assemble_workflow(str(batch_dir))
+    assert not report.ok
+    assert report.text == (
+        "assemble FAILED (heading_marks_changed): page 1: pages/p1_fixed.md has heading marks ['#', '###'], "
+        "pages/p1_outlined.md has ['##', '###']"
+    )
+    assert read_log(conversion_log)[-1]["failure_class"] == "heading_marks_changed"
