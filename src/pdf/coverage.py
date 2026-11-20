@@ -10,9 +10,11 @@ COMMENT_OR_BREAK = re.compile(r"<br>|<!--.*?-->", re.DOTALL)
 INLINE_TAG = re.compile(r"</?[a-zA-Z][^<>]*>")
 TOKEN_SEPARATOR = re.compile(r"[\s|]+")
 HYPHENATED_WORD = re.compile(r"[^\W\d_]-$")
+WORD_WITH_NOTE_MARK = re.compile(r"([^\W\d_]+)(\d+)")
 CONSUMED = "\x00"
 MISSING_SAMPLE = 12
 MODIFIER_LETTER = "Lm"
+TINY_TEXT_PT = 3.0
 TEXT_REGION_KEYS = ("tables", "figures")
 FORMULA_REGION_KEY = "formulas"
 
@@ -57,7 +59,7 @@ def missing_words(source: pymupdf.Page, page: dict, dropped_texts: set[str], reg
 
 
 def layer_words(source: pymupdf.Page, page: dict, dropped_texts: set[str]) -> list[tuple[str, pymupdf.Point]]:
-    dropped_rects = [pymupdf.Rect(bbox) for bbox, _ in page["dropped"]]
+    dropped_rects = [pymupdf.Rect(bbox) for bbox, _ in page["dropped"]] + tiny_text_rects(source)
     lines: dict[tuple[int, int], list[tuple[str, pymupdf.Point]]] = {}
     for x0, y0, x1, y1, word, block, line, _ in source.get_text("words"):
         center = pymupdf.Point((x0 + x1) / 2, (y0 + y1) / 2)
@@ -66,6 +68,13 @@ def layer_words(source: pymupdf.Page, page: dict, dropped_texts: set[str]) -> li
     return [
         entry for words in lines.values()
         if normalized(" ".join(word for word, _ in words)) not in dropped_texts for entry in words
+    ]
+
+
+def tiny_text_rects(source: pymupdf.Page) -> list[pymupdf.Rect]:
+    return [
+        pymupdf.Rect(span["bbox"]) for block in source.get_text("dict")["blocks"] for line in block.get("lines", [])
+        for span in line["spans"] if span["size"] < TINY_TEXT_PT
     ]
 
 
@@ -102,9 +111,14 @@ def uncovered_body_words(words: list[str], tokens: list[str]) -> list[str]:
         token = normalized(word)
         if token in stream:
             stream = stream.replace(token, CONSUMED, 1)
-        elif token not in whole:
+        elif token not in whole and not moved_note_mark(token, whole):
             missing.append(word)
     return missing
+
+
+def moved_note_mark(token: str, whole: str) -> bool:
+    match = WORD_WITH_NOTE_MARK.fullmatch(token)
+    return bool(match) and match[1] in whole and match[2] in whole
 
 
 def consume_exact(words: list[str], tokens: list[str]) -> tuple[list[bool], list[str]]:

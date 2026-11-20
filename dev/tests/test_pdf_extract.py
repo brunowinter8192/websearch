@@ -380,3 +380,81 @@ def test_words_missing_inside_a_table_are_listed_for_the_table_worker_instead_of
     prompt = (batch_dir / "prompt_tables.md").read_text()
     assert "Tables with a missing-words file: p1_0" in prompt
     assert "must appear in <id>_fixed.md at the place where the image shows it" in prompt
+
+
+def test_a_drop_cap_beside_the_first_rows_does_not_make_them_a_paragraph_start(tmp_path, monkeypatch, conversion_log):
+    rows = ["n recent years, changing public expectations have increasingly", "induced firms to publicly declare their commitments to",
+            "a wide variety of public interest concerns into their corporate", "practices. In the United States and elsewhere, demands for",
+            "firms to demonstrate sound management have intensified."]
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text((LEFT, 108), "I", fontsize=40)
+    for index, text in enumerate(rows):
+        page.insert_text((LEFT + (16 if index < 3 else 0), 80 + index * 14), text, fontsize=11)
+    document.save(tmp_path / "Book.pdf")
+    span = " ".join(rows[:2]) + " I" + " ".join(rows[2:])
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, span)])])
+    report = extract_workflow(str(tmp_path / "Book.pdf"), str(tmp_path / "batch"))
+    assert report.ok, report.text
+    assert "paragraph_starts_split=0" in report.text
+    assert (tmp_path / "batch" / "pages" / "p1.md").read_text() == span + "\n"
+
+
+def test_a_table_box_reaching_into_the_text_column_gives_the_column_back_to_the_page(tmp_path, monkeypatch, conversion_log):
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    for y, text in [(80, "Interviewee"), (100, "11. Manager"), (120, "12. Deputy"), (140, "13. Director")]:
+        page.insert_text((50, y), text, fontsize=9)
+    for y, x, text in [(70, 312, "Biermann, F., 2007. Earth system governance."), (100, 312, "Bitzer, V., 2008. Intersectoral partnerships"),
+                       (110, 322, "for a sustainable coffee"), (120, 322, "chain."), (130, 312, "Cashore, B., 2002. Legitimacy and"),
+                       (140, 322, "governance."), (170, 312, "RSPO, 2008. Minutes of the 5th General Assembly.")]:
+        page.insert_text((x, y), text, fontsize=8)
+    document.save(tmp_path / "Book.pdf")
+    fake_converter(monkeypatch, [chunk(1, [
+        ("text", [310, 60, 562, 74], "Biermann, F., 2007. Earth system governance."),
+        ("table", [48, 72, 562, 160], "|Interviewee|Biermann<br>Bitzer, V., 2008.|\n|---|---|\n|11. Manager|Cashore|"),
+        ("text", [310, 162, 562, 174], "RSPO, 2008. Minutes of the 5th General Assembly."),
+    ])])
+    batch_dir = tmp_path / "batch"
+    report = extract_workflow(str(tmp_path / "Book.pdf"), str(batch_dir))
+    assert report.ok, report.text
+    assert "region words missing from the converter text: none" in report.text
+    assert (batch_dir / "pages" / "p1.md").read_text().split("\n\n") == [
+        "Biermann, F., 2007. Earth system governance.", "<!-- TABLE p1_0 -->",
+        "Bitzer, V., 2008. Intersectoral partnerships for a sustainable coffee chain.", "Cashore, B., 2002. Legitimacy and governance.",
+        "RSPO, 2008. Minutes of the 5th General Assembly.\n",
+    ]
+    assert (batch_dir / "tables" / "p1_0_current.md").read_text() == "Interviewee\n11. Manager\n12. Deputy\n13. Director\n"
+    width, _ = png_size(batch_dir / "tables" / "p1_0.png")
+    assert width < (310 - 48) * 200 / 72
+
+
+def test_tiny_hidden_text_of_the_text_layer_is_not_required_in_the_extracted_page(tmp_path, monkeypatch, conversion_log):
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text((LEFT, 70), "1Original Article BASR", fontsize=2, color=(1, 1, 1))
+    page.insert_text((LEFT, 100), "Institutional Pressures and Voluntary Codes", fontsize=11)
+    document.save(tmp_path / "Book.pdf")
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, "Institutional Pressures and Voluntary Codes")])])
+    report = extract_workflow(str(tmp_path / "Book.pdf"), str(tmp_path / "batch"))
+    assert report.ok, report.text
+
+
+def test_a_note_mark_the_converter_moved_before_its_word_still_covers_the_word(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "on different signals and informational cues.21 As such, the composition")]])
+    fake_converter(monkeypatch, [chunk(1, [("text", BOX, "on different signals and informational 21 cues. As such, the composition")])])
+    report = extract_workflow(str(pdf), str(tmp_path / "batch"))
+    assert report.ok, report.text
+
+
+def test_running_boxes_kept_on_page_one_are_listed_in_the_manifest(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Book.pdf", [[(LEFT, "First page text"), (LEFT, "JCC 18 Summer 2005")], [(LEFT, "Second page text"), (LEFT, "JCC 18 Summer 2005")]])
+    fake_converter(monkeypatch, [
+        chunk(1, [("text", [60, 60, 560, 85], "First page text"), ("page-footer", [60, 88, 560, 100], "**JCC 18** _Summer 2005_"),
+                  ("page-footer", [500, 88, 560, 100], "99")]),
+        chunk(2, [("text", [60, 60, 560, 85], "Second page text"), ("page-footer", [60, 88, 560, 100], "**JCC 18** _Summer 2005_")]),
+    ])
+    batch_dir = tmp_path / "batch"
+    assert extract_workflow(str(pdf), str(batch_dir)).ok
+    assert read_manifest(batch_dir)["running"] == ["**JCC 18** _Summer 2005_"]
+    assert (batch_dir / "pages" / "p1.md").read_text() == "First page text\n\n**JCC 18** _Summer 2005_\n"

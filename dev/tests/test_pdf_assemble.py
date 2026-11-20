@@ -14,7 +14,7 @@ FORMULA = "$$R_i = \\alpha + \\beta R_m + \\text{error}.$$"
 
 # FUNCTIONS
 
-def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
+def batch(tmp_path, pages, tables=(), figures=(), formulas=(), running=()):
     batch_dir = tmp_path / "batch"
     outputs = [f"pages/p{number}_fixed.md" for number in range(1, len(pages) + 1)]
     workers = [{"name": "pages", "prompt": "prompt_pages.md", "outputs": outputs}]
@@ -23,6 +23,7 @@ def batch(tmp_path, pages, tables=(), figures=(), formulas=()):
     workers += [{"name": "formulas", "prompt": "prompt_formulas.md", "outputs": [f"formulas/{name}_fixed.md" for name in formulas]}]
     manifest = base_manifest(len(pages), workers=workers)
     manifest["tables"], manifest["figures"], manifest["formulas"] = list(tables), list(figures), list(formulas)
+    manifest["running"] = list(running)
     write_manifest(batch_dir, manifest)
     for name in ("pages", "tables", "figures", "formulas"):
         (batch_dir / name).mkdir()
@@ -220,10 +221,13 @@ def test_an_italic_page_number_is_neither_joined_onto_nor_moved(tmp_path):
     assert second == ""
 
 
-def test_an_open_paragraph_and_an_open_footnote_with_a_continuation_still_fail_as_ambiguous(tmp_path, conversion_log):
-    batch_dir = batch(tmp_path, ["the extent of externalized\n\n[^1]: IFC uses a set of policies for\n", "costs or avoid conflicts.\n"])
+def test_an_open_footnote_whose_place_on_the_next_page_holds_no_text_still_fails_as_ambiguous(tmp_path, conversion_log):
+    batch_dir = batch(tmp_path, [
+        "the extent of externalized\n\n[^1]: IFC uses a set of policies for\n",
+        "costs or avoid conflicts.\n\n<!-- TABLE p2_0 -->\n\n[^2]: Source.\n",
+    ], tables=("p2_0",))
     report = assemble_workflow(str(batch_dir))
-    assert report.text == "assemble FAILED (ambiguous_page_join): page 1: its last paragraph and its last footnote both run on"
+    assert report.text == "assemble FAILED (ambiguous_page_join): page 1: its last footnote runs on, but page 2 has no text before its first footnote"
 
 
 def test_a_reference_list_item_is_not_continued_by_the_next_item_but_a_footnote_is_continued_by_a_dash_line(tmp_path):
@@ -380,3 +384,189 @@ def test_a_word_listed_as_missing_for_a_table_must_appear_in_its_fixed_table(tmp
     assert read_log(conversion_log)[-1]["failure_class"] == "region_word_missing"
     (batch_dir / "tables" / "p1_0_fixed.md").write_text("|a|b|\n|---|---|\n|in neighboring areas<br>during droughts|2|\n")
     assert assemble_workflow(str(batch_dir)).ok
+
+
+def test_a_footnote_continuation_left_in_a_converter_footnote_box_is_joined_without_its_quote_mark(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "may qualify as prohibited child labour under this Convention.[^14] Growing cocoa involves\n\n"
+        "[^14]: For any type of work that is ‘likely to jeopardize the health, safety or morals of young\n",
+        "long hours in the sun performing physically demanding work.\n\n### Trafficking in persons\n\n"
+        "Ivorian law does not prohibit trafficking in persons.[^18]\n\n"
+        "> persons’ the minimum age is 18 years also; ILO C138, art. 2.\n\n"
+        "[^15]: Trafficking is not solely a child labour issue.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 2: 1->2(body) 1->2(footnote)" in report.text, report.text
+    first, second = book_pages(batch_dir)
+    assert first.split("\n\n") == [
+        "may qualify as prohibited child labour under this Convention.[^14] Growing cocoa involves long hours in the sun performing physically demanding work.",
+        "[^14]: For any type of work that is ‘likely to jeopardize the health, safety or morals of young persons’ the minimum age is 18 years also; ILO C138, art. 2.",
+    ]
+    assert second.split("\n\n") == [
+        "### Trafficking in persons", "Ivorian law does not prohibit trafficking in persons.[^18]", "[^15]: Trafficking is not solely a child labour issue.",
+    ]
+
+
+def test_an_open_footnote_takes_the_lowercase_paragraph_before_the_first_footnote_of_the_next_page(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "Ivorian law does not prohibit trafficking in persons.[^18]\n\n"
+        "[^18]: At least nine traffickers were arrested in 2002; however, all anti-trafficking law\n",
+        "## Response of the global cocoa industry\n\nBefore Congress voted, the cocoa industry announced an initiative ‘to\n\n"
+        "enforcement efforts in Côte d’Ivoire have ceased since September 2002 (USDOS 2003).\n\n"
+        "[^19]: Trade Act of 1930, § 307.\n",
+        "address the workers’ rights issues recently identified’.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 2: 1->2(footnote) 2->3(body)" in report.text, report.text
+    first, second, third = book_pages(batch_dir)
+    assert first.endswith(
+        "[^18]: At least nine traffickers were arrested in 2002; however, all anti-trafficking law "
+        "enforcement efforts in Côte d’Ivoire have ceased since September 2002 (USDOS 2003)."
+    )
+    assert second.split("\n\n") == [
+        "## Response of the global cocoa industry",
+        "Before Congress voted, the cocoa industry announced an initiative ‘to address the workers’ rights issues recently identified’.",
+        "[^19]: Trade Act of 1930, § 307.",
+    ]
+    assert third == ""
+
+
+def test_a_running_footer_kept_on_page_one_is_no_join_target_even_reformatted_by_the_worker(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "This case also demonstrates that pressure on consumer brands facilitates collaborative action.\n\nJCC 18 *Summer 2005*\n",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.\n",
+    ], running=("**JCC 18** _Summer 2005_",))
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 0: none" in report.text, report.text
+    assert book_pages(batch_dir) == [
+        "This case also demonstrates that pressure on consumer brands facilitates collaborative action.\n\nJCC 18 *Summer 2005*",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.",
+    ]
+
+
+def test_a_paragraph_ending_in_an_email_address_is_closed(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "**Anthony P. Ewing** is a lawyer.\n\n451 Walton Road, Maplewood, NJ 07040, USA\n\n! aewing@law.columbia.edu\n",
+        "Reports of slave labour on cocoa farms surfaced as early as 1998.\n",
+    ])
+    report = assemble_workflow(str(batch_dir))
+    assert "page joins: 0: none" in report.text, report.text
+    assert book_pages(batch_dir)[1] == "Reports of slave labour on cocoa farms surfaced as early as 1998."
+
+
+def joins_of(batch_dir):
+    return assemble_workflow(str(batch_dir)).text.splitlines()[-1]
+
+
+def test_a_closed_citation_note_and_a_next_page_without_footnotes_join_only_the_body(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "(and this despite the signing in September 2007 of the United\n\n"
+        "[^101]: The surveyed countries included: Papua New Guinea, Philippines, and Thailand. _See (Iocca 2010)_\n",
+        "Nations Declaration on the Rights of Indigenous Peoples by 144 States) (Iocca 2010).\n\n### Summary\n\n"
+        "The goal of this chapter has been to impress upon the reader the scope of the gap.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+    first, _ = book_pages(batch_dir)
+    assert first.endswith("[^101]: The surveyed countries included: Papua New Guinea, Philippines, and Thailand. _See (Iocca 2010)_")
+
+
+def test_an_open_footnote_whose_only_candidate_is_the_body_continuation_is_not_joined(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "the Committee on the Elimination of Racial Discrimination,[^67] the Inter-American\n\n"
+        "[^67]: interests are taken without their informed consent.‖ [cite]\n",
+        "Declaration on the Rights of Indigenous Peoples.  Following the Rio Declaration, numerous instruments followed.\n\n"
+        "[^68]: The principle of prior informed consent has received widespread support.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+
+
+def test_paragraphs_after_a_footnote_definition_belong_to_the_footnote(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "The United States went so far as to withhold funding.[^102] This pressure led the Bank in 1984 to\n\n"
+        "[^102]: As the Bank's own two decade review of its investment in infrastructure explains:\n\n"
+        "The Bank is also often criticized for not being effective at listening to stakeholders.\n\n"
+        "[^103]: In 1989, the Congress required analysis available to the general public for at\n",
+        "elaborate further on its environmental policy in OMS 2.36.\n\n"
+        "least 120 days prior to the approval date.\n\n[^104]: Bank 1987.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 2: 1->2(body) 1->2(footnote)"
+    first, second = book_pages(batch_dir)
+    assert first.split("\n\n")[0].endswith("led the Bank in 1984 to elaborate further on its environmental policy in OMS 2.36.")
+    assert first.endswith("[^103]: In 1989, the Congress required analysis available to the general public for at least 120 days prior to the approval date.")
+    assert second == "[^104]: Bank 1987."
+
+
+def test_on_a_page_without_footnotes_the_paragraph_after_an_open_paragraph_continues_the_footnote(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "Perhaps a more precise measure is the increase in contact.[^169]\n\n"
+        "[^169]: Standard Chartered Bank, as well as Korea First Bank, a subsidiary of Standard\n",
+        "While it is worth keeping in mind the distinction, there is a new normal now.\n\n"
+        "To gather some data, respondents were asked; eleven banks said that these campaigns did pose risks to their\n\n"
+        "Chartered, (also an EPFI) are in the syndicate for the Rapu Rapu project (_Id._).\n",
+        "other business lines.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 2: 1->2(footnote) 2->3(body)"
+    first, second, _ = book_pages(batch_dir)
+    assert first.endswith("a subsidiary of Standard Chartered, (also an EPFI) are in the syndicate for the Rapu Rapu project (_Id._).")
+    assert second.endswith("did pose risks to their other business lines.")
+
+
+def test_an_open_footnote_does_not_take_an_uppercase_first_paragraph_of_the_next_page(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "The declaration was adopted with 144 countries voting in its favor.\n\n"
+        "[^72]: IFC sets out political and conceptual arguments for adopting the term\n",
+        "The second Rio Declaration norm, the precautionary approach, is found in Principle 15.[^73]\n\n"
+        "[^73]: Principle 15, Rio Declaration.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 0: none"
+
+
+def test_a_body_continuation_skips_a_page_left_with_only_footnotes(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "investors affected by investment have little to no recourse against the\n",
+        "impacts of these investments.[^85] The agreements did not create obligations.[^86] Mann\n\n"
+        "[^85]: A case in point is the dispute in El Salvador.\n\n"
+        "[^86]: As Howard Mann observes, this mention falls short of explicit standards, it does link\n",
+        "notes that several US agreements impose more extensive labor obligations.\n\n"
+        "human rights to investment. _See_ Art. 7.2, Investment Agreement.\n\n[^87]: Freezing clauses.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 3: 1->2(body) 1->3(body) 2->3(footnote)"
+    first, second, third = book_pages(batch_dir)
+    assert first.endswith("did not create obligations.[^86] Mann notes that several US agreements impose more extensive labor obligations.")
+    assert second.endswith("it does link human rights to investment. _See_ Art. 7.2, Investment Agreement.")
+    assert third == "[^87]: Freezing clauses."
+
+
+@pytest.mark.parametrize("page_end, next_start", [
+    ("as a driver of ―compliance.‖", "Improvements, we said, are bought at a price."),
+    ("measures to obstruct environmental measures (213).</mark>", "<mark>Indeed, the advent of impact assessment changed this."),
+    ("analysis on the threat of reputational risk (Wright and Rwabizambuga 2006)", "Offering some evidence, my research shows this."),
+    ("**<u>Panel B:  experience with external stakeholders – summary statistics</u>**", "**Panel C: measures** **<u>of implementation</u>**"),
+])
+def test_closing_quote_glyph_trailing_tag_citation_and_bold_title_end_a_paragraph(tmp_path, page_end, next_start):
+    batch_dir = batch(tmp_path, [page_end + "\n", next_start + "\n"])
+    assert joins_of(batch_dir) == "page joins: 0: none"
+
+
+def test_an_open_paragraph_and_a_footnote_ending_in_a_url_join_only_the_body(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "a monitoring procedure is missing.  Even fewer\n\n[^189]: Rodriguez, http://www.carbonsmart.co.uk/?q=webfm_send/2\n",
+        "banks have established a monitoring and evaluation procedure (IFC 2007).\n\n### Outcome effectiveness\n\n"
+        "The survey asked:  ―Have you ever had to call an event of default?‖  Of the reporting institutions, 83\n\n"
+        "[^190]: _See_ Equator Principles.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 1: 1->2(body)"
+
+
+def test_an_enumerated_item_is_not_continued_by_the_next_item(tmp_path):
+    batch_dir = batch(tmp_path, [
+        "(4) external effects of the regime on the industry (specifically on non-participating institutions);\n",
+        "(5) governance of the regime (transparency of process, etc)\n\n(6) political legitimacy\n\n"
+        "Particular emphasis will be placed on implementation.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 0: none"
+    batch_dir = batch(tmp_path / "roman", [
+        "vi) accept subscriptions and donations, invest or expend all monies belonging to the Association;\n",
+        "vii) hold any monies of the Association in a deposit account;\n\nix) do all such other things as will further the above.\n",
+    ])
+    assert joins_of(batch_dir) == "page joins: 0: none"

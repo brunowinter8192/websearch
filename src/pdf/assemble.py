@@ -18,8 +18,14 @@ PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n")
 FOOTNOTE_DEFINITION = re.compile(r"^\[\^[^\]]+\]:")
 TRAILING_FOOTNOTE_MARKS = re.compile(r"(\[\^[^\]]+\])+$")
 HYPHENATED_END = re.compile(r"[^\W\d_]-$")
+EMAIL_END = re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+$")
+URL_END = re.compile(r"(https?://|www\.)\S+$")
+CITATION_END = re.compile(r"\([A-Z][^()]*\b\d{4}[a-z]?\)[*_]*$")
+BOLD_ONLY = re.compile(r"\*\*.*\*\*", re.DOTALL)
 HEADING_LINE_MARKS = re.compile(r"^(#+)", re.MULTILINE)
-LIST_ITEM = re.compile(r"^- ")
+LIST_ITEM = re.compile(r"^(- |\(\d+\) |([a-z]|[ivxl]+)\) )")
+CONTINUATION_MARK = re.compile(r"^(- |> )")
+TRAILING_TAGS = re.compile(r"(</?[a-zA-Z][^<>]*>)+$")
 CAPTION_LABEL = re.compile(r"^\**(Table|Fig\.|Figure) \d+(\.|—|\*| \(|$)")
 BARE_CAPTION_LABEL = re.compile(r"\**(Table|Fig\.|Figure) \d+\**")
 TABLE_NOTE_START = re.compile(r"^[A-Z(]")
@@ -28,7 +34,7 @@ BRACKETED_LINE = re.compile(r"\[[^\]^]+\]")
 IMPRINT_MARKS = ("ISSN", "©", "downloaded from IP address")
 BOX_QUOTE = ">"
 EMPHASIS_CHARS = "*_"
-CLOSING_CHARS = "”’\"')]»*_"
+CLOSING_CHARS = "”’‖\"')]»*_"
 SENTENCE_END_CHARS = ".!?:"
 QUOTE_PAIRS = (("‘‘", "“"), ("’’", "”"))
 TARGET_BODY = "body"
@@ -63,7 +69,7 @@ def assemble_book(manifest: dict, batch_dir: Path) -> Report:
         return report_unfinished(manifest, unfinished)
     require_region_words(batch_dir, manifest)
     pages = load_pages(batch_dir, manifest["pages"])
-    joins = join_pages(pages)
+    joins = join_pages(pages, {normalized(span) for span in manifest.get("running", [])})
     target = book_path(batch_dir, manifest)
     target.write_text(render_book(batch_dir, pages), encoding="utf-8")
     return Report(format_summary(manifest, target, joins), True)
@@ -133,12 +139,12 @@ def paragraphs_of(text: str) -> list[str]:
     return [cleaned for cleaned in ("\n".join(line.rstrip() for line in block.strip("\n").split("\n")) for block in blocks) if cleaned]
 
 
-def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
+def join_pages(pages: list[list[str]], running: set[str]) -> list[tuple[int, int, str]]:
     joins = []
     for index in range(len(pages)):
         while True:
-            targets = open_targets(pages[index])
-            found = continuation(pages, index + 1) if targets else None
+            targets = open_targets(pages[index], running if index == 0 else set())
+            found = first_continuation(pages, index + 1, targets)
             if found is None or new_list_item(pages, index, targets[0], found):
                 break
             planned = planned_joins(pages, index + 1, targets, found)
@@ -148,15 +154,70 @@ def join_pages(pages: list[list[str]]) -> list[tuple[int, int, str]]:
     return joins
 
 
-def open_targets(paragraphs: list[str]) -> list[tuple[str, int]]:
-    body = [index for index in range(len(paragraphs)) if is_body(paragraphs, index)]
-    notes = [index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)]
+def open_targets(paragraphs: list[str], running: set[str]) -> list[tuple[str, int]]:
+    area = footnote_area(paragraphs)
+    body = [
+        index for index in range(len(paragraphs))
+        if index not in area and is_body(paragraphs, index) and normalized(paragraphs[index]) not in running
+    ]
     targets = []
     if body and not terminated(paragraphs[body[-1]]):
         targets.append((TARGET_BODY, body[-1]))
-    if notes and not terminated(paragraphs[notes[-1]]):
-        targets.append((TARGET_FOOTNOTE, notes[-1]))
+    if area and not terminated(paragraphs[area[-1]]):
+        targets.append((TARGET_FOOTNOTE, area[-1]))
     return targets
+
+
+def footnote_area(paragraphs: list[str]) -> list[int]:
+    area, inside = [], False
+    for index, paragraph in enumerate(paragraphs):
+        if paragraph.startswith("#"):
+            inside = False
+        elif FOOTNOTE_DEFINITION.match(paragraph):
+            inside = True
+        if inside:
+            area.append(index)
+    return area
+
+
+def first_continuation(pages: list[list[str]], start: int, targets: list[tuple[str, int]]) -> tuple[int, int] | None:
+    if not targets:
+        return None
+    if targets[0][0] == TARGET_BODY:
+        return continuation(pages, start)
+    if start >= len(pages):
+        return None
+    note = footnote_candidate(start, pages[start], -1, True)
+    if note is not None:
+        return start, note
+    found = continuation(pages, start)
+    return found if found and runs_on(pages[found[0]][found[1]]) else None
+
+
+def footnote_candidate(number: int, paragraphs: list[str], after: int, alone: bool) -> int | None:
+    first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
+    if first_note is None:
+        return next((index for index in range(after + 1, len(paragraphs)) if stranded_note_text(paragraphs, index)), None)
+    candidate = first_note - 1
+    if candidate <= after:
+        return None
+    if not footnote_text(paragraphs, candidate):
+        raise WorkflowError(
+            "ambiguous_page_join", f"page {number}: its last footnote runs on, but page {number + 1} has no text before its first footnote",
+        )
+    return candidate if runs_on(paragraphs[candidate]) or not alone else None
+
+
+def stranded_note_text(paragraphs: list[str], index: int) -> bool:
+    if not footnote_text(paragraphs, index):
+        return False
+    after_open_body = index > 0 and is_body(paragraphs, index - 1) and not terminated(paragraphs[index - 1])
+    return runs_on(paragraphs[index]) or after_open_body
+
+
+def runs_on(paragraph: str) -> bool:
+    text = CONTINUATION_MARK.sub("", paragraph, count=1).lstrip()
+    return bool(text) and text[0].islower()
 
 
 def new_list_item(pages: list[list[str]], index: int, target: tuple[str, int], found: tuple[int, int]) -> bool:
@@ -167,18 +228,12 @@ def new_list_item(pages: list[list[str]], index: int, target: tuple[str, int], f
 def planned_joins(
     pages: list[list[str]], number: int, targets: list[tuple[str, int]], found: tuple[int, int],
 ) -> list[tuple[tuple[str, int], tuple[int, int]]]:
-    if len(targets) == 1:
-        return [(targets[0], found)]
-    return [(targets[0], found), (targets[1], footnote_continuation(pages, number, found))]
+    note = footnote_candidate(number, pages[found[0]], found[1], False) if len(targets) == 2 and found[0] == number else None
+    return [(targets[0], found)] + ([(targets[1], (found[0], note))] if note is not None else [])
 
 
-def footnote_continuation(pages: list[list[str]], number: int, found: tuple[int, int]) -> tuple[int, int]:
-    page_index, body_index = found
-    paragraphs = pages[page_index]
-    first_note = next((index for index, paragraph in enumerate(paragraphs) if FOOTNOTE_DEFINITION.match(paragraph)), None)
-    if first_note is None or first_note - 1 <= body_index or not is_body(paragraphs, first_note - 1):
-        raise WorkflowError("ambiguous_page_join", f"page {number}: its last paragraph and its last footnote both run on")
-    return page_index, first_note - 1
+def footnote_text(paragraphs: list[str], index: int) -> bool:
+    return is_body(paragraphs, index) or paragraphs[index].startswith(BOX_QUOTE)
 
 
 def is_body(paragraphs: list[str], index: int) -> bool:
@@ -214,13 +269,18 @@ def imprint(paragraph: str) -> bool:
 
 
 def terminated(paragraph: str) -> bool:
-    text = TRAILING_FOOTNOTE_MARKS.sub("", paragraph.rstrip()).rstrip(CLOSING_CHARS)
-    return bool(text) and text[-1] in SENTENCE_END_CHARS
+    if BOLD_ONLY.fullmatch(paragraph.strip()) or CITATION_END.search(paragraph.rstrip()):
+        return True
+    text = TRAILING_FOOTNOTE_MARKS.sub("", TRAILING_TAGS.sub("", paragraph.rstrip()).rstrip()).rstrip(CLOSING_CHARS)
+    return bool(text) and (text[-1] in SENTENCE_END_CHARS or bool(EMAIL_END.search(text) or URL_END.search(text)))
 
 
 def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
     for page_index in range(start, len(pages)):
         paragraphs = pages[page_index]
+        area = footnote_area(paragraphs)
+        if area and all(index in area or skippable(paragraphs, index) for index in range(len(paragraphs))):
+            continue
         for index, paragraph in enumerate(paragraphs):
             if paragraph.startswith("#") or FOOTNOTE_DEFINITION.match(paragraph):
                 return None
@@ -230,7 +290,7 @@ def continuation(pages: list[list[str]], start: int) -> tuple[int, int] | None:
 
 
 def joined(head: str, tail: str) -> str:
-    head, tail = head.rstrip(), LIST_ITEM.sub("", tail.lstrip(), count=1)
+    head, tail = head.rstrip(), CONTINUATION_MARK.sub("", tail.lstrip(), count=1)
     if HYPHENATED_END.search(head):
         return head[:-1] + tail.lstrip()
     return f"{head} {tail.lstrip()}"

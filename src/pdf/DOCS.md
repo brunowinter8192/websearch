@@ -10,13 +10,13 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries, placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`. stats: log in, summary text out.
 
 ## Modules
 
-### extract.py (568 LOC)
+### extract.py (613 LOC)
 
-**Purpose:** Orchestrates extract: start record, converter run, rotated-table repair, formula detection, coverage check, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
+**Purpose:** Orchestrates extract: start record, converter run, rotated-table and column-table repair, formula detection, coverage check, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.
 **Writes:** the batch directory (removes its own stale files there, `samples/` and the working book), including `<id>_missing.txt` for table and figure regions; `extract_log.txt` with the converter stdout; start record or failure end record in the conversion log.
 **Called by:** cli.py.
@@ -44,7 +44,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### assemble.py (264 LOC)
+### assemble.py (324 LOC)
 
 **Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, region `_missing.txt` files, `samples/` (refuses once sampling started).
@@ -104,7 +104,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### coverage.py (127 LOC)
+### coverage.py (141 LOC)
 
 **Purpose:** Text layer coverage of the extracted pages: stops extract on words missing outside regions, returns words missing inside table and figure regions.
 **Reads:** the converted PDF pages.
