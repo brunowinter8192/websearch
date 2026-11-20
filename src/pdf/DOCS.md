@@ -10,7 +10,7 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; paragraph starts split except on OCR pages and invisible OCR text layers over scans; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Region and outline workers write their `_fixed` files; status judges each worker by its expected files, a page file still holding the pending line counts as missing. apply-outline: the outline worker's levels into the outlined pages and the pre-filled `p<N>_fixed.md` that the page workers repair in place. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
+extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; paragraph starts split except on OCR pages and invisible OCR text layers over scans; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
 
 ## Modules
 
@@ -26,7 +26,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ### status.py (23 LOC)
 
-**Purpose:** Orchestrates the status command: per worker complete, or incomplete with the files still missing or still pending.
+**Purpose:** Orchestrates the status command: per worker complete, or incomplete with the files still missing.
 **Reads:** manifest and worker output files.
 **Writes:** none.
 **Called by:** cli.py.
@@ -34,11 +34,11 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### apply_outline.py (130 LOC)
+### apply_outline.py (112 LOC)
 
-**Purpose:** Orchestrates apply-outline: heading levels and missed headings into outlined page files and the pre-filled page files; refuses to overwrite a page file a worker already edited.
-**Reads:** manifest, `headings.json`, `headings_fixed.json`, the extracted, outlined and fixed page files.
-**Writes:** `pages/p<N>_outlined.md`, `pages/p<N>_fixed.md` (pending line plus outlined text).
+**Purpose:** Orchestrates apply-outline: heading levels and missed headings into outlined page files; a missed line absent on its named page is looked up in all pages.
+**Reads:** manifest, `headings.json`, `headings_fixed.json`, the extracted page files.
+**Writes:** `pages/p<N>_outlined.md`.
 **Called by:** cli.py.
 **Calls out:** none.
 
@@ -124,9 +124,9 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### batch_files.py (75 LOC)
+### batch_files.py (74 LOC)
 
-**Purpose:** Names and paths of the batch layout including region missing-word files, placeholder lines, the pending line of pre-filled pages, the bare page number pattern, JSON reading.
+**Purpose:** Names and paths of the batch layout including region missing-word files, placeholder lines, the bare page number pattern, JSON reading.
 **Reads:** JSON files of the batch directory.
 **Writes:** none.
 **Called by:** extract.py, apply_outline.py, assemble.py, worker_outputs.py, sample.py.
@@ -136,7 +136,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ### worker_outputs.py (42 LOC)
 
-**Purpose:** Completeness of every worker from the files it owes: present, without the pending line, and a valid outline file.
+**Purpose:** Completeness of every worker from the files it owes, including the validity of the outline file.
 **Reads:** worker output files, `headings.json`.
 **Writes:** none.
 **Called by:** status.py, apply_outline.py, assemble.py.
@@ -196,6 +196,6 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ## State
 
-None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: extract writes the manifest, prompts, `pages/p<N>.md`, `page_png/`, `tables/`, `figures/` and `formulas/` crops with `_current.md` (and `_missing.txt` where the converter text lacks printed words), `headings.json`, `bookmarks.json`; region workers write their `_fixed` files and the outline worker `headings_fixed.json`; apply-outline writes `pages/p<N>_outlined.md` and the pre-filled `pages/p<N>_fixed.md`, which page workers edit in place and release by removing the pending line; assemble and sample-close write `<STEM>.md`; sample and the sampling worker write `samples/run_<k>/`.
+None in memory. Persistent state is the conversion log under `src/logs/` and the batch directory: extract writes the manifest, prompts, `pages/p<N>.md`, `page_png/`, `tables/`, `figures/` and `formulas/` crops with `_current.md` (and `_missing.txt` where the converter text lacks printed words), `headings.json`, `bookmarks.json`; workers write the `_fixed` files and `headings_fixed.json`; apply-outline writes `pages/p<N>_outlined.md`; assemble and sample-close write `<STEM>.md`; sample and the sampling worker write `samples/run_<k>/`.
 
 Prompt templates live in `prompts/`: repair workers (`tables_prompt.md`, `figures_prompt.md`, `formulas_prompt.md`, `outline_prompt.md`, `pages_prompt.md`) and sampling worker (`sample_prompt.md`, `sample_excerpt_steps.md`). Details, decisions and observed evidence: process-docs/pdf_repair_flow (this design), process-docs/pdf_image_flow (the sample loop and the earlier image-only flow), process-docs/pdf_form (form rules).

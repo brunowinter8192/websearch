@@ -25,6 +25,8 @@ def test_pdf_subcommands_parse_their_flags(parser, monkeypatch):
     assert (args.cmd, args.pdf_cmd, args.pdf, args.batch_dir) == ("pdf", "extract", "a.pdf", "/tmp/x")
     for command in ("status", "apply-outline", "assemble", "sample", "sample-report"):
         assert parse(parser, monkeypatch, command, "--batch-dir", "/tmp/x").pdf_cmd == command
+    args = parse(parser, monkeypatch, "fallback", "--batch-dir", "/tmp/x", "--worker", "pages-21-25")
+    assert (args.pdf_cmd, args.worker) == ("fallback", "pages-21-25")
     assert parse(parser, monkeypatch, "sample-close", "--batch-dir", "/tmp/x").reject == []
     args = parse(parser, monkeypatch, "sample-close", "--batch-dir", "/tmp/x", "--reject", "17", "--reject", "22")
     assert args.reject == [17, 22]
