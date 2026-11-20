@@ -14,7 +14,7 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; page files with
 
 ## Modules
 
-### extract.py (479 LOC)
+### extract.py (486 LOC)
 
 **Purpose:** Orchestrates extract: start record, converter run, formula detection, page files with placeholders and paragraph starts split, crops, page images, worker prompts, manifest.
 **Reads:** the PDF, `config/pdf_models.json`, `prompts/`.

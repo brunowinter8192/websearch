@@ -260,3 +260,26 @@ def test_references_with_a_hanging_indent_are_split_before_each_reference(tmp_pa
     report = extract_workflow(str(pdf), str(tmp_path / "batch"))
     assert "paragraph_starts_split=1" in report.text
     assert (tmp_path / "batch" / "pages" / "p1.md").read_text() == rows_text(rows[:2]) + "\n\n" + rows_text(rows[2:]) + "\n"
+
+
+def test_page_images_and_crops_come_from_the_pdf_as_printed_not_from_the_converted_document(tmp_path, monkeypatch, conversion_log):
+    pdf = write_pdf(tmp_path / "Scan.pdf", [[(LEFT, "all but economic matters. It is, however")], [(LEFT, "A landscape table page")]])
+    rotated = pymupdf.open(pdf)
+    rotated[1].set_rotation(90)
+    rotated.save(tmp_path / "Book.pdf")
+    pdf = tmp_path / "Book.pdf"
+
+    def to_markdown(document, page_chunks, ocr_function):
+        for page in document:
+            page.remove_rotation()
+        document[0].insert_text((LEFT, 82), "OCR TEXT DRAWN OVER THE SCAN", fontsize=11)
+        return [chunk(1, [("table", [LEFT - 2, 60, 400, 100], "|a|")]), chunk(2, [("text", BOX, "A landscape table page")])]
+    monkeypatch.setattr(extract.pymupdf4llm, "to_markdown", to_markdown)
+    batch_dir = tmp_path / "batch"
+    assert extract_workflow(str(pdf), str(batch_dir)).ok
+    printed = pymupdf.open(pdf)
+    for number in (1, 2):
+        expected = printed[number - 1].get_pixmap(dpi=150)
+        assert pymupdf.Pixmap(str(batch_dir / "page_png" / f"p{number}.png")).samples == expected.samples
+    crop = printed[0].get_pixmap(dpi=200, clip=pymupdf.Rect(LEFT - 2, 60, 400, 100))
+    assert pymupdf.Pixmap(str(batch_dir / "tables" / "p1_0.png")).samples == crop.samples

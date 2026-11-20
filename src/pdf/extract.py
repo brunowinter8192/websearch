@@ -152,7 +152,7 @@ def extract_batch(run: dict, pdf: Path, batch_dir: Path) -> Report:
     chunks = convert(document, batch_dir / CONVERTER_LOG_FILE)
     ocr_pages = read_ocr_pages(batch_dir / CONVERTER_LOG_FILE)
     pages = [build_page(number, chunk, document[number - 1], number in ocr_pages) for number, chunk in enumerate(chunks, start=1)]
-    write_pages(batch_dir, document, pages)
+    write_pages(batch_dir, unrotated_original(pdf), pages)
     write_json(batch_dir / BOOKMARKS_FILE, bookmarks(document))
     write_json(batch_dir / HEADINGS_FILE, [heading for page in pages for heading in page["headings"]])
     manifest = build_manifest(run, pdf, pages)
@@ -365,6 +365,13 @@ def locate_row(span: str, row_text: str, start: int) -> int | None:
     pattern = re.compile(r"(?<!\S)" + MARKUP + (MARKUP + r"\s+" + MARKUP).join(re.escape(word) for word in words))
     match = pattern.search(span, start + 1)
     return match.start() if match else None
+
+
+def unrotated_original(pdf: Path) -> pymupdf.Document:
+    original = pymupdf.open(pdf)
+    for page in original:
+        page.remove_rotation()
+    return original
 
 
 def write_pages(batch_dir: Path, document: pymupdf.Document, pages: list[dict]) -> None:
