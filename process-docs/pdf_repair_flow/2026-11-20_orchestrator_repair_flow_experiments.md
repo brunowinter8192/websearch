@@ -70,3 +70,17 @@ A block in the new flow has not been observed. The skill therefore only aborts t
 - Documents/wise2627: 36 symlinks into PDF_DIR, 46 real PDF files. 23 of them are also in PDF_DIR (duplicates), 23 are not in PDF_DIR at all (mostly LÜAG: AktG, DCGK 2022, LÜAG Skript komplett; COKA 2026 Handout; two ICD2 excerpts). 5 symlinks in LÜAG/Übungen/Übung_2 point to real files inside Documents/wise2627 instead of PDF_DIR.
 - PDF_DIR has no duplicate files (by sha1).
 - Of 93 PDFs in PDF_DIR/wise2627, 12 SGSC PDFs had no markdown in rag-cli documents (matched by file name only).
+
+## Batch runs with the built tooling (2026-11-20, afternoon)
+
+Batch 1: Hayek 1939 (scan), Moura Chaddad 2012, Conley Williams 2011, Heilmayr 2020, Contreras 2019. Batch 2: Scholtens 2007, Schouten 2011, Schrage 2005, Wright 2006, Meyerstein 2011 (234 pages, 50 workers, run in waves of 20). All ten indexed into wise2627-reference (338 + 797 chunks). Over 100 Haiku workers ran; none was blocked by the content filter. All eight PDFs blocked in the image transcription flow are now indexed.
+
+Every PDF of batch 2 still needed a code change; each time a tripwire stopped the run before wrong text was produced. The fixes and their evidence are recorded by the workers in this area (formula worker, page join, coverage, second batch, Wright table notes, sample duplicates).
+
+Orchestrator observations worth keeping:
+- `MODEL_SELECTION_FILE` with a relative path is not found by worker-cli, which then silently spawns the default model (claude-sonnet-5) instead of Haiku. Observed once at the start of batch 1; the skill uses the absolute path.
+- The first Hayek sample run reported no finding although the page images were contaminated by the inserted OCR text (footnote 16 written as [^1]). A sample run with no finding is only as good as the page images; the main agent found it by reading one page image itself.
+- Three times the sampling worker "added" text that assemble had joined onto an earlier page (Heilmayr p9, Scholtens p10, plus the morning hand run). sample-close now rejects these itself.
+- Outline results showed two defects that the later prompts fix but that remain in the published files: Heilmayr has its title twice (IOP cover sheet), Moura Chaddad headings keep `**` bold markers (its page workers ran before the heading rule).
+- Meyerstein was published before the Wright fix; that fix adds a join 131->132 the published file lacks (text complete, paragraph split).
+- Batch-level rotation of page workers was done with a throwaway script in /tmp that kills complete page workers and spawns the next incomplete ranges up to 20.
