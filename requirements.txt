@@ -13,3 +13,7 @@ psutil
 matplotlib
 pytest-xdist
 pytest-timeout
+pymupdf4llm==2.1
+pymupdf-layout==2.1
+rapidocr==3.10.0
+onnxruntime==1.32.0

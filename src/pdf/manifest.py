@@ -10,7 +10,7 @@ from src.pdf.report import WorkflowError
 def load_manifest(batch_dir: Path) -> dict:
     path = batch_dir / MANIFEST_FILE_NAME
     if not path.is_file():
-        raise WorkflowError("manifest_missing", f"no {MANIFEST_FILE_NAME} in {batch_dir}, run split first")
+        raise WorkflowError("manifest_missing", f"no {MANIFEST_FILE_NAME} in {batch_dir}, run extract first")
     return json.loads(path.read_text(encoding="utf-8"))
 
 

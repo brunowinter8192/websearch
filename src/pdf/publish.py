@@ -132,7 +132,7 @@ def log_published(manifest: dict, runs: list[dict], target: Path, split: SplitRe
     append_record(build_end_record(
         manifest["run_id"], manifest["ts_start"], "ok", None,
         md=str(target),
-        pieces=[[piece["from"], piece["to"]] for piece in sorted(manifest["pieces"], key=lambda piece: piece["from"])],
+        workers=[worker["name"] for worker in manifest["workers"]],
         sample_runs=[{"run": run["run"], "pages": run["pages"], "applied": run["applied"], "rejected": run["rejected"]} for run in runs],
         **split_counts(split),
     ))

@@ -21,11 +21,9 @@ def parse(parser, monkeypatch, *argv):
 
 
 def test_pdf_subcommands_parse_their_flags(parser, monkeypatch):
-    args = parse(parser, monkeypatch, "split", "--pdf", "a.pdf", "--batch-dir", "/tmp/x")
-    assert (args.cmd, args.pdf_cmd, args.pdf, args.batch_dir) == ("pdf", "split", "a.pdf", "/tmp/x")
-    args = parse(parser, monkeypatch, "resplit", "--batch-dir", "/tmp/x", "--piece", "51-100")
-    assert (args.pdf_cmd, args.piece) == ("resplit", "51-100")
-    for command in ("status", "merge", "sample", "sample-report"):
+    args = parse(parser, monkeypatch, "extract", "--pdf", "a.pdf", "--batch-dir", "/tmp/x")
+    assert (args.cmd, args.pdf_cmd, args.pdf, args.batch_dir) == ("pdf", "extract", "a.pdf", "/tmp/x")
+    for command in ("status", "apply-outline", "assemble", "sample", "sample-report"):
         assert parse(parser, monkeypatch, command, "--batch-dir", "/tmp/x").pdf_cmd == command
     assert parse(parser, monkeypatch, "sample-close", "--batch-dir", "/tmp/x").reject == []
     args = parse(parser, monkeypatch, "sample-close", "--batch-dir", "/tmp/x", "--reject", "17", "--reject", "22")
@@ -35,7 +33,11 @@ def test_pdf_subcommands_parse_their_flags(parser, monkeypatch):
     assert parse(parser, monkeypatch, "stats", "--since", "2026-10-01").since == "2026-10-01"
 
 
-@pytest.mark.parametrize("argv", [["extract", "--pdf", "a.pdf", "--batch-dir", "/tmp/x"], ["assemble", "--batch-dir", "/tmp/x", "--out-dir", "/tmp/o"]])
+@pytest.mark.parametrize("argv", [
+    ["split", "--pdf", "a.pdf", "--batch-dir", "/tmp/x"],
+    ["resplit", "--batch-dir", "/tmp/x", "--piece", "51-100"],
+    ["merge", "--batch-dir", "/tmp/x"],
+])
 def test_removed_pdf_subcommands_are_rejected(parser, monkeypatch, argv):
     with pytest.raises(SystemExit) as raised:
         parse(parser, monkeypatch, *argv)

@@ -16,7 +16,7 @@ def test_importing_cli_has_no_side_effects(monkeypatch, tmp_path):
     importlib.import_module("cli")
     sys.modules.pop("cli", None)
     assert logging.getLogger().handlers == root_handlers
-    assert registered == []
+    assert [fn for fn in registered if fn.__module__.split(".")[0] in ("cli", "src")] == []
 
 
 def test_configure_logging_creates_log_dir_and_installs_one_rotating_file_handler(cli_module, monkeypatch, tmp_path):

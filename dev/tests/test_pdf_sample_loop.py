@@ -3,14 +3,12 @@ import json
 
 import pytest
 
-from dev.tests._pdf_fakes import conversion_log, numbered_pages, read_log, write_pdf, write_pieces
-from src.pdf.merge import merge_workflow
+from dev.tests._pdf_fakes import base_manifest, conversion_log, read_log, write_book_batch, write_manifest
 from src.pdf.publish import publish_workflow
 from src.pdf.report import WorkflowError
 from src.pdf.sample import sample_workflow
 from src.pdf.sample_close import sample_close_workflow
 from src.pdf.sample_report import sample_report_workflow
-from src.pdf.split import split_workflow
 
 FOOTNOTES = "[^8]: " + " ".join(f"Fußnote acht Satz {number} über Gemeinkosten und Äpfel." for number in range(55))
 
@@ -19,11 +17,9 @@ FOOTNOTES = "[^8]: " + " ".join(f"Fußnote acht Satz {number} über Gemeinkosten
 
 @pytest.fixture
 def merged(tmp_path, conversion_log):
-    pdf = write_pdf(tmp_path / "Book.pdf", numbered_pages(85))
-    batch_dir = tmp_path / "batches"
-    split_workflow(str(pdf), str(batch_dir))
-    write_pieces(batch_dir)
-    merge_workflow(str(batch_dir))
+    batch_dir = write_book_batch(tmp_path / "batches", 85)
+    manifest = base_manifest(85, workers=[{"name": "outline", "prompt": "prompt_outline.md", "outputs": []}])
+    write_manifest(batch_dir, manifest)
     return batch_dir
 
 
@@ -114,11 +110,7 @@ def test_rejecting_a_page_that_was_not_sampled_is_refused(merged):
 
 
 def test_the_loop_ends_when_every_page_was_sampled_even_after_a_correction(tmp_path, conversion_log):
-    pdf = write_pdf(tmp_path / "Short.pdf", numbered_pages(3))
-    batch_dir = tmp_path / "batches"
-    split_workflow(str(pdf), str(batch_dir))
-    write_pieces(batch_dir)
-    merge_workflow(str(batch_dir))
+    batch_dir = write_book_batch(tmp_path / "batches", 3)
     for number in (1, 2, 3):
         run, run_dir = open_run(batch_dir)
         worker_adds_footnotes(run, run_dir, run["excerpts"][0])
@@ -160,7 +152,7 @@ def test_publish_splits_a_long_correction_to_the_paragraph_limit_and_logs_the_ru
     end = read_log(conversion_log)[-1]
     assert (end["record_type"], end["outcome"], end["failure_class"]) == ("end", "ok", None)
     assert end["md"].endswith("out/Book.md")
-    assert end["pieces"] == [[1, 50], [51, 85]]
+    assert end["workers"] == ["outline"]
     assert [entry["run"] for entry in end["sample_runs"]] == [1, 2]
     assert end["sample_runs"][1]["applied"] == []
     assert end["paragraphs_split"] >= 1 and end["paragraphs_over_limit"] == 0
