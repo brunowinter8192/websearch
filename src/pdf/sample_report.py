@@ -5,7 +5,9 @@ from pathlib import Path
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report
 from src.pdf.sample_duplicates import KIND_DUPLICATE, KIND_MIXED, judge_excerpts
-from src.pdf.sample_runs import changed_excerpts, findings_path, load_runs, markers_kept, open_run_of, run_dir
+from src.pdf.sample_runs import (
+    changed_excerpts, findings_path, load_runs, markers_kept, merge_part_findings, open_run_of, run_dir,
+)
 
 REPORT_FILE_NAME = "report.md"
 FENCE = "````"
@@ -19,6 +21,7 @@ def sample_report_workflow(batch_dir: str) -> Report:
     run = open_run_of(load_runs(batch_path))
     book = book_path(batch_path, manifest).read_text(encoding="utf-8")
     judged = judge_excerpts(book, changed_excerpts(batch_path, run))
+    merge_part_findings(batch_path, run)
     findings = read_findings(findings_path(batch_path, run))
     target = write_report(batch_path, run, build_report(run, findings, judged))
     return Report(format_summary(run, findings, judged, target), True)

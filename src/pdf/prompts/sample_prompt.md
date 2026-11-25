@@ -7,7 +7,7 @@ Findings file: {{FINDINGS}}
 
 Each excerpt file is a cut from the Markdown of the whole PDF. Every page in it starts with a line <!-- page N -->. An excerpt begins with the page before the page you check. A paragraph that continues on the checked page stands completely on the page where it begins. That page can be several pages earlier when table or figure pages lie between, and then the paragraph is not in the excerpt. Continuation text at the top of a checked page that is missing from the excerpt for this reason is not a finding: do not add it. The page images are the full pages rendered at 150 dpi; they are the ground truth. Your corrections in the excerpt files are written back into the Markdown of the whole PDF after you are done.
 
-Steps:
+Steps, one after the other, never two Read calls at the same time:
 {{EXCERPT_STEPS}}
 {{WRITE_NUMBER}}. Write the findings file with the Write tool in one call. Write one line per checked page, in the order of the pages to check: either "page N: no finding" or "page N: <kind>: <what was wrong, in a few words>". kind is one of: missing_text, misread_text, invented_text, broken_table, missing_figure_description, other. A page with several findings gets one line per finding.
 {{DONE_NUMBER}}. When the findings file is written, reply with one line: done, number of pages checked, number of findings.

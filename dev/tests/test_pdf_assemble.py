@@ -628,3 +628,8 @@ def test_lowercase_text_directly_after_a_figure_continues_the_page_before(tmp_pa
     first, second = book_pages(batch_dir)
     assert first.endswith("shed light on the wide and rapid uptake of the Equator Principles among financial institutions headquartered there.")
     assert second == f"**FIGURE 1** Governance Levels in Home Countries of Equator Banks\n\n{FIGURE}"
+
+
+def test_heading_lines_moved_into_another_order_by_a_page_worker_pass_the_mark_check():
+    from src.pdf.assemble import require_heading_marks_kept
+    require_heading_marks_kept(1, "#### A\n\ntext\n\n### B\n", "### B\n\ntext\n\n#### A\n")

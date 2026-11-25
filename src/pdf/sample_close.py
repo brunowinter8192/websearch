@@ -5,7 +5,8 @@ from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
 from src.pdf.sample_duplicates import KIND_DUPLICATE, KIND_MIXED, judge_excerpts
 from src.pdf.sample_runs import (
-    changed_excerpts, findings_path, load_runs, loop_ended, markers_kept, open_run_of, sampled_pages, text_sha, write_run,
+    changed_excerpts, findings_path, load_runs, loop_ended, markers_kept, merge_part_findings, open_run_of, sampled_pages,
+    text_sha, write_run,
 )
 
 STATUS_CLOSED = "closed"
@@ -16,6 +17,7 @@ def sample_close_workflow(batch_dir: str, rejected_pages: list[int]) -> Report:
     batch_path = Path(batch_dir)
     manifest = load_manifest(batch_path)
     run = open_run_of(load_runs(batch_path))
+    merge_part_findings(batch_path, run)
     require_findings(findings_path(batch_path, run))
     book = read_unchanged_book(book_path(batch_path, manifest), run)
     judged = judge_excerpts(book, changed_excerpts(batch_path, run))

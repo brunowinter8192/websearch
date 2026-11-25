@@ -3,7 +3,7 @@ import math
 import random
 from pathlib import Path
 
-from src.config import SAMPLE_SHARE
+from src.config import SAMPLE_PART_EXCERPTS, SAMPLE_SHARE
 from src.pdf.batch_files import page_png
 from src.pdf.manifest import book_path, load_manifest
 from src.pdf.report import Report, WorkflowError
@@ -83,24 +83,45 @@ def write_new_run(manifest: dict, batch_dir: Path, runs: list[dict], pages: list
     directory.mkdir(parents=True)
     for excerpt in excerpts:
         (directory / excerpt["file"]).write_text(excerpt["original"], encoding="utf-8")
-    run = {"run": number, "status": STATUS_OPEN, "pages": pages, "book_sha256": text_sha(book), "excerpts": excerpts}
+    run = {
+        "run": number, "status": STATUS_OPEN, "pages": pages, "book_sha256": text_sha(book), "excerpts": excerpts,
+        "parts": plan_parts(excerpts),
+    }
     write_run(batch_dir, run)
-    (directory / PROMPT_FILE_NAME).write_text(render_sample_prompt(manifest, batch_dir, run), encoding="utf-8")
+    whole = render_sample_prompt(manifest, batch_dir, run, excerpts, findings_path(batch_dir, run))
+    (directory / PROMPT_FILE_NAME).write_text(whole, encoding="utf-8")
+    for part in run["parts"]:
+        chosen = [excerpt for excerpt in excerpts if excerpt["file"] in part["excerpts"]]
+        text = render_sample_prompt(manifest, batch_dir, run, chosen, directory / part["findings"])
+        (directory / part["prompt"]).write_text(text, encoding="utf-8")
     return run
 
 
-def render_sample_prompt(manifest: dict, batch_dir: Path, run: dict) -> str:
+# One part per SAMPLE_PART_EXCERPTS excerpts: each part has its own prompt and findings file, for one worker each
+def plan_parts(excerpts: list[dict]) -> list[dict]:
+    groups = [excerpts[first:first + SAMPLE_PART_EXCERPTS] for first in range(0, len(excerpts), SAMPLE_PART_EXCERPTS)]
+    return [
+        {
+            "prompt": f"prompt_part_{number}.md",
+            "findings": f"findings_part_{number}.md",
+            "excerpts": [excerpt["file"] for excerpt in group],
+        }
+        for number, group in enumerate(groups, 1)
+    ]
+
+
+def render_sample_prompt(manifest: dict, batch_dir: Path, run: dict, excerpts: list[dict], findings: Path) -> str:
     directory = run_dir(batch_dir, run["run"])
     steps = [
         excerpt_steps(1 + 3 * index, batch_dir, directory / excerpt["file"], excerpt)
-        for index, excerpt in enumerate(run["excerpts"])
+        for index, excerpt in enumerate(excerpts)
     ]
-    write_number = 1 + 3 * len(run["excerpts"])
+    write_number = 1 + 3 * len(excerpts)
     values = {
         "PDF": manifest["pdf"],
         "RUN": str(run["run"]),
-        "PAGES": " ".join(str(page) for page in run["pages"]),
-        "FINDINGS": str(findings_path(batch_dir, run)),
+        "PAGES": " ".join(str(page) for excerpt in excerpts for page in excerpt["pages"]),
+        "FINDINGS": str(findings),
         "EXCERPT_STEPS": "\n".join(steps),
         "WRITE_NUMBER": str(write_number),
         "DONE_NUMBER": str(write_number + 1),
@@ -128,5 +149,6 @@ def format_summary(manifest: dict, batch_dir: Path, run: dict, earlier: list[dic
         "pages: " + " ".join(str(page) for page in run["pages"]),
         "excerpts: " + " ".join(excerpt["file"] for excerpt in run["excerpts"]),
         f"prompt: {run_dir(batch_dir, run['run']) / PROMPT_FILE_NAME}",
+        "part prompts: " + " ".join(part["prompt"] for part in run["parts"]),
         f"pages sampled after this run: {done} of {manifest['pages']}",
     ])

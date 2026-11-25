@@ -6,11 +6,11 @@ PDF to markdown tooling for the websearch-pdf skill: extracts the text layer (OC
 
 ## Public Interface
 
-`__init__.py` is empty. Entry path is `python cli.py pdf extract|status|apply-outline|assemble|fallback|sample|sample-report|sample-close|publish|stats`; cli.py imports the ten workflow functions. Other modules are internal.
+`__init__.py` is empty. Entry path is `python cli.py pdf split-spreads|extract|status|apply-outline|assemble|fallback|sample|sample-report|sample-close|publish|stats`; cli.py imports the eleven workflow functions. Other modules are internal.
 
 ## Flow
 
-extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; paragraph starts split except on OCR pages and invisible OCR text layers over scans; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files, a file still holding the pending line counts as missing. fallback, only for a page worker blocked by the content filter: its missing page files pre-filled from the outlined pages under the pending line, plus an edit-only prompt for one new worker. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
+split-spreads, before extract: a PDF whose pages show two book pages side by side in, a copy with one book page per page out. extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer coverage checked per page; paragraph starts split except on OCR pages and invisible OCR text layers over scans; page files with placeholders, table, figure and formula crops, missing-word lists of regions, headings, bookmarks, page images, worker prompts and manifest (with the page-1 running boxes kept in the page) out. Workers write the `_fixed` files; status judges each worker by its expected files, a file still holding the pending line counts as missing. fallback, only for a page worker blocked by the content filter: its missing page files pre-filled from the outlined pages under the pending line, plus an edit-only prompt for one new worker. apply-outline: the outline worker's levels into the page files the page workers read. assemble: every worker complete, listed region words present in the fixed regions, fixed pages joined over page boundaries (page-1 running boxes of the manifest are no join target, table notes are no footnotes), placeholders replaced, `<STEM>.md` in the batch directory. sample loop and publish: as before, on `<STEM>.md`; sample-report marks and sample-close rejects an excerpt whose only change inserts text that already ends a paragraph on an earlier page (a page join carried it there). stats: log in, summary text out.
 
 ## Modules
 
@@ -54,9 +54,19 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
+### split_spreads.py (62 LOC)
+
+**Purpose:** Orchestrates the split-spreads command: every page clearly wider than high becomes two pages, its left and its right half; a PDF without such a page is not written.
+**Reads:** the PDF.
+**Writes:** the split PDF at `--out`.
+**Called by:** cli.py.
+**Calls out:** pymupdf.
+
+---
+
 ### assemble.py (348 LOC)
 
-**Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks, page boundary join, placeholder replacement, quote normalization, the working book.
+**Purpose:** Orchestrates assemble: completeness, listed region words, placeholder and heading mark checks (the marks of a page as a set, their order is free), page boundary join, placeholder replacement, quote normalization, the working book.
 **Reads:** manifest, outlined and fixed page files, fixed table, figure and formula files, region `_missing.txt` files, `samples/` (refuses once sampling started).
 **Writes:** `<STEM>.md` in the batch directory; an end record in the conversion log when a worker is incomplete or assemble fails.
 **Called by:** cli.py.
@@ -64,30 +74,30 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### sample.py (132 LOC)
+### sample.py (154 LOC)
 
-**Purpose:** Orchestrates the sample command: draws the pages of the next run among pages never sampled, cuts excerpts, writes the run file and the sampling prompt.
+**Purpose:** Orchestrates the sample command: draws the pages of the next run among pages never sampled, cuts excerpts, writes the run file, the sampling prompt for the whole run and one prompt per part of `SAMPLE_PART_EXCERPTS` excerpts for parallel workers.
 **Reads:** manifest, the working book, earlier run files.
-**Writes:** `samples/run_<k>/` with excerpt files, `run.json` and `prompt.md`.
+**Writes:** `samples/run_<k>/` with excerpt files, `run.json`, `prompt.md` and `prompt_part_<i>.md`.
 **Called by:** cli.py.
 **Calls out:** none.
 
 ---
 
-### sample_report.py (101 LOC)
+### sample_report.py (104 LOC)
 
 **Purpose:** Orchestrates the sample-report command: report of the open run with sampled pages, worker findings, every correction before and after, duplicate insertions marked.
-**Reads:** manifest, the working book, the open run file, its excerpt files and `findings.md`.
+**Reads:** manifest, the working book, the open run file, its excerpt files and `findings.md` (merged from `findings_part_<i>.md` once every part wrote its file).
 **Writes:** `report.md` in the run directory.
 **Called by:** cli.py.
 **Calls out:** none.
 
 ---
 
-### sample_close.py (96 LOC)
+### sample_close.py (98 LOC)
 
 **Purpose:** Orchestrates the sample-close command: rejects duplicate insertions, writes accepted excerpt corrections into the working book, closes the run, states whether the loop continues.
-**Reads:** manifest, the open run file, its excerpt files and `findings.md`, the working book.
+**Reads:** manifest, the open run file, its excerpt files and `findings.md` (merged from the part findings as in sample-report), the working book.
 **Writes:** the working book, the run file.
 **Called by:** cli.py.
 **Calls out:** none.
@@ -154,11 +164,11 @@ extract: PDF in, pymupdf4llm with RapidOCR, start record logged; text layer cove
 
 ---
 
-### sample_runs.py (81 LOC)
+### sample_runs.py (90 LOC)
 
-**Purpose:** Page marker lines and run files of the sample loop: loading, writing, sampled pages, loop end rule, changed excerpts and their marker check.
+**Purpose:** Page marker lines and run files of the sample loop: loading, writing, sampled pages, loop end rule, merge of the part findings into `findings.md`, changed excerpts and their marker check.
 **Reads:** `samples/run_<k>/` files.
-**Writes:** `run.json`.
+**Writes:** `run.json`, `findings.md`.
 **Called by:** sample.py, sample_report.py, sample_close.py, sample_duplicates.py, publish.py, assemble.py.
 **Calls out:** none.
 

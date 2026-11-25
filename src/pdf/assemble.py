@@ -130,7 +130,7 @@ def require_placeholders_kept(number: int, outlined: str, fixed: str) -> None:
 
 def require_heading_marks_kept(number: int, outlined: str, fixed: str) -> None:
     expected, found = HEADING_LINE_MARKS.findall(outlined), HEADING_LINE_MARKS.findall(fixed)
-    if expected != found:
+    if sorted(expected) != sorted(found):
         raise WorkflowError(
             "heading_marks_changed",
             f"page {number}: {fixed_page_md(number)} has heading marks {found}, {outlined_md(number)} has {expected}",

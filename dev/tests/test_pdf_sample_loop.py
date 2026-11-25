@@ -156,3 +156,25 @@ def test_publish_splits_a_long_correction_to_the_paragraph_limit_and_logs_the_ru
     assert [entry["run"] for entry in end["sample_runs"]] == [1, 2]
     assert end["sample_runs"][1]["applied"] == []
     assert end["paragraphs_split"] >= 1 and end["paragraphs_over_limit"] == 0
+
+
+def test_part_prompts_cover_every_excerpt_and_their_findings_are_merged_for_the_close(merged):
+    run, run_dir = open_run(merged)
+    covered = [name for part in run["parts"] for name in part["excerpts"]]
+    assert covered == [excerpt["file"] for excerpt in run["excerpts"]]
+    for part in run["parts"]:
+        prompt = (run_dir / part["prompt"]).read_text()
+        assert "{{" not in prompt and f"Findings file: {run_dir / part['findings']}" in prompt
+        (run_dir / part["findings"]).write_text("page 1: no finding")
+    report = sample_close_workflow(str(merged), [])
+    assert report.ok
+    assert (run_dir / "findings.md").read_text() == "page 1: no finding\n" * len(run["parts"])
+
+
+def test_close_refuses_while_a_part_has_not_written_its_findings(merged):
+    run, run_dir = open_run(merged)
+    (run_dir / run["parts"][0]["findings"]).write_text("page 1: no finding\n")
+    assert len(run["parts"]) > 1
+    with pytest.raises(WorkflowError) as error:
+        sample_close_workflow(str(merged), [])
+    assert error.value.failure_class == "findings_missing"

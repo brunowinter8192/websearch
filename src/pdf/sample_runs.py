@@ -61,6 +61,15 @@ def findings_path(batch_dir: Path, run: dict) -> Path:
     return run_dir(batch_dir, run["run"]) / FINDINGS_FILE_NAME
 
 
+# Writes findings.md from the findings files of the part workers once every part has written its file
+def merge_part_findings(batch_dir: Path, run: dict) -> None:
+    target = findings_path(batch_dir, run)
+    parts = [run_dir(batch_dir, run["run"]) / part["findings"] for part in run.get("parts", [])]
+    if target.is_file() or not parts or not all(path.is_file() for path in parts):
+        return
+    target.write_text("".join(path.read_text(encoding="utf-8").rstrip("\n") + "\n" for path in parts), encoding="utf-8")
+
+
 def changed_excerpts(batch_dir: Path, run: dict) -> list[tuple[dict, str]]:
     changed = []
     for excerpt in run["excerpts"]:

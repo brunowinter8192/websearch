@@ -26,6 +26,7 @@ from src.pdf.report import WorkflowError
 from src.pdf.sample import sample_workflow
 from src.pdf.sample_close import sample_close_workflow
 from src.pdf.sample_report import sample_report_workflow
+from src.pdf.split_spreads import split_spreads_workflow
 from src.pdf.stats import stats_workflow
 from src.pdf.status import status_workflow
 from src.scraper.chromium_scrape import scrape_url_chromium_workflow
@@ -137,8 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("collection", help="Target RAG collection name")
     p.add_argument("urls", nargs="+", help="URL(s) previously scraped via scrape_url_chromium")
 
-    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: extract, status, apply-outline, assemble, fallback, sample, sample-report, sample-close, publish, stats.")
+    p = sub.add_parser("pdf", help="PDF to markdown conversion tooling: split-spreads, extract, status, apply-outline, assemble, fallback, sample, sample-report, sample-close, publish, stats.")
     pdf_sub = p.add_subparsers(dest="pdf_cmd", required=True)
+
+    pp = pdf_sub.add_parser("split-spreads", help="Write a copy of a PDF in which every page that shows two book pages side by side is split into two pages.")
+    pp.add_argument("--pdf", required=True, help="Path to the PDF")
+    pp.add_argument("--out", required=True, help="Path of the split PDF to write")
 
     pp = pdf_sub.add_parser("extract", help="Extract the text layer (OCR for scans) into page files, table and figure crops, headings, worker prompts and manifest.")
     pp.add_argument("--pdf", required=True, help="Path to the PDF")
@@ -157,7 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
     pp.add_argument("--worker", required=True, help="Name of the blocked worker as in the manifest, e.g. pages-21-25")
 
-    pp = pdf_sub.add_parser("sample", help="Open the next sample run: draw 10 percent new pages, write excerpts and the sampling prompt.")
+    pp = pdf_sub.add_parser("sample", help="Open the next sample run: draw 10 percent new pages, write excerpts, the sampling prompt and one prompt per part for parallel workers.")
     pp.add_argument("--batch-dir", required=True, help="Directory written by extract")
 
     pp = pdf_sub.add_parser("sample-report", help="Write the report of the open sample run: pages, findings, every correction before and after.")
@@ -283,6 +288,8 @@ def _dispatch_pdf(args) -> None:
 
 
 def _run_pdf_command(args):
+    if args.pdf_cmd == "split-spreads":
+        return split_spreads_workflow(args.pdf, args.out)
     if args.pdf_cmd == "extract":
         return extract_workflow(args.pdf, args.batch_dir)
     if args.pdf_cmd == "status":
