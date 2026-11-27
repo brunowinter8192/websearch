@@ -41,8 +41,9 @@ description:
 - Du fragst den User dafür nicht.
 - Lässt sich die Stelle nicht wahrheitsgemäß reparieren, geht das PDF auf den Bildweg.
 
-**Endet `extract` mit `FAILED`, geht das PDF auf den Bildweg.**
-- Der Ablauf steht unter "Bildweg".
+**Endet `extract` mit `FAILED`, geht nur die gescheiterte Seite auf den Bildweg.**
+- Alle übrigen Seiten laufen weiter durch Step 1 bis 5.
+- Der Ablauf steht unter "Einzelne Seiten auf dem Bildweg".
 - Du fragst den User dafür nicht.
 
 ### Reparatur nach FAILED
@@ -77,12 +78,20 @@ description:
 
 ### Bildweg
 
-**Der Bildweg ist der Fallback für ein PDF, an dem `extract` scheitert oder dessen Reparatur nicht wahrheitsgemäß möglich ist.**
-- Beobachteter Fall: ein in PowerPoint gebautes Faktenblatt, jede Seite ein Dashboard aus Diagrammen, Karten, Quellenzeilen und einer großen Tabelle.
+**Der Bildweg ist der Fallback für die Seiten, an denen `extract` scheitert, und für ein PDF, dessen Reparatur nicht wahrheitsgemäß möglich ist.**
 - Worker schreiben jede Seite aus dem Seitenbild als Markdown.
 - Die Textschicht des PDFs prüft danach jedes Wort und jede Zahl.
-- Der Bildweg ersetzt für dieses PDF Step 1 bis 6.
 - IMG_DIR = `/tmp/pdfimg_<STEM>/`
+
+**Scheitert `extract`, gehen nur die gescheiterten Seiten auf den Bildweg.**
+- Der Ablauf steht unter "Einzelne Seiten auf dem Bildweg".
+- Die Schritte 1 bis 5 unten gelten dann nur für diese Seiten.
+
+**Ein ganzes PDF geht nur in zwei Fällen auf den Bildweg.**
+- Die Reparatur einer Stelle ist nicht wahrheitsgemäß möglich, wie unter "Reparatur nach FAILED".
+- Jede Seite des PDFs ist laut Seitenbild so gebaut wie die gescheiterte Seite.
+    - Beobachteter Fall: ein in PowerPoint gebautes Faktenblatt, jede Seite ein Dashboard aus Diagrammen, Karten, Quellenzeilen und einer großen Tabelle.
+- Der Bildweg ersetzt für ein solches PDF Step 1 bis 6.
 
 **Der Bildweg setzt eine Textschicht voraus.**
 - Liefert `pdftotext` für eine Seite mit sichtbarem Text keinen Text, wird das PDF nicht indexiert.
@@ -174,6 +183,72 @@ description:
 
 7. Notiere für den Report: PDF, Bildweg, Zahl der Rücksendungen je Seite, geprüfte Seiten der Stichprobe und eigene Korrekturen.
 
+### Einzelne Seiten auf dem Bildweg
+
+**Scheitert `extract` an einer Seite, wird das PDF an dieser Seite geteilt.**
+- Die gescheiterte Seite geht auf den Bildweg, jeder Teil davor und danach durch Step 1 bis 5.
+- Beobachteter Fall: ein Standardtext mit 163 Seiten, `extract` scheitert an Seite 12 mit `table_column_unclear` und an Seite 101 mit `text_not_covered`, die übrigen 161 Seiten laufen in drei Teilen durch.
+- `extract` bricht an der ersten gescheiterten Seite ab und nennt nur diese eine Seite.
+- PART_DIR = `/tmp/pdfparts_<STEM>/`
+
+1. Lies die Seite hinter `FAILED`. Sie zählt innerhalb des PDFs, das `extract` bekommen hat.
+   - Bei einem Teil gilt: Seite im Original = erste Seite des Teils + gemeldete Seite − 1.
+
+2. Teile das PDF an dieser Seite. Der Name jedes Teils trägt seinen Seitenbereich im Original.
+
+   ```bash
+   mkdir -p PART_DIR/out
+   qpdf --empty --pages "PDF_DIR/<Projekt>/<STEM>.pdf" <a>-<b> -- "PART_DIR/<STEM>_p<a>-<b>.pdf"
+   ```
+
+   - Ein Teil ohne Seiten entfällt, zum Beispiel wenn die erste oder die letzte Seite scheitert.
+
+3. Rufe `extract` für jeden Teil auf, jeder Teil mit eigenem BATCH_DIR.
+
+   ```bash
+   WORKFLOW extract --pdf "PART_DIR/<STEM>_p<a>-<b>.pdf" --batch-dir /tmp/pdf_<STEM>_p<a>-<b>/ > /tmp/pdf_<STEM>_p<a>-<b>_extract.txt 2>&1
+   ```
+
+   - Endet `extract` für einen Teil mit `FAILED`, gehst du mit diesem Teil zurück zu 1.
+
+4. Führe für jeden Teil Step 1 bis 5 aus, als wäre er ein eigenes PDF.
+   - Die Grenze von 20 Workern zählt über alle Teile.
+
+5. Führe für jede gescheiterte Seite die Schritte 1 bis 5 unter "Bildweg" aus, nur für diese Seiten.
+   - `pdftoppm` bekommt dafür `-f <n> -l <n>`.
+   - Die Stichprobe in Schritt 5 prüft jede dieser Seiten.
+   - `pdftoppm` füllt die Seitenzahl im Dateinamen mit Nullen auf, zum Beispiel `p-012.png` bei 163 Seiten. Der Prompt nennt den Dateinamen so, wie er auf der Platte liegt.
+
+6. Veröffentliche jeden Teil nach `PART_DIR/out`, nicht nach OUTPUT_DIR.
+
+   ```bash
+   WORKFLOW publish --batch-dir /tmp/pdf_<STEM>_p<a>-<b>/ --out-dir PART_DIR/out > /tmp/pdf_<STEM>_p<a>-<b>_publish.txt 2>&1
+   ```
+
+7. Setze Teile und Bildseiten zu einem Dokument mit den Seitenzahlen des Originals zusammen.
+
+   ```bash
+   python3 - PART_DIR/out IMG_DIR "<OUTPUT_DIR>/<STEM>.md" <<'EOF'
+   import re, sys, pathlib
+   out_dir, img_dir, target = (pathlib.Path(p) for p in sys.argv[1:4])
+   pieces = []
+   for md in out_dir.glob("*_p*-*.md"):
+       start = int(re.search(r"_p(\d+)-\d+\.md$", md.name).group(1))
+       shift = lambda m: f"<!-- page {int(m.group(1)) + start - 1} -->"
+       pieces.append((start, re.sub(r"<!-- page (\d+) -->", shift, md.read_text(encoding="utf-8")).strip()))
+   for md in img_dir.glob("md/p*.md"):
+       n = int(md.stem[1:])
+       pieces.append((n, f"<!-- page {n} -->\n\n" + md.read_text(encoding="utf-8").strip()))
+   target.write_text("\n\n".join(text for _, text in sorted(pieces)) + "\n", encoding="utf-8")
+   EOF
+   ```
+
+   - Dieser Schritt ersetzt für das PDF Step 6 und den Schritt 6 unter "Bildweg".
+
+8. Kille alle Worker dieses PDFs.
+
+9. Notiere für den Report: PDF, jede Seite auf dem Bildweg mit ihrer Fehlerklasse, die Seitenbereiche der Teile, Rücksendungen je Bildseite und eigene Korrekturen.
+
 ### Step 0 — PDFs festlegen
 
 1. Frage den User nach den PDFs und der Collection, falls er sie nicht genannt hat.
@@ -198,7 +273,7 @@ description:
    WORKFLOW extract --pdf "PDF_DIR/<Projekt>/<STEM>.pdf" --batch-dir BATCH_DIR > /tmp/pdf_<STEM>_extract.txt 2>&1
    ```
 
-   - Endet `extract` mit `FAILED`, gehst du für dieses PDF nach "Bildweg" vor.
+   - Endet `extract` mit `FAILED`, gehst du für dieses PDF nach "Einzelne Seiten auf dem Bildweg" vor.
 
 2. Lies `BATCH_DIR/manifest.json`. Dort steht jeder Worker dieses PDFs mit seinem Prompt:
    - `tables` — `BATCH_DIR/prompt_tables.md`, fehlt, wenn das PDF keine Tabelle hat.
@@ -389,7 +464,7 @@ description:
    Nicht indexiert: <PDF mit Grund, oder "keine">
    Geblockte Worker: <PDF, Worker, per Fallback repariert oder nicht indexiert, oder "keine">
    Reparaturen: <PDF, Datei, was geändert wurde, oder "keine">
-   Bildweg: <PDF, Grund, Rücksendungen je Seite, geprüfte Seiten, eigene Korrekturen, oder "keine">
+   Bildweg: <PDF, ganz oder einzelne Seiten mit Fehlerklasse, Rücksendungen je Seite, geprüfte Seiten, eigene Korrekturen, oder "keine">
    Stichprobe: <PDF, Zahl der Läufe, geprüfte Seiten, übernommene und verworfene Korrekturen mit Seite>
    Fehler: <jeder Fehler aus allen Steps, oder "keine">
    ```
